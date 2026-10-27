@@ -417,7 +417,7 @@ function RulesTab() {
 /** Why no sandbox reaches a rule's connections, with the way to the settings that change it. */
 function Unreachable({ reason }: { reason: string }) {
   return (
-    <p className="mt-1 flex max-w-96 gap-1.5 text-[0.6875rem]/relaxed whitespace-normal text-amber-700 dark:text-amber-400">
+    <p className="mt-1 flex max-w-96 gap-1.5 text-caption/relaxed whitespace-normal text-amber-700 dark:text-amber-400">
       <WarningIcon className="mt-0.5 size-3 shrink-0" aria-hidden />
       <span>
         {reason}{" "}
@@ -497,7 +497,7 @@ function RuleChip({
   return (
     <span
       title={title}
-      className="inline-flex h-[1.125rem] shrink-0 items-center rounded-sm bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset"
+      className="inline-flex h-[1.125rem] shrink-0 items-center rounded-sm bg-muted px-1 font-mono text-caption text-foreground/80 ring-1 ring-border ring-inset"
     >
       {children}
     </span>

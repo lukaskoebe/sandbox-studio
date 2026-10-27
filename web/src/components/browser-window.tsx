@@ -617,7 +617,7 @@ export function BrowserWindow({
               onControlsOpen={setKeys}
             />
             {!noting && (
-              <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-[0.6875rem] text-background opacity-0 shadow-sm transition group-hover:opacity-100">
+              <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-caption text-background opacity-0 shadow-sm transition group-hover:opacity-100">
                 Right-click to add a note for {name}
               </span>
             )}
@@ -848,12 +848,12 @@ function Address({
         className="h-full min-w-0 flex-1 bg-transparent font-mono text-xs text-ellipsis outline-none placeholder:font-sans"
       />
       {focused && editable && !w.driving && (
-        <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] whitespace-nowrap text-muted-foreground max-sm:hidden">
+        <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta whitespace-nowrap text-muted-foreground max-sm:hidden">
           ↵ takes the wheel from {w.name}
         </span>
       )}
       {w.replay && (
-        <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+        <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
           Replay
         </span>
       )}
@@ -902,7 +902,7 @@ function SiteInfo({
         {origin ? (
           <div className="grid gap-3">
             <div>
-              <PopoverTitle className="font-mono text-[0.8125rem]">
+              <PopoverTitle className="font-mono text-title">
                 {hostOf(url)}
               </PopoverTitle>
               <p className="text-muted-foreground">
@@ -1163,7 +1163,7 @@ function ReplaySteps({ w, replay }: { w: Win; replay: BrowserReplay }) {
       >
         <CaretLeftIcon />
       </Button>
-      <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums">
+      <span className="font-mono text-caption text-muted-foreground tabular-nums">
         {at + 1}/{steps.length}
       </span>
       <Button
@@ -1301,7 +1301,7 @@ function AskCard({ approval, name }: { approval: Approval; name: string }) {
           {formatAge(approval.createdAt)}
         </span>
       </div>
-      <p className="text-[0.8125rem]">
+      <p className="text-xs">
         {control ? (
           <>{name} asks you to hand the browser back.</>
         ) : cred ? (
@@ -1479,7 +1479,7 @@ function Asleep({
               </p>
             )}
             {last?.url && (
-              <p className="text-[0.6875rem] text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 Last page <span className="font-mono">{hostOf(last.url)}</span>
               </p>
             )}

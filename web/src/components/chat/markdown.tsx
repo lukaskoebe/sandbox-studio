@@ -304,7 +304,7 @@ export function CodeBlock({
   return (
     <pre
       className={cn(
-        "max-w-full overflow-x-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[0.6875rem] leading-relaxed",
+        "max-w-full overflow-x-auto rounded-md bg-muted px-2.5 py-2 font-mono text-caption leading-relaxed",
         className
       )}
     >
@@ -334,7 +334,7 @@ function inline(text: string): ReactNode[] {
       const code = (
         <code
           key={k}
-          className="rounded bg-muted px-1 py-px font-mono text-[0.6875rem]"
+          className="rounded bg-muted px-1 py-px font-mono text-caption"
         >
           {m[2].trim() || m[2]}
         </code>

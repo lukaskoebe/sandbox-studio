@@ -115,7 +115,7 @@ export function ToolCallCard({ tool }: { tool: ToolBody }) {
 
 export function Locations({ list }: { list: Location[] }) {
   return (
-    <ul className="grid gap-0.5 font-mono text-[0.6875rem] text-muted-foreground">
+    <ul className="grid gap-0.5 font-mono text-caption text-muted-foreground">
       {list.map((l, i) => (
         <li key={i} className="truncate" title={l.path}>
           {l.path}
@@ -174,7 +174,7 @@ export function Diff({
   const removed = rows.filter((r) => r.op === "-").length
   return (
     <div className="min-w-0 overflow-hidden rounded-md border">
-      <div className="flex items-center gap-2 border-b bg-muted/50 px-2 py-1 font-mono text-[0.6875rem]">
+      <div className="flex items-center gap-2 border-b bg-muted/50 px-2 py-1 font-mono text-caption">
         <span className="min-w-0 flex-1 truncate" title={path}>
           {path ?? "file"}
         </span>
@@ -184,7 +184,7 @@ export function Diff({
         <span className="text-emerald-700 dark:text-emerald-400">+{added}</span>
         <span className="text-destructive">−{removed}</span>
       </div>
-      <pre className="overflow-x-auto py-1 font-mono text-[0.6875rem] leading-relaxed">
+      <pre className="overflow-x-auto py-1 font-mono text-caption leading-relaxed">
         {rows.map((r, i) =>
           r.op === "…" ? (
             <div key={i} className="px-2 text-muted-foreground">

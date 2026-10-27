@@ -97,7 +97,7 @@ function Toggle({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-xs">
         <Switch
           checked={checked}
           disabled={disabled}

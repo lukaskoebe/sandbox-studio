@@ -142,7 +142,7 @@ function LocalNetworkSection({ env }: { env: string }) {
                   <span className="truncate font-mono">{h.host}</span>
                   <LANNameHint host={h.host} />
                 </span>
-                <span className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground">
+                <span className="shrink-0 font-mono text-caption text-muted-foreground">
                   {h.ports?.length
                     ? `Ports ${h.ports.join(", ")}`
                     : "Ports 80, 443"}
@@ -280,7 +280,7 @@ function LANNameHint({ host }: { host: string }) {
     ? `${m[1]}-${m[2]}-${m[3]}-N.lan.studio.internal`
     : `${host.replaceAll(".", "-")}.lan.studio.internal`
   return (
-    <span className="text-[0.6875rem] break-all text-muted-foreground">
+    <span className="text-caption break-all text-muted-foreground">
       Sandboxes connect to <span className="font-mono">{name}</span>
     </span>
   )

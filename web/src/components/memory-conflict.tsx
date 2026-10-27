@@ -204,9 +204,7 @@ function FactSide({
     <div className="grid content-start gap-1.5 border-t pt-2">
       <div className="flex items-center gap-1.5">
         <span className="font-medium">{name}</span>
-        <Ident className="text-[0.625rem] text-muted-foreground">
-          {fact.scope}
-        </Ident>
+        <Ident className="text-meta text-muted-foreground">{fact.scope}</Ident>
       </div>
       <p className="whitespace-pre-wrap">{fact.text}</p>
       <div className="flex flex-wrap gap-1">

@@ -135,7 +135,7 @@ export function UnifiedDiff({
       className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
       viewportClassName={fill ? undefined : "max-h-[60vh]"}
     >
-      <pre className="py-2 font-mono text-[11px]/[1.45]">
+      <pre className="py-2 font-mono text-caption/[1.45]">
         {lines.map((l, i) => {
           const comment = comments.find((c) => c.index === i)
           const where = l.file && `${l.file}:${l.line}`
@@ -210,7 +210,7 @@ export function UnifiedDiff({
                       }}
                     >
                       {commentLabel && (
-                        <span className="block text-[0.6875rem] text-muted-foreground">
+                        <span className="block text-caption text-muted-foreground">
                           {commentLabel} · line {l.line}
                         </span>
                       )}

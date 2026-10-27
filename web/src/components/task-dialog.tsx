@@ -470,7 +470,7 @@ function TaskForm({
               </Select>
             </Field>
             {task?.schedule && (
-              <label className="flex items-center gap-2 self-end pb-2 text-sm">
+              <label className="flex items-center gap-2 self-end pb-2 text-xs">
                 <Switch checked={paused} onCheckedChange={setPaused} />
                 Paused
               </label>

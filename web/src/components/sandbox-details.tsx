@@ -38,7 +38,7 @@ export function HistorySheet({
           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1" viewportClassName="px-4 pb-4">
-          <div className="grid gap-6 text-[0.8125rem]">
+          <div className="grid gap-6 text-xs">
             <LineageTimeline environmentId={env} sandboxId={sb.id} />
             {!building && <CheckpointsSection env={env} sandbox={sb} />}
           </div>

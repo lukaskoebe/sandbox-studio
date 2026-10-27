@@ -56,8 +56,9 @@ export function TeammateAvatar({
   return (
     <span
       aria-hidden
+      data-slot="avatar"
       className={cn(
-        "inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-[0.625rem] font-semibold text-white select-none",
+        "inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-meta font-semibold text-white select-none",
         emoji && "bg-muted text-foreground",
         className
       )}

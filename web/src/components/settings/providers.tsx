@@ -106,7 +106,7 @@ export function ProvidersSettings({ env }: { env: string }) {
                       <div>{kindLabels[p.kind]}</div>
                       {p.baseUrl && (
                         // A long URL is cut, not wrapped mid-word; the title has all of it.
-                        <div className="grid max-w-72 font-mono text-[0.6875rem] text-muted-foreground">
+                        <div className="grid max-w-72 font-mono text-caption text-muted-foreground">
                           <span className="truncate" title={p.baseUrl}>
                             {p.baseUrl}
                           </span>

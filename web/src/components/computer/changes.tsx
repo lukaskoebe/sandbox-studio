@@ -133,7 +133,7 @@ export function ChangesView({
           >
             In this thread
             {changedTurns.length > 0 && (
-              <span className="font-mono text-[0.625rem] text-muted-foreground">
+              <span className="font-mono text-meta text-muted-foreground">
                 {changedTurns.length}
               </span>
             )}
@@ -150,7 +150,7 @@ export function ChangesView({
       </div>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
         {approval ? (
-          <div className="grid gap-3 text-[0.8125rem]">
+          <div className="grid gap-3 text-xs">
             <p className="text-xs text-muted-foreground">
               {gitReviewDescription(approval)}
             </p>

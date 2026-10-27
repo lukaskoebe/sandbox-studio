@@ -146,28 +146,28 @@ export function ComputerMenu({
         <DropdownMenuContent align="end" className="w-72">
           <div className="grid gap-0.5 px-2 pt-1.5 pb-2">
             <span className="flex min-w-0 items-baseline gap-2">
-              <span className="truncate font-mono text-[0.8125rem] font-semibold">
+              <span className="truncate font-mono text-title font-semibold">
                 {sb.name}
               </span>
               {/* Its VM is ss-<id>-g<generation> (docs/sandboxes.md). */}
               <span
                 title="The computer's ID"
-                className="ml-auto shrink-0 font-mono text-[0.625rem] text-muted-foreground select-all"
+                className="ml-auto shrink-0 font-mono text-meta text-muted-foreground select-all"
               >
                 {sb.id}
               </span>
             </span>
-            <span className="truncate text-[0.6875rem] text-muted-foreground">
+            <span className="truncate text-caption text-muted-foreground">
               {facts.join(" · ")}
             </span>
           </div>
           {running && usage.data && <Meters usage={usage.data} />}
           {sb.baseOutdated && !building && (
             <div className="mx-1 mb-1 grid gap-1 border border-(--st-waiting)/40 bg-(--st-waiting)/10 p-2.5">
-              <span className="font-mono text-[0.71875rem] font-semibold text-(--st-waiting-fg) dark:text-(--st-waiting)">
+              <span className="font-mono text-caption font-semibold text-(--st-waiting-fg) dark:text-(--st-waiting)">
                 Built on an older base
               </span>
-              <span className="text-[0.78125rem]">
+              <span className="text-xs">
                 {sb.baseVersion ? `From ${sb.baseVersion}. ` : ""}
                 Rebase for the newer harness versions and chat adapters, and
                 Debian&apos;s security updates.
@@ -200,7 +200,7 @@ export function ComputerMenu({
                   <ClockCounterClockwiseIcon />
                   Checkpoints
                   {latest && (
-                    <span className="ml-auto max-w-32 truncate font-mono text-[0.6875rem] text-muted-foreground">
+                    <span className="ml-auto max-w-32 truncate font-mono text-caption text-muted-foreground">
                       {latest.name} · {formatAge(latest.createdAt)}
                     </span>
                   )}
@@ -249,7 +249,7 @@ export function ComputerMenu({
                 >
                   <CpuIcon />
                   Resources
-                  <span className="ml-auto text-[0.6875rem] text-muted-foreground">
+                  <span className="ml-auto text-caption text-muted-foreground">
                     {sizeLabel(sb)}
                   </span>
                 </DropdownMenuItem>
@@ -418,7 +418,7 @@ function Meters({ usage }: { usage: SandboxUsage }) {
       {rows.map((r) => (
         <div
           key={r.label}
-          className="grid grid-cols-[4rem_minmax(0,1fr)_5.5rem] items-center gap-2 text-[0.6875rem]"
+          className="grid grid-cols-[4rem_minmax(0,1fr)_5.5rem] items-center gap-2 text-caption"
         >
           <span className="text-muted-foreground">{r.label}</span>
           <span className="h-1 overflow-hidden rounded-full bg-muted">

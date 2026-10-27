@@ -156,9 +156,7 @@ export function SendingMessage({ prompt }: { prompt: Prompt }) {
   return (
     <div className="grid justify-items-end gap-1">
       <UserBubble u={{ text: prompt.text ?? "", attachments }} />
-      <span className="shimmer text-[0.625rem] text-muted-foreground">
-        Sending…
-      </span>
+      <span className="shimmer text-meta text-muted-foreground">Sending…</span>
     </div>
   )
 }

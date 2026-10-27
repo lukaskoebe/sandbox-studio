@@ -348,7 +348,7 @@ function BuildJobContents({
               className="rounded-md bg-muted"
               viewportClassName="max-h-[min(55vh,36rem)] min-h-16"
             >
-              <pre className="p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+              <pre className="p-3 font-mono text-caption/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
                 {log.data.text || "No output yet."}
               </pre>
             </ScrollArea>
@@ -396,7 +396,7 @@ function BuildJobContents({
           className="rounded-md border bg-muted/40"
           viewportClassName="max-h-80"
         >
-          <pre className="p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+          <pre className="p-3 font-mono text-caption/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
             {job.source}
           </pre>
         </ScrollArea>

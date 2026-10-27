@@ -293,7 +293,7 @@ function Overview({ ctx }: { ctx: PanelContext }) {
             <XIcon className="size-3.5" />
           </button>
         ) : (
-          <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[0.625rem] text-muted-foreground">
+          <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-meta text-muted-foreground">
             /
           </kbd>
         )}
@@ -360,7 +360,7 @@ function PanelHeader({ ctx }: { ctx: PanelContext }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <p className="font-mono text-[0.6875rem] text-muted-foreground">
+      <p className="font-mono text-caption text-muted-foreground">
         {current ? (
           <>
             {current.facts} facts · {current.pages} pages · core{" "}
@@ -694,7 +694,7 @@ function LintRow({
 
 function WantedSlug({ slug }: { slug: string }) {
   return (
-    <span className="font-mono text-[0.75rem] text-muted-foreground underline decoration-dashed underline-offset-3">
+    <span className="font-mono text-xs text-muted-foreground underline decoration-dashed underline-offset-3">
       {slug}
     </span>
   )
@@ -1074,7 +1074,7 @@ function SessionsRow({ ctx }: { ctx: PanelContext }) {
         text={
           <span className="font-medium">
             Sessions{" "}
-            <span className="font-mono text-[0.6875rem] font-normal text-muted-foreground">
+            <span className="font-mono text-caption font-normal text-muted-foreground">
               {sessions.data?.length}
             </span>
           </span>
@@ -1314,12 +1314,12 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
         />
         <header className="space-y-1">
           <h2 className="font-heading text-lg font-semibold">{p.title}</h2>
-          <p className="text-[0.6875rem] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {meta.join(" · ")}
           </p>
         </header>
         {p.compiled.trim() ? (
-          <Markdown text={p.compiled} className="text-[0.8125rem]/relaxed" />
+          <Markdown text={p.compiled} className="text-xs/relaxed" />
         ) : (
           <p className="text-muted-foreground">
             No compiled truth yet. Edit the page to write it, or let the next
@@ -1374,7 +1374,7 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
             <ol className="space-y-2 border-l pl-3">
               {[...(p.timeline ?? [])].reverse().map((t) => (
                 <li key={t.id} className="space-y-0.5">
-                  <span className="block text-[0.6875rem] text-muted-foreground">
+                  <span className="block text-caption text-muted-foreground">
                     {new Date(t.at).toLocaleString(undefined, {
                       dateStyle: "medium",
                       timeStyle: "short",
@@ -1386,10 +1386,7 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
                         ? "memory"
                         : "you"}
                   </span>
-                  <Markdown
-                    text={t.text}
-                    className="text-[0.8125rem]/relaxed"
-                  />
+                  <Markdown text={t.text} className="text-xs/relaxed" />
                 </li>
               ))}
             </ol>
@@ -1413,7 +1410,7 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
           </form>
         </section>
 
-        <p className="border-t pt-3 text-[0.6875rem] text-muted-foreground">
+        <p className="border-t pt-3 text-caption text-muted-foreground">
           In {owner}:{" "}
           <span className="font-mono">
             {dir}/pages/{p.slug}.md
@@ -1469,9 +1466,7 @@ function Snippet({ text, plain }: { text: string; plain?: boolean }) {
   return (
     <Markdown
       text={plain ? one : `“${one}”`}
-      className={
-        plain ? "text-[0.8125rem]/relaxed" : "inline-grid text-[0.6875rem]"
-      }
+      className={plain ? "text-xs/relaxed" : "inline-grid text-caption"}
     />
   )
 }
@@ -1494,7 +1489,7 @@ function Rows({
         <li>
           <button
             type="button"
-            className="w-full px-3 py-2 text-left text-[0.6875rem] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            className="w-full px-3 py-2 text-left text-caption text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             onClick={onMore}
           >
             Show {more} more
@@ -1523,11 +1518,9 @@ function Row({
 }) {
   const body = (
     <>
-      <span className="block text-[0.8125rem]/relaxed wrap-anywhere">
-        {text}
-      </span>
+      <span className="block text-xs/relaxed wrap-anywhere">{text}</span>
       {meta && (
-        <span className="mt-0.5 block text-[0.6875rem] text-muted-foreground">
+        <span className="mt-0.5 block text-caption text-muted-foreground">
           {meta}
         </span>
       )}
@@ -1562,15 +1555,13 @@ function Row({
 
 function EmptyRow({ children }: { children: ReactNode }) {
   return (
-    <li className="px-3 py-2.5 text-[0.75rem] text-muted-foreground">
-      {children}
-    </li>
+    <li className="px-3 py-2.5 text-xs text-muted-foreground">{children}</li>
   )
 }
 
 function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="ml-1.5 border px-1 font-mono text-[0.625rem] text-muted-foreground">
+    <span className="ml-1.5 border px-1 font-mono text-meta text-muted-foreground">
       {children}
     </span>
   )

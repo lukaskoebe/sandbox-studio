@@ -349,7 +349,7 @@ function Item({
     <button
       type="button"
       onClick={onClick}
-      className="mx-1.5 flex min-h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1 text-left text-[0.8125rem] outline-none hover:bg-muted focus-visible:bg-muted"
+      className="mx-1.5 flex min-h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1 text-left text-title outline-none hover:bg-muted focus-visible:bg-muted"
     >
       {children}
     </button>
@@ -455,7 +455,7 @@ export function ProfileSheet({
                 <TeammateAvatar
                   name={teammate.name}
                   avatar={teammate.avatar}
-                  className="size-6 text-[0.625rem]"
+                  className="size-6 text-meta"
                 />
                 {meta.title(teammate.name)}
               </SheetTitle>

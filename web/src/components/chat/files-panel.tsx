@@ -359,7 +359,7 @@ function FolderView({
       <div className="flex min-w-0 items-center gap-1">
         <nav
           aria-label="Folder"
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 font-mono text-[0.6875rem]"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 font-mono text-caption"
         >
           <button
             type="button"
@@ -542,7 +542,7 @@ function EntryRow({
         />
       )}
       {e.type === "file" && (
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+        <span className="shrink-0 text-caption text-muted-foreground">
           {formatBytes(e.size)}
         </span>
       )}
@@ -587,13 +587,13 @@ function FileView({
           <ArrowLeftIcon />
         </Button>
         <span
-          className="min-w-0 flex-1 truncate font-mono text-[0.6875rem]"
+          className="min-w-0 flex-1 truncate font-mono text-caption"
           title={path}
         >
           {path}
         </span>
         {c && (
-          <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+          <span className="shrink-0 text-caption text-muted-foreground">
             {formatBytes(c.size)}
           </span>
         )}
@@ -658,7 +658,7 @@ function FileBody({ file: c, name }: { file: FileContent; name: string }) {
       className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
       viewportClassName="max-h-[70vh]"
     >
-      <pre className="p-2 font-mono text-[11px]/[1.45] whitespace-pre">
+      <pre className="p-2 font-mono text-caption/[1.45] whitespace-pre">
         {text}
       </pre>
       <ScrollBar orientation="horizontal" />

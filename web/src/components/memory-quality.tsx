@@ -87,10 +87,7 @@ function Stat({
     <div className="min-w-0">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="text-sm font-medium">{value}</dd>
-      <dd
-        className="truncate text-[0.625rem] text-muted-foreground"
-        title={note}
-      >
+      <dd className="truncate text-meta text-muted-foreground" title={note}>
         {note}
       </dd>
     </div>

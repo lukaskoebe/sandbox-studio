@@ -143,7 +143,7 @@ function LevelRow({
           className="mt-[0.1875rem] size-3.5 shrink-0 appearance-none rounded-full border border-input bg-card outline-none checked:border-primary checked:bg-primary checked:shadow-[inset_0_0_0_3px_var(--color-card)] disabled:opacity-50"
         />
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span id={id} className="text-[0.8125rem] font-semibold">
+          <span id={id} className="text-title font-semibold">
             {title}
           </span>
           {badge && <Badge variant="secondary">{badge}</Badge>}
@@ -213,7 +213,7 @@ export function SecurityLevelPicker({
         <div
           aria-hidden
           className={cn(
-            "hidden gap-x-4 bg-muted/30 px-3 py-1.5 text-[0.6875rem] font-medium text-muted-foreground @xl:grid",
+            "hidden gap-x-4 bg-muted/30 px-3 py-1.5 text-caption font-medium text-muted-foreground @xl:grid",
             levelColumns
           )}
         >

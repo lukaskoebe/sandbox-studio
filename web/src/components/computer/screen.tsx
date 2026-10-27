@@ -243,7 +243,7 @@ export function ComputerScreen({
                     {(counts[t] ?? 0) > 1 && (
                       <span
                         aria-label={`${counts[t]} sessions`}
-                        className="rounded-sm border px-1 font-mono text-[0.625rem] leading-3.5 font-normal text-muted-foreground"
+                        className="rounded-sm border px-1 font-mono text-meta leading-3.5 font-normal text-muted-foreground"
                       >
                         {counts[t]}
                       </span>
@@ -478,7 +478,7 @@ function Switcher({
     return (
       <span className="flex h-[30px] min-w-0 items-center gap-2 px-2">
         <StatusDot {...phaseDot(p)} compact />
-        <span className="truncate font-mono text-[0.8125rem] font-semibold">
+        <span className="truncate font-mono text-title font-semibold">
           {sb.name}
         </span>
       </span>
@@ -491,7 +491,7 @@ function Switcher({
           className="flex h-[30px] min-w-0 items-center gap-2 rounded-md px-2 hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
         >
           <StatusDot {...phaseDot(p)} compact />
-          <span className="truncate font-mono text-[0.8125rem] font-semibold">
+          <span className="truncate font-mono text-title font-semibold">
             {sb.name}
           </span>
           <CaretDownIcon className="size-3 shrink-0 text-muted-foreground" />
@@ -514,7 +514,7 @@ function Switcher({
                   <StatusDot {...phaseDot(phase(c))} compact />
                 )}
                 <span className="min-w-0 truncate font-mono">{c.name}</span>
-                <span className="ml-auto text-[0.6875rem] text-muted-foreground">
+                <span className="ml-auto text-caption text-muted-foreground">
                   {phaseDot(phase(c)).label}
                 </span>
               </DropdownMenuItem>

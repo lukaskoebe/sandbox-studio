@@ -69,7 +69,7 @@ export function SettingRow({
           </span>
         )}
         <div className="grid min-w-0 gap-1">
-          <h3 className="text-[0.8125rem] leading-5 font-semibold tracking-tight">
+          <h3 className="text-title leading-5 font-semibold tracking-tight">
             {title}
           </h3>
           {description && (

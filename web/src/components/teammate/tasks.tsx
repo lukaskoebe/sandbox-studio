@@ -162,7 +162,7 @@ export function TeammateTasks({
         {tasks.isPending ? (
           <Spinner className="mx-auto block" />
         ) : tasks.isError ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-xs text-destructive">
             {errorMessage(tasks.error)}
           </p>
         ) : list.length === 0 ? (
@@ -193,13 +193,13 @@ export function TeammateTasks({
                   <span
                     className={
                       task.status === "done"
-                        ? "block truncate text-sm text-muted-foreground line-through"
-                        : "block truncate text-sm font-medium"
+                        ? "block truncate text-title text-muted-foreground line-through"
+                        : "block truncate text-title font-medium"
                     }
                   >
                     {task.title}
                   </span>
-                  <span className="mt-0.5 flex flex-wrap gap-x-2 text-[0.6875rem] text-muted-foreground">
+                  <span className="mt-0.5 flex flex-wrap gap-x-2 text-caption text-muted-foreground">
                     <span>{taskStatusLabels[task.status]}</span>
                     {task.due && <span>Due {task.due}</span>}
                     {task.createdBy === "teammate" && (
@@ -207,7 +207,7 @@ export function TeammateTasks({
                     )}
                   </span>
                   {task.schedule && task.status !== "done" && (
-                    <span className="mt-0.5 flex flex-wrap gap-x-2 text-[0.6875rem] text-muted-foreground">
+                    <span className="mt-0.5 flex flex-wrap gap-x-2 text-caption text-muted-foreground">
                       <span>
                         ⟳ {scheduleSentence(task.schedule)}
                         {task.schedule.paused

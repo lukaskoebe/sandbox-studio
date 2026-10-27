@@ -151,7 +151,7 @@ export function MemorySessionsTab({
                     {names.get(s.teammateId) ?? s.teammateId}
                   </TableCell>
                   <TableCell>{s.sandboxName}</TableCell>
-                  <TableCell className="max-w-96 text-[0.625rem] whitespace-normal">
+                  <TableCell className="max-w-96 text-meta whitespace-normal">
                     {s.harness} · <Ident>{s.sessionRef.slice(0, 12)}</Ident>
                     {s.summary && (
                       <p
@@ -162,7 +162,7 @@ export function MemorySessionsTab({
                       </p>
                     )}
                   </TableCell>
-                  <TableCell className="text-[0.625rem]">
+                  <TableCell className="text-meta">
                     {s.gitRemote && <Ident>{s.gitRemote}</Ident>}
                   </TableCell>
                   <TableCell className="text-right">{s.injections}</TableCell>
@@ -210,7 +210,7 @@ function SessionLog({ env, id }: { env: string; id: string }) {
                 Why
               </summary>
               <ScrollArea className="mt-1 rounded bg-muted/50">
-                <pre className="p-2 font-mono text-[0.625rem]">
+                <pre className="p-2 font-mono text-meta">
                   {JSON.stringify(e.why, null, 2)}
                 </pre>
                 <ScrollBar orientation="horizontal" />

@@ -26,6 +26,17 @@
    that :root sets for the pixel style and <html data-style="quiet"> for the quiet one, so one
    class reads right in both. Tailwind would otherwise write the shadows' values into each
    class, and rounded-full would be a constant. */
+/* The type scale, by role. Titles of pages, dialogs, sheets, cards and empty states are
+   text-sm (14px); titles of rows, sections and nav items text-title (13px); body text, notices,
+   messages and form labels text-xs (12px, /relaxed for prose); captions, hints and mono meta
+   text-caption (11px); badges and timestamps text-meta (10px). Section labels have the
+   style's label size. Only avatars' initials go smaller. */
+@theme {
+  --text-title: 0.8125rem;
+  --text-caption: 0.6875rem;
+  --text-meta: 0.625rem;
+}
+
 @theme inline {
   --font-heading: var(--heading-font);
   --font-control: var(--control-font);
@@ -287,6 +298,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Text without a size of its own is body text, not the browser's 16px. */
+    font-size: var(--text-xs);
     font-feature-settings: "tnum" 1;
     /* Instrument Sans is set tight for display sizes; the app's 12 to 14 px text reads
        better with a little air. */

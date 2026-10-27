@@ -133,7 +133,7 @@ function FolderBrowser({
               key={e.path}
               type="button"
               role="listitem"
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:bg-muted"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs outline-none hover:bg-muted focus-visible:bg-muted"
               onClick={() => setPath(e.path)}
             >
               {e.git ? (

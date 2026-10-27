@@ -42,13 +42,13 @@ export function TeammateHeader({
         <TeammateAvatar
           name={teammate.name}
           avatar={teammate.avatar}
-          className="size-7 text-[0.6875rem]"
+          className="size-7 text-caption"
         />
         <span className="grid min-w-0 leading-tight">
           <span className="truncate font-heading text-sm font-semibold">
             {teammate.name}
           </span>
-          <span className="truncate text-[0.6875rem] text-muted-foreground">
+          <span className="truncate text-caption text-muted-foreground">
             {[teammate.role, harnessLabels[teammate.harness]]
               .filter(Boolean)
               .join(" · ")}

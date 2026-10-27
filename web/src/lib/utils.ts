@@ -1,4 +1,12 @@
-export { cn } from "cn"
+import { createCn } from "cn/config"
+
+/**
+ * Joins class names and drops the ones a later class overrides. It knows the type scale's own
+ * sizes (styles.css), which would otherwise pass for text colors and lose to text-foreground.
+ */
+export const cn = createCn({
+  extend: { theme: { text: ["title", "caption", "meta"] } },
+})
 
 /** A byte count for people: 980 B, 12 KB, 3.4 MB. */
 export function formatBytes(bytes: number): string {

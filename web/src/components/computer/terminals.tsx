@@ -339,7 +339,7 @@ function SessionTab({
               onClick={onOpen}
               onDoubleClick={() => setEditing(true)}
               className={cn(
-                "flex max-w-56 items-center gap-1.5 pr-1 pl-2 font-mono text-[0.71875rem] whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset",
+                "flex max-w-56 items-center gap-1.5 pr-1 pl-2 font-mono text-caption whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset",
                 !active &&
                   (dark ? "hover:text-(--wb-term-fg)" : "hover:text-foreground")
               )}
@@ -381,7 +381,7 @@ function SessionTab({
         <TooltipContent
           side="bottom"
           align="start"
-          className="grid max-w-md justify-items-start gap-0.5 font-mono text-[0.6875rem]"
+          className="grid max-w-md justify-items-start gap-0.5 font-mono text-caption"
         >
           <span>{s ? terminalCommand(s) : name}</span>
           {s?.path && <span className="opacity-75">in {s.path}</span>}

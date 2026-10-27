@@ -528,7 +528,7 @@ function RuleForm({
         )}
       </Field>
       <Field>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-xs">
           <Checkbox
             checked={browserOnly}
             onCheckedChange={(v) => {

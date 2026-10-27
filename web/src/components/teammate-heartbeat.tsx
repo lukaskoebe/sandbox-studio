@@ -102,7 +102,7 @@ export function TeammateHeartbeat({
         its latest sandbox at these times, with the tasks to work on. A check-in
         that can't run is logged in its Tasks tab.
       </p>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-xs">
         <Switch
           checked={saved !== undefined}
           disabled={busy}

@@ -155,7 +155,7 @@ function Mark({ n, outcome }: { n: number; outcome?: Outcome }) {
   return (
     <span
       className={cn(
-        "flex size-6 shrink-0 items-center justify-center rounded-full border font-mono text-[0.6875rem] text-muted-foreground",
+        "flex size-6 shrink-0 items-center justify-center rounded-full border font-mono text-caption text-muted-foreground",
         outcome === "done" &&
           "border-primary bg-primary text-primary-foreground",
         outcome === "skipped" && "border-dashed"

@@ -41,7 +41,7 @@ export function TurnFooter({
   const usage = turnUsage(turn)
   if (!count && !usage) return null
   return (
-    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[0.6875rem] text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-caption text-muted-foreground">
       {count > 0 && (
         <Button
           variant="ghost"

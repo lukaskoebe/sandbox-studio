@@ -218,7 +218,7 @@ function RebaseForm({
         aria-label="What the rebase changes"
       >
         <div className="grid content-start gap-1">
-          <h3 className="font-mono text-[0.71875rem] font-semibold text-(--st-running)">
+          <h3 className="font-mono text-caption font-semibold text-(--st-running)">
             Kept
           </h3>
           <ul className="grid gap-0.5">
@@ -231,7 +231,7 @@ function RebaseForm({
           </ul>
         </div>
         <div className="grid content-start gap-1">
-          <h3 className="font-mono text-[0.71875rem] font-semibold text-destructive">
+          <h3 className="font-mono text-caption font-semibold text-destructive">
             Lost
           </h3>
           <ul className="grid gap-0.5">

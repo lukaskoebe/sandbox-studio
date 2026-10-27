@@ -444,7 +444,7 @@ export function TeammateForm({
           area="git"
         >
           <div className="space-y-1.5">
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-xs">
               <Switch checked={useHostGit} onCheckedChange={setUseHostGit} />
               Use my git identity
             </label>
@@ -597,7 +597,7 @@ function AvatarPicker({
           <TeammateAvatar
             name={name.trim() || "?"}
             avatar={choice}
-            className="size-7 text-[0.6875rem]"
+            className="size-7 text-caption"
           />
         </button>
       ))}

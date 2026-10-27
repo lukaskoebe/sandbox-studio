@@ -307,7 +307,7 @@ function ConversationStrip({
         <TeammateAvatar
           name={teammate.name}
           avatar={teammate.avatar}
-          className="size-7 text-[0.625rem]"
+          className="size-7 text-meta"
         />
         {waiting > 0 && (
           <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-(--st-waiting) ring-2 ring-background" />

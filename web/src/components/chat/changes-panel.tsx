@@ -171,11 +171,11 @@ function FileChangeView({
   return (
     <Collapsible className="group/file min-w-0 rounded-lg border bg-card">
       <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
-        <span className={cn("w-14 shrink-0 text-[0.6875rem]", status.cls)}>
+        <span className={cn("w-14 shrink-0 text-caption", status.cls)}>
           {status.label}
         </span>
         <span
-          className="min-w-0 flex-1 truncate font-mono text-[0.6875rem]"
+          className="min-w-0 flex-1 truncate font-mono text-caption"
           title={f.path}
           dir="rtl"
         >
@@ -183,7 +183,7 @@ function FileChangeView({
           <bdi>{f.path}</bdi>
         </span>
         {!f.binary && (f.added > 0 || f.removed > 0) && (
-          <span className="shrink-0 text-[0.6875rem]">
+          <span className="shrink-0 text-caption">
             <span className="text-emerald-600 dark:text-emerald-400">
               +{f.added}
             </span>{" "}

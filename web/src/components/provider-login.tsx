@@ -226,7 +226,7 @@ function Step({
   return (
     <li className="grid grid-cols-[1.25rem_1fr] gap-x-2 gap-y-1">
       <span
-        className="mt-px inline-flex size-5 items-center justify-center rounded-full bg-muted font-mono text-[0.6875rem] text-muted-foreground"
+        className="mt-px inline-flex size-5 items-center justify-center rounded-full bg-muted font-mono text-caption text-muted-foreground"
         aria-hidden
       >
         {n}

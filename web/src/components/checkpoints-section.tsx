@@ -151,7 +151,7 @@ export function CheckpointsSection({
                 </span>
                 {checkpoint.auto && (
                   <span
-                    className="shrink-0 rounded-sm border px-1 font-mono text-[0.6875rem] text-muted-foreground"
+                    className="shrink-0 rounded-sm border px-1 font-mono text-caption text-muted-foreground"
                     title="Taken on schedule, which deletes it again. Rename it in the history to keep it."
                   >
                     auto
@@ -159,7 +159,7 @@ export function CheckpointsSection({
                 )}
                 {checkpoint.state !== "ready" && (
                   <span
-                    className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground"
+                    className="shrink-0 font-mono text-caption text-muted-foreground"
                     title={
                       checkpoint.state === "deleting"
                         ? "Removal did not finish. Delete it again to retry."
@@ -172,7 +172,7 @@ export function CheckpointsSection({
                 <time
                   dateTime={checkpoint.createdAt}
                   title={new Date(checkpoint.createdAt).toLocaleString()}
-                  className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground"
+                  className="shrink-0 font-mono text-caption text-muted-foreground"
                 >
                   {formatAge(checkpoint.createdAt)}
                 </time>

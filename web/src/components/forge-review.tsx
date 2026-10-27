@@ -507,7 +507,7 @@ export function ForgeReview({ approval }: { approval: Approval }) {
                     <EyeSlashIcon />
                     <span className="grid">
                       Ignore
-                      <span className="text-[0.6875rem] text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         Close it without an answer to the agent
                       </span>
                     </span>

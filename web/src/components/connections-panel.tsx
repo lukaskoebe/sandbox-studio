@@ -122,12 +122,12 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
               </Ident>
               <time
                 dateTime={c.started}
-                className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground tabular-nums"
+                className="shrink-0 font-mono text-caption text-muted-foreground tabular-nums"
               >
                 {new Date(c.started).toLocaleTimeString()}
               </time>
             </div>
-            <div className="flex min-w-0 items-center gap-2 pl-4 text-[0.6875rem] text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-2 pl-4 text-caption text-muted-foreground">
               <span className="min-w-0 truncate">{c.source}</span>
               {c.intercepted && <InterceptedMarker conn={c} />}
               <span className="ml-auto shrink-0 font-mono whitespace-nowrap tabular-nums">

@@ -49,7 +49,7 @@ export function LineageTree({
           role="group"
           aria-label={template.name || templateLabel(template.id)}
         >
-          <p className="font-mono text-[0.6875rem] text-muted-foreground">
+          <p className="font-mono text-caption text-muted-foreground">
             {template.name || templateLabel(template.id)}
             {isSet(template.createdAt) && ` · ${formatAge(template.createdAt)}`}
           </p>
@@ -119,7 +119,7 @@ function TreeRow({
       ) : (
         <StatusDot
           {...phaseDot(phaseOf(node.status, true))}
-          className="shrink-0 font-sans text-[0.6875rem]"
+          className="shrink-0 font-sans text-caption"
         />
       )}
     </>

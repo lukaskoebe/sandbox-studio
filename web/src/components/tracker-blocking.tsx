@@ -72,7 +72,7 @@ export function TrackerBlocking({ env }: { env: string }) {
                 Show the {domains.length} listed domains
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-[0.6875rem] sm:grid-cols-3">
+                <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-caption sm:grid-cols-3">
                   {domains.map((d) => (
                     <li key={d} className="min-w-0">
                       <Ident>{d}</Ident>

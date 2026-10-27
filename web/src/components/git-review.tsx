@@ -585,7 +585,7 @@ function PushReview({ approval }: { approval: Approval }) {
                       <PaperPlaneRightIcon />
                       <span className="grid">
                         Send without deciding
-                        <span className="text-[0.6875rem] text-muted-foreground">
+                        <span className="text-caption text-muted-foreground">
                           The note and comments; the push keeps waiting
                         </span>
                       </span>
@@ -598,7 +598,7 @@ function PushReview({ approval }: { approval: Approval }) {
                     <EyeSlashIcon />
                     <span className="grid">
                       Ignore
-                      <span className="text-[0.6875rem] text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         Close it without an answer to the agent
                       </span>
                     </span>

@@ -92,7 +92,7 @@ function SettingsLayout() {
                         params={{ env }}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "flex h-7 shrink-0 items-center rounded-md px-2 font-control text-[0.8125rem] whitespace-nowrap text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          "flex h-7 shrink-0 items-center rounded-md px-2 font-control text-title whitespace-nowrap text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
                           active &&
                             "bg-foreground/8 font-medium text-foreground"
                         )}

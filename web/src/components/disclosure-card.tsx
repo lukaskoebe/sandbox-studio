@@ -31,7 +31,7 @@ export function DisclosureCard({
         onClick={() => onOpenChange(!open)}
         className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="w-32 shrink-0 text-[0.8125rem] font-semibold sm:w-40">
+        <span className="w-32 shrink-0 text-title font-semibold sm:w-40">
           {title}
         </span>
         <span

@@ -94,7 +94,7 @@ export function TeammateThread({
               {chatTitle(chat)}
             </h1>
             {computer && (
-              <span className="shrink-0 rounded-full border px-2 font-mono text-[0.6875rem] text-muted-foreground max-sm:hidden">
+              <span className="shrink-0 rounded-full border px-2 font-mono text-caption text-muted-foreground max-sm:hidden">
                 on {computer}
               </span>
             )}
@@ -222,7 +222,7 @@ function ThreadMenu({
             <TerminalWindowIcon />
             <span className="grid">
               Continue in the terminal
-              <span className="text-[0.6875rem] text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {chat.state === "running"
                   ? "Once the agent is done, or stopped"
                   : "In the agent's own interface"}

@@ -55,7 +55,7 @@ export function QueuedPrompts({
 
   return (
     <section aria-label="Queued messages" className="grid gap-1">
-      <p className="flex items-center gap-1.5 px-1 text-[0.6875rem] text-muted-foreground">
+      <p className="flex items-center gap-1.5 px-1 text-caption text-muted-foreground">
         <ClockIcon className="size-3" aria-hidden />
         {queued.length === 1 ? "Queued" : `${queued.length} queued`}:{" "}
         {stuck
@@ -66,7 +66,7 @@ export function QueuedPrompts({
         {queued.map((q) => (
           <li
             key={q.id}
-            className="flex items-start gap-2 rounded-lg border border-dashed bg-muted/30 py-1.5 pr-1 pl-3 text-sm"
+            className="flex items-start gap-2 rounded-lg border border-dashed bg-muted/30 py-1.5 pr-1 pl-3 text-xs/relaxed"
           >
             <div className="min-w-0 flex-1 py-0.5">
               {q.text && (

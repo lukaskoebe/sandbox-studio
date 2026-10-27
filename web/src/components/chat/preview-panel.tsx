@@ -240,7 +240,7 @@ function PreviewFrame({
           onLoad={() => setRenewal(undefined)}
         />
       )}
-      <p className="text-[0.6875rem] text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         Blank, or says it refused to connect? Some apps can't be shown inside
         Studio: use Open in new tab.
       </p>

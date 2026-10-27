@@ -196,7 +196,7 @@ function NoteMarker({
         style={{ left: `${note.u * 100}%`, top: `${note.v * 100}%` }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
-        className="pointer-events-auto absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-[0.6875rem] font-semibold text-primary-foreground shadow-md ring-2 ring-background transition-transform outline-none hover:scale-110 focus-visible:ring-ring data-popup-open:scale-110"
+        className="pointer-events-auto absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-caption font-semibold text-primary-foreground shadow-md ring-2 ring-background transition-transform outline-none hover:scale-110 focus-visible:ring-ring data-popup-open:scale-110"
         onContextMenu={(e) => {
           // A right-click on a marker opens it, rather than pinning a note on top of it.
           e.preventDefault()

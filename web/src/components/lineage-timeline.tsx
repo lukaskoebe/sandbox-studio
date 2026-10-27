@@ -277,7 +277,7 @@ function Marker({
         {label}
       </div>
       <div className="flex h-7 items-center justify-center">{dot}</div>
-      <div className="h-4 w-full truncate text-center text-[0.625rem] leading-4 text-muted-foreground">
+      <div className="h-4 w-full truncate text-center text-meta leading-4 text-muted-foreground">
         {meta}
       </div>
       {template && (

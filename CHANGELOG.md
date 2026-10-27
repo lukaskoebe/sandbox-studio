@@ -6,6 +6,12 @@
   the workspace at the same time, but a VM runs one such command at a time, so the copy
   failed with "runtime has an active or pending run" and the sandbox stayed as it was. They
   copy one after the other again, still compressed with zstd.
+- **Text sizes** follow one scale across every page: 14px for the titles of pages, dialogs
+  and cards, 13px for the titles of rows and sections, 12px for body text, notices and
+  messages, 11px for captions and 10px for badges. Queued messages read at the chat's size
+  instead of larger, Home's notices (notifications, previews, a newer base) share one
+  padding and size, and text without a size of its own is no longer the browser's 16px. An
+  end-to-end test checks every page in both styles.
 
 ## v0.9.0 — 2026-10-27
 

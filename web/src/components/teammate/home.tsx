@@ -367,7 +367,7 @@ function Preview({ text }: { text: string }) {
         i % 2 === 1 ? (
           <code
             key={i}
-            className="rounded-sm border bg-muted px-1 font-mono text-[0.75rem]"
+            className="rounded-sm border bg-muted px-1 font-mono text-xs"
           >
             {part}
           </code>
@@ -452,14 +452,14 @@ function ThreadCard({
           {chatTitle(chat)}
         </span>
         {computer && (
-          <span className="shrink-0 rounded-full border px-2 font-mono text-[0.6875rem] text-muted-foreground">
+          <span className="shrink-0 rounded-full border px-2 font-mono text-caption text-muted-foreground">
             on {computer}
           </span>
         )}
         {news && (
           <span
             title="New since you last looked"
-            className="ml-auto shrink-0 rounded-full bg-primary/10 px-1.5 text-[0.625rem] leading-4 font-medium text-primary"
+            className="ml-auto shrink-0 rounded-full bg-primary/10 px-1.5 text-meta leading-4 font-medium text-primary"
           >
             New
           </span>
@@ -480,12 +480,12 @@ function ThreadCard({
             avatar={teammate.avatar}
             className="mt-0.5 size-4 shrink-0 text-[0.5rem]"
           />
-          <span className="line-clamp-2 text-[0.8125rem]/relaxed">
+          <span className="line-clamp-2 text-xs/relaxed">
             <Preview text={said} />
           </span>
         </span>
       )}
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
+      <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
         {turns.length > 0 && (
           <>
             <span className="shrink-0">
@@ -579,9 +579,7 @@ function Row({
       <I className={cn("mt-[3px] size-3.5 shrink-0", iconClassName)} />
       <span className="min-w-0 flex-1 wrap-anywhere">{children}</span>
       {action}
-      <span className="shrink-0 pt-px font-mono text-[0.625rem]">
-        {time(at)}
-      </span>
+      <span className="shrink-0 pt-px font-mono text-meta">{time(at)}</span>
     </div>
   )
 }
@@ -627,7 +625,7 @@ function Learned({
           <Button
             size="xs"
             variant="ghost"
-            className="-my-0.5 h-5 shrink-0 px-1.5 text-[0.6875rem] text-muted-foreground opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+            className="-my-0.5 h-5 shrink-0 px-1.5 text-caption text-muted-foreground opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
             disabled={busy}
             onClick={() => void forget()}
           >
@@ -759,8 +757,8 @@ function WaitingRow({
         <span
           title={title}
           className={cn(
-            "truncate text-sm font-medium",
-            kind.mono && !group && "font-mono text-[0.8125rem]"
+            "truncate text-title font-medium",
+            kind.mono && !group && "font-mono"
           )}
         >
           {title}
@@ -910,7 +908,7 @@ function NewThread({
                       <I />
                       <span className="grid">
                         {modes[m].label}
-                        <span className="text-[0.6875rem] text-muted-foreground">
+                        <span className="text-caption text-muted-foreground">
                           {
                             {
                               message: "A new thread with your message",

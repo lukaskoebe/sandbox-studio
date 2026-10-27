@@ -86,7 +86,7 @@ export function BrowserDownloads({
   return (
     <div className="flex max-w-5xl flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Send to</span>
+        <span className="text-xs text-muted-foreground">Send to</span>
         <Select value={target} onValueChange={(v) => setTarget(v ?? "")}>
           <SelectTrigger size="sm" aria-label="Sandbox to send to">
             <SelectValue placeholder="Choose a sandbox" />

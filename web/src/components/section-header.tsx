@@ -50,9 +50,9 @@ export function SectionHeader({
           <IconComp weight="bold" className="size-3" aria-hidden />
         </span>
       )}
-      <h2 className="font-heading text-[0.8125rem] font-semibold">{title}</h2>
+      <h2 className="font-heading text-title font-semibold">{title}</h2>
       {count !== undefined && (
-        <span className="font-mono text-[0.6875rem] text-muted-foreground">
+        <span className="font-mono text-caption text-muted-foreground">
           {count}
         </span>
       )}

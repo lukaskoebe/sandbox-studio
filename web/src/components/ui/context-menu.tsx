@@ -1,5 +1,5 @@
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 
 // The items, separators and shortcuts are the dropdown menu's: a context menu is the same menu
 // opened at the pointer.

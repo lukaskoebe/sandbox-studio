@@ -9,6 +9,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { Notice } from "@/components/notice"
 import {
   ApprovalCardList,
   useApprovalReview,
@@ -118,28 +119,29 @@ function NotificationsBanner() {
     }
   }
   return (
-    <section
+    <Notice
       aria-label="Notifications"
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius) border bg-card px-4 py-3"
+      icon={<BellIcon />}
+      actions={
+        <>
+          <Button size="sm" variant="outline" onClick={request}>
+            Enable notifications
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Dismiss"
+            title="Dismiss"
+            onClick={dismiss}
+          >
+            <XIcon />
+          </Button>
+        </>
+      }
     >
-      <BellIcon className="size-4 shrink-0 text-muted-foreground" />
-      <p className="min-w-48 flex-1 text-[0.8125rem] text-muted-foreground">
-        Get a notification when an approval waits while Studio isn&apos;t in
-        front.
-      </p>
-      <Button size="sm" variant="outline" onClick={request}>
-        Enable notifications
-      </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label="Dismiss"
-        title="Dismiss"
-        onClick={dismiss}
-      >
-        <XIcon />
-      </Button>
-    </section>
+      Get a notification when an approval waits while Studio isn&apos;t in
+      front.
+    </Notice>
   )
 }
 
@@ -151,42 +153,43 @@ function PreviewsNotice({ env }: { env: string }) {
   const previews = usePreviewSetting()
   if (!previews.notice) return null
   return (
-    <section
+    <Notice
       aria-label="Previews"
-      className="flex flex-wrap items-center gap-3 rounded-(--radius) border bg-card px-4 py-3"
+      icon={<BroadcastIcon />}
+      actions={
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={previews.pending}
+            onClick={() => previews.setEnabled(true)}
+          >
+            Turn on previews
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Keep previews off"
+            title="Keep previews off"
+            disabled={previews.pending}
+            onClick={() => previews.setEnabled(false)}
+          >
+            <XIcon />
+          </Button>
+        </>
+      }
     >
-      <BroadcastIcon className="size-4 shrink-0 text-muted-foreground" />
-      <p className="min-w-0 flex-1 text-muted-foreground">
-        Previews of sandbox ports are off by default since v0.6. Turn them on
-        here or in{" "}
-        <Link
-          to="/e/$env/settings/general"
-          params={{ env }}
-          className="underline underline-offset-4"
-        >
-          Settings › General
-        </Link>
-        .
-      </p>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={previews.pending}
-        onClick={() => previews.setEnabled(true)}
+      Previews of sandbox ports are off by default since v0.6. Turn them on here
+      or in{" "}
+      <Link
+        to="/e/$env/settings/general"
+        params={{ env }}
+        className="underline underline-offset-4"
       >
-        Turn on previews
-      </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label="Keep previews off"
-        title="Keep previews off"
-        disabled={previews.pending}
-        onClick={() => previews.setEnabled(false)}
-      >
-        <XIcon />
-      </Button>
-    </section>
+        Settings › General
+      </Link>
+      .
+    </Notice>
   )
 }
 
@@ -220,51 +223,53 @@ function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
   }
   const release = /^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(current)
   return (
-    <section
+    <Notice
       aria-label="Base image"
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius) border border-(--st-waiting)/40 bg-(--st-waiting)/10 px-4 py-3"
-    >
-      <StackIcon className="size-4 shrink-0 text-(--st-waiting-fg) dark:text-(--st-waiting)" />
-      <p className="min-w-48 flex-1">
-        {release ? `${current} brings` : "Studio has"} a new base image.{" "}
-        <span className="font-medium">
-          {outdated.length} {outdated.length === 1 ? "sandbox" : "sandboxes"}
-        </span>{" "}
-        still {outdated.length === 1 ? "uses" : "use"} the old one:{" "}
-        {outdated.map((sb, i) => (
-          <span key={sb.id}>
-            {i > 0 && ", "}
-            <Link
-              to="/e/$env/sandboxes/$id"
-              params={{ env, id: sb.id }}
-              className="font-mono underline underline-offset-4"
+      tone="waiting"
+      icon={<StackIcon />}
+      actions={
+        <>
+          {release && (
+            <a
+              href={`https://github.com/lukaskoebe/sandbox-studio/releases/tag/${current}`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4"
             >
-              {sb.name}
-            </Link>
-          </span>
-        ))}
-        . Rebase them from their computer&apos;s menu.
-      </p>
-      {release && (
-        <a
-          href={`https://github.com/lukaskoebe/sandbox-studio/releases/tag/${current}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[0.8125rem] underline underline-offset-4"
-        >
-          What changed
-        </a>
-      )}
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label="Dismiss"
-        title="Dismiss until the next release"
-        onClick={dismiss}
-      >
-        <XIcon />
-      </Button>
-    </section>
+              What changed
+            </a>
+          )}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Dismiss"
+            title="Dismiss until the next release"
+            onClick={dismiss}
+          >
+            <XIcon />
+          </Button>
+        </>
+      }
+    >
+      {release ? `${current} brings` : "Studio has"} a new base image.{" "}
+      <span className="font-medium">
+        {outdated.length} {outdated.length === 1 ? "sandbox" : "sandboxes"}
+      </span>{" "}
+      still {outdated.length === 1 ? "uses" : "use"} the old one:{" "}
+      {outdated.map((sb, i) => (
+        <span key={sb.id}>
+          {i > 0 && ", "}
+          <Link
+            to="/e/$env/sandboxes/$id"
+            params={{ env, id: sb.id }}
+            className="font-mono underline underline-offset-4"
+          >
+            {sb.name}
+          </Link>
+        </span>
+      ))}
+      . Rebase them from their computer&apos;s menu.
+    </Notice>
   )
 }
 
@@ -305,8 +310,8 @@ function GetStarted({ env }: { env: string }) {
       aria-label="Get started"
       className="grid gap-3 rounded-(--radius) border bg-card p-5"
     >
-      <h2 className="font-medium">Start with a teammate</h2>
-      <p className="text-[0.8125rem] text-muted-foreground">
+      <h2 className="text-sm font-medium">Start with a teammate</h2>
+      <p className="text-xs text-muted-foreground">
         A teammate is an agent with its own computer: a sandbox, a Linux VM with
         Docker and a persistent workspace. Chat with it, and it asks you here
         before it reaches the network or pushes code.
@@ -397,9 +402,7 @@ function WorkingNow({
     >
       <Label id="working-now">Working now</Label>
       {chats.length === 0 ? (
-        <p className="text-[0.8125rem] text-muted-foreground">
-          No chat is running.
-        </p>
+        <p className="text-xs text-muted-foreground">No chat is running.</p>
       ) : (
         <ul className="overflow-hidden rounded-(--radius) border bg-card">
           {chats.map((c) => {
@@ -416,10 +419,10 @@ function WorkingNow({
                   <TeammateAvatar
                     name={who?.name ?? "?"}
                     avatar={who?.avatar}
-                    className="size-6 rounded-full text-[0.625rem]"
+                    className="size-6 rounded-full text-meta"
                   />
                   <span className="grid min-w-0 flex-1">
-                    <span className="truncate font-medium">
+                    <span className="truncate text-title font-medium">
                       {c.title || "New chat"}
                     </span>
                     <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
@@ -583,11 +586,11 @@ function Earlier({ env }: { env: string }) {
         </Link>
       </div>
       {entries.length === 0 ? (
-        <p className="text-[0.8125rem] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {approvals.isPending ? "Loading…" : "Nothing has happened yet."}
         </p>
       ) : (
-        <ul className="grid gap-2 text-[0.8125rem]">
+        <ul className="grid gap-2 text-xs">
           {entries.map((e) => (
             <li key={e.key} className="flex min-w-0 gap-3">
               <span

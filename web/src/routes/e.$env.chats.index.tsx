@@ -41,7 +41,7 @@ function ChatsPage() {
         className="min-h-0 flex-1"
         viewportClassName="flex flex-col gap-4 p-4"
       >
-        <p className="max-w-3xl text-sm text-muted-foreground">
+        <p className="max-w-3xl text-xs/relaxed text-muted-foreground">
           Talk to a teammate about the work in one of its sandboxes; it asks you
           before anything risky.{" "}
           <a
@@ -56,7 +56,7 @@ function ChatsPage() {
         {chats.isPending ? (
           <Spinner />
         ) : chats.isError ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-xs text-destructive">
             {errorMessage(chats.error)}
           </p>
         ) : list.length === 0 ? (

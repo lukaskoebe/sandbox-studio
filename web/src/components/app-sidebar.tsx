@@ -188,7 +188,7 @@ export function AppSidebar({ env }: { env: string }) {
                     <span className="min-w-0 flex-1 truncate">
                       Teammates didn't load
                     </span>
-                    <span className="text-[0.6875rem] text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {teammates.isFetching ? "retrying" : "retry"}
                     </span>
                   </SidebarMenuButton>
@@ -263,7 +263,7 @@ export function AppSidebar({ env }: { env: string }) {
               <GearIcon />
               <span>Settings</span>
               {updates.data?.available && (
-                <span className="ml-auto text-[0.625rem] text-primary">
+                <span className="ml-auto text-meta text-primary">
                   Update available
                 </span>
               )}
@@ -271,7 +271,7 @@ export function AppSidebar({ env }: { env: string }) {
           </SidebarMenuItem>
         </SidebarMenu>
         <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
-          <p className="min-w-0 truncate text-[0.625rem] text-muted-foreground">
+          <p className="min-w-0 truncate text-meta text-muted-foreground">
             Sandbox Studio{" "}
             <span className="font-mono">{health.data?.version}</span>
           </p>
@@ -377,8 +377,8 @@ function TeammateRow({
               title={busy ? `${terminal.program} running` : undefined}
               className={
                 working || busy
-                  ? "flex max-w-24 items-center gap-1.5 text-[0.6875rem] text-muted-foreground"
-                  : "text-[0.6875rem] text-muted-foreground"
+                  ? "flex max-w-24 items-center gap-1.5 text-caption text-muted-foreground"
+                  : "text-caption text-muted-foreground"
               }
             >
               {working && (
@@ -477,7 +477,7 @@ function EnvironmentSwitcher({ env }: { env: string }) {
               />
             }
           >
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-primary font-mono text-[0.625rem] font-bold text-primary-foreground">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-primary font-mono text-meta font-bold text-primary-foreground">
               {initials}
             </span>
             <span className="min-w-0 flex-1 truncate font-medium">

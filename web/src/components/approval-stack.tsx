@@ -342,7 +342,7 @@ function ChatPermissionSummary({ approval }: { approval: Approval }) {
   return (
     <div className="grid gap-2 text-xs">
       {p.diffs && p.diffs.length > 0 && (
-        <ul className="grid gap-0.5 font-mono text-[0.6875rem] text-muted-foreground">
+        <ul className="grid gap-0.5 font-mono text-caption text-muted-foreground">
           {p.diffs.slice(0, 3).map((d) => (
             <li key={d.path} className="flex gap-1.5">
               <span className="min-w-0 flex-1 truncate" title={d.path}>

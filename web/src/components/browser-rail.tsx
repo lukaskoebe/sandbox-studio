@@ -333,7 +333,7 @@ export function BrowserSteps({
               )}
             >
               <span className="flex items-baseline gap-1.5">
-                <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
+                <span className="shrink-0 font-mono text-meta text-muted-foreground">
                   {new Date(a.at).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -353,18 +353,16 @@ export function BrowserSteps({
                 </span>
               </span>
               {a.outcome === "pending" ? (
-                <span className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
+                <span className="flex items-center gap-1 text-caption text-muted-foreground">
                   <span className="size-1.5 rounded-full bg-(--st-waiting)" />
                   Asked you
                 </span>
               ) : a.outcome === "denied" ? (
-                <span className="text-[0.6875rem] text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   Denied
                 </span>
               ) : a.outcome === "failed" ? (
-                <span className="text-[0.6875rem] text-destructive">
-                  Failed
-                </span>
+                <span className="text-caption text-destructive">Failed</span>
               ) : null}
               {thumbs && changed && (
                 <img
