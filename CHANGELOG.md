@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.0 — 2026-10-27
 
 - **Forks and rebases** of a sandbox with a home disk work again. v0.9.0 copied the home and
   the workspace at the same time, but a VM runs one such command at a time, so the copy
