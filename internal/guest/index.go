@@ -91,7 +91,7 @@ func index(ctx context.Context, workspace string, git gitFunc) agentproto.FilesR
 			p := path.Join(rel, name)
 			switch {
 			case e.IsDir():
-				if !slices.Contains(skippedDirs, name) && !(rel == "" && name == lostFound) {
+				if !slices.Contains(skippedDirs, name) && (rel != "" || name != lostFound) {
 					queue = append(queue, p)
 				}
 			case !add(p):
