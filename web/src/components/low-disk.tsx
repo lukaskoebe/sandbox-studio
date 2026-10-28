@@ -4,25 +4,46 @@ import { formatBytes } from "@/lib/utils"
 
 type Disk = components["schemas"]["Disk"]
 
+const diskNames: Record<Disk["name"], string> = {
+  home: "home disk",
+  workspace: "workspace disk",
+  docker: "Docker disk",
+}
+
 /** "The home disk has 180 MB of 4.0 GB free", for each nearly full disk. */
 export function lowDiskText(disks: Disk[]) {
   return disks
     .map(
       (d) =>
-        `The ${d.name} disk has ${formatBytes(d.free)} of ${formatBytes(d.total)} free`
+        `The ${diskNames[d.name]} has ${formatBytes(d.free)} of ${formatBytes(d.total)} free`
     )
     .join(". ")
 }
 
-/** What to do about a nearly full disk: agents stop when the home disk fills. */
+/**
+ * What to do about each nearly full disk: agents stop when the home disk fills, and Docker's
+ * builds and pulls fail when its disk does.
+ */
 function advice(disks: Disk[]) {
-  return disks.some((d) => d.name === "home") ? (
+  const has = (name: Disk["name"]) => disks.some((d) => d.name === name)
+  return (
     <>
-      Agents stop when it fills: free some space in the terminal, such as with{" "}
-      <code className="font-mono">rm -rf ~/.cache ~/.npm</code>.
+      {has("home") && (
+        <>
+          Agents stop when the home disk fills: free some space in the terminal,
+          such as with <code className="font-mono">rm -rf ~/.cache ~/.npm</code>
+          .{" "}
+        </>
+      )}
+      {has("workspace") && "Free some space in /workspace from the terminal. "}
+      {has("docker") && (
+        <>
+          Free Docker&apos;s space with{" "}
+          <code className="font-mono">docker builder prune</code> and{" "}
+          <code className="font-mono">docker image prune -a</code>.
+        </>
+      )}
     </>
-  ) : (
-    "Free some space in /workspace from the terminal."
   )
 }
 

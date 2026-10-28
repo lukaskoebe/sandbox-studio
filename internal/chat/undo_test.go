@@ -158,7 +158,9 @@ func TestTaskDoneOnlyAfterChanges(t *testing.T) {
 
 func TestFailedTurnSaysTheDiskIsFull(t *testing.T) {
 	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Fail: "Internal error: OpenCode service failure"}}})
-	f.g.disks = []agentproto.Disk{{Name: agentproto.DiskHome, Free: 10 << 20, Total: 4 << 30}, {Name: agentproto.DiskWorkspace, Free: 8 << 30, Total: 10 << 30}}
+	// A full Docker disk fails Docker, not the agent, and isn't named.
+	f.g.disks = []agentproto.Disk{{Name: agentproto.DiskDocker, Free: 1 << 20, Total: 20 << 30},
+		{Name: agentproto.DiskHome, Free: 10 << 20, Total: 4 << 30}, {Name: agentproto.DiskWorkspace, Free: 8 << 30, Total: 10 << 30}}
 	f.wait(t, f.send(t, "one").ID)
 	log, _ := f.s.Get(context.Background(), f.sb.EnvironmentID, f.chat.ID)
 	last := log.Items[len(log.Items)-1]

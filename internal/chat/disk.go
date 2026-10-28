@@ -22,7 +22,8 @@ func (s *Service) diskFull(ctx context.Context, sandboxID string) string {
 		return ""
 	}
 	for _, d := range disks {
-		if !d.Full() {
+		// A full Docker disk fails Docker's builds and pulls, which say so, not the agent.
+		if !d.Full() || d.Name == agentproto.DiskDocker {
 			continue
 		}
 		free := fmt.Sprintf("%s free of %s", sizeText(d.Free), sizeText(d.Total))

@@ -9,12 +9,16 @@ const KindDisk = "disk"
 const (
 	DiskHome      = "home"      // the terminal user's home: harness state, caches, snapshots
 	DiskWorkspace = "workspace" // /workspace
+	DiskDocker    = "docker"    // /var/lib/docker: images, containers, volumes, build cache
 )
+
+// DockerDir is where the Docker disk is mounted.
+const DockerDir = "/var/lib/docker"
 
 // Disk is one of the sandbox's disks, in bytes, as the terminal user sees it: Free leaves
 // out what only root may use.
 type Disk struct {
-	Name  string `json:"name" enum:"home,workspace"`
+	Name  string `json:"name" enum:"home,workspace,docker"`
 	Free  int64  `json:"free"`
 	Total int64  `json:"total"`
 }

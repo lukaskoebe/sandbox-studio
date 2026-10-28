@@ -2030,7 +2030,8 @@
           "name": {
             "enum": [
               "home",
-              "workspace"
+              "workspace",
+              "docker"
             ],
             "type": "string"
           },

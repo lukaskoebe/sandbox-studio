@@ -3595,7 +3595,7 @@ export interface components {
             /** Format: int64 */
             free: number;
             /** @enum {string} */
-            name: "home" | "workspace";
+            name: "home" | "workspace" | "docker";
             /** Format: int64 */
             total: number;
         };

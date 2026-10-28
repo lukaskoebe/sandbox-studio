@@ -43,13 +43,16 @@ at `/usr/share/sandbox-studio/home-skel` (the base image's home, or the template
 its last build step left it). Nothing seeds it again, so files you delete stay deleted. Its
 size is fixed and not a setting. Browser VMs and template build VMs have no home disk.
 
-While a tab is open, Studio asks each running sandbox's guest every minute how full its home
-and workspace disks are (`KindDisk`, as the agent user sees them). A disk with less than a
+While a tab is open, Studio asks each running sandbox's guest every minute how full its home,
+workspace and Docker disks are (`KindDisk`, as the agent user sees them). A disk with less than a
 tenth, up to 512 MiB, free is nearly full: the sandbox's `lowDisks` says so, Home names the
 sandbox, and its page and its chats show a strip. Agents keep their sessions in the home,
 and fail with errors of their own when it fills, so a failed request or agent start whose
 sandbox has less than 64 MiB (or a fiftieth of the disk) free says which disk is full and
-how to free it, and then the agent's error. A guest older than v0.10.1 can't say.
+how to free it, and then the agent's error. A full Docker disk fails Docker's builds and
+pulls, which say so themselves, and not the agent, so only its strip and Home warn about it;
+the strip suggests `docker builder prune` and `docker image prune -a`, as the agent
+instructions do. A guest older than v0.10.1 can't say.
 
 A sandbox made from a template built before the home skeleton (exporter version 1) has no
 home disk: its home stays on the root layer next to the toolchains that template keeps

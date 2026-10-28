@@ -439,7 +439,8 @@ func dialLoopback(port int) (net.Conn, error) {
 func (a *Agent) replyDisks(st net.Conn) error {
 	var disks []agentproto.Disk
 	seen := map[uint64]bool{}
-	for _, d := range []struct{ name, dir string }{{agentproto.DiskHome, a.user.home}, {agentproto.DiskWorkspace, Workdir}} {
+	for _, d := range []struct{ name, dir string }{{agentproto.DiskHome, a.user.home}, {agentproto.DiskWorkspace, Workdir},
+		{agentproto.DiskDocker, agentproto.DockerDir}} {
 		var fs unix.Stat_t
 		if unix.Stat(d.dir, &fs) != nil || seen[fs.Dev] {
 			continue // a workspace on the home's disk is the home
