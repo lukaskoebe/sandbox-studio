@@ -4665,6 +4665,20 @@ export interface components {
             /** @description added, modified, removed, renamed and so on, as the forge says */
             status: string;
         };
+        PRLineComment: {
+            author: string;
+            body: string;
+            /**
+             * Format: int64
+             * @description The line's number in the new file, or in the old one for side old
+             */
+            line?: number;
+            path: string;
+            /** @enum {string} */
+            side: "new" | "old";
+            /** Format: date-time */
+            when: string;
+        };
         PRReview: {
             author: string;
             body?: string;
@@ -4925,10 +4939,13 @@ export interface components {
             author: string;
             base: components["schemas"]["PRBranch"];
             body?: string;
+            /** @description The comments on the pull request's conversation */
             comments: components["schemas"]["PRComment"][] | null;
             commits: components["schemas"]["PRCommit"][] | null;
             files: components["schemas"]["PRFile"][] | null;
             head: components["schemas"]["PRBranch"];
+            /** @description The reviews' comments on lines of the diff */
+            lineComments?: components["schemas"]["PRLineComment"][] | null;
             merged?: boolean;
             /** @description The pull request has more commits than listed */
             moreCommits?: boolean;

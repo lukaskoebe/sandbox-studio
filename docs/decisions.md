@@ -35,6 +35,7 @@
 | 2026-10-13 | The guest's writes to the host go in pieces of at most 16 KiB, and a reply stays within one 256 KiB stream window, because msb's vsock breaks on larger ones ([guest agent](guest-agent.md#limits-of-the-channel-on-msbs-vsock)) |
 | 2026-10-24 | A teammate's page is the conversation beside its computer's screen (Terminal, Browser, Preview, Changes), and a computer without a teammate has the screen alone; the sandbox workspace, its side panels and the teammate tabs go ([teammate and computer](design/teammate-computer.md)) |
 | 2026-10-28 | SSH access is one config file Studio keeps, with a host per sandbox and `studio ssh-proxy` as the ProxyCommand, included from `~/.ssh/config` when the user turns it on; Studio uses its own client and host keys, not the user's and not msb's per-VM host key ([sandboxes](sandboxes.md#ssh-access)) |
+| 2026-10-28 | A teammate finds pull requests to review itself: `git_repositories` lists what each forge's token reaches and `git_pull_request_list` a repository's pull requests, anyone's. Both only read, with no approval; posting still goes through the `git.review` approval, and a comment on someone else's pull request is a review with the verdict comment rather than a tool of its own ([git review](git-review.md#pull-request-reviews)) |
 
 ## From v1
 

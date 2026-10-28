@@ -13,12 +13,14 @@ import (
 )
 
 // Tools are the MCP tools of the git remote. The push and pull request tools answer from
-// Studio's records of the calling sandbox's pushes and never ask a forge; the review tools
-// read pull requests from it.
+// Studio's records of the calling sandbox's pushes and never ask a forge; the list and review
+// tools read repositories and pull requests from it.
 func (s *Service) Tools() []integrations.Tool {
 	return []integrations.Tool{
 		{Def: agentcall.GitPushStatusTool, Handle: s.toolPushStatus},
 		{Def: agentcall.GitPullRequestStatusTool, Handle: s.toolPullRequestStatus},
+		{Def: agentcall.GitRepositoriesTool, Handle: s.toolRepositories},
+		{Def: agentcall.GitPullRequestListTool, Handle: s.toolPullRequestList},
 		{Def: agentcall.GitPullRequestReadTool, Handle: s.toolPullRequestRead},
 		{Def: agentcall.GitPullRequestReviewTool, Handle: s.toolPullRequestReview},
 		{Def: agentcall.GitReviewStatusTool, Handle: s.toolReviewStatus},

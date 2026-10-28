@@ -112,6 +112,15 @@ func (s *Service) reviewForge(ctx context.Context, envID, name string) (store.Fo
 	return f, rv, nil
 }
 
+// splitRepository splits a tool's repository argument, owner/repo, on a forge of kind.
+func splitRepository(kind, repository string) (string, string, error) {
+	owner, repo, ok := splitPath(strings.Trim(repository, "/"))
+	if !ok || badOwner(kind, owner) {
+		return "", "", integrations.ToolError("repository is owner/repo, not %q", repository)
+	}
+	return owner, repo, nil
+}
+
 // pullRequestArgs are the arguments that name a pull request.
 type pullRequestArgs struct {
 	Forge      string `json:"forge"`
@@ -120,9 +129,9 @@ type pullRequestArgs struct {
 }
 
 func (in pullRequestArgs) split(kind string) (string, string, error) {
-	owner, repo, ok := splitPath(strings.Trim(in.Repository, "/"))
-	if !ok || badOwner(kind, owner) {
-		return "", "", integrations.ToolError("repository is owner/repo, not %q", in.Repository)
+	owner, repo, err := splitRepository(kind, in.Repository)
+	if err != nil {
+		return "", "", err
 	}
 	if in.Number < 1 {
 		return "", "", integrations.ToolError("give the pull request's number")

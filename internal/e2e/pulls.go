@@ -11,9 +11,9 @@ import (
 	"sync"
 )
 
-// The upstream's Forgejo API: the account e2e-user, and on every repository a pull request 1,
-// "Apply coupon codes", opened by someone else. Reviews posted to it are kept for the tests
-// (GET /api/e2e/reviews).
+// The upstream's Forgejo API: the account e2e-user with the repositories acme/web and acme/api,
+// and on every repository a pull request 1, "Apply coupon codes", opened by someone else.
+// Reviews posted to it are kept for the tests (GET /api/e2e/reviews).
 
 const pullDiff = `diff --git a/web/coupon.ts b/web/coupon.ts
 --- a/web/coupon.ts
@@ -32,6 +32,8 @@ type PostedReview struct {
 	Repo string         `json:"repo"`
 	Body map[string]any `json:"body"`
 }
+
+var pullsPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/pulls$`)
 
 var pullPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/(pulls|issues)/1(\.diff|/commits|/files|/reviews|/comments)?$`)
 
@@ -57,6 +59,22 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 	}
 	if r.URL.Path == "/api/v1/user" {
 		send(map[string]string{"login": "e2e-user"})
+		return true
+	}
+	if r.URL.Path == "/api/v1/user/repos" {
+		send([]map[string]any{{"full_name": "acme/web", "description": "The shop"}, {"full_name": "acme/api", "private": true}})
+		return true
+	}
+	if m := pullsPath.FindStringSubmatch(r.URL.Path); m != nil {
+		repo := hostOnly(r.Host) + "/" + m[1] + "/" + m[2]
+		if r.URL.Query().Get("state") == "closed" {
+			send([]any{})
+			return true
+		}
+		send([]map[string]any{{"number": 1, "title": "Apply coupon codes", "state": "open",
+			"html_url": "https://" + repo + "/pulls/1", "user": map[string]string{"login": "someone"},
+			"base": map[string]string{"ref": "main"}, "head": map[string]string{"ref": "feature/coupons"},
+			"updated_at": "2026-10-27T09:00:00Z"}})
 		return true
 	}
 	m := pullPath.FindStringSubmatch(r.URL.Path)

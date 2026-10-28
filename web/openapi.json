@@ -5177,6 +5177,44 @@
         ],
         "type": "object"
       },
+      "PRLineComment": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "line": {
+            "description": "The line's number in the new file, or in the old one for side old",
+            "format": "int64",
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "new",
+              "old"
+            ],
+            "type": "string"
+          },
+          "when": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "author",
+          "path",
+          "side",
+          "body",
+          "when"
+        ],
+        "type": "object"
+      },
       "PRReview": {
         "additionalProperties": false,
         "properties": {
@@ -6099,6 +6137,7 @@
             "type": "string"
           },
           "comments": {
+            "description": "The comments on the pull request's conversation",
             "items": {
               "$ref": "#/components/schemas/PRComment"
             },
@@ -6127,6 +6166,16 @@
           },
           "head": {
             "$ref": "#/components/schemas/PRBranch"
+          },
+          "lineComments": {
+            "description": "The reviews' comments on lines of the diff",
+            "items": {
+              "$ref": "#/components/schemas/PRLineComment"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "merged": {
             "type": "boolean"

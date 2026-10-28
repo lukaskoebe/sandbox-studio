@@ -34,6 +34,7 @@ type reviewForge struct {
 	head   string
 	mu     sync.Mutex
 	posted []map[string]any
+	listed []string // the queries of pull request lists
 }
 
 func newReviewForge(t *testing.T) *reviewForge {
@@ -70,7 +71,25 @@ func newReviewForge(t *testing.T) *reviewForge {
 		case p == "/repos/acme/web/pulls/42/files":
 			send([]map[string]any{{"filename": "web/coupon.ts", "status": "modified", "additions": 2, "deletions": 1}})
 		case p == "/repos/acme/web/pulls/42/reviews" && r.Method == http.MethodGet:
-			send([]any{})
+			send([]map[string]any{{"id": 3, "comments_count": 1, "user": map[string]string{"login": "carol"}, "state": "COMMENT", "body": "A question"},
+				{"id": 4, "comments_count": 0, "user": map[string]string{"login": "dave"}, "state": "APPROVED"}})
+		case p == "/repos/acme/web/pulls/42/reviews/3/comments":
+			send([]map[string]any{{"user": map[string]string{"login": "carol"}, "path": "web/coupon.ts", "body": "Why the subtotal?",
+				"position": 0, "original_position": 21}})
+		case p == "/repos/acme/web/pulls" && r.Method == http.MethodGet:
+			f.mu.Lock()
+			f.listed = append(f.listed, r.URL.RawQuery)
+			f.mu.Unlock()
+			send([]map[string]any{
+				{"number": 42, "title": "Apply coupon codes", "state": "open", "user": map[string]string{"login": f.author},
+					"base": map[string]string{"ref": "main"}, "head": map[string]string{"ref": "feature/coupons"},
+					"requested_reviewers": []map[string]string{{"login": "lukas"}}, "labels": []map[string]string{{"name": "checkout"}},
+					"html_url": "https://forge.example/acme/web/pulls/42"},
+				{"number": 41, "title": "WIP: Gift cards", "state": "open", "draft": true, "user": map[string]string{"login": "erin"},
+					"base": map[string]string{"ref": "main"}, "head": map[string]string{"ref": "gift-cards"}},
+			})
+		case p == "/user/repos":
+			send([]map[string]any{{"full_name": "acme/web", "description": "The shop"}, {"full_name": "acme/api", "private": true}})
 		case p == "/repos/acme/web/pulls/42/reviews" && r.Method == http.MethodPost:
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)

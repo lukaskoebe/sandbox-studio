@@ -119,9 +119,11 @@ who will merge it. Changing that is a separate decision.
 phases 1 and 3, and the attribution line of phase 2, off by default and remembered per
 teammate in the browser. The mirror needs nothing: `git fetch origin pull/<n>/head` already
 goes to the forge. The review also asks the forge whether the pull request moved since the
-draft ("1 new commit since Ada read it"). Not yet: teammate accounts (so until then a verdict
-on the user's own pull request posts as a comment that starts with it), review requests as
-tasks, and GitLab.
+draft ("1 new commit since Ada read it"). Later (2026-10-28): `git_repositories` and
+`git_pull_request_list`, so a teammate finds the pull requests to review itself instead of
+being handed one, and the read shows the reviews' line comments. Not yet: teammate accounts
+(so until then a verdict on the user's own pull request posts as a comment that starts with
+it), review requests as tasks, and GitLab.
 
 ## Open questions
 

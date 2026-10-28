@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Agents find the pull requests to review.** `git_repositories` lists the repositories
+  each forge's token reaches and `git_pull_request_list` a repository's pull requests,
+  anyone's, so "review the open pull requests in acme/web" works without handing the agent
+  a number. Reading a pull request now includes the line comments of its reviews. A review
+  still waits for you to post it, on your own pull requests or other people's.
 - **SSH into a sandbox from any client.** Turn on **SSH access** in Settings → General, or
   run `studio ssh enable`, and `ssh my-app.studio` reaches sandbox my-app, as do scp,
   sftp, VS Code Remote-SSH, Cursor, Zed and JetBrains Gateway, which list the sandboxes

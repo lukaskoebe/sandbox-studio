@@ -40,16 +40,39 @@ var pullRequestRef = map[string]any{
 	"number":     map[string]any{"type": "integer", "minimum": 1, "description": "The pull request's number"},
 }
 
+// GitRepositoriesTool lists the environment's forges and the repositories their tokens reach.
+var GitRepositoriesTool = Tool{agentproto.MethodGitRepositories,
+	"The git forges of this environment and the repositories Studio's token for each reaches, recently active first. " +
+		"Clone one through the git remote with `git clone <remote><path>.git`; the pull request tools work on the forges " +
+		"marked pullRequests (Forgejo, Gitea and GitHub).",
+	obj(nil, map[string]any{
+		"forge": str("Only this forge", "maxLength", 32),
+		"query": str("Only repositories whose path or description contains this", "maxLength", 100),
+	})}
+
+// GitPullRequestListTool lists a repository's pull requests, anyone's.
+var GitPullRequestListTool = Tool{agentproto.MethodGitPullRequestList,
+	"The pull requests of a repository on a Forgejo, Gitea or GitHub forge, whoever opened them, most recently updated first: " +
+		"number, title, author, branches, draft, requested reviewers and labels. Read one with git_pull_request_read.",
+	obj([]string{"repository"}, map[string]any{
+		"forge":      pullRequestRef["forge"],
+		"repository": pullRequestRef["repository"],
+		"state":      map[string]any{"type": "string", "enum": []string{"open", "closed", "all"}, "description": "Default open"},
+		"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "description": "Default 30"},
+	})}
+
 // GitPullRequestReadTool reads a pull request through Studio, which holds the forge's token.
 var GitPullRequestReadTool = Tool{agentproto.MethodGitPullRequestRead,
-	"A pull request on a Forgejo, Gitea or GitHub forge: its title, description, author, branches and commits, the changed files " +
-		"with their line counts, and the reviews and comments so far. Diffs are left out: read the code with git, as " +
-		"`git fetch origin pull/<number>/head` fetches the pull request's head through the git remote.",
+	"A pull request on a Forgejo, Gitea or GitHub forge, whoever opened it: its title, description, author, branches and commits, " +
+		"the changed files with their line counts, and the reviews, their line comments and the conversation's comments so far. " +
+		"Diffs are left out: read the code with git, as `git fetch origin pull/<number>/head` fetches the pull request's head " +
+		"through the git remote.",
 	obj([]string{"repository", "number"}, pullRequestRef)}
 
 // GitPullRequestReviewTool drafts a review; the user edits, posts or discards it.
 var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
-	"Drafts a review of a pull request: a verdict, a summary and comments on lines of its diff. Nothing is posted yet: the user " +
+	"Drafts a review of a pull request, yours or anyone's: a verdict, a summary and comments on lines of its diff. To only " +
+		"comment, use verdict comment. Nothing is posted yet: the user " +
 		"sees the draft beside the diff, can edit it, and posts or discards it. The call answers at once with \"awaiting approval\"; " +
 		"git_pull_request_review_status says what became of it. A comment must be on a line the diff shows, as added or kept (side new) " +
 		"or removed (side old). A new draft for the same pull request replaces one still waiting.",
@@ -74,7 +97,8 @@ var GitReviewStatusTool = Tool{agentproto.MethodGitReviewStatus,
 	obj([]string{"repository", "number"}, pullRequestRef)}
 
 func init() {
-	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool)
+	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitRepositoriesTool, GitPullRequestListTool,
+		GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool)
 }
 
 // GitCredentialCall routes the git credential helper's question to gitreview. It stays out

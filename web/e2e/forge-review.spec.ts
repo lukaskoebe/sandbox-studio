@@ -45,6 +45,79 @@ async function draftReview(api: Api, sb: string, forge: string) {
   expect(call.result.status).toBe("awaiting approval")
 }
 
+async function call<T>(
+  api: Api,
+  sb: string,
+  method: string,
+  params: Record<string, unknown>
+) {
+  return (await api.json<{ result: T }>(
+    "POST",
+    `/api/e2e/sandboxes/${sb}/calls`,
+    { method, params, wait: true }
+  ))!.result
+}
+
+test("an agent finds the repositories and their pull requests to review", async ({
+  api,
+  env,
+}) => {
+  const forge = await forgejo(api, env)
+  const sb = await api.createSandbox(sandboxName("prlist"))
+
+  const repos = await call<{
+    forges: {
+      name: string
+      pullRequests: boolean
+      remote: string
+      repositories?: { path: string }[]
+    }[]
+  }>(api, sb, "git_repositories", { forge: forge.name })
+  expect(repos.forges).toEqual([
+    expect.objectContaining({
+      name: forge.name,
+      pullRequests: true,
+      remote: `https://git.studio.internal/${forge.name}/`,
+      repositories: [
+        { path: "acme/web", description: "The shop" },
+        { path: "acme/api", private: true },
+      ],
+    }),
+  ])
+
+  const list = await call<{ pullRequests: Record<string, unknown>[] }>(
+    api,
+    sb,
+    "git_pull_request_list",
+    { forge: forge.name, repository: "acme/web" }
+  )
+  expect(list.pullRequests).toEqual([
+    expect.objectContaining({
+      number: 1,
+      title: "Apply coupon codes",
+      author: "someone",
+      head: "feature/coupons",
+      base: "main",
+    }),
+  ])
+  const closed = await call<{ pullRequests: unknown[] }>(
+    api,
+    sb,
+    "git_pull_request_list",
+    { forge: forge.name, repository: "acme/web", state: "closed" }
+  )
+  expect(closed.pullRequests).toEqual([])
+
+  const pr = await call<{ title: string; files: { path: string }[] }>(
+    api,
+    sb,
+    "git_pull_request_read",
+    { forge: forge.name, repository: "acme/web", number: 1 }
+  )
+  expect(pr.title).toBe("Apply coupon codes")
+  expect(pr.files).toEqual([expect.objectContaining({ path: "web/coupon.ts" })])
+})
+
 test("a teammate's pull request review waits for approval and posts as edited", async ({
   page,
   api,

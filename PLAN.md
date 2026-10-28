@@ -17,10 +17,7 @@ says.
 
 ## Next
 
-- **Pull request reviews of any pull request**: a teammate can only review one it is handed,
-  and can't list the pull requests of the repositories it reaches. It should list them, review
-  any of them, and comment on pull requests of other people and agents, all through review →
-  [forge reviews](docs/design/forge-reviews.md)
+Nothing is queued: the next items come from the backlog or the next feedback round.
 
 ## Backlog
 
@@ -81,3 +78,9 @@ says.
 **Git**
 - The host-agent acceptance check: an agent in a sandbox pushes to `git@github.com:…`
   through review, with the key only in the host agent
+- Pull request reviews, what is left: teammates' own forge accounts (a verdict on the user's
+  own pull request posts as a comment until then), review requests on a forge becoming
+  tasks, and GitLab merge requests → [forge reviews](docs/design/forge-reviews.md#phases)
+- The pull request tools against a real Forgejo and GitHub: the list's `draft` field on
+  Forgejo, and Forgejo's `position`/`original_position` of a review's line comments, were
+  read from the API docs, not a live forge

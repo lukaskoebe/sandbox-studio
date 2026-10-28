@@ -21,27 +21,31 @@ type Reviewer interface {
 	// PullRequestDiff returns the pull request's unified diff, cut at max bytes; truncated
 	// says whether it was.
 	PullRequestDiff(ctx context.Context, token, owner, repo string, number int, max int64) (diff string, truncated bool, err error)
+	// ListPullRequests lists a repository's pull requests in state open, closed or all, most
+	// recently updated first, at most limit of them.
+	ListPullRequests(ctx context.Context, token, owner, repo, state string, limit int) ([]PRSummary, error)
 	// PostReview posts a review and returns its web URL.
 	PostReview(ctx context.Context, token, owner, repo string, number int, r ReviewPost) (string, error)
 }
 
 // PullRequestInfo is a pull request as git_pull_request_read answers it.
 type PullRequestInfo struct {
-	Number      int         `json:"number"`
-	Title       string      `json:"title"`
-	Body        string      `json:"body,omitempty"`
-	State       string      `json:"state" doc:"open or closed"`
-	Merged      bool        `json:"merged,omitempty"`
-	URL         string      `json:"url,omitempty"`
-	Author      string      `json:"author"`
-	Base        PRBranch    `json:"base"`
-	Head        PRBranch    `json:"head"`
-	Commits     []PRCommit  `json:"commits"`
-	MoreCommits bool        `json:"moreCommits,omitempty" doc:"The pull request has more commits than listed"`
-	Files       []PRFile    `json:"files"`
-	MoreFiles   bool        `json:"moreFiles,omitempty" doc:"The pull request changes more files than listed"`
-	Reviews     []PRReview  `json:"reviews"`
-	Comments    []PRComment `json:"comments"`
+	Number       int             `json:"number"`
+	Title        string          `json:"title"`
+	Body         string          `json:"body,omitempty"`
+	State        string          `json:"state" doc:"open or closed"`
+	Merged       bool            `json:"merged,omitempty"`
+	URL          string          `json:"url,omitempty"`
+	Author       string          `json:"author"`
+	Base         PRBranch        `json:"base"`
+	Head         PRBranch        `json:"head"`
+	Commits      []PRCommit      `json:"commits"`
+	MoreCommits  bool            `json:"moreCommits,omitempty" doc:"The pull request has more commits than listed"`
+	Files        []PRFile        `json:"files"`
+	MoreFiles    bool            `json:"moreFiles,omitempty" doc:"The pull request changes more files than listed"`
+	Reviews      []PRReview      `json:"reviews"`
+	LineComments []PRLineComment `json:"lineComments,omitempty" doc:"The reviews' comments on lines of the diff"`
+	Comments     []PRComment     `json:"comments" doc:"The comments on the pull request's conversation"`
 }
 
 // PRBranch is a pull request's base or head.
@@ -70,6 +74,16 @@ type PRReview struct {
 	Author string    `json:"author"`
 	State  string    `json:"state" doc:"As the forge says, such as APPROVED, REQUEST_CHANGES or COMMENTED"`
 	Body   string    `json:"body,omitempty"`
+	When   time.Time `json:"when"`
+}
+
+// PRLineComment is a review's comment on a line of a pull request's diff.
+type PRLineComment struct {
+	Author string    `json:"author"`
+	Path   string    `json:"path"`
+	Line   int       `json:"line,omitempty" doc:"The line's number in the new file, or in the old one for side old"`
+	Side   string    `json:"side" enum:"new,old"`
+	Body   string    `json:"body"`
 	When   time.Time `json:"when"`
 }
 
@@ -109,7 +123,7 @@ const pageSize = 50
 // restAPI is one call to a forge's REST API, as Forgejo and GitHub make it.
 type restAPI func(ctx context.Context, token, method, path string, in, out any) error
 
-func readPullRequest(ctx context.Context, call restAPI, token, owner, repo string, number int) (PullRequestInfo, error) {
+func readPullRequest(ctx context.Context, call restAPI, github bool, token, owner, repo string, number int) (PullRequestInfo, error) {
 	base := "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo)
 	n := strconv.Itoa(number)
 	type user struct {
@@ -137,7 +151,7 @@ func readPullRequest(ctx context.Context, call restAPI, token, owner, repo strin
 	}
 	info := PullRequestInfo{Number: pr.Number, Title: pr.Title, Body: pr.Body, State: pr.State, Merged: pr.Merged, URL: pr.HTMLURL,
 		Author: pr.User.Login, Base: PRBranch(pr.Base), Head: PRBranch(pr.Head),
-		Commits: []PRCommit{}, Files: []PRFile{}, Reviews: []PRReview{}, Comments: []PRComment{}}
+		Commits: []PRCommit{}, Files: []PRFile{}, Reviews: []PRReview{}, LineComments: []PRLineComment{}, Comments: []PRComment{}}
 	// Forgejo pages with limit, GitHub with per_page; each ignores the other's.
 	page := fmt.Sprintf("?limit=%d&per_page=%d", pageSize+1, pageSize+1)
 
@@ -180,6 +194,8 @@ func readPullRequest(ctx context.Context, call restAPI, token, owner, repo strin
 	}
 
 	var reviews []struct {
+		ID          int64     `json:"id"`
+		Comments    int       `json:"comments_count"`
 		User        user      `json:"user"`
 		State       string    `json:"state"`
 		Body        string    `json:"body"`
@@ -190,6 +206,62 @@ func readPullRequest(ctx context.Context, call restAPI, token, owner, repo strin
 	}
 	for _, r := range reviews[:min(len(reviews), pageSize)] {
 		info.Reviews = append(info.Reviews, PRReview{Author: r.User.Login, State: r.State, Body: r.Body, When: r.SubmittedAt})
+	}
+
+	// The reviews' line comments: GitHub lists them for the whole pull request, Forgejo per
+	// review, so only reviews that have some are asked.
+	type lineComment struct {
+		User         user      `json:"user"`
+		Path         string    `json:"path"`
+		Body         string    `json:"body"`
+		CreatedAt    time.Time `json:"created_at"`
+		Line         *int      `json:"line"`              // GitHub; null once the line is outdated
+		OriginalLine int       `json:"original_line"`     // GitHub
+		Side         string    `json:"side"`              // GitHub: LEFT or RIGHT
+		Position     int       `json:"position"`          // Forgejo: the line in the new file
+		OldPosition  int       `json:"original_position"` // Forgejo: the line in the old file
+	}
+	add := func(list []lineComment) {
+		for _, c := range list {
+			if len(info.LineComments) == pageSize {
+				return
+			}
+			lc := PRLineComment{Author: c.User.Login, Path: c.Path, Body: c.Body, When: c.CreatedAt, Side: "new"}
+			switch {
+			case github && c.Side == "LEFT":
+				lc.Side = "old"
+				fallthrough
+			case github:
+				lc.Line = c.OriginalLine
+				if c.Line != nil {
+					lc.Line = *c.Line
+				}
+			case c.Position > 0:
+				lc.Line = c.Position
+			default:
+				lc.Line, lc.Side = c.OldPosition, "old"
+			}
+			info.LineComments = append(info.LineComments, lc)
+		}
+	}
+	if github {
+		var list []lineComment
+		if err := call(ctx, token, http.MethodGet, base+"/pulls/"+n+"/comments"+page, nil, &list); err != nil {
+			return info, err
+		}
+		add(list)
+	} else {
+		for _, r := range reviews[:min(len(reviews), pageSize)] {
+			if r.Comments == 0 || len(info.LineComments) == pageSize {
+				continue
+			}
+			var list []lineComment
+			path := base + "/pulls/" + n + "/reviews/" + strconv.FormatInt(r.ID, 10) + "/comments"
+			if err := call(ctx, token, http.MethodGet, path, nil, &list); err != nil {
+				return info, err
+			}
+			add(list)
+		}
 	}
 
 	var comments []struct {
@@ -283,7 +355,7 @@ func callText(ctx context.Context, client *http.Client, auth, token, rawURL stri
 // --- Forgejo and GitHub ---------------------------------------------------------------------
 
 func (f *Forgejo) ReadPullRequest(ctx context.Context, token, owner, repo string, number int) (PullRequestInfo, error) {
-	return readPullRequest(ctx, f.call, token, owner, repo, number)
+	return readPullRequest(ctx, f.call, false, token, owner, repo, number)
 }
 
 func (f *Forgejo) PullRequestDiff(ctx context.Context, token, owner, repo string, number int, max int64) (string, bool, error) {
@@ -301,7 +373,7 @@ func (g *GitHub) rest(ctx context.Context, token, method, path string, in, out a
 }
 
 func (g *GitHub) ReadPullRequest(ctx context.Context, token, owner, repo string, number int) (PullRequestInfo, error) {
-	return readPullRequest(ctx, g.rest, token, owner, repo, number)
+	return readPullRequest(ctx, g.rest, true, token, owner, repo, number)
 }
 
 func (g *GitHub) PullRequestDiff(ctx context.Context, token, owner, repo string, number int, max int64) (string, bool, error) {

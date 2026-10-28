@@ -372,14 +372,31 @@ an agent at once, in the sandbox's chat or terminal it works in.
 
 ## Pull request reviews
 
-An agent can review a pull request on a forge with an API (Forgejo, Gitea, Codeberg or
-GitHub; GitLab is refused for now). It reads with `git_pull_request_read` and git, and drafts
-the review with `git_pull_request_review`. Nothing reaches the forge until the user posts
-the draft, as the forge's token's account.
+An agent can review any pull request on a forge with an API (Forgejo, Gitea, Codeberg or
+GitHub; GitLab is refused for now), whoever opened it, in any repository the forge's token
+reaches. It finds them with `git_repositories` and `git_pull_request_list`, reads with
+`git_pull_request_read` and git, and drafts the review with `git_pull_request_review`.
+Nothing reaches the forge until the user posts the draft, as the forge's token's account.
+A comment on someone else's pull request is a review with the verdict `comment`.
+
+- **Finding repositories.** `git_repositories(forge?, query?)` answers each forge of the
+  environment (or the one named) with its kind, its virtual remote's URL prefix
+  (`https://git.studio.internal/<forge>/`, to clone `<prefix><path>.git`), whether the pull
+  request tools work on it, and the repositories Studio's token reaches, as Settings lists
+  them (`Repositories`, at most `MaxRepositories`). `query` keeps those whose path or
+  description contains it. A forge of kind https or ssh has no list and says so; a forge
+  whose API fails says why, and the others are still listed.
+- **Listing pull requests.** `git_pull_request_list(repository, forge?, state?, limit?)`
+  asks the forge for the repository's pull requests (`GET /repos/{o}/{r}/pulls`, sorted by
+  the latest update), `open` by default or `closed` or `all`, 30 by default and at most
+  100: number, title, author, state, draft, merged, base and head branches, requested
+  reviewers, labels, last update and URL.
 
 - **Reading.** `git_pull_request_read(repository, number, forge?)` answers the pull
   request's title, description, author, branches, commits (up to 50), changed files with line
-  counts (up to 50), and the reviews and comments so far, from the forge with the forge's
+  counts (up to 50), the reviews so far, their comments on lines (up to 50, `{author, path,
+  line, side}`: GitHub's `…/pulls/{n}/comments`, Forgejo's `…/reviews/{id}/comments` of each
+  review that has some) and the conversation's comments, from the forge with the forge's
   token. The diff is left out: `git fetch origin pull/<n>/head` works through the virtual
   remote, since fetches go to the forge as they are. `forge` is needed only when the
   environment has more than one forge with an API.
@@ -450,8 +467,8 @@ type Integration interface {
 - **Jobs.** `Set.RunJobs` runs each job every `Every` until Studio stops; a failed run is
   logged. No integration has a job yet.
 
-Git review serves five tools: the two below, answered from Studio's records of the calling
-sandbox's pushes and never from a forge, and the three of [pull request
+Git review serves seven tools: the two below, answered from Studio's records of the calling
+sandbox's pushes and never from a forge, and the five of [pull request
 reviews](#pull-request-reviews).
 
 
