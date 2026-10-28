@@ -20,8 +20,8 @@ func TestPromptBlocksLinkMentions(t *testing.T) {
 	want := []acp.ContentBlock{
 		{Type: "text", Text: p.Text},
 		{Type: "resource_link", URI: "file:///workspace/web/checkout.tsx", Name: "checkout.tsx"},
-		{Type: "resource_link", URI: "file:///workspace/web/coupon%20code.ts#L20-L28", Name: "coupon code.ts"},
-		{Type: "resource_link", URI: "file:///workspace/README.md#L3", Name: "README.md"},
+		{Type: "resource_link", URI: "file:///workspace/web/coupon%20code.ts?start=20&end=28#L20-L28", Name: "coupon code.ts"},
+		{Type: "resource_link", URI: "file:///workspace/README.md?start=3&end=3#L3", Name: "README.md"},
 	}
 	if len(blocks) != len(want) {
 		t.Fatalf("blocks = %+v", blocks)

@@ -90,12 +90,17 @@ func mentionLink(m Mention) (acp.ContentBlock, error) {
 	case m.Start < 0 || m.End < 0 || (m.End != 0 && (m.Start == 0 || m.End < m.Start)):
 		return acp.ContentBlock{}, fmt.Errorf("%w: the lines of %s are not a range", ErrInvalid, m.Path)
 	}
-	uri := (&url.URL{Scheme: "file", Path: "/workspace/" + clean}).String()
+	// The lines are in the query, which OpenCode reads, and the fragment, as editors
+	// write them.
+	u := &url.URL{Scheme: "file", Path: "/workspace/" + clean}
 	switch {
 	case m.End > m.Start:
-		uri += fmt.Sprintf("#L%d-L%d", m.Start, m.End)
+		u.RawQuery = fmt.Sprintf("start=%d&end=%d", m.Start, m.End)
+		u.Fragment = fmt.Sprintf("L%d-L%d", m.Start, m.End)
 	case m.Start > 0:
-		uri += fmt.Sprintf("#L%d", m.Start)
+		u.RawQuery = fmt.Sprintf("start=%d&end=%d", m.Start, m.Start)
+		u.Fragment = fmt.Sprintf("L%d", m.Start)
 	}
+	uri := u.String()
 	return acp.ContentBlock{Type: "resource_link", URI: uri, Name: path.Base(clean)}, nil
 }

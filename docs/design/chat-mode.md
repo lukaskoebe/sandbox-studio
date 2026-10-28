@@ -195,7 +195,8 @@ visible thing, updated in place, not one row per chunk.
   see them. At most 10 MiB per prompt.
 - Mentions: `@path` in the text, `@path:20-28` for lines, with `mentions[]` in the body
   naming each file. Each becomes a `resource_link` to `file:///workspace/<path>` (with
-  `#L20-L28`), which every ACP agent takes, so the agent reads the file itself as it is
+  `?start=20&end=28#L20-L28`: OpenCode reads the lines from the query, editors from the
+  fragment), which every ACP agent takes, so the agent reads the file itself as it is
   now; the Claude subscription shim names it in a text block. The user item keeps the
   mentions, and the bubble shows them as links to Files. The composer's picker lists
   `GET /sandboxes/{id}/files/index`: the guest's `files` stream with op `index`, which runs

@@ -8,6 +8,9 @@
   store a file no longer leaves it out, which undoing to it would have deleted.
 - **OpenCode keeps no snapshots of its own**: a Git copy of the workspace in the home disk,
   which it added to at every step. Studio's undo covers the same.
+- **Lines of an @ mention reach OpenCode.** The link to the file names the lines in its
+  query too, which is where OpenCode reads them, so it reads those lines instead of the
+  whole file.
 - **The Studio app on NixOS.** When the app can't load its libraries, `studio app` names
   the Nix packages to add to `programs.nix-ld.libraries` (on other systems, the packages to
   install) before it opens the browser instead.

@@ -75,7 +75,7 @@ test("@ mentions a workspace file: the agent gets links, and the message opens t
     blocks.filter((b) => b.type === "resource_link").map((b) => [b.uri, b.name])
   ).toEqual([
     ["file:///workspace/web/src/checkout/checkout.tsx", "checkout.tsx"],
-    ["file:///workspace/web/src/checkout/coupon.ts#L20-L28", "coupon.ts"],
+    ["file:///workspace/web/src/checkout/coupon.ts?start=20&end=28#L20-L28", "coupon.ts"],
   ])
 
   // In the message, the files are links to the computer's Files.

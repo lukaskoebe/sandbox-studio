@@ -653,7 +653,7 @@ func TestClaudeContentMapsAttachments(t *testing.T) {
 		{Type: "image", MimeType: "image/png", Data: "AAAA"},
 		{Type: "image", MimeType: "image/svg+xml", Data: "AAAA"},
 		{Type: "resource", Resource: raw},
-		{Type: "resource_link", URI: "file:///workspace/web/coupon%20code.ts#L20-L28", Name: "coupon code.ts"},
+		{Type: "resource_link", URI: "file:///workspace/web/coupon%20code.ts?start=20&end=28#L20-L28", Name: "coupon code.ts"},
 		{Type: "resource_link", URI: "file:///workspace/README.md", Name: "README.md"},
 	}
 	out, err := claudeContent(blocks)

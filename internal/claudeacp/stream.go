@@ -289,7 +289,7 @@ func claudeContent(blocks []acp.ContentBlock) ([]any, error) {
 }
 
 // linkedFile is a resource link's file as the agent reads it: the path, and the lines a
-// #L20-L28 fragment names.
+// #L20-L28 fragment names (the ?start=20&end=28 query says the same).
 func linkedFile(uri string) string {
 	u, err := url.Parse(uri)
 	if err != nil || u.Scheme != "file" {
