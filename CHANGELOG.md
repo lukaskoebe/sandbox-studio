@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **SSH into a sandbox from any client.** Turn on **SSH access** in Settings → General, or
+  run `studio ssh enable`, and `ssh my-app.studio` reaches sandbox my-app, as do scp,
+  sftp, VS Code Remote-SSH, Cursor, Zed and JetBrains Gateway, which list the sandboxes
+  among their hosts. Studio adds one Include line to `~/.ssh/config`, for a file it keeps
+  up to date, and uses its own keys. A stopped sandbox starts, and a suspended one
+  resumes, when you connect. **Connect over SSH** in the computer's ⋯ menu shows the
+  commands and opens the sandbox in VS Code or Cursor. The base image gets `rsync`.
 - **A full home disk says so.** Agents keep their sessions in the sandbox's 4 GiB home
   disk, and when it filled, OpenCode failed with "OpenCode service failure" and nothing
   said why. A request or agent start that fails on a full disk now says which disk is full

@@ -17,9 +17,11 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
+	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/sshconfig"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -112,6 +114,12 @@ func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
 }
 
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return gw }
+
+func serveSSH(ctx context.Context, vm string, keys runtime.SSHKeys) error {
+	return runtime.ServeSSH(ctx, vm, keys)
+}
+
+func sshUserConfig(paths.Paths) (string, error) { return sshconfig.DefaultUserConfig() }
 
 // upstreamDial is the gateway's dialer; nil is its default, public addresses only.
 func upstreamDial() gatewayDial { return nil }

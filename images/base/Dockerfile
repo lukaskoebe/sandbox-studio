@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
-        curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client bash-completion zsh \
+        curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client rsync bash-completion zsh \
         gnupg procps iproute2 iputils-ping dnsutils unzip xz-utils zstd file \
         build-essential pkg-config python3 python3-venv locales \
     && install -m 0755 -d /etc/apt/keyrings \

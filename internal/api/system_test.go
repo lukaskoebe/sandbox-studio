@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	goruntime "runtime"
+	"strings"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
+	"github.com/lukaskoebe/sandbox-studio/internal/sshconfig"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
 )
@@ -57,6 +61,48 @@ func TestSystemSettings(t *testing.T) {
 	// This Studio has no installer.
 	if rec = do(h, "PUT", "http://localhost:7878/api/system/updates", `{"mode":"install"}`); rec.Code != http.StatusConflict {
 		t.Fatalf("install mode without an installer: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// SSH access adds Studio's config to the user's, and names a host per sandbox.
+func TestSSHAccess(t *testing.T) {
+	h, s := newTestServer(t)
+	dir := t.TempDir()
+	userConfig := filepath.Join(dir, "home", ".ssh", "config")
+	s.System = System{
+		SSH: &sshconfig.Service{Dir: filepath.Join(dir, "data", "ssh"), UserConfig: userConfig, Exe: "/usr/bin/studio", Addr: "127.0.0.1:7878"},
+		SSHSandboxes: func(context.Context) ([]store.Sandbox, error) {
+			return []store.Sandbox{{ID: "a1", Name: "api"}}, nil
+		},
+	}
+	var st SSHAccess
+	rec := do(h, "GET", "http://localhost:7878/api/system/ssh", "")
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &st) != nil || st.Enabled || st.UserConfig != userConfig ||
+		len(st.Hosts) != 1 || st.Hosts[0] != (SSHHost{Alias: "api.studio", SandboxID: "a1"}) {
+		t.Fatalf("ssh status: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "PUT", "http://localhost:7878/api/system/ssh", `{"enabled":true}`)
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &st) != nil || !st.Enabled {
+		t.Fatalf("enable ssh: %d %s", rec.Code, rec.Body)
+	}
+	if b, err := os.ReadFile(userConfig); err != nil || !strings.Contains(string(b), `Include "`+st.Config+`"`) {
+		t.Fatalf("user config = %q, %v", b, err)
+	}
+	rec = do(h, "PUT", "http://localhost:7878/api/system/ssh", `{"enabled":false}`)
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &st) != nil || st.Enabled {
+		t.Fatalf("disable ssh: %d %s", rec.Code, rec.Body)
+	}
+
+	// A config Studio can't change says which line to add.
+	if err := os.Chmod(filepath.Dir(userConfig), 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(userConfig), 0o700) })
+	if os.Geteuid() != 0 && goruntime.GOOS != "windows" {
+		rec = do(h, "PUT", "http://localhost:7878/api/system/ssh", `{"enabled":true}`)
+		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "Include") {
+			t.Fatalf("enable on a read-only config: %d %s", rec.Code, rec.Body)
+		}
 	}
 }
 

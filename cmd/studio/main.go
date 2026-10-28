@@ -9,6 +9,8 @@
 //	studio version    print the version and the default base image
 //	studio autostart enable|disable|status
 //	                  start Studio at login (a user-scope entry; off by default)
+//	studio ssh enable|disable|status
+//	                  reach sandboxes as <name>.studio from any SSH client (off by default)
 package main
 
 import (
@@ -80,6 +82,10 @@ var serverCommands = []cli.ServerCommand{
 		Detail: "It checks the microsandbox runtime, KVM or the hypervisor, the base image, the data\ndirectory, free disk space and the -addr ports. It exits 1 if a check fails."},
 	{Name: "autostart", Args: "enable|disable|status", Summary: "Start Studio when you log in, or stop doing so.",
 		Detail: "status is the default. It writes a systemd user unit on Linux, a LaunchAgent on macOS\nand a Run key value on Windows, which take effect at the next login."},
+	{Name: "ssh", Args: "enable|disable|status", Summary: "Reach the sandboxes from any SSH client, as <name>.studio.",
+		Detail: "status is the default. enable adds an Include line for Studio's SSH config, which names a\nhost per sandbox, at the top of ~/.ssh/config; disable removes it. Then `ssh my-app.studio`,\nscp, sftp, VS Code Remote-SSH, JetBrains Gateway and Zed reach sandbox my-app, and Studio\nstarts or resumes it first. Settings → General has the same switch."},
+	{Name: "ssh-proxy", Args: "<sandbox>.studio", Summary: "Serve one SSH connection to a sandbox over stdin and stdout.",
+		Detail: "It is the ProxyCommand of Studio's SSH config, which `studio ssh enable` includes; you don't\nrun it yourself. It asks the running Studio for the sandbox, by name or ID, and starts or\nresumes it if it doesn't run."},
 	{Name: "restore-msb-db", Args: "[-replace] [file]", Summary: "Rebuild microsandbox's database from one a repair moved aside.",
 		Detail: "When Studio finds microsandbox's database damaged, it moves it aside to\nmsb.db.broken-<time> and rebuilds it from the rows it can read. If it could read none,\nmicrosandbox starts empty and its sandboxes can't start. This rebuilds the database from\nfile, by default the newest one moved aside, and keeps the one in place aside in turn.\nQuit Studio first. It refuses while the database in place knows sandboxes, unless -replace."},
 	{Name: "app", Summary: "Open Studio in its app window, or in the browser without the app.",
@@ -134,6 +140,10 @@ func main() {
 		os.Exit(runApp(context.Background(), os.Stdout, *addr))
 	case "autostart":
 		os.Exit(runAutostart(os.Stdout, flag.Args()[1:]))
+	case "ssh":
+		os.Exit(runSSH(os.Stdout, *addr, flag.Args()[1:]))
+	case "ssh-proxy":
+		os.Exit(runSSHProxy(context.Background(), *addr, flag.Args()[1:]))
 	case "restore-msb-db":
 		os.Exit(runRestoreMSBDB(os.Stdout, *addr, flag.Args()[1:]))
 	}
@@ -501,6 +511,17 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	}}
 	if system.Autostart, err = autostart.Default(); err != nil {
 		log.Warn("autostart is unavailable", "err", err)
+	}
+	// Studio's SSH config names a host per sandbox; ~/.ssh/config includes it while SSH
+	// access is on (docs/sandboxes.md#ssh-access).
+	if system.SSH, err = sshService(p, addr); err != nil {
+		log.Warn("SSH access is unavailable", "err", err)
+	} else {
+		system.SSHSandboxes = func(ctx context.Context) ([]store.Sandbox, error) {
+			all, err := st.AllSandboxes(ctx)
+			return slices.DeleteFunc(all, func(sb store.Sandbox) bool { return !sandboxes.Public(sb) }), err
+		}
+		go system.SSH.Follow(ctx, bus, system.SSHSandboxes, log)
 	}
 
 	// Subscription sign-ins run in system VMs, and the CLI calls of subscription providers' memory

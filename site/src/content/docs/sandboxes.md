@@ -89,6 +89,21 @@ Each port keeps its own browser storage, so a service worker an app registered s
 
 An agent can list the ports itself, with the `sandbox_info` tool of Studio's MCP server or `studio-agent info` in a terminal; the same tool tells it the sandbox's security level and the network rules that cover it.
 
+## Connect over SSH
+
+Any SSH client can reach a sandbox: `ssh`, `scp`, `sftp`, and editors that work over SSH, such as VS Code Remote-SSH, Cursor, Zed and JetBrains Gateway. Turn on **SSH access** under **Settings → General**, or run `studio ssh enable`. Studio adds one `Include` line at the top of `~/.ssh/config`, for a file Studio keeps up to date with a host per sandbox. Then a sandbox named `my-app` is `my-app.studio`:
+
+```sh
+ssh my-app.studio
+scp -r ./src my-app.studio:/workspace/
+```
+
+Your editor lists the `.studio` hosts among its SSH hosts. **Connect over SSH** in the computer's **⋯** menu shows a sandbox's commands and opens it in VS Code or Cursor. Studio must be running. A stopped sandbox starts and a suspended one resumes when you connect. A name that sandboxes of two environments share gets the sandbox ID added, as in `my-app-k2x9….studio`, and `<id>.studio` always works.
+
+Studio uses its own key and host key, so none of your keys are needed or changed. You log in as `agent`; `ssh root@my-app.studio` logs in as root. An SSH session starts in `/` with `/bin/sh` and without the terminal's environment. For that environment, run `ssh -t my-app.studio bash -l`. An editor that installs a server in the sandbox, as VS Code does, downloads it through the sandbox's network rules, so allow the request if Studio asks. `scp` copies the files but then reports an error, because of a fault in microsandbox's SFTP server; `sftp` doesn't.
+
+If a dotfile manager such as home-manager keeps `~/.ssh/config` read-only, Studio says which `Include` line to add there yourself. `studio ssh disable` and the switch remove it.
+
 ## Export a workspace
 
 Use **Export** in the **⋯** menu to save a `.studio-sandbox` file that can be imported in another environment or Studio install, with **+** next to **Your computers** and **Import a computer**. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).

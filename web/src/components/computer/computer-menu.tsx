@@ -12,6 +12,7 @@ import {
   PlayIcon,
   PlugsConnectedIcon,
   PlusIcon,
+  TerminalIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
 import { SaveCheckpointDialog } from "@/components/checkpoints-section"
@@ -28,6 +29,7 @@ import {
 import { formatMiB, HistorySheet } from "@/components/sandbox-details"
 import { useSandboxLifecycle } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxDialog } from "@/components/sandbox-options-menu"
+import { SSHDialog } from "@/components/ssh-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -63,13 +65,14 @@ type Dialog =
   | "rebase"
   | "resources"
   | "connections"
+  | "ssh"
   | "another"
   | "delete"
 
 /**
  * The computer's ⋯ on the screen's bezel: what it is and what it uses, then what is off the
- * everyday path: checkpoints, fork and merge, rebase, resources, its connections, export,
- * another computer, suspend and delete. Power has its own button beside it.
+ * everyday path: checkpoints, fork and merge, rebase, resources, its connections, SSH,
+ * export, another computer, suspend and delete. Power has its own button beside it.
  */
 export function ComputerMenu({
   env,
@@ -242,6 +245,13 @@ export function ComputerMenu({
                   Connections
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  title="Reach this computer from ssh, scp or an editor that works over SSH"
+                  onClick={() => setDialog("ssh")}
+                >
+                  <TerminalIcon />
+                  Connect over SSH
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   disabled={
                     p !== "ready" && p !== "stopped" && p !== "suspended"
                   }
@@ -379,6 +389,7 @@ export function ComputerMenu({
           </ScrollArea>
         </SheetContent>
       </Sheet>
+      {dialog === "ssh" && <SSHDialog sandbox={sb} open onOpenChange={close} />}
       {owner && (
         <CreateSandboxDialog
           env={env}

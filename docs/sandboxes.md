@@ -418,52 +418,93 @@ an open merge involves.
 
 ## SSH access
 
-microsandbox serves a running VM over SSH with its own `msb ssh` commands (msb 0.7.7).
-Studio neither starts nor stops them: you run them yourself, for example for an editor that
-connects over SSH, such as VS Code Remote-SSH.
+Any SSH client reaches a sandbox as `<name>.studio`: `ssh`, `scp`, `sftp`, VS Code
+Remote-SSH, Cursor, Zed and JetBrains Gateway. It is off until the user turns on **SSH access**
+in Settings → General or runs `studio ssh enable` (`internal/sshconfig`, `cmd/studio/ssh.go`).
 
-1. **Find the VM.** Studio names a sandbox's VM `ss-<id>-g<generation>`, where `<id>` is the
-   sandbox ID shown at the top of its computer's ⋯ menu and the generation is 1 until the sandbox is
-   rebased. `msb list` shows the names (every VM Studio owns starts with `ss-`). Studio shows
-   the name nowhere yet, so it is not in the API or the UI.
-2. **Quick shell.** `msb ssh connect ss-<id>-g1` opens a root shell in the VM. It needs no
-   key: it goes through msb's own local connection, as `msb exec` does.
-3. **Authorize your key** for an SSH client. `msb ssh authorize --file ~/.ssh/id_ed25519.pub`
-   adds your own public key to `~/.microsandbox/ssh/authorized_keys`. That file is msb's, not
-   Studio's, and covers every msb VM on this machine; remove the line to take the key back. Use
-   your own key only. Studio's keys and secrets never go into a sandbox.
-4. **Connect with OpenSSH or Remote-SSH.** Add a host to `~/.ssh/config` that serves the
-   connection over stdio. Set `User agent`: the login user is the SSH user name, and without it
-   your local user name is used and the session fails with "guest user not found".
+**The files.** Studio keeps an OpenSSH config in `<data>/ssh/config` and rewrites it whenever a
+sandbox event changes the list of sandboxes (`sshconfig.Service.Follow`, 500 ms after the
+last event; unchanged contents aren't written). It names a host per public sandbox, and a
+wildcard block for all of them:
 
-   ```
-   Host studio-<id>
-       HostName ss-<id>-g1
-       User agent
-       ProxyCommand msb ssh serve --stdio ss-<id>-g1
-       IdentityFile ~/.ssh/id_ed25519
-   ```
+```
+Host my-app.studio
+    HostName k2x9….studio
 
-   `msb ssh serve --port <port> <name>` listens on a host port instead, for clients that can't
-   run a ProxyCommand. Without `--port` it listens on `127.0.0.1:2222`.
+Host *.studio
+    User agent
+    ProxyCommand "/path/to/studio" -addr 127.0.0.1:7878 ssh-proxy -data "<data>" %h
+    IdentityFile "<data>/ssh/id_ed25519"
+    IdentitiesOnly yes
+    UserKnownHostsFile "<data>/ssh/known_hosts"
+    StrictHostKeyChecking yes
+```
 
-An SSH session's shell is `/bin/sh`, not a login shell, and starts in `/`, whatever the
-user's login shell is. It reads no profile, so it has neither the CA variables
-(`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS` and the others) nor the secret placeholders a terminal
-has (see [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)). The system CA
-bundle still includes Studio's CA. For the terminal's environment, run `bash -l`, for example
-`ssh -t studio-<id> bash -l`.
+The explicit hosts are what editors list; the wildcard reaches any `<name or ID>.studio`, so a
+sandbox created a moment ago works before the file is rewritten. A name that sandboxes of
+several environments share gets `-<id>` added in every one of them. The ProxyCommand names the
+data directory, and `-msb-home` when Studio runs with `MSB_HOME`, because ssh runs it without
+Studio's environment.
+
+The same directory holds Studio's own ed25519 client key (`id_ed25519`, authorized in
+`authorized_keys`) and host key (`host_ed25519`, the one key `known_hosts` lists for
+`*.studio`), created on first start with 0600 files in a 0700 directory. No key of the user's is
+used or touched. msb keeps a host key per VM (`sandboxes/<vm>/ssh/host_ed25519` in its home),
+which would change on every rebase; Studio's stays.
+
+**The Include.** Enabling adds two lines at the top of `~/.ssh/config`, a comment and
+`Include "<data>/ssh/config"`: at the top, because an Include after a `Host` line only applies to
+that host. It creates `~/.ssh` (0700) and the file (0600) when there are none, keeps an
+existing file's mode, writes a symlinked file where the link points, and replaces the file
+through a rename. Disabling removes the two lines and the blank line after them. When the file
+can't be written, as with a read-only one from home-manager, the API answers 422 and the CLI
+fails, both naming the line to add by hand (`sshconfig.WriteError`). The e2e build points the
+user config at `<data>/e2e-home/.ssh/config`, so tests never touch the real one.
+
+**The proxy.** `studio ssh-proxy <host>` signs in to the running Studio with the control
+credential (as `studio tui` does), finds the sandbox by ID, by name, or by `name-<id>`, starts
+a stopped one or resumes a suspended one, and waits up to 3 minutes for it to run. It writes
+what it does to stderr ("Studio: starting my-app…"), signs out, and serves the connection over
+its stdin and stdout with the SDK (`runtime.ServeSSH`: `PrepareServer` with Studio's host key and
+authorized keys, SFTP on, no inactivity timeout, then `ServeConnection`). It detaches from the
+VM afterwards and never stops it. The session's user is the one the client logs in as: `agent`
+by the config, `root` with `ssh root@…`. A Studio that isn't running fails the connection with
+"Studio is not running at …".
+
+**Limits.** These are msb's SSH server's (msb 0.7.8):
+
+- A session's shell is `/bin/sh`, not a login shell, and it starts in `/`, whatever the user's
+  login shell is. It reads no profile, so it has neither the CA variables (`SSL_CERT_FILE`,
+  `NODE_EXTRA_CA_CERTS` and the others) nor the secret placeholders a terminal has (see
+  [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)). The system CA bundle
+  still includes Studio's CA. For the terminal's environment, run `bash -l`, for example
+  `ssh -t my-app.studio bash -l`.
+- The SFTP subsystem closes its channel without an exit status, so OpenSSH's `scp` (which uses
+  SFTP) copies the files and then exits 1. `sftp` doesn't mind. `scp -O` needs `scp` in the
+  guest, which the base image doesn't have. The base image has `rsync` from the next base
+  release, for `rsync -e ssh`.
 
 SSH sessions run inside the sandbox's VM, so the network policy applies to them as it does to
 terminals: egress is fixed when the VM is created, and only what it allows gets out (see
-[network](network.md)).
+[network](network.md)). An editor that installs a server in the guest, such as VS Code's, downloads it
+through the gateway and may need an approval.
 
-Verified on 2026-10-17 with msb 0.7.7 and base images v0.3.2 and v0.3.4: `msb ssh connect`
-without any authorized key (root, in `/`); `ssh` through the `ProxyCommand` host above as
-`agent` and as `root`, with a key added by `msb ssh authorize`; a key that was not authorized
-refused with "Permission denied (publickey…)"; an `ssh -p` login through
-`msb ssh serve --port`, which listens on `127.0.0.1:2222` without `--port`; and `ssh -t … bash -l` giving a login shell with the CA variables. VS Code
-Remote-SSH itself was not tried.
+Verified on 2026-10-28 with msb 0.7.8, through a scratch Studio with its own data directory
+and `MSB_HOME`, on a minimal Debian image with an `agent` user:
+
+- `ssh my-app.studio` through the generated config and `studio ssh-proxy`, as `agent`, with the
+  strict host key check against Studio's `known_hosts`;
+- a connection to a stopped sandbox, which started it, and to a suspended one by its ID, which
+  resumed it;
+- `sftp` and `scp` uploads (scp exiting 1 as described);
+- through `msb ssh serve --stdio` on an alpine VM: exit codes, stdin, a PTY (`ssh -tt`), `-L`
+  and `-D` forwards;
+- through `runtime.ServeSSH` with Studio's keys on the alpine VM: a key not in Studio's
+  `authorized_keys` refused with "Permission denied (publickey…)", and the VM still running
+  after the session.
+
+`ssh -G` reading the generated config is a unit test (`TestOpenSSHReadsTheConfig`). The
+Remote-SSH, Zed and JetBrains clients themselves were not tried.
 
 ## Base image
 

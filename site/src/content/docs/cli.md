@@ -58,6 +58,7 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 | `studio app` | Opens Studio in [a window of its own](../getting-started/#studio-in-a-window-of-its-own), starting Studio if it isn't running. Without the app or a display it opens the browser. |
 | `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. |
 | `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |
+| `studio ssh enable`, `disable`, `status` | Lets any SSH client reach the sandboxes as `<name>.studio`, or stops doing so. See [Connect over SSH](../sandboxes/#connect-over-ssh). Studio's SSH config runs `studio ssh-proxy`, which needs Studio running; you don't run it yourself. |
 | `studio restore-msb-db [-replace] [file]` | Rebuilds microsandbox's database from one Studio moved aside as damaged. Quit Studio first. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm). |
 | `studio version` | Prints Studio's version and its base image. |
 

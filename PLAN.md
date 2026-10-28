@@ -17,9 +17,6 @@ says.
 
 ## Next
 
-- **SSH into a sandbox from any client**: `ssh`, `scp`, `rsync`, VS Code Remote-SSH, JetBrains
-  Gateway or Zed, without copying a `ProxyCommand` per sandbox by hand. Today it takes
-  `msb ssh` commands and a host block written by hand → [sandboxes](docs/sandboxes.md#ssh-access)
 - **Pull request reviews of any pull request**: a teammate can only review one it is handed,
   and can't list the pull requests of the repositories it reaches. It should list them, review
   any of them, and comment on pull requests of other people and agents, all through review →
@@ -43,6 +40,11 @@ says.
 - Template build qualifications: release base, cold-cache pulls, live exec export with
   network installs, oversized captures →
   [template builds](docs/template-builds.md#current-qualification-boundary)
+- SSH access with the clients themselves: VS Code Remote-SSH, Zed and JetBrains Gateway
+  against a sandbox on the release base image (`ssh`, `sftp` and the proxy were run on a
+  minimal image). msb 0.7.8's SFTP server closes its channel without an exit status, so
+  `scp` exits 1 after copying; report it upstream →
+  [sandboxes](docs/sandboxes.md#ssh-access)
 - Signed and notarized releases (the workflow exists, never exercised) →
   [release](docs/release.md)
 - Studio inside Studio needs nested virtualization, which microsandbox 0.7.7 turns off

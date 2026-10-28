@@ -34,6 +34,7 @@
 | 2026-10-13 | Teammate tasks and check-ins: one schedule per teammate, which starts a chat only with open tasks, in the latest sandbox, starting it if it's stopped ([teammates](teammates.md#check-ins-heartbeats)) |
 | 2026-10-13 | The guest's writes to the host go in pieces of at most 16 KiB, and a reply stays within one 256 KiB stream window, because msb's vsock breaks on larger ones ([guest agent](guest-agent.md#limits-of-the-channel-on-msbs-vsock)) |
 | 2026-10-24 | A teammate's page is the conversation beside its computer's screen (Terminal, Browser, Preview, Changes), and a computer without a teammate has the screen alone; the sandbox workspace, its side panels and the teammate tabs go ([teammate and computer](design/teammate-computer.md)) |
+| 2026-10-28 | SSH access is one config file Studio keeps, with a host per sandbox and `studio ssh-proxy` as the ProxyCommand, included from `~/.ssh/config` when the user turns it on; Studio uses its own client and host keys, not the user's and not msb's per-VM host key ([sandboxes](sandboxes.md#ssh-access)) |
 
 ## From v1
 

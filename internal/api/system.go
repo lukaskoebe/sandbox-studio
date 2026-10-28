@@ -12,6 +12,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/sshconfig"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
 )
@@ -22,6 +23,9 @@ type System struct {
 	Doctor    func(context.Context) doctor.Report
 	Autostart *autostart.Service
 	Updates   *updates.Checker
+	// SSH is SSH access, and SSHSandboxes the sandboxes its config names.
+	SSH          *sshconfig.Service
+	SSHSandboxes func(context.Context) ([]store.Sandbox, error)
 }
 
 // The API's names for the system types, so that the generated schemas say what they are.
@@ -33,6 +37,18 @@ type (
 	// UpdateState is the update check's setting and last result.
 	UpdateState updates.State
 )
+
+// SSHHost is the host name of a sandbox in Studio's SSH config.
+type SSHHost struct {
+	Alias     string `json:"alias" doc:"The host name SSH clients connect to, such as my-app.studio"`
+	SandboxID string `json:"sandboxId"`
+}
+
+// SSHAccess says whether SSH clients reach the sandboxes, and as which hosts.
+type SSHAccess struct {
+	sshconfig.Status
+	Hosts []SSHHost `json:"hosts" doc:"A host per sandbox, in every environment"`
+}
 
 // DoctorReport is the result of the host checks.
 type DoctorReport struct {
@@ -97,6 +113,41 @@ func (s *Server) registerSystem(api huma.API) {
 			st, err = s.System.Autostart.Disable()
 		}
 		return &struct{ Body AutostartStatus }{AutostartStatus(st)}, autostartError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getSSHAccess", Method: http.MethodGet, Path: "/api/system/ssh", Tags: []string{"system"},
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body SSHAccess }, error) {
+		if s.System.SSH == nil {
+			return nil, huma.Error503ServiceUnavailable("SSH access is not available")
+		}
+		st, err := s.System.SSH.Status()
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return s.sshAccess(ctx, st)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "setSSHAccess", Method: http.MethodPut, Path: "/api/system/ssh", Tags: []string{"system"},
+		Summary: "Include Studio's SSH config in the user's ~/.ssh/config, or stop doing so",
+	}, func(ctx context.Context, in *toggleIn) (*struct{ Body SSHAccess }, error) {
+		if s.System.SSH == nil {
+			return nil, huma.Error503ServiceUnavailable("SSH access is not available")
+		}
+		var st sshconfig.Status
+		var err error
+		if in.Body.Enabled {
+			st, err = s.System.SSH.Enable()
+		} else {
+			st, err = s.System.SSH.Disable()
+		}
+		if we := (*sshconfig.WriteError)(nil); errors.As(err, &we) {
+			return nil, huma.Error422UnprocessableEntity(we.Error())
+		} else if err != nil {
+			return nil, apiError(err)
+		}
+		return s.sshAccess(ctx, st)
 	})
 
 	huma.Register(api, huma.Operation{
@@ -193,6 +244,21 @@ func (s *Server) registerPreviewSetting(api huma.API) {
 		}
 		return &struct{ Body PreviewSetting }{st}, apiError(err)
 	})
+}
+
+// sshAccess adds the sandboxes' hosts to st.
+func (s *Server) sshAccess(ctx context.Context, st sshconfig.Status) (*struct{ Body SSHAccess }, error) {
+	out := SSHAccess{Status: st, Hosts: []SSHHost{}}
+	if s.System.SSHSandboxes != nil {
+		sbs, err := s.System.SSHSandboxes(ctx)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		for _, h := range sshconfig.Hosts(sbs) {
+			out.Hosts = append(out.Hosts, SSHHost{Alias: h.Alias, SandboxID: h.ID})
+		}
+	}
+	return &struct{ Body SSHAccess }{out}, nil
 }
 
 // autostartError reports refusals, such as a `go run` binary, as the user's to fix.

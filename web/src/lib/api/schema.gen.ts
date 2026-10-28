@@ -2833,6 +2833,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/ssh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSSHAccess"];
+        /** Include Studio's SSH config in the user's ~/.ssh/config, or stop doing so */
+        put: operations["setSSHAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/ssh-agent": {
         parameters: {
             query?: never;
@@ -5406,6 +5423,21 @@ export interface components {
             sandboxId?: string;
             /** @description Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId */
             teammateId?: string;
+        };
+        SSHAccess: {
+            /** @description Studio's SSH config file, which lists a host per sandbox */
+            config: string;
+            /** @description Whether the user's SSH config includes Studio's */
+            enabled: boolean;
+            /** @description A host per sandbox, in every environment */
+            hosts: components["schemas"]["SSHHost"][] | null;
+            /** @description The user's SSH config file, such as ~/.ssh/config */
+            userConfig: string;
+        };
+        SSHHost: {
+            /** @description The host name SSH clients connect to, such as my-app.studio */
+            alias: string;
+            sandboxId: string;
         };
         SandboxImport: {
             buildJobId?: string;
@@ -13308,6 +13340,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewSetting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSSHAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHAccess"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setSSHAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHAccess"];
                 };
             };
             /** @description Error */

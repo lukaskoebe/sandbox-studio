@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
+	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -50,6 +52,16 @@ func hostProbes() doctor.Probes {
 }
 
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return e2e.Egress{Gateway: gw} }
+
+// serveSSH has no VM to serve.
+func serveSSH(context.Context, string, runtime.SSHKeys) error {
+	return errors.New("the e2e build has no VMs to serve over SSH")
+}
+
+// sshUserConfig keeps SSH access away from the user's own ~/.ssh/config.
+func sshUserConfig(p paths.Paths) (string, error) {
+	return filepath.Join(p.Data, "e2e-home", ".ssh", "config"), nil
+}
 
 func upstreamDial() gatewayDial { return e2e.Dial }
 

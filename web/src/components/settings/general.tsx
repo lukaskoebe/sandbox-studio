@@ -10,6 +10,7 @@ import {
   ListChecksIcon,
   PaletteIcon,
   PowerIcon,
+  TerminalIcon,
   TerminalWindowIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
@@ -27,6 +28,7 @@ import { SettingsLink } from "@/components/settings/link"
 import { SettingsPage } from "@/components/settings/page"
 import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
+import { useSSHAccess } from "@/components/ssh-dialog"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
 import {
   Select,
@@ -58,6 +60,7 @@ export function GeneralSettings({ env }: { env: string }) {
     <SettingsPage title="General">
       <SettingsGroup label="Studio">
         <AutostartSection />
+        <SSHSection />
         <NotificationsSection />
         <PreviewsSection />
         <TerminalShellSection />
@@ -443,6 +446,34 @@ function AutostartSection() {
           >
             Update it
           </Button>
+        </p>
+      )}
+    </SettingRow>
+  )
+}
+
+function SSHSection() {
+  const { status, set } = useSSHAccess()
+  const st = status.data
+  const example = st?.hosts?.[0]?.alias ?? "my-app.studio"
+  return (
+    <SettingRow
+      icon={TerminalIcon}
+      title="SSH access"
+      description="Reach each sandbox as <name>.studio from ssh, scp, rsync and editors that work over SSH, such as VS Code, Cursor, Zed and JetBrains Gateway. It adds one Include line at the top of your SSH config, for Studio's config with a host per sandbox and Studio's own key. Studio starts or resumes a sandbox you connect to."
+      control={
+        <Switch
+          aria-label="Reach sandboxes over SSH"
+          checked={!!st?.enabled}
+          disabled={!st || set.isPending}
+          onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}
+        />
+      }
+    >
+      {st?.enabled && (
+        <p className="text-muted-foreground">
+          <Ident>{st.userConfig}</Ident> includes <Ident>{st.config}</Ident>.
+          Try <code className="font-mono">ssh {example}</code>.
         </p>
       )}
     </SettingRow>
