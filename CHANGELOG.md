@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.11.0 — 2026-10-29
 
 - **Loading a long chat's earlier turns keeps your place** while they render. The message
   you were reading could slip out of view as the turns above it settled.
