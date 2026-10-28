@@ -371,6 +371,9 @@ func (s *Service) decideReview(ctx context.Context, a store.Approval, d integrat
 		return err
 	}
 	defer s.publish(a.EnvironmentID, a.ID)
+	// Decided, the review settles even if the user's request goes away.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
 	if st != store.StatusApproved {
 		result := ""
 		if st == store.StatusDismissed {
@@ -383,8 +386,6 @@ func (s *Service) decideReview(ctx context.Context, a store.Approval, d integrat
 			s.Log.Error("git remote: record the posted review", "approval", a.ID, "err", err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
-	defer cancel()
 	url, result, err := s.postDraft(ctx, r, draft)
 	if err != nil {
 		s.Log.Info("git remote: approved review failed", "approval", a.ID, "err", err)

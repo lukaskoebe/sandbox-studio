@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Loading a long chat's earlier turns keeps your place** while they render. The message
+  you were reading could slip out of view as the turns above it settled.
+- **A discarded review keeps its note** when you leave the page right after discarding it,
+  which could drop the note.
 - **Docker's disk is watched too.** Home and the sandbox's page warn when the Docker disk
   (`/var/lib/docker`) is nearly full, as for the home and workspace disks, and suggest
   `docker builder prune` and `docker image prune -a`. Agents are told the same: Docker has

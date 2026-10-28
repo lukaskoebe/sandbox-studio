@@ -320,8 +320,13 @@ function LoadEarlier({
   onLoad: () => Promise<void>
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const load = () =>
-    onLoad().catch((err: unknown) => toast.error(errorMessage(err)))
+  const load = () => {
+    const viewport = ref.current?.closest<HTMLElement>(
+      '[aria-label="Messages"]'
+    )
+    if (viewport) holdPlace(viewport)
+    return onLoad().catch((err: unknown) => toast.error(errorMessage(err)))
+  }
   const loadRef = useRef(load)
   loadRef.current = load
   useEffect(() => {
@@ -383,6 +388,40 @@ function LoadEarlier({
       </p>
     </div>
   )
+}
+
+/**
+ * Keeps the first message in view where it is for a few seconds, while the turns loaded above
+ * it render: being content-visibility auto, they start at a guessed height and settle as they
+ * come near. The scroller keeps the place only when they arrive. Scrolling ends the hold.
+ */
+function holdPlace(viewport: HTMLElement) {
+  const box = viewport.getBoundingClientRect()
+  const el = [
+    ...viewport.querySelectorAll<HTMLElement>("[data-message-id]"),
+  ].find((m) => {
+    const r = m.getBoundingClientRect()
+    return r.bottom > box.top && r.top < box.bottom
+  })
+  const content = el?.parentElement
+  if (!el || !content) return
+  const top = () =>
+    el.getBoundingClientRect().top - viewport.getBoundingClientRect().top
+  const at = top()
+  const intents = ["wheel", "touchmove", "keydown", "pointerdown"]
+  const stop = () => {
+    keep.disconnect()
+    clearTimeout(timer)
+    for (const e of intents) viewport.removeEventListener(e, stop)
+  }
+  const keep = new ResizeObserver(() => {
+    if (!el.isConnected) return stop()
+    const moved = top() - at
+    if (Math.abs(moved) > 0.5) viewport.scrollTop += moved
+  })
+  keep.observe(content)
+  for (const e of intents) viewport.addEventListener(e, stop, { passive: true })
+  const timer = setTimeout(stop, 3000)
 }
 
 /**
