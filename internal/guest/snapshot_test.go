@@ -3,6 +3,7 @@
 package guest
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -376,5 +377,103 @@ func TestFiles(t *testing.T) {
 		if r, err := browse(ws, me, agentproto.FilesRequest{Op: op, Path: p}); err == nil {
 			t.Fatalf("%s: %+v", p, r)
 		}
+	}
+}
+
+// storeBytes is the size of the store's files, which the fake disk counts as used.
+func storeBytes(t *testing.T, s *snapshots) int64 {
+	t.Helper()
+	var n int64
+	err := filepath.WalkDir(s.store, func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			info, err := d.Info()
+			if err == nil {
+				n += info.Size()
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func TestSnapshotLeavesRoomOnTheDisk(t *testing.T) {
+	s, ws := newSnapshots(t)
+	// A disk of 8000 bytes keeps 1000 free; limit is what the store may use before it's full.
+	limit := int64(1 << 30)
+	s.space = func() (int64, int64, error) { return limit - storeBytes(t, s), 8000, nil }
+	for _, id := range []string{"a", "b", "c"} {
+		put(t, ws, map[string]string{"f": strings.Repeat(id, 400)})
+		take(t, s, agentproto.SnapshotRequest{ID: id})
+	}
+
+	// Short of room, the oldest snapshots go, before the walk and after it, but the base stays.
+	limit = storeBytes(t, s) + 999
+	put(t, ws, map[string]string{"f": strings.Repeat("d", 400)})
+	r := take(t, s, agentproto.SnapshotRequest{ID: "d", Base: "c"})
+	if !slices.Equal(r.Dropped, []string{"a", "b"}) || r.NoRoom || len(r.Changes) != 1 {
+		t.Fatalf("dropped %v, no room %v, changes %+v", r.Dropped, r.NoRoom, r.Changes)
+	}
+	mustManifest(t, s, "d")
+
+	// With no room for even one snapshot, it goes as well, and says so with the turn's changes.
+	limit = storeBytes(t, s) + 10
+	put(t, ws, map[string]string{"f": strings.Repeat("e", 400)})
+	r = take(t, s, agentproto.SnapshotRequest{ID: "e", Base: "d"})
+	if !slices.Equal(r.Dropped, []string{"c", "d"}) || !r.NoRoom || len(r.Changes) != 1 {
+		t.Fatalf("dropped %v, no room %v, changes %+v", r.Dropped, r.NoRoom, r.Changes)
+	}
+	if n := blobCount(t, s); n != 0 {
+		t.Fatalf("%d blobs left", n)
+	}
+
+	// The store takes at most a quarter of its disk.
+	limit = 1 << 30
+	s.space = func() (int64, int64, error) { return limit, 4000, nil }
+	for _, id := range []string{"f", "g", "h"} {
+		put(t, ws, map[string]string{"f": strings.Repeat(id, 400)})
+		r = take(t, s, agentproto.SnapshotRequest{ID: id})
+	}
+	if !slices.Equal(r.Dropped, []string{"f"}) {
+		t.Fatalf("over a quarter: dropped %v", r.Dropped)
+	}
+}
+
+func TestSnapshotFailsRatherThanLeaveOutAFile(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root writes to a read-only directory")
+	}
+	s, ws := newSnapshots(t)
+	put(t, ws, map[string]string{"a": "1"})
+	take(t, s, agentproto.SnapshotRequest{ID: "a"})
+	// A store it can't write to, as on a full disk: a snapshot without the new file would
+	// remove it on a restore.
+	blobs := filepath.Join(s.store, "blobs")
+	var dirs []string
+	must(t, filepath.WalkDir(blobs, func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() {
+			dirs = append(dirs, p)
+		}
+		return err
+	}))
+	for _, d := range dirs {
+		must(t, os.Chmod(d, 0o500))
+	}
+	t.Cleanup(func() {
+		for _, d := range dirs {
+			os.Chmod(d, 0o700)
+		}
+	})
+	put(t, ws, map[string]string{"b": "new"})
+	if _, err := s.serve(agentproto.SnapshotRequest{Op: agentproto.SnapshotTake, ID: "b", Base: "a"}); err == nil {
+		t.Fatal("took a snapshot without a file it couldn't store")
+	}
+	st, err := s.openStore()
+	must(t, err)
+	defer st.close()
+	if _, err := st.readManifest("b"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("manifest b: %v", err)
 	}
 }

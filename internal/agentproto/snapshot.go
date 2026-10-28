@@ -48,8 +48,13 @@ type SnapshotReply struct {
 	// Take.
 	Files int   `json:"files,omitempty"`
 	Bytes int64 `json:"bytes,omitempty"`
-	// Dropped are snapshots removed to keep the store under its cap.
+	// Dropped are snapshots removed to keep the store under its cap, or the disk from filling.
 	Dropped []string `json:"dropped,omitempty"`
+	// NoRoom says the disk had too little room to keep the snapshot: it is gone, and the turn
+	// can't be undone to it. Partial says the walk stopped when the disk filled, so Changes
+	// are unknown.
+	NoRoom  bool `json:"noRoom,omitempty"`
+	Partial bool `json:"partial,omitempty"`
 	// Take and changes.
 	Changes []FileChange `json:"changes,omitempty"`
 	More    int          `json:"more,omitempty"`

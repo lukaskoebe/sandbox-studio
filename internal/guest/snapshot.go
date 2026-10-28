@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -58,6 +59,24 @@ type snapshots struct {
 	cap       int64 // the store's size limit
 	maxFile   int64
 	maxListed int
+	// space reports the free and total bytes of the store's disk; nil skips the checks.
+	space func() (free, total int64, err error)
+}
+
+// The store leaves room on its disk, which the agent's own files share: the home disk is
+// a few GiB, and a full one stops the agent. It takes at most a quarter of the disk, and
+// drops its oldest snapshots to keep an eighth of it, up to maxHeadroom, free.
+const maxHeadroom = 512 << 20
+
+// diskSpace is the free and total bytes of the disk dir is on, as the agent user sees them.
+func diskSpace(dir string) func() (int64, int64, error) {
+	return func() (int64, int64, error) {
+		var fs unix.Statfs_t
+		if err := unix.Statfs(dir, &fs); err != nil {
+			return 0, 0, err
+		}
+		return int64(fs.Bavail) * fs.Bsize, int64(fs.Blocks) * fs.Bsize, nil
+	}
 }
 
 // gitLister returns what `git ls-files -co --exclude-standard -z` lists in dir.
@@ -77,6 +96,7 @@ func (a *Agent) snapshotStore() *snapshots {
 			cap:       agentproto.MaxSnapshotBytes,
 			maxFile:   agentproto.MaxSnapshotFile,
 			maxListed: agentproto.MaxChangesListed,
+			space:     diskSpace(a.user.home),
 		}
 	})
 	return a.snap
@@ -640,6 +660,11 @@ func (w *walker) dir(fd int, rel string, f *gitFilter, st *store) error {
 			}
 			e.Type, e.Size, e.MTime = 'f', fs.Size, fs.Mtim.Nano()
 			if err := w.file(fd, name, &e, st); err != nil {
+				var se storeError
+				if errors.As(err, &se) {
+					// Left out, the file would go on a restore: no snapshot instead.
+					return err
+				}
 				continue // unreadable or gone: left out
 			}
 			w.out = append(w.out, e)
@@ -680,12 +705,18 @@ func (w *walker) file(dir int, name string, e *mentry, st *store) error {
 	e.Hash = hex.EncodeToString(sum[:])
 	if w.st != nil {
 		if err := w.st.putBlob(e.Hash, data); err != nil {
-			return err
+			return storeError{err}
 		}
 	}
 	w.bytes += e.Size
 	return nil
 }
+
+// storeError is a failed write to the store, such as on a full disk, as opposed to a
+// workspace file that can't be read.
+type storeError struct{ error }
+
+func (e storeError) Unwrap() error { return e.error }
 
 // --- ops ------------------------------------------------------------------------------
 
@@ -705,34 +736,128 @@ func (s *snapshots) take(id, baseID string) (agentproto.SnapshotReply, error) {
 	if base != nil {
 		baseIdx = base.index()
 	}
-	w, err := s.scan(st, baseIdx, true)
+	var reply agentproto.SnapshotReply
+	budget, headroom := s.limits()
+	// Room first, as the walk writes the new files' blobs.
+	if _, err := s.room(st, headroom, &reply, id, baseID); err != nil {
+		return reply, err
+	}
+	w, err := s.scanAndWrite(st, id, baseIdx, &reply, baseID)
+	if errors.Is(err, unix.ENOSPC) {
+		// Even without the older snapshots the disk is full: this one goes too.
+		_, _ = st.collect()
+		reply.NoRoom, reply.Partial = true, true
+		return reply, nil
+	}
 	if err != nil {
-		return agentproto.SnapshotReply{}, err
+		return reply, err
 	}
 	m := &manifest{Entries: w.out}
-	if err := st.writeManifest(id, m); err != nil {
-		return agentproto.SnapshotReply{}, err
+	reply.Files, reply.Bytes = len(m.Entries), w.bytes
+	if base != nil {
+		reply.Changes, reply.More = s.compare(st, base, m, "", false)
 	}
-	reply := agentproto.SnapshotReply{Files: len(m.Entries), Bytes: w.bytes}
 	// The cap: drop the oldest snapshots until the blobs fit.
 	size, err := st.collect()
-	for err == nil && size > s.cap {
-		var ids []string
-		if ids, err = st.manifestIDs(); err != nil || len(ids) == 0 || ids[0] == id {
+	for err == nil && size > budget {
+		var dropped bool
+		if dropped, err = st.dropOldest(&reply, id); err == nil && !dropped {
 			break
 		}
-		if err = unix.Unlinkat(st.manifests, ids[0]+".json", 0); err == nil {
-			reply.Dropped = append(reply.Dropped, ids[0])
+		if err == nil {
 			size, err = st.collect()
 		}
 	}
 	if err != nil {
-		return agentproto.SnapshotReply{}, err
+		return reply, err
 	}
-	if base != nil {
-		reply.Changes, reply.More = s.compare(st, base, m, "", false)
+	ok, err := s.room(st, headroom, &reply, id)
+	if err == nil && !ok {
+		// Alone, the snapshot leaves too little room for the agent's own files.
+		err = ignoreENOENT(unix.Unlinkat(st.manifests, id+".json", 0))
+		if err == nil {
+			_, err = st.collect()
+		}
+		reply.NoRoom = true
 	}
-	return reply, nil
+	return reply, err
+}
+
+// scanAndWrite walks the workspace and writes snapshot id. A disk that fills on the way
+// costs the other snapshots, but keep, and the walk runs once more.
+func (s *snapshots) scanAndWrite(st *store, id string, base map[string]mentry, reply *agentproto.SnapshotReply, keep string) (*walker, error) {
+	var w *walker
+	var err error
+	for try := 0; try < 2; try++ {
+		if try > 0 {
+			if _, err := st.collect(); err != nil {
+				return nil, err
+			}
+			if _, err := s.room(st, math.MaxInt64, reply, id, keep); err != nil {
+				return nil, err
+			}
+		}
+		if w, err = s.scan(st, base, true); err == nil {
+			err = st.writeManifest(id, &manifest{Entries: w.out})
+		}
+		if !errors.Is(err, unix.ENOSPC) {
+			break
+		}
+	}
+	return w, err
+}
+
+// limits are the store's size limit and the free bytes it keeps on its disk.
+func (s *snapshots) limits() (budget, headroom int64) {
+	budget = s.cap
+	if s.space == nil {
+		return budget, 0
+	}
+	if _, total, err := s.space(); err == nil && total > 0 {
+		budget = min(budget, total/4)
+		headroom = min(maxHeadroom, total/8)
+	}
+	return budget, headroom
+}
+
+// room drops the oldest snapshots, but keep, until the disk has need bytes free. It says
+// whether it has; a disk it can't measure has.
+func (s *snapshots) room(st *store, need int64, reply *agentproto.SnapshotReply, keep ...string) (bool, error) {
+	if s.space == nil || need <= 0 {
+		return true, nil
+	}
+	for {
+		free, _, err := s.space()
+		if err != nil || free >= need {
+			return true, nil
+		}
+		dropped, err := st.dropOldest(reply, keep...)
+		if err != nil || !dropped {
+			return false, err
+		}
+		if _, err := st.collect(); err != nil {
+			return false, err
+		}
+	}
+}
+
+// dropOldest removes the oldest snapshot but keep, and says whether there was one.
+func (st *store) dropOldest(reply *agentproto.SnapshotReply, keep ...string) (bool, error) {
+	ids, err := st.manifestIDs()
+	if err != nil {
+		return false, err
+	}
+	for _, id := range ids {
+		if slices.Contains(keep, id) {
+			continue
+		}
+		if err := ignoreENOENT(unix.Unlinkat(st.manifests, id+".json", 0)); err != nil {
+			return false, err
+		}
+		reply.Dropped = append(reply.Dropped, id)
+		return true, nil
+	}
+	return false, nil
 }
 
 func (s *snapshots) changes(baseID, id, only string) (agentproto.SnapshotReply, error) {

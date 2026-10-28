@@ -531,9 +531,15 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
     - The next prompt starts with a text block: "[Studio] The user undid your changes from
       the last N requests; the files are back as they were before '<first prompt>'." The
       agent knows its earlier edits are gone.
-  - **Limits.** The store is capped at 2 GiB per sandbox. Studio keeps snapshots for the
-    newest 50 turns per chat and garbage-collects unreferenced blobs. Older turns lose
-    their Undo button.
+  - **Limits.** The store is capped at 2 GiB per sandbox, and at a quarter of the home
+    disk it lives on (`~/.local/state/studio/snapshots`). It also keeps an eighth of that
+    disk, up to 512 MiB, free for the agent's own files: before the walk and after it, the
+    oldest snapshots go, but the base, until there is room. A disk that fills during the
+    walk costs the other snapshots and the walk runs once more. When the new snapshot alone
+    leaves too little room, it goes too and the reply says `noRoom` (with `partial` when the
+    walk stopped, so its changes are unknown); that turn can't be undone. Studio keeps
+    snapshots for the newest 50 turns per chat and garbage-collects unreferenced blobs.
+    Older turns lose their Undo button.
 - **Disk checkpoints stay** the manual, whole-sandbox tool in the Checkpoints section of the sandbox dashboard.
 
 **Preview panel.**

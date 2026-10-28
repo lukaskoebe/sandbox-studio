@@ -40,6 +40,7 @@ type fakeGuest struct {
 	// turnEdits are what the next turns change, applied as each turn ends.
 	turnEdits []map[string]string
 	snapErr   error
+	noRoom    bool // snapshots are taken but not kept, as on a full disk
 	// slots, when set, is how many agents run at once, as the guest's MaxACPProcesses;
 	// running holds the chats whose stream is open.
 	slots    int
@@ -91,6 +92,10 @@ func (g *fakeGuest) Snapshot(_ context.Context, _ string, req agentproto.Snapsho
 		var r agentproto.SnapshotReply
 		if base, ok := g.snaps[req.Base]; ok {
 			r.Changes = diff(base, g.ws, false)
+		}
+		if g.noRoom {
+			delete(g.snaps, req.ID)
+			r.NoRoom = true
 		}
 		return r, nil
 	case agentproto.SnapshotChanges:

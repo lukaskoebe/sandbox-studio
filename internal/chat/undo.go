@@ -54,6 +54,10 @@ func (s *Service) snapshot(ctx context.Context, c store.Chat, t store.ChatTurn) 
 		return t
 	}
 	s.forget(ctx, c, reply.Dropped)
+	if reply.NoRoom {
+		s.log().Warn("chat: no room on the sandbox's disk for a snapshot before the turn", "chat", c.ID)
+		return t
+	}
 	next, err := s.Store.SetChatTurnSnapshot(ctx, c.ID, t.ID, t.ID)
 	if err != nil {
 		return t
@@ -76,6 +80,13 @@ func (s *Service) changes(ctx context.Context, c store.Chat, t store.ChatTurn) b
 		return true
 	}
 	s.forget(ctx, c, reply.Dropped)
+	if reply.NoRoom {
+		// The changes are still known, unless the disk filled during the walk.
+		s.log().Warn("chat: no room on the sandbox's disk for a snapshot after the turn", "chat", c.ID, "partial", reply.Partial)
+		if reply.Partial {
+			return true
+		}
+	}
 	raw, _ := json.Marshal(TurnChanges{Files: orEmpty(reply.Changes), More: reply.More})
 	if _, err := s.Store.SetChatTurnChanges(ctx, c.ID, t.ID, raw); err == nil {
 		s.changed(c.EnvironmentID, c.ID, false)

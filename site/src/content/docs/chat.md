@@ -65,7 +65,7 @@ What undo doesn't touch:
 - Files over 16 MiB.
 - Anything outside `/workspace`, such as installed system packages or Docker data. For that, use [checkpoints](../checkpoints/).
 
-Studio keeps undo for the newest 50 requests of a chat; older ones lose their Undo button. To keep the snapshots small, it also drops the oldest ones when a sandbox's snapshots reach 2 GiB.
+Studio keeps undo for the newest 50 requests of a chat; older ones lose their Undo button. To keep the snapshots small, it also drops the oldest ones when a sandbox's snapshots reach 2 GiB or a quarter of its home disk, or when the home disk runs low: agents keep their sessions there, and stop when it is full. A request with no room for its snapshot can't be undone.
 
 ## Changes, Files, and Preview
 

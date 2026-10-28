@@ -120,6 +120,21 @@ func TestSnapshotFailureKeepsTheTurn(t *testing.T) {
 	}
 }
 
+func TestSnapshotWithoutRoomKeepsTheTurn(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	f.g.noRoom = true
+	turn := f.send(t, "one")
+	f.wait(t, turn.ID)
+	log, _ := f.s.Get(context.Background(), f.sb.EnvironmentID, f.chat.ID)
+	if log.Turns[0].Undoable || log.Turns[0].StopReason != "end_turn" {
+		t.Fatalf("turn %+v", log.Turns[0])
+	}
+	stored, _ := f.s.Store.ChatTurns(context.Background(), f.chat.ID)
+	if stored[0].Snapshot != "" {
+		t.Fatalf("recorded snapshot %q, which the guest had no room for", stored[0].Snapshot)
+	}
+}
+
 func TestTaskDoneOnlyAfterChanges(t *testing.T) {
 	f := newFixture(t, &acptest.Agent{})
 	var mu sync.Mutex
