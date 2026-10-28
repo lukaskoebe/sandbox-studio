@@ -463,7 +463,7 @@ func TestSnapshotFailsRatherThanLeaveOutAFile(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, d := range dirs {
-			os.Chmod(d, 0o700)
+			_ = os.Chmod(d, 0o700)
 		}
 	})
 	put(t, ws, map[string]string{"b": "new"})

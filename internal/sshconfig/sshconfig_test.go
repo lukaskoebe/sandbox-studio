@@ -148,7 +148,8 @@ func TestOpenSSHReadsTheConfig(t *testing.T) {
 			t.Fatalf("ssh -G %s: %v", host, err)
 		}
 		opts := map[string]string{}
-		for _, line := range strings.Split(string(out), "\n") {
+		// ssh on Windows ends its lines with \r\n.
+		for _, line := range strings.Split(strings.ReplaceAll(string(out), "\r", ""), "\n") {
 			k, v, _ := strings.Cut(line, " ")
 			if _, seen := opts[k]; !seen {
 				opts[k] = v
@@ -163,8 +164,11 @@ func TestOpenSSHReadsTheConfig(t *testing.T) {
 	if want := `"/opt/sandbox studio/studio" -addr 127.0.0.1:7878 ssh-proxy -data "/home/u/sandbox studio" %h`; opts["proxycommand"] != want {
 		t.Fatalf("proxycommand = %q, want %q", opts["proxycommand"], want)
 	}
-	if !strings.Contains(opts["identityfile"], filepath.Join(s.Dir, "id_ed25519")) ||
-		!strings.Contains(opts["userknownhostsfile"], filepath.Join(s.Dir, "known_hosts")) {
+	// ssh on Windows may print a path with forward slashes or another case.
+	has := func(opt, file string) bool {
+		return strings.Contains(strings.ToLower(filepath.ToSlash(opts[opt])), strings.ToLower(filepath.ToSlash(filepath.Join(s.Dir, file))))
+	}
+	if !has("identityfile", "id_ed25519") || !has("userknownhostsfile", "known_hosts") {
 		t.Fatalf("identityfile %q, userknownhostsfile %q", opts["identityfile"], opts["userknownhostsfile"])
 	}
 	// A sandbox the file doesn't list yet is reached by its name or ID all the same.

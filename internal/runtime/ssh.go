@@ -26,7 +26,7 @@ func ServeSSH(ctx context.Context, name string, keys SSHKeys) error {
 		return err
 	}
 	// Detach, not Close, which would stop the VM.
-	defer sb.Detach(context.WithoutCancel(ctx))
+	defer func() { _ = sb.Detach(context.WithoutCancel(ctx)) }()
 	srv, err := sb.SSH().PrepareServer(ctx,
 		msb.WithSSHHostKeyPath(keys.HostKey),
 		msb.WithSSHAuthorizedKeysPath(keys.AuthorizedKeys),
