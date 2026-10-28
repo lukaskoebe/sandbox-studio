@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Docker's disk is watched too.** Home and the sandbox's page warn when the Docker disk
+  (`/var/lib/docker`) is nearly full, as for the home and workspace disks, and suggest
+  `docker builder prune` and `docker image prune -a`. Agents are told the same: Docker has
+  its own disk, its data-root stays there, and they free it with those commands, asking
+  before they remove volumes. An agent had moved Docker's data to `/workspace` when that
+  disk filled, which fills the workspace and puts Docker's data into every fork and
+  checkpoint.
 - **Files shows nothing beside the tree until you open a file**, instead of listing the
   folder a second time. The empty view still takes uploads into the folder selected in the
   tree, dropped on it or picked with **Upload into …**.

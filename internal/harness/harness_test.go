@@ -270,9 +270,10 @@ func TestInstructionsNameTheSandboxes(t *testing.T) {
 }
 
 // TestInstructionsStayShort caps the managed block without a soul: every session reads it, so
-// details that change belong behind a tool. Raise the cap only on purpose.
+// details that change belong behind a tool. Raise the cap only on purpose: 5300 since the
+// Docker disk's line, as agents moved Docker's data-root to /workspace when that disk filled.
 func TestInstructionsStayShort(t *testing.T) {
-	const max = 5000
+	const max = 5300
 	p := teammate
 	p.Soul = ""
 	if n := len(instructions(p, Sandbox{Name: "api"}).Content); n > max {
