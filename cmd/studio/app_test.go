@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -49,5 +50,18 @@ func TestStartAppReportsAnAppThatCantStart(t *testing.T) {
 	err := startApp(app, "studio", "127.0.0.1:7878")
 	if err == nil || !strings.Contains(err.Error(), "libwebkit2gtk") {
 		t.Fatalf("startApp = %v; want the loader's message", err)
+	}
+}
+
+func TestAppLibHint(t *testing.T) {
+	missing := errors.New("exit status 127: studio-app: error while loading shared libraries: libX11.so.6: cannot open shared object file: No such file or directory")
+	if got := appLibHint(missing, true); !strings.Contains(got, "programs.nix-ld.libraries") || !strings.Contains(got, "pkgs.xorg.libX11") || !strings.HasSuffix(got, "\n") {
+		t.Fatalf("NixOS: %q", got)
+	}
+	if got := appLibHint(missing, false); !strings.Contains(got, "libwebkit2gtk-4.1-0") {
+		t.Fatalf("elsewhere: %q", got)
+	}
+	if got := appLibHint(errors.New("exit status 1: no window"), true); got != "" {
+		t.Fatalf("another failure: %q", got)
 	}
 }

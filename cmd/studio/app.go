@@ -60,10 +60,28 @@ func runApp(ctx context.Context, w io.Writer, addr string) int {
 		return openInBrowser(ctx, w, addr) // a window needs a display as much as the browser does
 	}
 	if err := startApp(app, exe, addr); err != nil {
-		fmt.Fprintf(w, "The Studio app didn't start: %v\nStudio opens in the browser instead.\n", err)
+		_, statErr := os.Stat("/etc/NIXOS")
+		fmt.Fprintf(w, "The Studio app didn't start: %v\n%sStudio opens in the browser instead.\n", err, appLibHint(err, statErr == nil))
 		return openInBrowser(ctx, w, addr)
 	}
 	return 0
+}
+
+// nixAppLibraries are the Nix packages with the libraries the Linux app links, for
+// programs.nix-ld.libraries. Their own dependencies come with them.
+const nixAppLibraries = "pkgs.gtk3 pkgs.webkitgtk_4_1 pkgs.libsoup_3 pkgs.glib pkgs.gdk-pixbuf pkgs.xorg.libX11"
+
+// appLibHint says how to install the libraries of an app the loader couldn't start, as a
+// line, or "" for another failure. On NixOS, a prebuilt binary finds libraries only through
+// nix-ld.
+func appLibHint(err error, nixos bool) string {
+	if !strings.Contains(err.Error(), "cannot open shared object file") {
+		return ""
+	}
+	if nixos {
+		return "On NixOS, the app is a prebuilt binary that needs programs.nix-ld with programs.nix-ld.libraries = [ " + nixAppLibraries + " ]. Then run studio app again.\n"
+	}
+	return "The app needs GTK 3 and WebKitGTK 4.1: install them (Debian and Ubuntu: libwebkit2gtk-4.1-0, Fedora: webkit2gtk4.1).\n"
 }
 
 // startApp starts the app on its own and waits appStartWait for it to fail. A second app

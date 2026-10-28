@@ -53,7 +53,9 @@ system shows notifications (macOS shows them only for an app the user allowed) o
 opens Studio in the browser instead when there is no app, no display (neither `DISPLAY` nor
 `WAYLAND_DISPLAY` on Linux; GTK without one waits rather than fails), or the app exits with
 an error, such as a missing WebKitGTK; its last log line, from `logs/studio-app.log`, says
-why. An exit with status 0 is a second app that showed the first one's window.
+why. When the loader couldn't find a library, it also names the packages to install, or on
+NixOS (`/etc/NIXOS`) the ones for `programs.nix-ld.libraries` (`nixAppLibraries` in
+`cmd/studio/app.go`, one for each library `studio-app` links). An exit with status 0 is a second app that showed the first one's window.
 
 ## Building
 

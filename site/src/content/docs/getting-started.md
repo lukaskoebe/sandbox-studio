@@ -80,7 +80,7 @@ studio app
 
 `studio app` opens Studio in a window of its own, with an icon in the tray or menu bar and the system's notifications. It starts Studio in the background if it isn't running, and leaves it running when you close the app, so the browser keeps working beside it. The tray menu has **Open Studio**, **Open in browser**, **Close the app** and **Quit Studio**, which stops Studio too; your sandboxes keep running. Links to other sites, sign-ins and previews open in your browser.
 
-On Linux the app needs GTK 3 and WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Debian and Ubuntu, `webkit2gtk4.1` on Fedora). Without them, or without a display, `studio app` opens Studio in your browser instead and says why. The install script puts `studio-app` next to `studio`.
+On Linux the app needs GTK 3 and WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Debian and Ubuntu, `webkit2gtk4.1` on Fedora). Without them, or without a display, `studio app` opens Studio in your browser instead and says why. On NixOS the prebuilt app finds its libraries through [nix-ld](https://github.com/nix-community/nix-ld): enable `programs.nix-ld` with `programs.nix-ld.libraries = [ pkgs.gtk3 pkgs.webkitgtk_4_1 pkgs.libsoup_3 pkgs.glib pkgs.gdk-pixbuf pkgs.xorg.libX11 ]`. The install script puts `studio-app` next to `studio`.
 
 Or install Studio as a web app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The web app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
 

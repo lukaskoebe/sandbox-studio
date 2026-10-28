@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **The Studio app on NixOS.** When the app can't load its libraries, `studio app` names
+  the Nix packages to add to `programs.nix-ld.libraries` (on other systems, the packages to
+  install) before it opens the browser instead.
+
 ## v0.10.0 — 2026-10-27
 
 - **Forks and rebases** of a sandbox with a home disk work again. v0.9.0 copied the home and
