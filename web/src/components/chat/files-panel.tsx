@@ -1,6 +1,5 @@
 import {
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -9,11 +8,8 @@ import {
 import {
   ArrowClockwiseIcon,
   AtIcon,
-  DotsThreeIcon,
   DownloadSimpleIcon,
   FileIcon,
-  FolderIcon,
-  LinkSimpleIcon,
   SidebarSimpleIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
@@ -30,12 +26,6 @@ import {
 import { CodeView } from "@/components/code-view"
 import { ancestors, FilesTree, GoToFile } from "@/components/chat/files-tree"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
@@ -58,15 +48,12 @@ import { cn, formatBytes } from "@/lib/utils"
 type FileEntry = components["schemas"]["FileEntry"]
 type FileContent = components["schemas"]["FileContent"]
 
-function join(dir: string, name: string) {
-  return dir ? `${dir}/${name}` : name
-}
-
 /**
- * A browser of the sandbox's /workspace, as mock K draws it: the tree beside the folder or
- * file shown, the path above them, and Go to file. Below 640px the tree opens over the file
+ * A browser of the sandbox's /workspace, as mock K draws it: the tree beside the file
+ * shown, the path above them, and Go to file. Below 640px the tree opens over the file
  * and closes once one is picked. Folders opened in the tree stay open while Files moves about.
- * The folder shown takes uploads; files the selected request changed are marked.
+ * With no file open, the view beside the tree is empty and takes uploads into the folder
+ * shown; files the selected request changed are marked.
  */
 export function FilesPanel({
   env,
@@ -196,24 +183,24 @@ export function FilesPanel({
             </ScrollArea>
           </>
         )}
-        <ScrollArea className="min-w-0 flex-1" viewportClassName="p-2.5">
-          {file ? (
+        {file ? (
+          <ScrollArea className="min-w-0 flex-1" viewportClassName="p-2.5">
             <FileView
               env={env}
               sandboxId={sandboxId}
               path={file}
               changed={changed.has(file)}
             />
-          ) : (
-            <FolderView
-              env={env}
-              sandboxId={sandboxId}
-              dir={dir}
-              onOpen={open}
-              changed={changed}
-            />
-          )}
-        </ScrollArea>
+          </ScrollArea>
+        ) : (
+          <NoFile
+            env={env}
+            sandboxId={sandboxId}
+            dir={dir}
+            tree={tree}
+            onShowTree={() => showTree(true)}
+          />
+        )}
       </div>
     </div>
   )
@@ -517,18 +504,23 @@ function UploadList({
   )
 }
 
-function FolderView({
+/**
+ * What Files shows with no file open: an empty view that points to the tree, which lists the
+ * folder, and takes uploads into the folder, dropped on it or picked.
+ */
+function NoFile({
   env,
   sandboxId,
   dir,
-  onOpen,
-  changed,
+  tree,
+  onShowTree,
 }: {
   env: string
   sandboxId: string
   dir: string
-  onOpen: (dir: string, file?: string) => void
-  changed: Set<string>
+  /** Whether the tree is shown beside it. */
+  tree: boolean
+  onShowTree: () => void
 }) {
   const list = $api.useQuery(
     "get",
@@ -536,30 +528,21 @@ function FolderView({
     { params: { path: { env, id: sandboxId }, query: { path: dir } } }
   )
   const { refetch } = list
-  const entries = list.data?.entries ?? []
   const uploads = useFolderUploads({
     env,
     sandboxId,
     dir,
-    entries,
+    entries: list.data?.entries ?? [],
     onDone: () => void refetch(),
   })
   const input = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
-
-  // Folders that hold a changed file are marked too.
-  const changedHere = useMemo(() => {
-    const out = new Set<string>()
-    const prefix = dir ? `${dir}/` : ""
-    for (const p of changed) {
-      if (p.startsWith(prefix)) out.add(p.slice(prefix.length).split("/")[0])
-    }
-    return out
-  }, [changed, dir])
+  const folder = dir || "the workspace"
 
   return (
     <div
-      className="relative grid min-w-0 content-start gap-2"
+      aria-label="No file open"
+      className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-xs text-muted-foreground"
       onDragOver={(e) => {
         if (!hasFiles(e.dataTransfer)) return
         e.preventDefault()
@@ -578,90 +561,47 @@ function FolderView({
       }}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-md border-2 border-dashed border-ring bg-background/90 text-xs font-medium">
-          Drop to upload into {dir || "the workspace"}
+        <div className="pointer-events-none absolute inset-2 z-10 grid place-items-center rounded-md border-2 border-dashed border-ring bg-background/90 font-medium text-foreground">
+          Drop to upload into {folder}
         </div>
       )}
-      <div className="flex min-w-0 items-center gap-1">
-        <span className="min-w-0 truncate font-mono text-xs font-semibold">
-          {dir.split("/").at(-1) || "workspace"}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
-          {list.isSuccess &&
-            `${entries.length.toLocaleString()} ${entries.length === 1 ? "item" : "items"}`}
-        </span>
+      <FileIcon className="size-6" />
+      <p>
+        {tree ? "Pick a file in the tree, or press" : "No file open. Press"}{" "}
+        <kbd className="rounded border px-1 font-mono">/</kbd> to go to{" "}
+        {tree ? "one" : "a file"} by name.
+      </p>
+      <div className="flex flex-wrap justify-center gap-2">
+        {!tree && (
+          <Button size="xs" variant="outline" onClick={onShowTree}>
+            <SidebarSimpleIcon />
+            Show the tree
+          </Button>
+        )}
         <Button
+          size="xs"
           variant="ghost"
-          size="icon-xs"
-          title="Refresh"
-          disabled={list.isFetching}
-          onClick={() => void refetch()}
+          title={`Upload files into ${folder}; you can also drop them here`}
+          onClick={() => input.current?.click()}
         >
-          {list.isFetching ? <Spinner /> : <ArrowClockwiseIcon />}
+          <UploadSimpleIcon />
+          Upload into {dir.split("/").at(-1) || "workspace"}…
         </Button>
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Folder options"
-                title="Folder options"
-              />
-            }
-          >
-            <DotsThreeIcon weight="bold" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => input.current?.click()}>
-              <UploadSimpleIcon />
-              Upload…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <input
-          ref={input}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            uploads.start(Array.from(e.currentTarget.files ?? []))
-            e.currentTarget.value = ""
-          }}
-        />
       </div>
+      <input
+        ref={input}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          uploads.start(Array.from(e.currentTarget.files ?? []))
+          e.currentTarget.value = ""
+        }}
+      />
       {uploads.items.length > 0 && (
-        <UploadList items={uploads.items} onClear={uploads.clear} />
-      )}
-      {list.isError && (
-        <p className="text-muted-foreground">
-          Can't show the files: {errorMessage(list.error)}
-        </p>
-      )}
-      {list.isSuccess && entries.length === 0 && (
-        <p className="text-muted-foreground">This folder is empty.</p>
-      )}
-      {entries.length > 0 && (
-        <ul className="grid min-w-0">
-          {entries.map((e) => (
-            <li key={e.name} className="min-w-0">
-              <EntryRow
-                entry={e}
-                changed={changedHere.has(e.name)}
-                onOpen={() =>
-                  e.type === "dir"
-                    ? onOpen(join(dir, e.name))
-                    : onOpen(dir, join(dir, e.name))
-                }
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      {list.data?.truncated && (
-        <p className="text-muted-foreground">
-          Only the first 1,000 items of this folder are shown.
-        </p>
+        <div className="w-full max-w-sm text-left text-foreground">
+          <UploadList items={uploads.items} onClear={uploads.clear} />
+        </div>
       )}
       <AlertDialog
         open={uploads.clash !== null}
@@ -696,66 +636,6 @@ function FolderView({
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-function EntryRow({
-  entry: e,
-  changed,
-  onOpen,
-}: {
-  entry: FileEntry
-  changed: boolean
-  onOpen: () => void
-}) {
-  const Icon =
-    e.type === "dir"
-      ? FolderIcon
-      : e.type === "symlink"
-        ? LinkSimpleIcon
-        : FileIcon
-  const openable = e.type === "dir" || e.type === "file"
-  return (
-    <button
-      type="button"
-      disabled={!openable}
-      onClick={onOpen}
-      title={
-        e.type === "symlink"
-          ? "A link to another place; links aren't followed"
-          : changed
-            ? "Changed by the selected message"
-            : undefined
-      }
-      className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-default disabled:hover:bg-transparent"
-    >
-      <Icon
-        className={cn(
-          "size-3.5 shrink-0",
-          e.type === "dir" ? "text-sky-600 dark:text-sky-400" : "",
-          e.type !== "dir" && "text-muted-foreground"
-        )}
-      />
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate",
-          changed && "font-medium text-amber-700 dark:text-amber-400"
-        )}
-      >
-        {e.name}
-      </span>
-      {changed && (
-        <span
-          className="size-1.5 shrink-0 rounded-full bg-amber-500"
-          aria-label="changed"
-        />
-      )}
-      {e.type === "file" && (
-        <span className="shrink-0 text-caption text-muted-foreground">
-          {formatBytes(e.size)}
-        </span>
-      )}
-    </button>
   )
 }
 

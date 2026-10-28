@@ -13,12 +13,20 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
   await screen.getByRole("tab", { name: "Changes" }).click()
   await screen.getByRole("button", { name: "Files", exact: true }).click()
 
-  const row = (n: string) =>
-    screen.getByRole("button", { name: new RegExp(`^${n}`) })
-  await row("web").click()
-  await row("src").click()
-  await row("checkout").click()
-  await row("coupon.ts").click()
+  // With no file open, the view beside the tree is empty: the tree lists the folders.
+  const tree = screen.getByRole("tree", { name: "Workspace" })
+  const item = (n: string) =>
+    tree.getByRole("treeitem", { name: new RegExp(`^${n}( |$)`) })
+  const noFile = screen.getByLabel("No file open")
+  await expect(noFile).toContainText("Pick a file in the tree")
+  await expect(
+    noFile.getByRole("button", { name: /^Upload into workspace/ })
+  ).toBeVisible()
+  await item("web").click()
+  await item("src").click()
+  await item("checkout").click()
+  await expect(noFile).toBeVisible()
+  await item("coupon\\.ts").click()
   await expect(page).toHaveURL(/file=web%2Fsrc%2Fcheckout%2Fcoupon\.ts/)
   const code = screen.locator("pre")
   await expect(code).toContainText("applyCoupon")
@@ -32,9 +40,10 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
   // Back, as Alt+← and the mouse's back button do, goes to the places Files showed rather
   // than another page; Forward comes back.
   await page.goBack()
-  await expect(row("coupon.ts")).toBeVisible()
+  await expect(noFile).toBeVisible()
+  await expect(item("checkout")).toHaveAttribute("aria-selected", "true")
   await page.goBack()
-  await expect(row("checkout")).toBeVisible()
+  await expect(item("src")).toHaveAttribute("aria-selected", "true")
   await expect(page).toHaveURL(/files=web%2Fsrc(&|$)/)
   await page.goForward()
   await page.goForward()
@@ -48,15 +57,12 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
     .getByRole("navigation", { name: "Path" })
     .getByRole("button", { name: "checkout" })
     .click()
-  await expect(row("coupon.ts")).toBeVisible()
+  await expect(noFile).toBeVisible()
   await page.goBack()
   await expect(code).toContainText("applyCoupon")
 
   // The tree beside the file has opened to it. A file opens from the tree, whose folders stay
   // open; the keys move through it.
-  const tree = screen.getByRole("tree", { name: "Workspace" })
-  const item = (n: string) =>
-    tree.getByRole("treeitem", { name: new RegExp(`^${n}( |$)`) })
   await expect(item("coupon\\.ts")).toHaveAttribute("aria-selected", "true")
   await expect(item("checkout")).toHaveAttribute("aria-expanded", "true")
   await item("README\\.md").click()

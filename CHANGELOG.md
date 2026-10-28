@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Files shows nothing beside the tree until you open a file**, instead of listing the
+  folder a second time. The empty view still takes uploads into the folder selected in the
+  tree, dropped on it or picked with **Upload into …**.
 - **Agents find the pull requests to review.** `git_repositories` lists the repositories
   each forge's token reaches and `git_pull_request_list` a repository's pull requests,
   anyone's, so "review the open pull requests in acme/web" works without handing the agent
