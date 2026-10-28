@@ -296,8 +296,18 @@ said they were leaning towards exposing the flags on `msb restore` rather than o
 `msb run --from-sandbox`, and that a fix was in progress. Neither released version carries it:
 msb 0.7.7 and 0.7.8 (2026-10-09, Studio's since v0.6) have the same restore surface. The SDK's restore takes
 a network policy with rules and default egress and ingress only, and the Rust `RestoreBuilder`
-has no setter for a proxy or a DNS resolver. The 0.7.9 release bump (#1829) is still open. So
-there is nothing to bump yet. When a release adds restore options for the proxy and resolver,
+has no setter for a proxy or a DNS resolver.
+
+On 2026-10-28 it was still open. Its last comment (2026-10-14) points at a maintainer's
+branch, `toks/snapshot-guest-config`, that "still needs a few more changes"; it is 51 commits
+behind main. msb 0.7.9, 0.7.10 and 0.7.11 (2026-10-22 to 2026-10-24) changed nothing here:
+0.7.11's `RestoreConfig` still rejects DNS and proxy settings in its network policy, and takes
+vsock routes as 0.7.8's already did. The open pull requests near it don't close the gap
+either: #1888 (keep a sandbox's safe configuration in its snapshots) is a draft, and #1951
+and #1954 add DNS rebind protection and strict hostname mode to restore, not a proxy or
+resolver. So 0.7.11 alone doesn't unblock restore or copy-on-write forks.
+
+When a release adds restore options for the proxy and resolver,
 the bump updates the `sdk/go` module in `go.mod` and `go.sum` and the msb runtime that
 `runtime.Ensure` installs. Then `CheckpointRestoreSupported` can return true and
 `RestoreCheckpoint` must pass Studio's egress to the restore. `checkEgress` and its tests stay
