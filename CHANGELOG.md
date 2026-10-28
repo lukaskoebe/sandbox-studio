@@ -6,6 +6,8 @@
   2 GiB, and the oldest go when the disk runs low rather than after it filled. A request
   with no room for its snapshot runs on; it just can't be undone. A snapshot that couldn't
   store a file no longer leaves it out, which undoing to it would have deleted.
+- **OpenCode keeps no snapshots of its own**: a Git copy of the workspace in the home disk,
+  which it added to at every step. Studio's undo covers the same.
 - **The Studio app on NixOS.** When the app can't load its libraries, `studio app` names
   the Nix packages to add to `programs.nix-ld.libraries` (on other systems, the packages to
   install) before it opens the browser instead.

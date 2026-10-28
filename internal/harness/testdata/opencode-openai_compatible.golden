@@ -31,7 +31,8 @@
         "baseURL": "https://llm.example.com/v1?x=1&y=2"
       }
     }
-  }
+  },
+  "snapshot": false
 }
 == .config/opencode/plugins/studio-memory.js mode=644 block=false
 // Managed by Sandbox Studio: rewritten when a session starts.

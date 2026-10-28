@@ -23,7 +23,8 @@
         "apiKey": "{env:ANTHROPIC_API_KEY}"
       }
     }
-  }
+  },
+  "snapshot": false
 }
 == .config/opencode/plugins/studio-memory.js mode=644 block=false
 // Managed by Sandbox Studio: rewritten when a session starts.

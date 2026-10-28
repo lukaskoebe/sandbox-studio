@@ -295,6 +295,7 @@ func TestOpenCodeCompatibleModelImages(t *testing.T) {
 			t.Fatal("no opencode.json")
 		}
 		var cfg struct {
+			Snapshot *bool `json:"snapshot"`
 			Provider map[string]struct {
 				Models map[string]struct {
 					Attachment bool `json:"attachment"`
@@ -307,6 +308,9 @@ func TestOpenCodeCompatibleModelImages(t *testing.T) {
 		}
 		if err := json.Unmarshal([]byte(files[i].Content), &cfg); err != nil {
 			t.Fatal(err)
+		}
+		if cfg.Snapshot == nil || *cfg.Snapshot {
+			t.Fatalf("OpenCode keeps snapshots of its own: %s", files[i].Content)
 		}
 		m, ok := cfg.Provider[compatibleID].Models["qwen3-coder:30b"]
 		switch {

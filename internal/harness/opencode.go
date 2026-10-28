@@ -36,6 +36,9 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 		"permission": "allow",
 		// The binary is installed by the image; the agent user can't update it.
 		"autoupdate": false,
+		// OpenCode's own copy of the workspace, in git, fills the home disk; Studio's
+		// snapshots undo a turn instead.
+		"snapshot": false,
 		// Memory tools; the hooks are the plugin in plugins/.
 		"mcp": map[string]any{mcpServerName: map[string]any{
 			"type": "local", "command": []string{AgentPath, "mcp"}, "enabled": true,
