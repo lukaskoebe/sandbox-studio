@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -44,6 +45,8 @@ var SetBase func(ctx context.Context, sandboxID, image, version string) error
 //	POST /api/e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
 //	                                    through the gateway, in the background
 //	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
+//	PUT  /api/e2e/sandboxes/{id}/disks    {"disks": [{"name": "home", "free": 1, "total": 4}]}: how
+//	                                    full its disks are, in bytes; null is plenty of room
 //	PUT  /api/e2e/sandboxes/{id}/terminals/{name} {"command": "npm", "foreground": ["npm run dev"],
 //	                                    "path", "harness", "idle": 3}: what runs in a terminal
 //	                                    session, which it creates if needed
@@ -282,6 +285,22 @@ func (r *Runtime) Control() http.Handler {
 			return
 		}
 		g.SetPorts(body.Ports)
+		writeJSON(w, http.StatusOK, g.State())
+	})
+	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/disks", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.Guest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		var body struct {
+			Disks []agentproto.Disk `json:"disks"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil {
+			http.Error(w, "want {disks}", http.StatusBadRequest)
+			return
+		}
+		g.SetDisks(body.Disks)
 		writeJSON(w, http.StatusOK, g.State())
 	})
 	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/terminals/{name}", func(w http.ResponseWriter, req *http.Request) {

@@ -450,6 +450,8 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go mgr.FollowEnvironments(ctx, bus)
 	go mgr.RunCheckpointSchedules(ctx)
 	go mgr.WatchTerminals(ctx)
+	mgr.DisksEvery = disksEvery
+	go mgr.WatchDisks(ctx)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
 	}

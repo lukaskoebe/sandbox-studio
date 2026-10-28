@@ -39,6 +39,10 @@ func (g *chatGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP
 	return g.agent.Pipe(), nil
 }
 
+func (g *chatGuest) Disks(context.Context, string) ([]agentproto.Disk, error) {
+	return nil, nil
+}
+
 func (g *chatGuest) Snapshot(_ context.Context, _ string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -26,6 +26,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
+	"golang.org/x/sys/unix"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
@@ -196,6 +197,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.replySessions(st)
 	case agentproto.KindPorts:
 		err = replyPorts(st)
+	case agentproto.KindDisk:
+		err = a.replyDisks(st)
 	case agentproto.KindKill:
 		err = a.killSession(st, h.Session)
 	case agentproto.KindTitle:
@@ -431,6 +434,22 @@ func dialLoopback(port int) (net.Conn, error) {
 		return up, nil
 	}
 	return nil, err
+}
+
+func (a *Agent) replyDisks(st net.Conn) error {
+	var disks []agentproto.Disk
+	seen := map[uint64]bool{}
+	for _, d := range []struct{ name, dir string }{{agentproto.DiskHome, a.user.home}, {agentproto.DiskWorkspace, Workdir}} {
+		var fs unix.Stat_t
+		if unix.Stat(d.dir, &fs) != nil || seen[fs.Dev] {
+			continue // a workspace on the home's disk is the home
+		}
+		seen[fs.Dev] = true
+		if free, total, err := diskSpace(d.dir)(); err == nil {
+			disks = append(disks, agentproto.Disk{Name: d.name, Free: free, Total: total})
+		}
+	}
+	return agentproto.WriteJSONLine(st, disks)
 }
 
 func replyPorts(st net.Conn) error {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A full home disk says so.** Agents keep their sessions in the sandbox's 4 GiB home
+  disk, and when it filled, OpenCode failed with "OpenCode service failure" and nothing
+  said why. A request or agent start that fails on a full disk now says which disk is full
+  and how to free it. While a disk is nearly full, Home names its sandbox, and the
+  sandbox's page and its chats show a strip. A sandbox started by an older Studio needs a
+  restart for this.
 - **Undo's snapshots leave room.** They take at most a quarter of the home disk as well as
   2 GiB, and the oldest go when the disk runs low rather than after it filled. A request
   with no room for its snapshot runs on; it just can't be undone. A snapshot that couldn't

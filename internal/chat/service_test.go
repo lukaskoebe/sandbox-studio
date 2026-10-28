@@ -41,6 +41,7 @@ type fakeGuest struct {
 	turnEdits []map[string]string
 	snapErr   error
 	noRoom    bool // snapshots are taken but not kept, as on a full disk
+	disks     []agentproto.Disk
 	// slots, when set, is how many agents run at once, as the guest's MaxACPProcesses;
 	// running holds the chats whose stream is open.
 	slots    int
@@ -50,6 +51,12 @@ type fakeGuest struct {
 	// newAgent, when set, serves each stream with an agent of its own, for chats that run
 	// side by side; an acptest.Agent serves one stream at a time.
 	newAgent func() *acptest.Agent
+}
+
+func (g *fakeGuest) Disks(context.Context, string) ([]agentproto.Disk, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.disks, nil
 }
 
 func (g *fakeGuest) Snapshot(_ context.Context, _ string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error) {

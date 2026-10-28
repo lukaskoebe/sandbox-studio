@@ -36,6 +36,7 @@ type Turn struct {
 	Steps []Step
 	Stop  string          // defaults to end_turn
 	Usage json.RawMessage // optional PromptResponse usage
+	Fail  string          // when set, the prompt fails after the steps with an internal error of this message
 }
 
 // Agent is the scripted agent. Configure it before Serve.
@@ -288,6 +289,10 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 			if stop == "cancelled" {
 				break
 			}
+		}
+		if t.Fail != "" {
+			a.reply(id, nil, &rpcError{Code: -32603, Message: t.Fail})
+			return
 		}
 		res := map[string]any{"stopReason": stop}
 		if t.Usage != nil {

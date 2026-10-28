@@ -615,6 +615,13 @@ func (h *Hub) Ports(ctx context.Context, id string) ([]agentproto.Port, error) {
 	return out, err
 }
 
+// Disks says how full the guest's home and workspace disks are.
+func (h *Hub) Disks(ctx context.Context, id string) ([]agentproto.Disk, error) {
+	var out []agentproto.Disk
+	err := h.request(ctx, id, agentproto.Header{Kind: agentproto.KindDisk}, nil, &out)
+	return out, err
+}
+
 // Configure sends a sandbox its environment's configuration.
 func (h *Hub) Configure(ctx context.Context, id string, cfg agentproto.Config) error {
 	var ok struct{}

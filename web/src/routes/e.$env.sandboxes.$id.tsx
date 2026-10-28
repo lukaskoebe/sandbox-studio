@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { WarningIcon } from "@phosphor-icons/react"
+import { LowDiskStatus } from "@/components/low-disk"
 import { BackToSetup, fromSetup } from "@/components/back-to-setup"
 import { ComputerScreen, type ScreenChange } from "@/components/computer/screen"
 import {
@@ -180,6 +181,7 @@ function SandboxPage() {
         updatedAt={sandbox.dataUpdatedAt}
         error={sandbox.error}
       />
+      <LowDiskStatus disks={sb.lowDisks} />
       <div className="flex min-h-0 flex-1">
         <ComputerScreen
           key={sb.id}

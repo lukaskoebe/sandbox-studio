@@ -82,6 +82,7 @@ type Guest interface {
 	Snapshot(ctx context.Context, id string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error)
 	Files(ctx context.Context, id string, req agentproto.FilesRequest) (agentproto.FilesReply, error)
 	Upload(ctx context.Context, id string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error)
+	Disks(ctx context.Context, id string) ([]agentproto.Disk, error)
 }
 
 // Launch is how to start a chat's agent, planned like an agent session: the harness,
@@ -430,6 +431,11 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 	s.stops[c.ID] = false
 	s.mu.Unlock()
 	l, err := s.ensure(ctx, c, launch)
+	if err != nil && !errors.Is(err, store.ErrConflict) {
+		if full := s.diskFull(ctx, c.SandboxID); full != "" {
+			err = Conflict(full + " Starting the agent failed: " + clip(err.Error(), 2000))
+		}
+	}
 	if err == nil && s.stopped(c.ID) {
 		err = ErrStopped
 	}
@@ -1141,6 +1147,10 @@ func (l *live) run(r *run, prompt <-chan acp.PromptResult) {
 // end closes the turn: the last writes, a marker saying why it stopped, the usage.
 func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 	ctx := context.Background()
+	full := ""
+	if err != nil && !errors.Is(err, acp.ErrClosed) && !errors.Is(err, io.EOF) && !isClosed(l.conn) {
+		full = l.s.diskFull(ctx, l.sandboxID)
+	}
 	close(r.answered)
 	l.mu.Lock()
 	r.ended = true
@@ -1158,6 +1168,9 @@ func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 		}
 	case err != nil:
 		reason, kind, text = StopInterrupted, MarkerError, "The request failed: "+clip(err.Error(), 2000)
+		if full != "" {
+			text = full + " The agent said: " + clip(err.Error(), 2000)
+		}
 	case reason == acp.StopCancelled:
 		kind, text = MarkerStopped, "Stopped."
 	case reason == acp.StopMaxTokens:

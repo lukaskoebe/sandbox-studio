@@ -3,6 +3,7 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import {
   BellIcon,
   BroadcastIcon,
+  HardDriveIcon,
   PlusIcon,
   StackIcon,
   UserPlusIcon,
@@ -10,6 +11,7 @@ import {
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/notice"
+import { lowDiskText } from "@/components/low-disk"
 import {
   ApprovalCardList,
   useApprovalReview,
@@ -77,6 +79,7 @@ function Home() {
       <NotificationsBanner />
       <PreviewsNotice env={env} />
       <BaseNotice env={env} sandboxes={sandboxes.data ?? []} />
+      <DiskNotice env={env} sandboxes={sandboxes.data ?? []} />
       {empty ? (
         <GetStarted env={env} />
       ) : (
@@ -269,6 +272,36 @@ function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
         </span>
       ))}
       . Rebase them from their computer&apos;s menu.
+    </Notice>
+  )
+}
+
+/**
+ * Names the sandboxes whose disks are nearly full: agents stop when the home disk fills.
+ * It goes once they have room again.
+ */
+function DiskNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
+  const low = sandboxes.filter((sb) => sb.lowDisks?.length)
+  if (low.length === 0) return null
+  return (
+    <Notice aria-label="Disk space" tone="waiting" icon={<HardDriveIcon />}>
+      {low.map((sb) => (
+        <span key={sb.id} className="block">
+          <Link
+            to="/e/$env/sandboxes/$id"
+            params={{ env, id: sb.id }}
+            className="font-mono underline underline-offset-4"
+          >
+            {sb.name}
+          </Link>
+          : {lowDiskText(sb.lowDisks ?? [])}.
+        </span>
+      ))}
+      <span className="block">
+        Agents stop when a home disk fills. Free some space in the
+        sandbox&apos;s terminal, such as with{" "}
+        <code className="font-mono">rm -rf ~/.cache ~/.npm</code>.
+      </span>
     </Notice>
   )
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp/acptest"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -152,5 +153,17 @@ func TestTaskDoneOnlyAfterChanges(t *testing.T) {
 	defer mu.Unlock()
 	if !slices.Equal(done, []string{f.sb.ID}) {
 		t.Fatalf("tasks done %v; want one, for the turn that changed a file", done)
+	}
+}
+
+func TestFailedTurnSaysTheDiskIsFull(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Fail: "Internal error: OpenCode service failure"}}})
+	f.g.disks = []agentproto.Disk{{Name: agentproto.DiskHome, Free: 10 << 20, Total: 4 << 30}, {Name: agentproto.DiskWorkspace, Free: 8 << 30, Total: 10 << 30}}
+	f.wait(t, f.send(t, "one").ID)
+	log, _ := f.s.Get(context.Background(), f.sb.EnvironmentID, f.chat.ID)
+	last := log.Items[len(log.Items)-1]
+	want := "The sandbox's home disk is full (10 MiB free of 4.0 GiB)"
+	if last.Marker == nil || last.Marker.Kind != MarkerError || !strings.HasPrefix(last.Marker.Text, want) || !strings.Contains(last.Marker.Text, "OpenCode service failure") {
+		t.Fatalf("marker %+v; want it to start %q", last.Marker, want)
 	}
 }

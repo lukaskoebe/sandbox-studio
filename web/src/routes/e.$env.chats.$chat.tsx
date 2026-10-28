@@ -14,6 +14,7 @@ import {
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
+import { LowDiskStatus } from "@/components/low-disk"
 import { ChatStateBadge } from "@/components/chat/chat-items"
 import { ChatThread, requestLabel } from "@/components/chat/chat-thread"
 import {
@@ -195,6 +196,7 @@ function ChatPage() {
             : "Reconnecting… new messages show up once Studio is back."}
         </div>
       )}
+      <LowDiskStatus disks={sandbox.data?.lowDisks} />
       <div className="flex min-h-0 flex-1">
         <ChatThread
           env={env}

@@ -55,6 +55,7 @@ type Guest struct {
 	buffers  map[string]string // tmux paste buffers, see runTmux
 	clones   []string          // the folders repositories were cloned to, see runGit
 	ports    []int
+	disks    []agentproto.Disk
 	forwards []int // a browser VM's forwarded ports
 	conns    []*Connection
 	calls    []*Call
@@ -227,6 +228,14 @@ func (g *Guest) handle(st net.Conn) {
 		}
 		g.mu.Unlock()
 		err = agentproto.WriteJSONLine(st, ports)
+	case agentproto.KindDisk:
+		g.mu.Lock()
+		disks := g.disks
+		if disks == nil {
+			disks = []agentproto.Disk{{Name: agentproto.DiskHome, Free: 3 << 30, Total: 4 << 30}, {Name: agentproto.DiskWorkspace, Free: 9 << 30, Total: 10 << 30}}
+		}
+		g.mu.Unlock()
+		err = agentproto.WriteJSONLine(st, disks)
 	case agentproto.KindPTY:
 		err = g.servePTY(st, br, h.Session)
 	case agentproto.KindTCP:
@@ -565,6 +574,13 @@ func (g *Guest) SetPorts(ports []int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.ports = slices.Clone(ports)
+}
+
+// SetDisks sets how full the guest's disks are; nil is the default, with plenty of room.
+func (g *Guest) SetDisks(disks []agentproto.Disk) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.disks = slices.Clone(disks)
 }
 
 // Connect makes an HTTP request to host:port through the gateway in the background, like

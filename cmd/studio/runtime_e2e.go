@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
@@ -26,6 +27,9 @@ import (
 var fakeRuntime *e2e.Runtime
 
 func installGuestAgent(string, string) error { return nil }
+
+// disksEvery has the fake guests' disks, which the tests set, show within a second.
+const disksEvery = time.Second
 
 func ensureRuntime(context.Context) (*runtime.Upgrade, error) { return nil, nil }
 

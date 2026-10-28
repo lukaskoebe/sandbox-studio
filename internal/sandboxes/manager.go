@@ -71,6 +71,9 @@ type Manager struct {
 	// Studio release that brought it. A sandbox on another base is outdated; empty knows none.
 	BaseImage   string
 	BaseVersion string
+	// DisksEvery is how often WatchDisks asks the guests how full their disks are; 0 is a
+	// minute.
+	DisksEvery time.Duration
 
 	opsMu sync.Mutex
 	ops   map[string]*operation // sandbox ID → its create or fork; see progress.go
@@ -78,6 +81,7 @@ type Manager struct {
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	autoFailed  sync.Map // sandbox ID → when its scheduled checkpoint last failed, see scheduledCheckpoint
 	tasksDone   sync.Map // sandbox ID → when its newest task that changed files ended, see TaskDone
+	lowDisks    sync.Map // sandbox ID → its nearly full []agentproto.Disk, see WatchDisks
 	kickOnce    sync.Once
 	kick        chan struct{} // see scheduleKick
 	harness     harnessConfigs
@@ -121,14 +125,15 @@ type Egress interface {
 // View is a sandbox as shown to clients: catalog record plus live state.
 type View struct {
 	store.Sandbox
-	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,suspended,stopped,crashed,creating,failed" doc:"The VM's runtime status; creating or failed while a create or fork runs or after it failed"`
-	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
-	Agent                      *AgentInfo     `json:"agent,omitempty"`
-	Progress                   *Progress      `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
-	TemplateName               string         `json:"templateName,omitempty" doc:"The display name of the template the sandbox runs, such as node-22+python-3.13@2"`
-	ForkOf                     string         `json:"forkOf,omitempty" doc:"The ID of the sandbox this one was forked from, which it can be merged back into"`
-	BaseVersion                string         `json:"baseVersion,omitempty" doc:"The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base"`
-	BaseOutdated               bool           `json:"baseOutdated,omitempty" doc:"Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date"`
+	Status                     runtime.Status    `json:"status" enum:"absent,created,starting,running,draining,suspended,stopped,crashed,creating,failed" doc:"The VM's runtime status; creating or failed while a create or fork runs or after it failed"`
+	CheckpointRestoreSupported bool              `json:"checkpointRestoreSupported"`
+	Agent                      *AgentInfo        `json:"agent,omitempty"`
+	Progress                   *Progress         `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
+	TemplateName               string            `json:"templateName,omitempty" doc:"The display name of the template the sandbox runs, such as node-22+python-3.13@2"`
+	ForkOf                     string            `json:"forkOf,omitempty" doc:"The ID of the sandbox this one was forked from, which it can be merged back into"`
+	BaseVersion                string            `json:"baseVersion,omitempty" doc:"The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base"`
+	BaseOutdated               bool              `json:"baseOutdated,omitempty" doc:"Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date"`
+	LowDisks                   []agentproto.Disk `json:"lowDisks,omitempty" doc:"The sandbox's disks that are nearly full, as its guest said within the last minute while a tab was open; absent when none is"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -814,6 +819,7 @@ func (m *Manager) withAgent(v View) View {
 	v.BaseVersion, v.BaseOutdated = v.Sandbox.BaseVersion, m.BaseOutdated(v.BaseImage)
 	if hello, ok := m.Hub.Connected(v.ID); ok && v.Status.IsRunning() {
 		v.Agent = &AgentInfo{Version: hello.Version, Arch: hello.Arch}
+		v.LowDisks = m.LowDisks(v.ID)
 	}
 	return m.withProgress(v)
 }

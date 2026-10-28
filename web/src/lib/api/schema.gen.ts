@@ -3574,6 +3574,14 @@ export interface components {
             /** Format: int64 */
             removed: number;
         };
+        Disk: {
+            /** Format: int64 */
+            free: number;
+            /** @enum {string} */
+            name: "home" | "workspace";
+            /** Format: int64 */
+            total: number;
+        };
         DoctorReport: {
             /** Format: date-time */
             checkedAt: string;
@@ -5166,6 +5174,8 @@ export interface components {
              * @description The memory the running VM has while a change waits for its next start; absent when it has memoryMiB
              */
             liveMemoryMiB?: number;
+            /** @description The sandbox's disks that are nearly full, as its guest said within the last minute while a tab was open; absent when none is */
+            lowDisks?: components["schemas"]["Disk"][] | null;
             /** Format: int64 */
             maxMemoryMiB: number;
             /** Format: int64 */
@@ -6203,6 +6213,8 @@ export interface components {
              * @description The memory the running VM has while a change waits for its next start; absent when it has memoryMiB
              */
             liveMemoryMiB?: number;
+            /** @description The sandbox's disks that are nearly full, as its guest said within the last minute while a tab was open; absent when none is */
+            lowDisks?: components["schemas"]["Disk"][] | null;
             /** Format: int64 */
             maxMemoryMiB: number;
             /** Format: int64 */

@@ -45,6 +45,10 @@ var msbRepaired string
 // repairMSBDB checks msb's database before any msb call opens it. A damaged one is moved
 // aside and rebuilt from the rows that can still be read; then msb indexes the snapshots on
 // disk again, so the checkpoints are found.
+// disksEvery is how often Studio asks the guests how full their disks are: 0 is the
+// sandbox manager's minute.
+const disksEvery = 0
+
 func repairMSBDB(ctx context.Context, log *slog.Logger) {
 	path, err := msbdb.Path()
 	if err != nil {
