@@ -73,7 +73,7 @@ func TestSessionStart(t *testing.T) {
 	ada := decode[store.Teammate](t, rec)
 	const forgeToken = "github_pat_session-test-token"
 	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/forges",
-		`{"name":"gh","kind":"github","baseUrl":"https://github.com","token":"`+forgeToken+`"}`); rec.Code != http.StatusCreated {
+		`{"name":"gh","kind":"github","baseUrl":"https://github.com","token":"`+forgeToken+`","skipCheck":true}`); rec.Code != http.StatusCreated {
 		t.Fatalf("forge: %d %s", rec.Code, rec.Body)
 	}
 	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID})

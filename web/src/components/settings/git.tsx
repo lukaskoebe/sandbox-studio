@@ -46,9 +46,11 @@ import {
 import { Ident } from "@/components/ident"
 import {
   APIFields,
+  checkRefused,
   ForgeDialog,
   HostKeyCheck,
   PublicKeyNotice,
+  SkipCheck,
   type Scanned,
 } from "@/components/forge-dialog"
 import { SettingsPage } from "@/components/settings/page"
@@ -670,6 +672,7 @@ function APIForm({
   )
   const [url, setURL] = useState(forge.apiUrl ?? defaultAPIURL(forge.baseUrl))
   const [token, setToken] = useState("")
+  const [skipCheck, setSkipCheck] = useState(false)
   const save = $api.useMutation(
     "put",
     "/api/environments/{env}/forges/{id}/api",
@@ -688,7 +691,12 @@ function APIForm({
         if (kind)
           save.mutate({
             params: { path: { env, id: forge.id } },
-            body: { kind, baseUrl: url.trim(), token },
+            body: {
+              kind,
+              baseUrl: url.trim(),
+              token,
+              ...(skipCheck ? { skipCheck } : {}),
+            },
           })
       }}
       className="grid gap-4"
@@ -704,16 +712,29 @@ function APIForm({
           requests, with your approval.
         </DialogDescription>
       </DialogHeader>
+      {/* A skipped check is for what the check refused, not for what the user typed since. */}
       <APIFields
         sshAddress={forge.baseUrl}
         kind={kind}
-        onKind={setKind}
+        onKind={(k) => {
+          setKind(k)
+          setSkipCheck(false)
+        }}
         url={url}
-        onURL={setURL}
+        onURL={(u) => {
+          setURL(u)
+          setSkipCheck(false)
+        }}
         token={token}
-        onToken={setToken}
+        onToken={(t) => {
+          setToken(t)
+          setSkipCheck(false)
+        }}
       />
       {save.error && <FieldError>{errorMessage(save.error)}</FieldError>}
+      {checkRefused(save.error) && (
+        <SkipCheck checked={skipCheck} onCheckedChange={setSkipCheck} />
+      )}
       <DialogFooter>
         <Button
           type="submit"

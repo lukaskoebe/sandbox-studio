@@ -78,6 +78,8 @@ type ForgeInput struct {
 	Auth     string `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge"`
 	APIKind  string `json:"apiKind,omitempty" enum:"forgejo,github,gitlab" doc:"Kind ssh: the forge's API, for repository lists and pull requests, reached with token; git still goes over SSH"`
 	APIURL   string `json:"apiUrl,omitempty" maxLength:"4096" doc:"Kind ssh with apiKind: the forge's HTTPS URL, such as https://codeberg.org"`
+	// The check's failure is a 422 at body.skipCheck, so the form can offer to add it anyway.
+	SkipCheck bool `json:"skipCheck,omitempty" doc:"Add the forge without first checking that its API answers at the URL and accepts the token, as for a forge Studio can't reach yet"`
 }
 
 // ForgeAPI gives an ssh forge an API, for repository lists and pull requests.
@@ -85,6 +87,8 @@ type ForgeAPI struct {
 	Kind    string `json:"kind" enum:"forgejo,github,gitlab"`
 	BaseURL string `json:"baseUrl" maxLength:"4096" doc:"The forge's HTTPS URL, such as https://codeberg.org"`
 	Token   string `json:"token" minLength:"1" maxLength:"4096" doc:"An access token for the API; Studio keeps it and sandboxes never see it"`
+	// The check's failure is a 422 at body.skipCheck, as for a new forge.
+	SkipCheck bool `json:"skipCheck,omitempty" doc:"Save the API without first checking that it answers at the URL and accepts the token"`
 }
 
 // ForgeAuth switches how an ssh forge authenticates.
@@ -169,6 +173,11 @@ func (s *Server) registerForges(api huma.API) {
 			if err != nil {
 				return nil, apiError(err)
 			}
+			if !b.SkipCheck {
+				if err := s.checkForgeToken(ctx, b.APIKind, apiURL, b.Token); err != nil {
+					return nil, err
+				}
+			}
 			f.APIKind, f.APIURL = b.APIKind, apiURL
 			if apiSec, err = s.Vault.Prepare(in.Env, secretName, value, []string{apiHost}, "API token of forge "+b.Name); err != nil {
 				return nil, apiError(err)
@@ -201,8 +210,15 @@ func (s *Server) registerForges(api huma.API) {
 			f.Auth = store.ForgeAuthNone
 		} else if b.Token == "" || b.HostKey != "" || b.Auth != "" {
 			return nil, huma.Error422UnprocessableEntity("forges of kind " + b.Kind + " need a token, and no host key or auth")
-		} else if sec, err = s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note); err != nil {
-			return nil, apiError(err)
+		} else {
+			if gitreview.HasAPI(f) && !b.SkipCheck {
+				if err := s.checkForgeToken(ctx, b.Kind, u.Base, b.Token); err != nil {
+					return nil, err
+				}
+			}
+			if sec, err = s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note); err != nil {
+				return nil, apiError(err)
+			}
 		}
 		if f.APIKind != "" {
 			f, err = s.Store.CreateForgeWithAPI(ctx, f, sec, apiSec)
@@ -324,6 +340,11 @@ func (s *Server) registerForges(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
+		if !in.Body.SkipCheck {
+			if err := s.checkForgeToken(ctx, in.Body.Kind, apiURL, in.Body.Token); err != nil {
+				return nil, err
+			}
+		}
 		sec, err := s.Vault.Prepare(in.Env, forgeSecretPrefix(f.Name)+"_TOKEN", in.Body.Token, []string{apiHost}, "API token of forge "+f.Name)
 		if err != nil {
 			return nil, apiError(err)
@@ -414,11 +435,13 @@ func (s *Server) registerForges(api huma.API) {
 
 	huma.Register(api, huma.Operation{
 		OperationID: "parseForgeURL", Method: http.MethodPost, Path: "/api/environments/{env}/forges/parse-url", Tags: []string{"git"},
-		Description: "Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment.",
+		Description: "Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment. " +
+			"Without detect, only hosts Studio knows, such as github.com and codeberg.org, get their API.",
 	}, func(ctx context.Context, in *struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		Body struct {
-			URL string `json:"url" minLength:"1" maxLength:"2048"`
+			URL    string `json:"url" minLength:"1" maxLength:"2048"`
+			Detect bool   `json:"detect,omitempty" doc:"Also ask a host Studio doesn't know which forge it runs (Forgejo or Gitea, GitLab, GitHub Enterprise), by endpoints they answer without a token; takes up to a few seconds"`
 		}
 	}) (*struct{ Body gitreview.RepoURL }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
@@ -428,7 +451,14 @@ func (s *Server) registerForges(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		r, err := gitreview.ParseRepoURL(in.Body.URL)
+		parse := func(ctx context.Context, raw string) (gitreview.RepoURL, error) { return gitreview.ParseRepoURL(raw) }
+		if in.Body.Detect {
+			if s.Git == nil {
+				return nil, huma.Error503ServiceUnavailable("the git remote is not running")
+			}
+			parse = s.Git.DetectRepoURL
+		}
+		r, err := parse(ctx, in.Body.URL)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -492,4 +522,18 @@ func (s *Server) registerForges(api huma.API) {
 		}
 		return &struct{ Body gitreview.AgentStatus }{s.Git.AgentStatus(ctx)}, nil
 	})
+}
+
+// checkForgeToken checks that the API of kind at baseURL accepts token before Studio keeps
+// them. Its failure is a 422 at body.skipCheck: the form then offers to save without the check.
+func (s *Server) checkForgeToken(ctx context.Context, kind, baseURL, token string) error {
+	if s.Git == nil {
+		return huma.Error503ServiceUnavailable("the git remote is not running, so the forge's API can't be checked; skip the check to save it anyway")
+	}
+	if _, err := s.Git.CheckToken(ctx, kind, baseURL, token); err != nil {
+		msg := strings.TrimPrefix(err.Error(), gitreview.ErrInvalid.Error()+": ")
+		return huma.Error422UnprocessableEntity("Studio could not use the API at "+baseURL+" with this token: "+msg,
+			&huma.ErrorDetail{Location: "body.skipCheck", Message: msg})
+	}
+	return nil
 }

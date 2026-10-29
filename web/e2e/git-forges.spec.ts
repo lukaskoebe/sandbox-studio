@@ -35,6 +35,76 @@ test("the forge dialog offers GitLab with its own address and token scopes", asy
   await expect(dialog.getByLabel("Username", { exact: true })).toHaveCount(0)
 })
 
+// A pasted HTTPS URL of a host Studio doesn't know is asked which forge it runs: the e2e
+// upstream is a Forgejo to it. Another HTTPS kind picked after keeps the host.
+test("a self-hosted forge's URL is detected and kept across kinds", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}/settings/git`)
+  await page.getByRole("button", { name: "Add forge" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Add forge" })
+  await dialog
+    .getByLabel("Repository URL", { exact: true })
+    .fill("https://git.example.org/team/app.git")
+  await expect(
+    dialog.getByRole("combobox").filter({ hasText: "Forgejo" })
+  ).toBeVisible()
+  await expect(dialog.locator("#forge-url")).toHaveValue(
+    "https://git.example.org"
+  )
+
+  await dialog.getByRole("combobox").filter({ hasText: "Forgejo" }).click()
+  await page.getByRole("option", { name: "Other HTTPS", exact: true }).click()
+  await expect(dialog.locator("#forge-url")).toHaveValue(
+    "https://git.example.org"
+  )
+  await dialog.getByRole("combobox").filter({ hasText: "Other HTTPS" }).click()
+  await page.getByRole("option", { name: "Forgejo", exact: true }).click()
+  await expect(dialog.locator("#forge-url")).toHaveValue(
+    "https://git.example.org"
+  )
+})
+
+// A forge whose API Studio can't use with the token is refused, unless the user saves it
+// anyway.
+test("a forge's token is checked, and can be saved unchecked", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `fj-${Math.random().toString(36).slice(2, 8)}`
+  const host = `${name}.example.org`
+  await page.goto(`/e/${env}/settings/git`)
+  await page.getByRole("button", { name: "Add forge" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Add forge" })
+  await dialog
+    .getByLabel("Repository URL", { exact: true })
+    .fill(`https://${host}/team/app.git`)
+  await expect(
+    dialog.getByRole("combobox").filter({ hasText: "Forgejo" })
+  ).toBeVisible()
+  await dialog.getByLabel("Name in Studio", { exact: true }).fill(name)
+  await dialog.locator("#forge-token").fill("rejected-token")
+  await dialog.getByRole("button", { name: "Add forge" }).click()
+  await expect(dialog).toContainText(
+    `Studio could not use the API at https://${host} with this token`
+  )
+  const skip = dialog.getByRole("checkbox", {
+    name: "Save it anyway, without the check",
+  })
+  await skip.check()
+  await dialog.getByRole("button", { name: "Add forge" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole("row").filter({ hasText: host })).toBeVisible()
+  const forges = await api.json<{ id: string; name: string }[]>(
+    "GET",
+    `/api/environments/${env}/forges`
+  )
+  const forge = forges!.find((f) => f.name === name)!
+  await api.json("DELETE", `/api/environments/${env}/forges/${forge.id}`)
+})
+
 // A clone URL pasted into an SSH forge's address fills in the form: the user and host from its
 // address, the name from its host.
 test("an SSH forge's address takes a clone URL and keeps its user", async ({

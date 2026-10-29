@@ -37,7 +37,7 @@ func TestForges(t *testing.T) {
 			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
 		}
 	}
-	rec := do(h, "POST", base, `{"name":"code-berg","kind":"forgejo","baseUrl":"https://codeberg.org/","token":"`+token+`"}`)
+	rec := do(h, "POST", base, `{"name":"code-berg","kind":"forgejo","baseUrl":"https://codeberg.org/","token":"`+token+`","skipCheck":true}`)
 	if rec.Code != http.StatusCreated || strings.Contains(rec.Body.String(), token) {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
 	}
@@ -45,13 +45,13 @@ func TestForges(t *testing.T) {
 	if f.BaseURL != "https://codeberg.org" || f.SecretID == "" {
 		t.Fatalf("forge: %+v", f)
 	}
-	if rec := do(h, "POST", base, `{"name":"code-berg","kind":"forgejo","baseUrl":"https://codeberg.org","token":"y"}`); rec.Code != http.StatusConflict {
+	if rec := do(h, "POST", base, `{"name":"code-berg","kind":"forgejo","baseUrl":"https://codeberg.org","token":"y","skipCheck":true}`); rec.Code != http.StatusConflict {
 		t.Fatalf("duplicate: %d %s", rec.Code, rec.Body)
 	}
 	if got := decode[[]store.Forge](t, do(h, "GET", base, "")); len(got) != 1 || got[0].ID != f.ID {
 		t.Fatalf("list: %+v", got)
 	}
-	rec = do(h, "POST", base, `{"name":"lab","kind":"gitlab","baseUrl":"https://gitlab.com/","token":"`+token+`"}`)
+	rec = do(h, "POST", base, `{"name":"lab","kind":"gitlab","baseUrl":"https://gitlab.com/","token":"`+token+`","skipCheck":true}`)
 	if rec.Code != http.StatusCreated || decode[store.Forge](t, rec).Kind != "gitlab" {
 		t.Fatalf("gitlab forge: %d %s", rec.Code, rec.Body)
 	}
@@ -443,7 +443,7 @@ func TestSSHForgeAPI(t *testing.T) {
 			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
 		}
 	}
-	rec := do(h, "POST", base, `{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":`+hk+`,"apiKind":"github","apiUrl":"https://github.com/","token":"first"}`)
+	rec := do(h, "POST", base, `{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":`+hk+`,"apiKind":"github","apiUrl":"https://github.com/","token":"first","skipCheck":true}`)
 	f := decode[store.Forge](t, rec)
 	if rec.Code != http.StatusCreated || f.Auth != store.ForgeAuthAgent || f.APIKind != "github" || f.APIURL != "https://github.com" || f.APISecretID == "" {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
@@ -475,7 +475,7 @@ func TestSSHForgeAPI(t *testing.T) {
 	if rec := do(h, "PUT", base+"/"+f.ID+"/token", `{"token":"x"}`); rec.Code != http.StatusConflict {
 		t.Fatalf("token without an API: %d %s", rec.Code, rec.Body)
 	}
-	rec = do(h, "PUT", base+"/"+f.ID+"/api", `{"kind":"forgejo","baseUrl":"https://codeberg.org","token":"third"}`)
+	rec = do(h, "PUT", base+"/"+f.ID+"/api", `{"kind":"forgejo","baseUrl":"https://codeberg.org","token":"third","skipCheck":true}`)
 	got := decode[store.Forge](t, rec)
 	if rec.Code != http.StatusOK || got.APIKind != "forgejo" || got.APIURL != "https://codeberg.org" || got.APISecretID == "" {
 		t.Fatalf("set the API: %d %s", rec.Code, rec.Body)

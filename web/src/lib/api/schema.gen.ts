@@ -514,7 +514,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment. */
+        /** @description Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment. Without detect, only hosts Studio knows, such as github.com and codeberg.org, get their API. */
         post: operations["parseForgeURL"];
         delete?: never;
         options?: never;
@@ -4134,6 +4134,8 @@ export interface components {
             baseUrl: string;
             /** @enum {string} */
             kind: "forgejo" | "github" | "gitlab";
+            /** @description Save the API without first checking that it answers at the URL and accepts the token */
+            skipCheck?: boolean;
             /** @description An access token for the API; Studio keeps it and sandboxes never see it */
             token: string;
         };
@@ -4165,6 +4167,8 @@ export interface components {
             kind: "forgejo" | "github" | "gitlab" | "https" | "ssh" | "local";
             /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git */
             name: string;
+            /** @description Add the forge without first checking that its API answers at the URL and accepts the token, as for a forge Studio can't reach yet */
+            skipCheck?: boolean;
             /** @description Every kind but ssh and local: an access token with read and write access to the repositories; for kind ssh with apiKind, the API's token. Studio keeps it and sandboxes never see it */
             token?: string;
             /** @description Kind https: the user git authenticates as with the token; git if empty */
@@ -4849,6 +4853,8 @@ export interface components {
             title: string;
         };
         ParseForgeURLRequest: {
+            /** @description Also ask a host Studio doesn't know which forge it runs (Forgejo or Gitea, GitLab, GitHub Enterprise), by endpoints they answer without a token; takes up to a few seconds */
+            detect?: boolean;
             url: string;
         };
         PasteTokenInBody: {

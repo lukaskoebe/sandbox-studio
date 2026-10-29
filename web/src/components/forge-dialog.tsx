@@ -258,6 +258,37 @@ export function TokenHint({ kind, baseUrl }: { kind: Kind; baseUrl: string }) {
   )
 }
 
+/**
+ * Whether a save was refused because Studio could not use the forge's API with the token: the
+ * address isn't the API's, the forge isn't of that kind, or it refuses the token.
+ */
+export function checkRefused(error: unknown) {
+  const errors =
+    error && typeof error === "object"
+      ? (error as { errors?: { location?: string }[] }).errors
+      : undefined
+  return !!errors?.some((e) => e.location === "body.skipCheck")
+}
+
+/** Saving a forge's API although Studio could not use it, as checkRefused tells. */
+export function SkipCheck({
+  checked,
+  onCheckedChange,
+}: {
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(c) => onCheckedChange(c === true)}
+      />
+      Save it anyway, without the check
+    </label>
+  )
+}
+
 const apiChoices = { none: "None", ...apiLabels }
 
 /**
@@ -361,6 +392,13 @@ const defaultBaseURLs: Record<Kind, string> = {
   local: "",
 }
 
+/** The kinds whose address is an HTTPS URL. */
+const httpsKinds: Kind[] = ["forgejo", "github", "gitlab", "https"]
+
+/** Whether a URL read as kind may still be a host Studio can ask which forge it runs. */
+const undetected = (r: { kind: Kind; apiKind?: string }) =>
+  r.kind === "https" || (r.kind === "ssh" && !r.apiKind)
+
 /**
  * Whether an SSH address is a repository's clone URL: [user@]host:path, with a path that isn't a
  * port, or ssh://host/path.
@@ -399,12 +437,26 @@ function ForgeForm({
   const [confirmed, setConfirmed] = useState(false)
   const [created, setCreated] = useState<Forge>()
   const [error, setError] = useState<string>()
+  // Whether the error is Studio failing to use the forge's API, which the user may skip.
+  const [refused, setRefused] = useState(false)
+  const [skipCheck, setSkipCheck] = useState(false)
   const [saving, setSaving] = useState(false)
   const parse = $api.useMutation(
     "post",
     "/api/environments/{env}/forges/parse-url"
   )
   const { mutate: parseURL, data: parsed } = parse
+  // A host Studio doesn't know is asked which forge it runs, which takes a moment longer.
+  const detect = $api.useMutation(
+    "post",
+    "/api/environments/{env}/forges/parse-url"
+  )
+  const {
+    mutate: detectURL,
+    data: detected,
+    reset: resetDetect,
+    isPending: detecting,
+  } = detect
   const forges = $api.useQuery("get", "/api/environments/{env}/forges", {
     params: { path: { env } },
   })
@@ -420,20 +472,36 @@ function ForgeForm({
     )
     return () => clearTimeout(timer)
   }, [repoURL, env, parseURL])
-  useEffect(() => {
-    if (!parsed) return
-    setKind(parsed.kind)
-    setBaseUrl(parsed.baseUrl)
-    setName(parsed.name)
+  const fill = (r: NonNullable<typeof parsed>) => {
+    setKind(r.kind)
+    setBaseUrl(r.baseUrl)
+    setName(r.name)
     setNameEdited(false)
-    setRepoPath(parsed.path)
-    setAuth(parsed.auth === "key" ? "key" : "agent")
-    setApiKind(parsed.apiKind ?? "")
-    setApiUrl(parsed.apiUrl ?? "")
+    setRepoPath(r.path)
+    setAuth(r.auth === "key" ? "key" : "agent")
+    setApiKind(r.apiKind ?? "")
+    setApiUrl(r.apiUrl ?? "")
     setScanned(undefined)
     setConfirmed(false)
     setError(undefined)
+  }
+  useEffect(() => {
+    if (!parsed) return
+    fill(parsed)
+    resetDetect()
+    if (undetected(parsed))
+      detectURL({
+        params: { path: { env } },
+        body: { url: parse.variables.body.url, detect: true },
+      })
   }, [parsed])
+  useEffect(() => {
+    if (detected && !undetected(detected)) fill(detected)
+  }, [detected])
+  useEffect(() => {
+    setRefused(false)
+    setSkipCheck(false)
+  }, [kind, baseUrl, token, apiKind, apiUrl])
   const ssh = kind === "ssh"
   const local = kind === "local"
   const canSave =
@@ -448,7 +516,16 @@ function ForgeForm({
 
   const pickKind = (k: Kind) => {
     setKind(k)
-    setBaseUrl(defaultBaseURLs[k])
+    // An HTTPS address the user pasted or typed stays for another HTTPS kind: a Forgejo
+    // read as Other HTTPS keeps its host when it is made a Forgejo.
+    const url = baseUrl.trim()
+    const keep =
+      httpsKinds.includes(k) &&
+      httpsKinds.includes(kind) &&
+      url !== "" &&
+      !Object.values(defaultBaseURLs).includes(url)
+    if (!keep) setBaseUrl(defaultBaseURLs[k])
+    resetDetect()
     setApiKind("")
     setApiUrl("")
     setScanned(undefined)
@@ -478,11 +555,13 @@ function ForgeForm({
                 ...(apiKind ? { apiKind, apiUrl: apiUrl.trim(), token } : {}),
               }
             : { token }),
+        ...(skipCheck ? { skipCheck } : {}),
       },
     })
     setSaving(false)
     if (res.error) {
       setError(errorMessage(res.error))
+      setRefused(checkRefused(res.error))
       return
     }
     invalidate()
@@ -545,16 +624,25 @@ function ForgeForm({
             </SelectContent>
           </Select>
           <FieldDescription>
-            {kind === "forgejo" && "Forgejo or Gitea, such as Codeberg."}
-            {kind === "github" && "github.com or GitHub Enterprise Server."}
-            {kind === "gitlab" &&
-              "gitlab.com or a self-hosted GitLab. Approved pushes to other branches get a merge request."}
-            {kind === "https" &&
-              "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
-            {ssh &&
-              "Any host serving git over SSH. Pull requests with the forge's API, below."}
-            {local &&
-              "Repositories in a folder here, such as ~/git. Approved pushes go in with your git, as git push to the folder would; no pull requests."}
+            {detecting ? (
+              <span className="flex items-center gap-2">
+                <Spinner />
+                Asking the host which forge it runs…
+              </span>
+            ) : (
+              <>
+                {kind === "forgejo" && "Forgejo or Gitea, such as Codeberg."}
+                {kind === "github" && "github.com or GitHub Enterprise Server."}
+                {kind === "gitlab" &&
+                  "gitlab.com or a self-hosted GitLab. Approved pushes to other branches get a merge request."}
+                {kind === "https" &&
+                  "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
+                {ssh &&
+                  "Any host serving git over SSH. Pull requests with the forge's API, below."}
+                {local &&
+                  "Repositories in a folder here, such as ~/git. Approved pushes go in with your git, as git push to the folder would; no pull requests."}
+              </>
+            )}
           </FieldDescription>
         </Field>
         <Field>
@@ -720,6 +808,9 @@ function ForgeForm({
         </FieldDescription>
       </Field>
       {error && <FieldError>{error}</FieldError>}
+      {refused && (
+        <SkipCheck checked={skipCheck} onCheckedChange={setSkipCheck} />
+      )}
       <DialogFooter>
         <Button type="submit" disabled={!canSave || saving}>
           {saving && <Spinner />}

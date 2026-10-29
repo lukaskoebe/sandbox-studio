@@ -3384,6 +3384,10 @@
             ],
             "type": "string"
           },
+          "skipCheck": {
+            "description": "Save the API without first checking that it answers at the URL and accepts the token",
+            "type": "boolean"
+          },
           "token": {
             "description": "An access token for the API; Studio keeps it and sandboxes never see it",
             "maxLength": 4096,
@@ -3478,6 +3482,10 @@
             "description": "Names the forge in the remote URL: https://git.studio.internal/\u003cname\u003e/\u003cpath\u003e.git",
             "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
             "type": "string"
+          },
+          "skipCheck": {
+            "description": "Add the forge without first checking that its API answers at the URL and accepts the token, as for a forge Studio can't reach yet",
+            "type": "boolean"
           },
           "token": {
             "description": "Every kind but ssh and local: an access token with read and write access to the repositories; for kind ssh with apiKind, the API's token. Studio keeps it and sandboxes never see it",
@@ -5570,6 +5578,10 @@
       "ParseForgeURLRequest": {
         "additionalProperties": false,
         "properties": {
+          "detect": {
+            "description": "Also ask a host Studio doesn't know which forge it runs (Forgejo or Gitea, GitLab, GitHub Enterprise), by endpoints they answer without a token; takes up to a few seconds",
+            "type": "boolean"
+          },
           "url": {
             "maxLength": 2048,
             "minLength": 1,
@@ -12028,7 +12040,7 @@
     },
     "/api/environments/{env}/forges/parse-url": {
       "post": {
-        "description": "Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment.",
+        "description": "Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment. Without detect, only hosts Studio knows, such as github.com and codeberg.org, get their API.",
         "operationId": "parseForgeURL",
         "parameters": [
           {

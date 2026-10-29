@@ -48,14 +48,35 @@ func (p *pulls) reviews() []PostedReview {
 	return append([]PostedReview{}, p.posted...)
 }
 
-// serve answers the Forgejo API requests it knows; ok is false for the rest.
+// serve answers the Forgejo API requests it knows, and the user of GitHub's and GitLab's,
+// which a forge's token is checked with; ok is false for the rest. A token with rejected in it
+// is refused.
 func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
-	if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
-		return false
-	}
 	send := func(v any) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(v)
+	}
+	if strings.Contains(r.Header.Get("Authorization"), "rejected") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"message":"Bad credentials"}`)
+		return true
+	}
+	switch r.URL.Path {
+	case "/user", "/api/v3/user":
+		send(map[string]string{"login": "e2e-user"})
+		return true
+	case "/api/v4/user":
+		send(map[string]string{"username": "e2e-user"})
+		return true
+	}
+	if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
+		return false
+	}
+	// Every host is a Forgejo to the forge dialog's detection.
+	if r.URL.Path == "/api/v1/version" {
+		send(map[string]string{"version": "11.0.1+gitea-1.22.0"})
+		return true
 	}
 	if r.URL.Path == "/api/v1/user" {
 		send(map[string]string{"login": "e2e-user"})

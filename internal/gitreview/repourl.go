@@ -37,6 +37,12 @@ var sshAPIHosts = map[string]string{"github.com": "github.com", "ssh.github.com"
 // uniqueness. A path on this computer, /home/me/git/repo, ~/git/repo or file:///..., makes
 // a local forge for the folder the repository is in, named local.
 func ParseRepoURL(raw string) (RepoURL, error) {
+	return parseRepoURL(raw, nil)
+}
+
+// parseRepoURL is ParseRepoURL with known, more hosts by the API they have: an HTTPS host
+// gets that kind, an SSH host that API on https:// and its name.
+func parseRepoURL(raw string, known map[string]string) (RepoURL, error) {
 	raw = strings.TrimSpace(raw)
 	bad := func(why string) (RepoURL, error) {
 		return RepoURL{}, fmt.Errorf("%w: %s", ErrInvalid, why)
@@ -57,7 +63,11 @@ func ParseRepoURL(raw string) (RepoURL, error) {
 			return RepoURL{}, err
 		}
 		r.Kind, r.BaseURL, path = KindHTTPS, base, u.Path
-		if k, ok := apiHosts[host]; ok {
+		k, ok := apiHosts[host]
+		if !ok {
+			k, ok = known[host]
+		}
+		if ok {
 			r.Kind = k
 			if k == KindGitLab {
 				// GitLab paths may have subgroups; "/-/" starts the project's own pages, such as
@@ -115,6 +125,8 @@ func ParseRepoURL(raw string) (RepoURL, error) {
 		host = u.Host
 		if web, ok := sshAPIHosts[host]; ok {
 			r.APIKind, r.APIURL = apiHosts[web], "https://"+web
+		} else if k, ok := known[host]; ok {
+			r.APIKind, r.APIURL = k, "https://"+sshWebHost(host)
 		}
 	} else if u, err := url.Parse(r.BaseURL); err == nil {
 		host = u.Hostname()
