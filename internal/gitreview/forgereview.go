@@ -66,7 +66,7 @@ func (s *Service) ReviewDetail(ctx context.Context, a store.Approval) (*ReviewDe
 }
 
 // reviewForge finds the forge a review tool names, or the environment's one forge that can
-// review when it names none.
+// review when it names none, as its API sees it (apiForge).
 func (s *Service) reviewForge(ctx context.Context, envID, name string) (store.Forge, Reviewer, error) {
 	var f store.Forge
 	if name != "" {
@@ -78,24 +78,33 @@ func (s *Service) reviewForge(ctx context.Context, envID, name string) (store.Fo
 		if err != nil {
 			return f, nil, err
 		}
+		api, ok := apiForge(f)
+		if !ok {
+			return f, nil, integrations.ToolError("%s", noAPI(f))
+		}
+		f = api
 	} else {
 		forges, err := s.Store.Forges(ctx, envID)
 		if err != nil {
 			return f, nil, err
 		}
-		var names []string
+		var names, without []string
 		for _, c := range forges {
-			if hasAPI(c.Kind) {
-				f = c
+			if api, ok := apiForge(c); ok {
+				f = api
 				names = append(names, c.Name)
+			} else {
+				without = append(without, noAPI(c))
 			}
 		}
-		switch len(names) {
-		case 0:
-			return f, nil, integrations.ToolError("this environment has no forge with an API; the user adds one in Settings → Git forges")
-		case 1:
-		default:
+		switch {
+		case len(names) == 1:
+		case len(names) > 1:
 			return f, nil, integrations.ToolError("name the forge: one of %s", strings.Join(names, ", "))
+		case len(without) == 0:
+			return f, nil, integrations.ToolError("this environment has no forges; the user adds one in Settings → Git forges")
+		default:
+			return f, nil, integrations.ToolError("no forge of this environment has an API for pull requests: %s", strings.Join(without, "; "))
 		}
 	}
 	if f.Kind == KindGitLab {
@@ -426,6 +435,10 @@ func (s *Service) postDraft(ctx context.Context, r store.GitReview, draft Review
 	if err != nil {
 		return "", "", errors.New("the forge was removed from Sandbox Studio")
 	}
+	f, ok := apiForge(f)
+	if !ok {
+		return "", "", errors.New(noAPI(f))
+	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {
 		return "", "", err
@@ -561,6 +574,10 @@ func (s *Service) ReviewHead(ctx context.Context, envID, approvalID string) (Rev
 	f, err := s.Store.Forge(ctx, envID, r.ForgeID)
 	if err != nil {
 		return h, err
+	}
+	f, ok := apiForge(f)
+	if !ok {
+		return h, errNoAPI
 	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {

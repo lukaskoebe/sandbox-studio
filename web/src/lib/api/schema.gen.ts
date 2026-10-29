@@ -556,6 +556,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/forges/{id}/api": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Gives an ssh forge an API with a token, or replaces the one it has: Studio then lists its repositories and reads, reviews and opens its pull requests through the API, while git still goes over SSH. */
+        put: operations["setForgeAPI"];
+        post?: never;
+        /** @description Takes an ssh forge's API away and deletes its token. git over SSH keeps working; pull requests and repository lists stop. */
+        delete: operations["removeForgeAPI"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges/{id}/auth": {
         parameters: {
             query?: never;
@@ -4031,6 +4049,15 @@ export interface components {
              */
             agentSlowAt?: string;
             /**
+             * @description Kind ssh: the API Studio reads repositories and pull requests through, with the forge's API token; empty without one
+             * @enum {string}
+             */
+            apiKind?: "forgejo" | "github" | "gitlab";
+            /** @description Kind ssh with an API: the studio-only vault secret holding the API token */
+            apiSecretId?: string;
+            /** @description Kind ssh with an API: the forge's HTTPS URL, such as https://codeberg.org */
+            apiUrl?: string;
+            /**
              * @description Kind ssh: sign with the host's SSH agent, or with a key Studio generated; none for kind local
              * @enum {string}
              */
@@ -4060,6 +4087,14 @@ export interface components {
             /** @description The basic-auth user (https) or SSH user (ssh) */
             username?: string;
         };
+        ForgeAPI: {
+            /** @description The forge's HTTPS URL, such as https://codeberg.org */
+            baseUrl: string;
+            /** @enum {string} */
+            kind: "forgejo" | "github" | "gitlab";
+            /** @description An access token for the API; Studio keeps it and sandboxes never see it */
+            token: string;
+        };
         ForgeAuth: {
             /** @enum {string} */
             auth: "agent" | "key";
@@ -4068,6 +4103,13 @@ export interface components {
             hostKey: string;
         };
         ForgeInput: {
+            /**
+             * @description Kind ssh: the forge's API, for repository lists and pull requests, reached with token; git still goes over SSH
+             * @enum {string}
+             */
+            apiKind?: "forgejo" | "github" | "gitlab";
+            /** @description Kind ssh with apiKind: the forge's HTTPS URL, such as https://codeberg.org */
+            apiUrl?: string;
             /**
              * @description Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge
              * @enum {string}
@@ -4081,7 +4123,7 @@ export interface components {
             kind: "forgejo" | "github" | "gitlab" | "https" | "ssh" | "local";
             /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git */
             name: string;
-            /** @description Every kind but ssh and local: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
+            /** @description Every kind but ssh and local: an access token with read and write access to the repositories; for kind ssh with apiKind, the API's token. Studio keeps it and sandboxes never see it */
             token?: string;
             /** @description Kind https: the user git authenticates as with the token; git if empty */
             username?: string;
@@ -5133,6 +5175,13 @@ export interface components {
             private?: boolean;
         };
         RepoURL: {
+            /**
+             * @description Kind ssh: the API the host is known to have, for pull requests with a token
+             * @enum {string}
+             */
+            apiKind?: "forgejo" | "github" | "gitlab";
+            /** @description Kind ssh with apiKind: the API's HTTPS URL */
+            apiUrl?: string;
             /**
              * @description Kind ssh: the host's SSH agent
              * @enum {string}
@@ -7613,6 +7662,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setForgeAPI: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgeAPI"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    removeForgeAPI: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"];
+                };
             };
             /** @description Error */
             default: {

@@ -16,7 +16,8 @@ import (
 // Forge is a git host an environment's sandboxes push to through the virtual git remote.
 // Its credential (a token, or for kind ssh a private key) is a studio-only secret:
 // sandboxes never see it. An ssh forge with auth agent has no secret: Studio signs with
-// the host's SSH agent.
+// the host's SSH agent. An ssh forge may also have an API, whose token is a second
+// studio-only secret.
 type Forge struct {
 	ID                 string     `json:"id"`
 	EnvironmentID      string     `json:"environmentId"`
@@ -32,6 +33,9 @@ type Forge struct {
 	HostKeyMismatch    string     `json:"hostKeyMismatch,omitempty" doc:"Fingerprint of a different host key the host presented since it was pinned; re-pin to clear"`
 	AgentSlowAt        *time.Time `json:"agentSlowAt,omitempty" doc:"When a signature by the SSH agent last waited for the user to confirm it"`
 	AgentHintDismissed bool       `json:"agentHintDismissed,omitempty" doc:"The user dismissed the suggestion to use a Studio key instead"`
+	APIKind            string     `json:"apiKind,omitempty" enum:"forgejo,github,gitlab" doc:"Kind ssh: the API Studio reads repositories and pull requests through, with the forge's API token; empty without one"`
+	APIURL             string     `json:"apiUrl,omitempty" doc:"Kind ssh with an API: the forge's HTTPS URL, such as https://codeberg.org"`
+	APISecretID        string     `json:"apiSecretId,omitempty" doc:"Kind ssh with an API: the studio-only vault secret holding the API token"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
@@ -45,14 +49,14 @@ const (
 )
 
 const forgeCols = `id, environment_id, name, kind, base_url, username, auth, IFNULL(secret_id, ''), public_key, host_key,
-	host_key_offered, agent_slow_at, agent_hint_dismissed, created_at, updated_at`
+	host_key_offered, agent_slow_at, agent_hint_dismissed, api_kind, api_url, IFNULL(api_secret_id, ''), created_at, updated_at`
 
 func scanForge(row interface{ Scan(...any) error }) (Forge, error) {
 	var f Forge
 	var created, updated int64
 	var slow sql.NullInt64
 	err := row.Scan(&f.ID, &f.EnvironmentID, &f.Name, &f.Kind, &f.BaseURL, &f.Username, &f.Auth, &f.SecretID, &f.PublicKey, &f.HostKey,
-		&f.HostKeyMismatch, &slow, &f.AgentHintDismissed, &created, &updated)
+		&f.HostKeyMismatch, &slow, &f.AgentHintDismissed, &f.APIKind, &f.APIURL, &f.APISecretID, &created, &updated)
 	f.CreatedAt, f.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	if slow.Valid {
 		t := time.Unix(slow.Int64, 0)
@@ -74,6 +78,17 @@ func fingerprint(hostKey string) string {
 // The secret is stored studio-only. An ssh forge names its auth; with auth agent, as with
 // auth none, there is no secret and sec is ignored.
 func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, error) {
+	f.APIKind, f.APIURL = "", ""
+	return s.createForge(ctx, f, sec, Secret{})
+}
+
+// CreateForgeWithAPI is CreateForge for an ssh forge with an API: f names its APIKind and
+// APIURL, and api is its API token's secret, which the caller sealed.
+func (s *Store) CreateForgeWithAPI(ctx context.Context, f Forge, sec, api Secret) (Forge, error) {
+	return s.createForge(ctx, f, sec, api)
+}
+
+func (s *Store) createForge(ctx context.Context, f Forge, sec, api Secret) (Forge, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return f, err
@@ -87,9 +102,18 @@ func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, er
 		}
 		f.SecretID = sec.ID
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, username, auth, secret_id, public_key, host_key, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		f.ID, f.EnvironmentID, f.Name, f.Kind, f.BaseURL, f.Username, f.Auth, nullable(f.SecretID), f.PublicKey, f.HostKey, t, t)
+	f.APISecretID = ""
+	if f.APIKind != "" {
+		if err := insertForgeSecret(ctx, tx, f.EnvironmentID, api, t); err != nil {
+			return f, err
+		}
+		f.APISecretID = api.ID
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, username, auth, secret_id, public_key, host_key,
+		api_kind, api_url, api_secret_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		f.ID, f.EnvironmentID, f.Name, f.Kind, f.BaseURL, f.Username, f.Auth, nullable(f.SecretID), f.PublicKey, f.HostKey,
+		f.APIKind, f.APIURL, nullable(f.APISecretID), t, t)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return f, fmt.Errorf("a forge named %q: %w", f.Name, ErrExists)
 	}
@@ -159,6 +183,76 @@ func (s *Store) SetForgeAgent(ctx context.Context, envID, id string) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// SetForgeAPI gives an ssh forge an API of kind at url, with the token in sec, which the
+// caller sealed. An API the forge had is replaced, and its token deleted.
+func (s *Store) SetForgeAPI(ctx context.Context, envID, id, kind, url string, sec Secret) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	old, err := forgeAPISecret(ctx, tx, envID, id)
+	if err != nil {
+		return err
+	}
+	// The old token goes first: the new one may have its name.
+	if err := clearForgeAPI(ctx, tx, envID, id, old); err != nil {
+		return err
+	}
+	t := now()
+	if err := insertForgeSecret(ctx, tx, envID, sec, t); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE forges SET api_kind = ?, api_url = ?, api_secret_id = ?, updated_at = ? WHERE environment_id = ? AND id = ?",
+		kind, url, sec.ID, t, envID, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RemoveForgeAPI takes an ssh forge's API away and deletes its token. A forge without one is
+// left as it is.
+func (s *Store) RemoveForgeAPI(ctx context.Context, envID, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	old, err := forgeAPISecret(ctx, tx, envID, id)
+	if err != nil {
+		return err
+	}
+	if err := clearForgeAPI(ctx, tx, envID, id, old); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// forgeAPISecret returns the API token's secret ID of an ssh forge, "" if it has none. A
+// forge of another kind is ErrNotFound.
+func forgeAPISecret(ctx context.Context, tx *sql.Tx, envID, id string) (string, error) {
+	var secretID sql.NullString
+	var k string
+	err := tx.QueryRowContext(ctx, "SELECT api_secret_id, kind FROM forges WHERE environment_id = ? AND id = ?", envID, id).Scan(&secretID, &k)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && k != "ssh" {
+		return "", ErrNotFound
+	}
+	return secretID.String, err
+}
+
+// clearForgeAPI empties a forge's API columns and deletes the token secret old, if any.
+func clearForgeAPI(ctx context.Context, tx *sql.Tx, envID, id, old string) error {
+	if old == "" {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE forges SET api_kind = '', api_url = '', api_secret_id = NULL, updated_at = ? WHERE environment_id = ? AND id = ?",
+		now(), envID, id); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, old)
+	return err
 }
 
 // forgeSecret returns the secret ID of a forge, "" if it has none. With kind set, a forge of
@@ -267,22 +361,30 @@ func (s *Store) ForgeByName(ctx context.Context, envID, name string) (Forge, err
 	return f, err
 }
 
-// DeleteForge removes a forge and its token or key, if any. Pushes keep their copy of its name.
+// DeleteForge removes a forge and its token, key and API token, if any. Pushes keep their
+// copy of its name.
 func (s *Store) DeleteForge(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	secretID, err := forgeSecret(ctx, tx, envID, id, "")
+	var secretID, apiSecretID sql.NullString
+	err = tx.QueryRowContext(ctx, "SELECT secret_id, api_secret_id FROM forges WHERE environment_id = ? AND id = ?", envID, id).Scan(&secretID, &apiSecretID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM forges WHERE environment_id = ? AND id = ?", envID, id); err != nil {
 		return err
 	}
-	if secretID != "" {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, secretID); err != nil {
+	for _, sec := range []sql.NullString{secretID, apiSecretID} {
+		if sec.String == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, sec.String); err != nil {
 			return err
 		}
 	}
@@ -292,6 +394,17 @@ func (s *Store) DeleteForge(ctx context.Context, envID, id string) error {
 // SetForgeSecret replaces the sealed value of a forge's secret, such as an expired token.
 // The caller sealed it for the secret's ID.
 func (s *Store) SetForgeSecret(ctx context.Context, envID, id string, sealed []byte) error {
+	return s.setForgeSecret(ctx, envID, id, "secret_id", sealed)
+}
+
+// SetForgeAPISecret replaces the sealed value of an ssh forge's API token, as SetForgeSecret
+// does a forge's token.
+func (s *Store) SetForgeAPISecret(ctx context.Context, envID, id string, sealed []byte) error {
+	return s.setForgeSecret(ctx, envID, id, "api_secret_id", sealed)
+}
+
+// setForgeSecret replaces the value of the secret a forge's column names.
+func (s *Store) setForgeSecret(ctx context.Context, envID, id, column string, sealed []byte) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -299,7 +412,7 @@ func (s *Store) SetForgeSecret(ctx context.Context, envID, id string, sealed []b
 	defer tx.Rollback()
 	t := now()
 	res, err := tx.ExecContext(ctx, `UPDATE secrets SET value = ?, updated_at = ?
-		WHERE environment_id = ? AND id = (SELECT secret_id FROM forges WHERE environment_id = ? AND id = ?)`, sealed, t, envID, envID, id)
+		WHERE environment_id = ? AND id = (SELECT `+column+` FROM forges WHERE environment_id = ? AND id = ?)`, sealed, t, envID, envID, id)
 	if err != nil {
 		return err
 	}
@@ -315,7 +428,7 @@ func (s *Store) SetForgeSecret(ctx context.Context, envID, id string, sealed []b
 // SecretForge returns the name of the forge whose token a secret is, or "" if none.
 func (s *Store) SecretForge(ctx context.Context, envID, secretID string) (string, error) {
 	var name string
-	err := s.db.QueryRowContext(ctx, "SELECT name FROM forges WHERE environment_id = ? AND secret_id = ?", envID, secretID).Scan(&name)
+	err := s.db.QueryRowContext(ctx, "SELECT name FROM forges WHERE environment_id = ? AND ? IN (secret_id, api_secret_id)", envID, secretID).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}

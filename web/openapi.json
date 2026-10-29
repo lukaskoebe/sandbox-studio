@@ -3247,6 +3247,23 @@
             "format": "date-time",
             "type": "string"
           },
+          "apiKind": {
+            "description": "Kind ssh: the API Studio reads repositories and pull requests through, with the forge's API token; empty without one",
+            "enum": [
+              "forgejo",
+              "github",
+              "gitlab"
+            ],
+            "type": "string"
+          },
+          "apiSecretId": {
+            "description": "Kind ssh with an API: the studio-only vault secret holding the API token",
+            "type": "string"
+          },
+          "apiUrl": {
+            "description": "Kind ssh with an API: the forge's HTTPS URL, such as https://codeberg.org",
+            "type": "string"
+          },
           "auth": {
             "description": "Kind ssh: sign with the host's SSH agent, or with a key Studio generated; none for kind local",
             "enum": [
@@ -3325,6 +3342,36 @@
         ],
         "type": "object"
       },
+      "ForgeAPI": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "description": "The forge's HTTPS URL, such as https://codeberg.org",
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "forgejo",
+              "github",
+              "gitlab"
+            ],
+            "type": "string"
+          },
+          "token": {
+            "description": "An access token for the API; Studio keeps it and sandboxes never see it",
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "baseUrl",
+          "token"
+        ],
+        "type": "object"
+      },
       "ForgeAuth": {
         "additionalProperties": false,
         "properties": {
@@ -3358,6 +3405,20 @@
       "ForgeInput": {
         "additionalProperties": false,
         "properties": {
+          "apiKind": {
+            "description": "Kind ssh: the forge's API, for repository lists and pull requests, reached with token; git still goes over SSH",
+            "enum": [
+              "forgejo",
+              "github",
+              "gitlab"
+            ],
+            "type": "string"
+          },
+          "apiUrl": {
+            "description": "Kind ssh with apiKind: the forge's HTTPS URL, such as https://codeberg.org",
+            "maxLength": 4096,
+            "type": "string"
+          },
           "auth": {
             "description": "Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge",
             "enum": [
@@ -3393,7 +3454,7 @@
             "type": "string"
           },
           "token": {
-            "description": "Every kind but ssh and local: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it",
+            "description": "Every kind but ssh and local: an access token with read and write access to the repositories; for kind ssh with apiKind, the API's token. Studio keeps it and sandboxes never see it",
             "maxLength": 4096,
             "type": "string"
           },
@@ -6663,6 +6724,19 @@
       "RepoURL": {
         "additionalProperties": false,
         "properties": {
+          "apiKind": {
+            "description": "Kind ssh: the API the host is known to have, for pull requests with a token",
+            "enum": [
+              "forgejo",
+              "github",
+              "gitlab"
+            ],
+            "type": "string"
+          },
+          "apiUrl": {
+            "description": "Kind ssh with apiKind: the API's HTTPS URL",
+            "type": "string"
+          },
           "auth": {
             "description": "Kind ssh: the host's SSH agent",
             "enum": [
@@ -12044,6 +12118,120 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges/{id}/api": {
+      "delete": {
+        "description": "Takes an ssh forge's API away and deletes its token. git over SSH keeps working; pull requests and repository lists stop.",
+        "operationId": "removeForgeAPI",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forge"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      },
+      "put": {
+        "description": "Gives an ssh forge an API with a token, or replaces the one it has: Studio then lists its repositories and reads, reviews and opens its pull requests through the API, while git still goes over SSH.",
+        "operationId": "setForgeAPI",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeAPI"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forge"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {

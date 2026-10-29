@@ -9,8 +9,8 @@ import (
 
 func TestParseRepoURL(t *testing.T) {
 	for in, want := range map[string]RepoURL{
-		"git@github.com:owner/repo.git":                    {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent"},
-		"git@github.com:owner/repo":                        {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent"},
+		"git@github.com:owner/repo.git":                    {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent", APIKind: KindGitHub, APIURL: "https://github.com"},
+		"git@github.com:owner/repo":                        {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent", APIKind: KindGitHub, APIURL: "https://github.com"},
 		"ssh://git@git.example.org:2222/team/x.git":        {Kind: KindSSH, BaseURL: "ssh://git@git.example.org:2222", Name: "example", Path: "team/x", Auth: "agent"},
 		"ssh://gitolite@Box.Example.co.uk/repo":            {Kind: KindSSH, BaseURL: "ssh://gitolite@box.example.co.uk", Name: "example", Path: "repo", Auth: "agent"},
 		"https://github.com/owner/repo":                    {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},

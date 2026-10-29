@@ -22,7 +22,8 @@ import (
 
 // Forge kinds. forgejo, github and gitlab have an API (default branch, pull or merge requests);
 // https is any host speaking git over HTTPS with a token; ssh is any host speaking git over SSH
-// with a key Studio generated; local is a folder of repositories on this computer (local.go).
+// with a key Studio generated, and may have one of the APIs too (apiForge); local is a folder
+// of repositories on this computer (local.go).
 const (
 	KindForgejo = "forgejo"
 	KindGitHub  = "github"
@@ -34,6 +35,48 @@ const (
 
 // hasAPI reports whether a kind has an API adapter, and so repository paths and PRs.
 func hasAPI(kind string) bool { return kind == KindForgejo || kind == KindGitHub || kind == KindGitLab }
+
+// apiForge is f as Studio talks to its API: f itself for a kind with an API, and for an ssh
+// forge with an API token, f as a forge of the API's kind at its HTTPS URL holding that token.
+// Its name and ID stay f's. ok is false when f has no API. git goes on using f.
+func apiForge(f store.Forge) (store.Forge, bool) {
+	if hasAPI(f.Kind) {
+		return f, true
+	}
+	if f.Kind != KindSSH || f.APIKind == "" || f.APISecretID == "" {
+		return f, false
+	}
+	a := f
+	a.Kind, a.BaseURL, a.Username, a.Auth, a.SecretID = f.APIKind, f.APIURL, "", "", f.APISecretID
+	return a, true
+}
+
+// HasAPI reports whether Studio can reach f's API: f's kind has one, or f is an ssh forge with
+// an API token.
+func HasAPI(f store.Forge) bool {
+	_, ok := apiForge(f)
+	return ok
+}
+
+// CheckAPI validates the API an ssh forge gets, of kind at baseURL, and returns the normalized
+// URL and its host.
+func CheckAPI(kind, baseURL string) (string, string, error) {
+	if !hasAPI(kind) {
+		return "", "", fmt.Errorf("%w: the API is forgejo, github or gitlab, not %q", ErrInvalid, kind)
+	}
+	return publicBase(baseURL)
+}
+
+// noAPI explains why f has no API, for a tool or a test that needs one.
+func noAPI(f store.Forge) string {
+	switch f.Kind {
+	case KindSSH:
+		return f.Name + " is an SSH forge without an API token; the user adds one to it in Settings → Git forges"
+	case KindLocal:
+		return f.Name + " is a folder on the user's computer, without pull requests"
+	}
+	return f.Name + " is a plain HTTPS forge, without an API for pull requests"
+}
 
 // badOwner reports whether owner can't be the owner of a repository on a forge of kind. An API
 // forge needs one; Forgejo and GitHub take a single segment, GitLab any path (subgroups).

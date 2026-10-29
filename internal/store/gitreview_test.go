@@ -61,6 +61,87 @@ func TestForgeHostKeys(t *testing.T) {
 	}
 }
 
+// An ssh forge's API token is a second studio-only secret: replacing the API replaces it,
+// removing the API or the forge deletes it, and only ssh forges take one.
+func TestForgeAPIToken(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	env, err := st.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostKey, _ := testHostKey(t)
+	token := func(name string) Secret {
+		return Secret{ID: NewID(), Name: name, Sealed: []byte("sealed"), Hosts: []string{"git.example.net"}, Placeholder: NewID()}
+	}
+	f, err := st.CreateForgeWithAPI(ctx, Forge{ID: NewID(), EnvironmentID: env.ID, Name: "box", Kind: "ssh", BaseURL: "ssh://git@git.example.net",
+		Auth: ForgeAuthAgent, HostKey: hostKey, APIKind: "forgejo", APIURL: "https://git.example.net"}, Secret{}, token("FORGE_BOX_TOKEN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f, _ = st.Forge(ctx, env.ID, f.ID); f.APIKind != "forgejo" || f.APIURL != "https://git.example.net" || f.APISecretID == "" || f.SecretID != "" {
+		t.Fatalf("created: %+v", f)
+	}
+	if name, err := st.SecretForge(ctx, env.ID, f.APISecretID); err != nil || name != "box" {
+		t.Fatalf("the token's forge: %q, %v", name, err)
+	}
+	if err := st.SetForgeAPISecret(ctx, env.ID, f.ID, []byte("resealed")); err != nil {
+		t.Fatal(err)
+	}
+
+	// A new API under the same secret name replaces the old token.
+	if err := st.SetForgeAPI(ctx, env.ID, f.ID, "github", "https://github.example.net", token("FORGE_BOX_TOKEN")); err != nil {
+		t.Fatal(err)
+	}
+	g, _ := st.Forge(ctx, env.ID, f.ID)
+	if g.APIKind != "github" || g.APIURL != "https://github.example.net" || g.APISecretID == f.APISecretID {
+		t.Fatalf("replaced: %+v", g)
+	}
+	if secrets, _ := st.Secrets(ctx, env.ID); len(secrets) != 1 || secrets[0].ID != g.APISecretID || !secrets[0].StudioOnly {
+		t.Fatalf("secrets after replacing: %+v", secrets)
+	}
+	if err := st.RemoveForgeAPI(ctx, env.ID, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ = st.Forge(ctx, env.ID, f.ID); g.APIKind != "" || g.APIURL != "" || g.APISecretID != "" {
+		t.Fatalf("removed: %+v", g)
+	}
+	if secrets, _ := st.Secrets(ctx, env.ID); len(secrets) != 0 {
+		t.Fatalf("the token was not deleted: %d secrets", len(secrets))
+	}
+
+	// Deleting the forge deletes its API token along with its key.
+	if err := st.SetForgeAPI(ctx, env.ID, f.ID, "forgejo", "https://git.example.net", token("FORGE_BOX_TOKEN")); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetForgeKey(ctx, env.ID, f.ID, "ssh-ed25519 AAAA studio", token("FORGE_BOX_SSH_KEY")); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteForge(ctx, env.ID, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	if secrets, _ := st.Secrets(ctx, env.ID); len(secrets) != 0 {
+		t.Fatalf("deleting the forge left %d secrets", len(secrets))
+	}
+
+	// Other kinds have their own API or none.
+	gh, err := st.CreateForge(ctx, Forge{ID: NewID(), EnvironmentID: env.ID, Name: "gh", Kind: "github", BaseURL: "https://github.com"}, token("FORGE_GH_TOKEN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetForgeAPI(ctx, env.ID, gh.ID, "forgejo", "https://git.example.net", token("FORGE_GH_API")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an API for a github forge: %v", err)
+	}
+	if _, err := st.CreateForgeWithAPI(ctx, Forge{ID: NewID(), EnvironmentID: env.ID, Name: "plain", Kind: "https", BaseURL: "https://git.example.net",
+		APIKind: "forgejo", APIURL: "https://git.example.net"}, token("FORGE_PLAIN_TOKEN"), token("FORGE_PLAIN_API")); err == nil {
+		t.Fatal("an https forge took an API")
+	}
+}
+
 func TestForgeAgentAuth(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, ":memory:")

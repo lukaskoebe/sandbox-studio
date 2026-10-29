@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **An SSH forge can have pull requests.** Give it its host's API and a token (Forgejo or
+  Gitea, GitHub, or GitLab) in the Add forge dialog, or later with **Add an API token** in
+  its row. git keeps going over SSH, and through the API Studio lists the forge's
+  repositories, proposes a pull request with an approved push, and agents read and review
+  pull requests, all on one forge. A pasted SSH URL of github.com, gitlab.com or
+  codeberg.org fills in the API. Without one, the pull request tools no longer say the
+  environment "has no forge with an API": they name each forge and why it has none, such as
+  an SSH forge without an API token.
 - **The app opens on macOS, with the system's notifications.** `studio app` failed there
   with "notifications require a valid bundle identifier" and fell back to the browser: macOS
   gives notifications only to an app bundle, and the app was a bare binary. The macOS

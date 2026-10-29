@@ -148,6 +148,7 @@ type forgeView struct {
 	Kind         string `json:"kind"`
 	Remote       string `json:"remote" doc:"The virtual remote's URL prefix: clone <remote><path>.git"`
 	Reviews      bool   `json:"pullRequests" doc:"Whether the pull request tools work on this forge"`
+	API          string `json:"api,omitempty" doc:"Kind ssh: the API Studio reaches it through, for repositories and pull requests; git still goes over SSH"`
 	Repositories []Repo `json:"repositories,omitempty"`
 	More         bool   `json:"more,omitempty" doc:"The forge lists more repositories than shown"`
 	Note         string `json:"note,omitempty" doc:"Why the forge lists no repositories"`
@@ -182,10 +183,14 @@ func (s *Service) toolRepositories(ctx context.Context, sb store.Sandbox, params
 	defer cancel()
 	out := []forgeView{}
 	for _, f := range forges {
+		api, withAPI := apiForge(f)
 		v := forgeView{Name: f.Name, Kind: f.Kind, Remote: "https://" + Host + "/" + f.Name + "/",
-			Reviews: f.Kind == KindForgejo || f.Kind == KindGitHub}
-		if f.Kind != KindLocal && !hasAPI(f.Kind) {
-			v.Note = "a forge of kind " + f.Kind + " has no list; clone a repository by its path"
+			Reviews: withAPI && (api.Kind == KindForgejo || api.Kind == KindGitHub)}
+		if withAPI && f.Kind == KindSSH {
+			v.API = api.Kind
+		}
+		if f.Kind != KindLocal && !withAPI {
+			v.Note = noAPI(f) + ", so it has no list either; clone a repository by its path"
 			out = append(out, v)
 			continue
 		}

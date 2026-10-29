@@ -20,12 +20,46 @@ export const authLabels: Record<Auth, string> = {
   key: "A Studio key",
 }
 
+/** The APIs Studio speaks: a forge of one of these kinds, or an SSH forge with its token. */
+export type APIKind = NonNullable<Forge["apiKind"]>
+
+export const apiLabels: Record<APIKind, string> = {
+  forgejo: "Forgejo or Gitea",
+  github: "GitHub",
+  gitlab: "GitLab",
+}
+
 export const hasAPI = (kind: Kind) =>
   kind === "forgejo" || kind === "github" || kind === "gitlab"
 
+/** Whether Studio reaches a forge's API: its kind has one, or it is SSH with an API token. */
+export const forgeHasAPI = (f: Forge) => hasAPI(f.kind) || !!f.apiKind
+
 /** Whether Studio can list a forge's repositories: through its API, or in its folder. */
-export const canListRepositories = (kind: Kind) =>
-  hasAPI(kind) || kind === "local"
+export const canListRepositories = (f: Forge) =>
+  forgeHasAPI(f) || f.kind === "local"
+
+/** The SSH hosts whose API is on another host: GitHub's and GitLab's port 443 ones. */
+const sshWebHosts: Record<string, string> = {
+  "ssh.github.com": "github.com",
+  "altssh.gitlab.com": "gitlab.com",
+}
+
+/** The HTTPS URL an SSH forge's API likely has: https:// and its host. */
+export function defaultAPIURL(sshAddress: string) {
+  const host = /^(?:ssh:\/\/)?(?:[^@/\s]+@)?([^:/\s]+)/
+    .exec(sshAddress.trim())?.[1]
+    ?.toLowerCase()
+  return host ? `https://${sshWebHosts[host] ?? host}` : ""
+}
+
+/** The API an SSH forge likely has: GitHub's or GitLab's on theirs, else Forgejo's. */
+export function defaultAPIKind(sshAddress: string): APIKind {
+  const url = defaultAPIURL(sshAddress)
+  if (url === "https://github.com") return "github"
+  if (url === "https://gitlab.com") return "gitlab"
+  return "forgejo"
+}
 
 /**
  * The name a forge gets in Studio when the user doesn't pick one, as the server names a forge

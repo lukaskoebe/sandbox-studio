@@ -73,9 +73,18 @@ type ForgeInput struct {
 	Kind     string `json:"kind" enum:"forgejo,github,gitlab,https,ssh,local"`
 	BaseURL  string `json:"baseUrl" maxLength:"4096" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222; for kind local a folder of repositories on this computer, such as ~/git"`
 	Username string `json:"username,omitempty" maxLength:"64" doc:"Kind https: the user git authenticates as with the token; git if empty"`
-	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh and local: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
+	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh and local: an access token with read and write access to the repositories; for kind ssh with apiKind, the API's token. Studio keeps it and sandboxes never see it"`
 	HostKey  string `json:"hostKey,omitempty" maxLength:"16384" doc:"Kind ssh: the host key to pin, as scanned and confirmed by the user"`
 	Auth     string `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge"`
+	APIKind  string `json:"apiKind,omitempty" enum:"forgejo,github,gitlab" doc:"Kind ssh: the forge's API, for repository lists and pull requests, reached with token; git still goes over SSH"`
+	APIURL   string `json:"apiUrl,omitempty" maxLength:"4096" doc:"Kind ssh with apiKind: the forge's HTTPS URL, such as https://codeberg.org"`
+}
+
+// ForgeAPI gives an ssh forge an API, for repository lists and pull requests.
+type ForgeAPI struct {
+	Kind    string `json:"kind" enum:"forgejo,github,gitlab"`
+	BaseURL string `json:"baseUrl" maxLength:"4096" doc:"The forge's HTTPS URL, such as https://codeberg.org"`
+	Token   string `json:"token" minLength:"1" maxLength:"4096" doc:"An access token for the API; Studio keeps it and sandboxes never see it"`
 }
 
 // ForgeAuth switches how an ssh forge authenticates.
@@ -148,10 +157,26 @@ func (s *Server) registerForges(api huma.API) {
 		}
 		f := store.Forge{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind, BaseURL: u.Base, Username: u.User}
 		secretName, value, note := forgeSecretPrefix(b.Name)+"_TOKEN", b.Token, "Token of forge "+b.Name
-		var sec store.Secret
+		var sec, apiSec store.Secret
+		if b.APIKind != "" || b.APIURL != "" {
+			if b.Kind != gitreview.KindSSH {
+				return nil, huma.Error422UnprocessableEntity("only ssh forges take an API; forges of kind " + b.Kind + " have their own or none")
+			}
+			if b.Token == "" {
+				return nil, huma.Error422UnprocessableEntity("an ssh forge's API needs a token")
+			}
+			apiURL, apiHost, err := gitreview.CheckAPI(b.APIKind, b.APIURL)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			f.APIKind, f.APIURL = b.APIKind, apiURL
+			if apiSec, err = s.Vault.Prepare(in.Env, secretName, value, []string{apiHost}, "API token of forge "+b.Name); err != nil {
+				return nil, apiError(err)
+			}
+		}
 		if b.Kind == gitreview.KindSSH {
-			if b.Token != "" {
-				return nil, huma.Error422UnprocessableEntity("ssh forges sign with the SSH agent or a key Studio generates, not a token")
+			if b.Token != "" && b.APIKind == "" {
+				return nil, huma.Error422UnprocessableEntity("ssh forges sign with the SSH agent or a key Studio generates; a token is for their API, with apiKind")
 			}
 			hk, err := gitreview.CheckHostKey(b.HostKey)
 			if err == nil {
@@ -179,7 +204,11 @@ func (s *Server) registerForges(api huma.API) {
 		} else if sec, err = s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note); err != nil {
 			return nil, apiError(err)
 		}
-		f, err = s.Store.CreateForge(ctx, f, sec)
+		if f.APIKind != "" {
+			f, err = s.Store.CreateForgeWithAPI(ctx, f, sec, apiSec)
+		} else {
+			f, err = s.Store.CreateForge(ctx, f, sec)
+		}
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -252,19 +281,77 @@ func (s *Server) registerForges(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		if f.Kind == gitreview.KindSSH {
-			return nil, huma.Error409Conflict("ssh forges have a key, not a token; to get a new key, remove the forge and add it again")
+		if f.Kind == gitreview.KindSSH && f.APISecretID == "" {
+			return nil, huma.Error409Conflict("ssh forges have a key, not a token; give the forge an API to add a token for it")
 		}
 		if f.Kind == gitreview.KindLocal {
 			return nil, huma.Error409Conflict("local forges have no token")
 		}
-		sealed, err := s.Vault.SealValue(f.SecretID, in.Body.Token)
+		// An ssh forge's token is its API's.
+		secretID, set := f.SecretID, s.Store.SetForgeSecret
+		if f.Kind == gitreview.KindSSH {
+			secretID, set = f.APISecretID, s.Store.SetForgeAPISecret
+		}
+		sealed, err := s.Vault.SealValue(secretID, in.Body.Token)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		if err := s.Store.SetForgeSecret(ctx, in.Env, f.ID, sealed); err != nil {
+		if err := set(ctx, in.Env, f.ID, sealed); err != nil {
 			return nil, apiError(err)
 		}
+		s.publishSecrets(in.Env)
+		f, err = s.Store.Forge(ctx, in.Env, in.ID)
+		return &struct{ Body store.Forge }{f}, apiError(err)
+	})
+
+	type apiIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Forge ID"`
+		Body ForgeAPI
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setForgeAPI", Method: http.MethodPut, Path: "/api/environments/{env}/forges/{id}/api", Tags: []string{"git"},
+		Description: "Gives an ssh forge an API with a token, or replaces the one it has: Studio then lists its repositories and reads, reviews and opens its pull requests through the API, while git still goes over SSH.",
+	}, func(ctx context.Context, in *apiIn) (*struct{ Body store.Forge }, error) {
+		f, err := s.Store.Forge(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if f.Kind != gitreview.KindSSH {
+			return nil, huma.Error409Conflict("only ssh forges take an API; forges of kind " + f.Kind + " have their own or none")
+		}
+		apiURL, apiHost, err := gitreview.CheckAPI(in.Body.Kind, in.Body.BaseURL)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		sec, err := s.Vault.Prepare(in.Env, forgeSecretPrefix(f.Name)+"_TOKEN", in.Body.Token, []string{apiHost}, "API token of forge "+f.Name)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if err := s.Store.SetForgeAPI(ctx, in.Env, f.ID, in.Body.Kind, apiURL, sec); err != nil {
+			return nil, apiError(err)
+		}
+		s.Vault.Changed(in.Env)
+		s.publishSecrets(in.Env)
+		f, err = s.Store.Forge(ctx, in.Env, in.ID)
+		return &struct{ Body store.Forge }{f}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "removeForgeAPI", Method: http.MethodDelete, Path: "/api/environments/{env}/forges/{id}/api", Tags: []string{"git"},
+		Description: "Takes an ssh forge's API away and deletes its token. git over SSH keeps working; pull requests and repository lists stop.",
+	}, func(ctx context.Context, in *forgePath) (*struct{ Body store.Forge }, error) {
+		f, err := s.Store.Forge(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if f.Kind != gitreview.KindSSH {
+			return nil, huma.Error409Conflict("only ssh forges take an API; forges of kind " + f.Kind + " have their own or none")
+		}
+		if err := s.Store.RemoveForgeAPI(ctx, in.Env, in.ID); err != nil {
+			return nil, apiError(err)
+		}
+		s.Vault.Changed(in.Env)
 		s.publishSecrets(in.Env)
 		f, err = s.Store.Forge(ctx, in.Env, in.ID)
 		return &struct{ Body store.Forge }{f}, apiError(err)

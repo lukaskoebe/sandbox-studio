@@ -25,7 +25,7 @@ function useListableForges(env: string): Forge[] {
   const forges = $api.useQuery("get", "/api/environments/{env}/forges", {
     params: { path: { env } },
   })
-  return (forges.data ?? []).filter((f) => canListRepositories(f.kind))
+  return (forges.data ?? []).filter(canListRepositories)
 }
 
 /**

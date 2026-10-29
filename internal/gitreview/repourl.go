@@ -19,10 +19,16 @@ type RepoURL struct {
 	Name    string `json:"name" doc:"A short name for the forge, not yet taken in the environment"`
 	Path    string `json:"path" doc:"The repository's path on the forge, without .git"`
 	Auth    string `json:"auth,omitempty" enum:"agent,key,none" doc:"Kind ssh: the host's SSH agent"`
+	APIKind string `json:"apiKind,omitempty" enum:"forgejo,github,gitlab" doc:"Kind ssh: the API the host is known to have, for pull requests with a token"`
+	APIURL  string `json:"apiUrl,omitempty" doc:"Kind ssh with apiKind: the API's HTTPS URL"`
 }
 
 // apiHosts are hosts with an API Studio speaks, so their HTTPS URLs get that kind.
 var apiHosts = map[string]string{"github.com": KindGitHub, "codeberg.org": KindForgejo, "gitlab.com": KindGitLab}
+
+// sshAPIHosts are the SSH hosts of apiHosts, by the HTTPS host of their API.
+var sshAPIHosts = map[string]string{"github.com": "github.com", "ssh.github.com": "github.com",
+	"codeberg.org": "codeberg.org", "gitlab.com": "gitlab.com", "altssh.gitlab.com": "gitlab.com"}
 
 // ParseRepoURL reads a repository URL: git@host:owner/repo.git, ssh://git@host:port/owner/repo.git
 // or https://host/owner/repo(.git). SSH URLs make an ssh forge signing with the agent, also
@@ -107,6 +113,9 @@ func ParseRepoURL(raw string) (RepoURL, error) {
 	if r.Kind == KindSSH {
 		u, _ := ParseSSHURL(r.BaseURL)
 		host = u.Host
+		if web, ok := sshAPIHosts[host]; ok {
+			r.APIKind, r.APIURL = apiHosts[web], "https://"+web
+		}
 	} else if u, err := url.Parse(r.BaseURL); err == nil {
 		host = u.Hostname()
 	}

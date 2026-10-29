@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
 import {
+  APIFields,
   ForgeDialog,
   HostKeyCheck,
   PublicKeyNotice,
@@ -59,7 +60,16 @@ import {
   type Forge,
 } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
-import { hasAPI, kindLabels, remoteHost, type Auth } from "@/lib/forges"
+import {
+  apiLabels,
+  defaultAPIKind,
+  defaultAPIURL,
+  forgeHasAPI,
+  kindLabels,
+  remoteHost,
+  type APIKind,
+  type Auth,
+} from "@/lib/forges"
 
 /**
  * Settings → Git forges. addURL opens the Add forge dialog filled in from a repository URL;
@@ -202,6 +212,7 @@ function ForgeRow({
   const [testing, setTesting] = useState(false)
   const [replacing, setReplacing] = useState(false)
   const [pinning, setPinning] = useState(false)
+  const [settingAPI, setSettingAPI] = useState(false)
   const [keyAdded, setKeyAdded] = useState<Forge>()
   const switchAuth = $api.useMutation(
     "put",
@@ -338,6 +349,35 @@ function ForgeRow({
                 </div>
               </>
             )}
+            <div className="flex flex-wrap items-center gap-x-2">
+              {forge.apiKind ? (
+                <>
+                  <span>
+                    Pull requests through the {apiLabels[forge.apiKind]} API at{" "}
+                    <Ident>{forge.apiUrl ?? ""}</Ident>.
+                  </span>
+                  <Button
+                    variant="link"
+                    size="xs"
+                    onClick={() => setSettingAPI(true)}
+                  >
+                    Change
+                  </Button>
+                  <RemoveAPI env={env} forge={forge} />
+                </>
+              ) : (
+                <>
+                  No pull requests without the forge&apos;s API.
+                  <Button
+                    variant="link"
+                    size="xs"
+                    onClick={() => setSettingAPI(true)}
+                  >
+                    Add an API token
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </TableCell>
@@ -399,6 +439,17 @@ function ForgeRow({
                 env={env}
                 forge={forge}
                 onDone={() => setReplacing(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+        <Dialog open={settingAPI} onOpenChange={setSettingAPI}>
+          <DialogContent className="sm:max-w-xl lg:max-w-2xl">
+            {settingAPI && (
+              <APIForm
+                env={env}
+                forge={forge}
+                onDone={() => setSettingAPI(false)}
               />
             )}
           </DialogContent>
@@ -477,7 +528,7 @@ function TestForm({ env, forge }: { env: string; forge: Forge }) {
   )
   const res = test.data
   const local = forge.kind === "local"
-  const needsRepo = !hasAPI(forge.kind) && !local
+  const needsRepo = !forgeHasAPI(forge) && !local
   const submit = (e: FormEvent) => {
     e.preventDefault()
     test.mutate({
@@ -600,6 +651,125 @@ function TokenForm({
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+/** Gives an SSH forge an API with a token, or changes the one it has. */
+function APIForm({
+  env,
+  forge,
+  onDone,
+}: {
+  env: string
+  forge: Forge
+  onDone: () => void
+}) {
+  const invalidate = useInvalidateForges()
+  const [kind, setKind] = useState<APIKind | "">(
+    forge.apiKind ?? defaultAPIKind(forge.baseUrl)
+  )
+  const [url, setURL] = useState(forge.apiUrl ?? defaultAPIURL(forge.baseUrl))
+  const [token, setToken] = useState("")
+  const save = $api.useMutation(
+    "put",
+    "/api/environments/{env}/forges/{id}/api",
+    {
+      onSuccess: () => {
+        invalidate()
+        toast.success(`${forge.name} has pull requests now`)
+        onDone()
+      },
+    }
+  )
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (kind)
+          save.mutate({
+            params: { path: { env, id: forge.id } },
+            body: { kind, baseUrl: url.trim(), token },
+          })
+      }}
+      className="grid gap-4"
+    >
+      <DialogHeader>
+        <DialogTitle>
+          {forge.apiKind ? "Change the API" : "Add an API token"} of{" "}
+          {forge.name}
+        </DialogTitle>
+        <DialogDescription>
+          git keeps going over SSH. Through the API, Studio lists the
+          forge&apos;s repositories, and agents read, review and open pull
+          requests, with your approval.
+        </DialogDescription>
+      </DialogHeader>
+      <APIFields
+        sshAddress={forge.baseUrl}
+        kind={kind}
+        onKind={setKind}
+        url={url}
+        onURL={setURL}
+        token={token}
+        onToken={setToken}
+      />
+      {save.error && <FieldError>{errorMessage(save.error)}</FieldError>}
+      <DialogFooter>
+        <Button
+          type="submit"
+          disabled={
+            !kind || url.trim() === "" || token === "" || save.isPending
+          }
+        >
+          {save.isPending && <Spinner />}
+          Save
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+function RemoveAPI({ env, forge }: { env: string; forge: Forge }) {
+  const invalidate = useInvalidateForges()
+  const remove = $api.useMutation(
+    "delete",
+    "/api/environments/{env}/forges/{id}/api",
+    {
+      onSuccess: invalidate,
+      onError: (err) =>
+        toast.error("Could not remove the API", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger render={<Button variant="link" size="xs" />}>
+        Remove
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove the API of {forge.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Studio forgets its token. git over SSH keeps working; pull requests
+            and the list of repositories stop.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={remove.isPending}
+            onClick={() =>
+              remove.mutate({ params: { path: { env, id: forge.id } } })
+            }
+          >
+            {remove.isPending && <Spinner />}
+            Remove
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

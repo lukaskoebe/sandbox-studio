@@ -159,7 +159,8 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, er
 // defaultBranch is the repository's default branch, or "" when the forge has no API or
 // did not say.
 func (s *Service) defaultBranch(ctx context.Context, f store.Forge, owner, repo string) string {
-	if !hasAPI(f.Kind) {
+	f, ok := apiForge(f)
+	if !ok {
 		return ""
 	}
 	ad, err := adapter(f, s.httpClient())
@@ -185,6 +186,10 @@ func (s *Service) defaultBranch(ctx context.Context, f store.Forge, owner, repo 
 // the repository's default branch. It does nothing while base is unknown.
 func (s *Service) pullRequestFor(ctx context.Context, f store.Forge, rv *PushReview, base string) {
 	if base == "" || base == rv.Branch {
+		return
+	}
+	f, ok := apiForge(f)
+	if !ok {
 		return
 	}
 	ad, err := adapter(f, s.httpClient())
@@ -273,6 +278,10 @@ func (s *Service) openPRNow(ctx context.Context, p store.GitPush, pr PullRequest
 func (s *Service) openPullRequestOf(ctx context.Context, p store.GitPush, head string) string {
 	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
 	if err != nil {
+		return ""
+	}
+	f, ok := apiForge(f)
+	if !ok {
 		return ""
 	}
 	ad, err := adapter(f, s.httpClient())
@@ -404,6 +413,10 @@ func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (
 	if err != nil {
 		return "", errors.New("the forge was removed from Sandbox Studio")
 	}
+	f, ok := apiForge(f)
+	if !ok {
+		return "", errors.New(noAPI(f))
+	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {
 		return "", err
@@ -415,15 +428,17 @@ func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (
 	return ad.OpenPullRequest(ctx, token, p.Owner, p.Repo, pr)
 }
 
-// TestForge checks that a forge's token works and returns the account it belongs to.
+// TestForge checks that a forge's token works and returns the account it belongs to. An ssh
+// forge's API token is checked through its API, and a repository, if named, over SSH.
 func (s *Service) TestForge(ctx context.Context, f store.Forge, repo string) (Check, error) {
 	var c Check
-	if hasAPI(f.Kind) {
-		ad, err := adapter(f, s.httpClient())
+	api, withAPI := apiForge(f)
+	if withAPI {
+		ad, err := adapter(api, s.httpClient())
 		if err != nil {
 			return c, err
 		}
-		token, err := s.token(ctx, f)
+		token, err := s.token(ctx, api)
 		if err != nil {
 			return c, fmt.Errorf("the forge's token: %w", err)
 		}
@@ -438,7 +453,7 @@ func (s *Service) TestForge(ctx context.Context, f store.Forge, repo string) (Ch
 		return c, nil
 	}
 	if repo == "" {
-		if !hasAPI(f.Kind) {
+		if !withAPI {
 			return c, fmt.Errorf("%w: name a repository to test with", ErrInvalid)
 		}
 		return c, nil

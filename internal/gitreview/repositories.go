@@ -25,14 +25,16 @@ type Repo struct {
 }
 
 // Repositories lists the repositories of f that Studio's credential reaches: through the API
-// of a forgejo, github or gitlab forge, or the repositories in a local forge's folder. Forges
-// of kind https and ssh have no list.
+// of a forgejo, github or gitlab forge or of an ssh forge with an API token, or the
+// repositories in a local forge's folder. Forges of kind https, and ssh without an API, have
+// no list.
 func (s *Service) Repositories(ctx context.Context, f store.Forge) ([]Repo, error) {
 	if f.Kind == KindLocal {
 		return localRepositories(f.BaseURL)
 	}
-	if !hasAPI(f.Kind) {
-		return nil, fmt.Errorf("%w: a forge of kind %s has no API to list its repositories", ErrInvalid, f.Kind)
+	f, ok := apiForge(f)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrInvalid, noAPI(f))
 	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {

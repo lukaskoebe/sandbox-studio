@@ -19,8 +19,9 @@ host. Code: `internal/gitreview`, the API in `internal/api/git.go`, the UI in
 ## Forges
 
 A forge is a kind, a base URL, a username, one studio-only credential and, for SSH, a pinned
-host key. An SSH forge can sign with your SSH agent instead of a credential. The kind chooses
-the transport (HTTPS or SSH) and whether there is an API for pull requests.
+host key. An SSH forge can sign with your SSH agent instead of a credential, and can have an
+API with a token of its own. The kind chooses the transport (HTTPS or SSH) and whether there is
+an API for pull requests.
 
 - Per environment: name (`^[a-z0-9][a-z0-9-]{0,31}$`, used in the remote URL), kind and
   base URL. Pasting a repository URL such as `git@github.com:owner/repo.git` into the Add
@@ -53,7 +54,8 @@ the transport (HTTPS or SSH) and whether there is an API for pull requests.
   every upstream connection goes through `gateway.DialPublic`, so DNS can't rebind past the
   check. A LAN forge would let a sandbox drive requests into your network through Studio.
 - The token is stored as a secret `FORGE_<NAME>_TOKEN` (for `ssh` with a Studio key, the key
-  as `FORGE_<NAME>_SSH_KEY`; an SSH forge that signs with the agent has no secret) marked
+  as `FORGE_<NAME>_SSH_KEY`, and its API's token, if any, as `FORGE_<NAME>_TOKEN`; an SSH
+  forge that signs with the agent and has no API has no secret) marked
   studio-only: it has no host binding, so the gateway never
   substitutes it into sandbox traffic, network rules can't name it, and the secrets API
   refuses to edit or delete it (409; the secrets page shows it as "Forge token" or "Forge
@@ -142,7 +144,17 @@ The config holds only these internal URLs, never a token or key.
   reached through the virtual remote.
 - Pushes are approved like any other: `git-receive-pack` over SSH with the staged pack.
   The approval says how Studio will push ("over SSH to ssh://git@host/path, host key
-  SHA256:…"). No pull requests.
+  SHA256:…"). Pull requests only with an API.
+- **API:** an SSH forge on a Forgejo, Gitea, GitHub or GitLab host can have that host's API
+  too, with an access token: "Pull requests" in the Add forge dialog, or "Add an API token"
+  in its row (`PUT …/forges/{id}/api` with `{kind, baseUrl, token}`; `DELETE …/forges/{id}/api`
+  takes it away and deletes the token). git keeps going over SSH; the API, at `baseUrl` (the
+  forge's web address, such as `https://codeberg.org`), serves what it does for a forge of
+  its kind: the repository list, the default branch and pull request of a push, and the pull
+  request tools. A pasted SSH URL of github.com, gitlab.com or codeberg.org suggests their
+  API. The token is replaced in place like any forge's (`PUT …/forges/{id}/token`). One forge
+  for both keeps a single name for the agent, where an SSH forge beside an API forge for the
+  same host would be two.
 - A sandbox reaching an SSH host without a forge makes a plain TCP connection through the
   gateway, decided by the network policy like any host and port; it has no key unless the
   agent made one and someone registered it, which bypasses review.
@@ -319,7 +331,7 @@ it, so a client that doesn't know about rewrites can't approve one by accident.
     request of a push approved without one, or whose pull request failed or was not
     approved; 409 if there is none to open, 502 if the forge refuses. If one was opened on
     the forge meanwhile, the push records that it updates it.
-  - `https` and `ssh` forges have no API and get no pull request.
+  - `https` forges, and `ssh` forges without an API, get no pull request.
 
 Approvals are decided through the usual `POST /api/environments/{env}/approvals/{id}/decide`
 endpoint (`note` is optional); the integration owning the approval kind handles it.
@@ -373,7 +385,7 @@ an agent at once, in the sandbox's chat or terminal it works in.
 ## Pull request reviews
 
 An agent can review any pull request on a forge with an API (Forgejo, Gitea, Codeberg or
-GitHub; GitLab is refused for now), whoever opened it, in any repository the forge's token
+GitHub, also an SSH forge with that API; GitLab is refused for now), whoever opened it, in any repository the forge's token
 reaches. It finds them with `git_repositories` and `git_pull_request_list`, reads with
 `git_pull_request_read` and git, and drafts the review with `git_pull_request_review`.
 Nothing reaches the forge until the user posts the draft, as the forge's token's account.
@@ -384,8 +396,11 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   (`https://git.studio.internal/<forge>/`, to clone `<prefix><path>.git`), whether the pull
   request tools work on it, and the repositories Studio's token reaches, as Settings lists
   them (`Repositories`, at most `MaxRepositories`). `query` keeps those whose path or
-  description contains it. A forge of kind https or ssh has no list and says so; a forge
-  whose API fails says why, and the others are still listed.
+  description contains it. An SSH forge with an API says which (`api`). A forge without an
+  API (kind https, or ssh without one) has no list and says why; a forge whose API fails says
+  why, and the others are still listed. When no forge has an API, the pull request tools
+  answer with each forge and why it has none, such as "work is an SSH forge without an API
+  token; the user adds one to it in Settings → Git forges".
 - **Listing pull requests.** `git_pull_request_list(repository, forge?, state?, limit?)`
   asks the forge for the repository's pull requests (`GET /repos/{o}/{r}/pulls`, sorted by
   the latest update), `open` by default or `closed` or `all`, 30 by default and at most

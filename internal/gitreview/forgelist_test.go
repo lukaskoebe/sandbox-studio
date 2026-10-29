@@ -117,3 +117,60 @@ func TestRepositoriesListsEachForge(t *testing.T) {
 		t.Fatalf("unknown forge: %v", err)
 	}
 }
+
+// An ssh forge with an API token lists its repositories and pull requests through the API,
+// under its own name, and says why it can't once the token is gone.
+func TestSSHForgeWithAnAPIServesThePullRequestTools(t *testing.T) {
+	svc, st, sb, ff := newReviewHarness(t)
+	ctx := context.Background()
+	old, err := st.ForgeByName(ctx, sb.EnvironmentID, "forge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteForge(ctx, sb.EnvironmentID, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	api := store.Secret{ID: store.NewID(), Name: "FORGE_CODEBERG_TOKEN", Sealed: []byte("sealed"), Hosts: []string{"127.0.0.1"}}
+	f, err := st.CreateForgeWithAPI(ctx, store.Forge{ID: store.NewID(), EnvironmentID: sb.EnvironmentID, Name: "codeberg", Kind: KindSSH,
+		BaseURL: "ssh://git@codeberg.org", Auth: store.ForgeAuthAgent, APIKind: KindForgejo, APIURL: ff.srv.URL}, store.Secret{}, api)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.Secrets = fakeSecrets{sb.EnvironmentID + "/" + f.APISecretID: forgeToken}
+
+	got, err := callReviewTool(t, svc.toolPullRequestList, sb, `{"repository":"acme/web"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["forge"] != "codeberg" || len(got["pullRequests"].([]any)) != 2 {
+		t.Fatalf("list: %v", got)
+	}
+	out, err := svc.toolRepositories(ctx, sb, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := out.(map[string]any)["forges"].([]forgeView); len(v) != 1 || !v[0].Reviews || v[0].API != KindForgejo || len(v[0].Repositories) != 2 {
+		t.Fatalf("repositories: %+v", v)
+	}
+
+	// Testing the forge asks its API whose token it has.
+	if c, err := svc.TestForge(ctx, f, ""); err != nil || c.User == "" {
+		t.Fatalf("test: %+v, %v", c, err)
+	}
+
+	if err := st.RemoveForgeAPI(ctx, sb.EnvironmentID, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []string{`{"repository":"acme/web"}`, `{"repository":"acme/web","forge":"codeberg"}`} {
+		_, err := callReviewTool(t, svc.toolPullRequestList, sb, args)
+		if !integrations.IsToolError(err) || !strings.Contains(err.Error(), "codeberg is an SSH forge without an API token; the user adds one to it in Settings → Git forges") {
+			t.Fatalf("%s without the API: %v", args, err)
+		}
+	}
+	if err := st.DeleteForge(ctx, sb.EnvironmentID, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := callReviewTool(t, svc.toolPullRequestList, sb, `{"repository":"acme/web"}`); !integrations.IsToolError(err) || !strings.Contains(err.Error(), "has no forges") {
+		t.Fatalf("no forges: %v", err)
+	}
+}

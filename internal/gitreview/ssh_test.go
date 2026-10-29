@@ -421,6 +421,45 @@ func TestSSHForgeFetchPushAndApprove(t *testing.T) {
 	sh.assertKeyHidden(t, g)
 }
 
+// With an API, an SSH forge's approved push comes with a pull request: proposed through the
+// API, pushed over SSH, and opened through the API once approved.
+func TestSSHForgeWithAnAPIProposesAPullRequest(t *testing.T) {
+	sh := newSSHHarness(t)
+	api := store.Secret{ID: store.NewID(), Name: "FORGE_BOX_TOKEN", Sealed: []byte("sealed"), Hosts: []string{"127.0.0.1"}, Placeholder: "box-api"}
+	if err := sh.st.SetForgeAPI(sh.ctx, sh.env.ID, sh.forge.ID, KindForgejo, sh.harness.forge.srv.URL, api); err != nil {
+		t.Fatal(err)
+	}
+	sh.svc.Secrets.(fakeSecrets)[sh.env.ID+"/"+api.ID] = forgeToken
+	g := sh.guest(t, sh.env.ID, "one")
+	repo, err := git.Clone(memory.NewStorage(), memfs.New(), &git.CloneOptions{URL: g.srv.URL + "/box/owner/repo.git"})
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	commitFile(t, repo, "ssh.txt", "over ssh\n", "Over SSH")
+	if err := push(repo, "refs/heads/main:refs/heads/feature", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	pending := sh.approvals(t, KindPush, store.StatusPending)
+	if len(pending) != 1 || !strings.Contains(string(pending[0].Payload), `"base":"main"`) {
+		t.Fatalf("pending = %+v", pending)
+	}
+	sh.decide(t, pending[0], integrations.Allow, "")
+	upstream := filepath.Join(sh.ssh.root, "owner/repo.git")
+	if out := sh.ssh.git("--git-dir", upstream, "log", "-1", "--format=%s", "feature"); out != "Over SSH" {
+		t.Fatalf("upstream feature = %q", out)
+	}
+	prs := sh.approvals(t, KindPR, store.StatusPending)
+	if len(prs) != 1 {
+		t.Fatalf("pull request proposals = %+v", prs)
+	}
+	sh.decide(t, prs[0], integrations.Allow, "")
+	sh.harness.forge.mu.Lock()
+	defer sh.harness.forge.mu.Unlock()
+	if len(sh.harness.forge.pulls) != 1 || sh.harness.forge.pulls[0].Head != "feature" || sh.harness.forge.pulls[0].Base != "main" {
+		t.Fatalf("opened = %+v", sh.harness.forge.pulls)
+	}
+}
+
 func TestSSHHostKeyMismatch(t *testing.T) {
 	sh := newSSHHarness(t)
 	_, other, _ := ed25519.GenerateKey(rand.Reader)

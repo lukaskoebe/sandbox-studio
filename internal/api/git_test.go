@@ -422,3 +422,85 @@ func TestLocalForges(t *testing.T) {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
 }
+
+// An ssh forge can have an API with a token: given when it is added or later, replaced, and
+// taken away again. Other kinds take none.
+func TestSSHForgeAPI(t *testing.T) {
+	h, s := newTestServer(t)
+	ctx := context.Background()
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID + "/forges"
+	// github.com's key is built in, so nothing is scanned.
+	hk := `"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"`
+
+	for _, body := range []string{
+		`{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":` + hk + `,"apiKind":"github","apiUrl":"https://github.com"}`,
+		`{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":` + hk + `,"apiKind":"github","apiUrl":"https://10.0.0.1","token":"t"}`,
+		`{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":` + hk + `,"apiUrl":"https://github.com","token":"t"}`,
+		`{"name":"lab","kind":"https","baseUrl":"https://git.example.com","token":"t","apiKind":"forgejo","apiUrl":"https://git.example.com"}`,
+	} {
+		if rec := do(h, "POST", base, body); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
+	rec := do(h, "POST", base, `{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":`+hk+`,"apiKind":"github","apiUrl":"https://github.com/","token":"first"}`)
+	f := decode[store.Forge](t, rec)
+	if rec.Code != http.StatusCreated || f.Auth != store.ForgeAuthAgent || f.APIKind != "github" || f.APIURL != "https://github.com" || f.APISecretID == "" {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	sec, err := s.Store.SecretByID(ctx, env.ID, f.APISecretID)
+	if err != nil || sec.Name != "FORGE_GH_TOKEN" || strings.Join(sec.Hosts, ",") != "github.com" || !sec.StudioOnly {
+		t.Fatalf("token secret %+v: %v", sec, err)
+	}
+	if v, err := s.Vault.Value(ctx, env.ID, f.APISecretID); err != nil || v != "first" {
+		t.Fatalf("token = %q, %v", v, err)
+	}
+	if rec := do(h, "DELETE", testOrigin+"/api/environments/"+env.ID+"/secrets/"+f.APISecretID, ""); rec.Code != http.StatusConflict {
+		t.Fatalf("delete the token as a secret: %d %s", rec.Code, rec.Body)
+	}
+
+	// Its token is replaced in place, like any forge's.
+	if rec := do(h, "PUT", base+"/"+f.ID+"/token", `{"token":"second"}`); rec.Code != http.StatusOK {
+		t.Fatalf("replace the token: %d %s", rec.Code, rec.Body)
+	}
+	if v, _ := s.Vault.Value(ctx, env.ID, f.APISecretID); v != "second" {
+		t.Fatalf("replaced token = %q", v)
+	}
+
+	// The API is taken away, and given again.
+	rec = do(h, "DELETE", base+"/"+f.ID+"/api", "")
+	if got := decode[store.Forge](t, rec); rec.Code != http.StatusOK || got.APIKind != "" || got.APISecretID != "" {
+		t.Fatalf("remove the API: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/"+f.ID+"/token", `{"token":"x"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("token without an API: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "PUT", base+"/"+f.ID+"/api", `{"kind":"forgejo","baseUrl":"https://codeberg.org","token":"third"}`)
+	got := decode[store.Forge](t, rec)
+	if rec.Code != http.StatusOK || got.APIKind != "forgejo" || got.APIURL != "https://codeberg.org" || got.APISecretID == "" {
+		t.Fatalf("set the API: %d %s", rec.Code, rec.Body)
+	}
+	if v, _ := s.Vault.Value(ctx, env.ID, got.APISecretID); v != "third" {
+		t.Fatalf("new token = %q", v)
+	}
+	if rec := do(h, "PUT", base+"/"+f.ID+"/api", `{"kind":"https","baseUrl":"https://codeberg.org","token":"t"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("an API of kind https: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = do(h, "POST", base, `{"name":"lab","kind":"https","baseUrl":"https://git.example.com","token":"t"}`)
+	lab := decode[store.Forge](t, rec)
+	if rec := do(h, "PUT", base+"/"+lab.ID+"/api", `{"kind":"forgejo","baseUrl":"https://git.example.com","token":"t"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("an API for an https forge: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "DELETE", base+"/"+lab.ID+"/api", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("remove the API of an https forge: %d %s", rec.Code, rec.Body)
+	}
+
+	// Removing the forge removes its API token.
+	if rec := do(h, "DELETE", base+"/"+f.ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	if _, err := s.Store.SecretByID(ctx, env.ID, got.APISecretID); err == nil {
+		t.Fatal("the API token outlived its forge")
+	}
+}

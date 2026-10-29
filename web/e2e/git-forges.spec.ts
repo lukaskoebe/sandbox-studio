@@ -61,6 +61,77 @@ test("an SSH forge's address takes a clone URL and keeps its user", async ({
   )
 })
 
+// A pasted SSH clone URL of a host with a known API suggests that API for pull requests, and
+// the form then wants its token.
+test("an SSH forge of a known host is offered its API", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}/settings/git`)
+  await page.getByRole("button", { name: "Add forge" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Add forge" })
+  await dialog
+    .getByLabel("Repository URL", { exact: true })
+    .fill("git@github.com:owner/repo.git")
+  await expect(dialog.locator("#forge-url")).toHaveValue("ssh://git@github.com")
+  await expect(
+    dialog.getByRole("combobox").filter({ hasText: "GitHub" })
+  ).toBeVisible()
+  await expect(dialog.locator("#forge-api-url")).toHaveValue(
+    "https://github.com"
+  )
+  await expect(dialog.locator("#forge-api-token")).toBeVisible()
+  await expect(dialog).toContainText("fine-grained token")
+})
+
+// An SSH forge gets an API token later in its row, and loses it again, keeping git over SSH.
+test("an SSH forge's API token is added and removed in its row", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `gh-${Math.random().toString(36).slice(2, 8)}`
+  const forge = await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/forges`,
+    {
+      name,
+      kind: "ssh",
+      baseUrl: "git@github.com",
+      // github.com's key is built into Studio, so nothing is scanned.
+      hostKey:
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl",
+    }
+  )
+  try {
+    await page.goto(`/e/${env}/settings/git`)
+    const row = page.getByRole("row").filter({ hasText: name })
+    await expect(row).toContainText("No pull requests without the forge's API")
+    await row.getByRole("button", { name: "Add an API token" }).click()
+    const dialog = page.getByRole("dialog", {
+      name: `Add an API token of ${name}`,
+    })
+    await expect(dialog.locator("#forge-api-url")).toHaveValue(
+      "https://github.com"
+    )
+    await dialog.locator("#forge-api-token").fill("github_pat_e2e")
+    await dialog.getByRole("button", { name: "Save" }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(row).toContainText(
+      "Pull requests through the GitHub API at https://github.com"
+    )
+
+    await row.getByRole("button", { name: "Remove", exact: true }).click()
+    await page
+      .getByRole("alertdialog", { name: `Remove the API of ${name}?` })
+      .getByRole("button", { name: "Remove" })
+      .click()
+    await expect(row).toContainText("No pull requests without the forge's API")
+  } finally {
+    await api.json("DELETE", `/api/environments/${env}/forges/${forge!.id}`)
+  }
+})
+
 // A repository's folder pasted into the dialog makes a local forge for the folder it is in:
 // no token, and the test lists the repository's branches with the host's git.
 test("a repository folder on this computer becomes a local forge", async ({

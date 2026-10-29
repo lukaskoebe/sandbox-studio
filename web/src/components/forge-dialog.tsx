@@ -36,11 +36,14 @@ import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, fetchClient, type Forge } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
 import {
+  apiLabels,
   authLabels,
+  defaultAPIURL,
   freeName,
   kindLabels,
   remoteHost,
   suggestedName,
+  type APIKind,
   type Auth,
   type Kind,
 } from "@/lib/forges"
@@ -225,6 +228,130 @@ export function PublicKeyNotice({
   )
 }
 
+/** What a forge's access token needs, for a forge or API of kind at baseUrl. */
+export function TokenHint({ kind, baseUrl }: { kind: Kind; baseUrl: string }) {
+  return (
+    <>
+      {kind === "github" ? (
+        <>
+          A{" "}
+          <a
+            href={`${baseUrl.trim().replace(/\/+$/, "") || "https://github.com"}/settings/personal-access-tokens/new`}
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            fine-grained token
+          </a>{" "}
+          for the repositories sandboxes may use, with Contents and Pull
+          requests read and write.
+        </>
+      ) : kind === "forgejo" ? (
+        "Needs read and write access to the repositories, and to issues for pull requests."
+      ) : kind === "gitlab" ? (
+        "A personal or project access token with the api and write_repository scopes."
+      ) : (
+        "Needs read and write access to the repositories."
+      )}{" "}
+      Studio keeps it; sandboxes never see it.
+    </>
+  )
+}
+
+const apiChoices = { none: "None", ...apiLabels }
+
+/**
+ * The API of an SSH forge: which one, its HTTPS URL and a token. git still goes over SSH; the
+ * API lists the forge's repositories and serves its pull requests. With optional, None is a
+ * choice, and the other fields show only once an API is picked.
+ */
+export function APIFields({
+  sshAddress,
+  kind,
+  onKind,
+  url,
+  onURL,
+  token,
+  onToken,
+  optional,
+}: {
+  sshAddress: string
+  kind: APIKind | ""
+  onKind: (kind: APIKind | "") => void
+  url: string
+  onURL: (url: string) => void
+  token: string
+  onToken: (token: string) => void
+  optional?: boolean
+}) {
+  const choices = optional ? apiChoices : apiLabels
+  return (
+    <>
+      <div className="grid items-start gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel>Pull requests</FieldLabel>
+          <Select
+            value={kind || "none"}
+            onValueChange={(v) => {
+              if (!v) return
+              const k = v === "none" ? "" : (v as APIKind)
+              onKind(k)
+              if (k && url.trim() === "") onURL(defaultAPIURL(sshAddress))
+            }}
+            items={choices}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(choices).map(([k, label]) => (
+                <SelectItem key={k} value={k}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            {kind
+              ? "Through the forge's API, with a token. git still goes over SSH."
+              : "Give Studio the forge's API and a token, and agents can list its repositories and read, review and open pull requests."}
+          </FieldDescription>
+        </Field>
+        {kind && (
+          <Field>
+            <FieldLabel htmlFor="forge-api-url">API URL</FieldLabel>
+            <Input
+              id="forge-api-url"
+              value={url}
+              placeholder="https://git.example.org"
+              autoComplete="off"
+              onChange={(e) => onURL(e.target.value)}
+            />
+            <FieldDescription>
+              The forge&apos;s web address, as in your browser.
+            </FieldDescription>
+          </Field>
+        )}
+      </div>
+      {kind && (
+        <Field>
+          <FieldLabel htmlFor="forge-api-token">Access token</FieldLabel>
+          <Input
+            id="forge-api-token"
+            type="password"
+            value={token}
+            autoComplete="off"
+            onChange={(e) => onToken(e.target.value)}
+          />
+          <FieldDescription>
+            <TokenHint kind={kind} baseUrl={url} />
+          </FieldDescription>
+        </Field>
+      )}
+    </>
+  )
+}
+
 const defaultBaseURLs: Record<Kind, string> = {
   forgejo: "https://codeberg.org",
   github: "https://github.com",
@@ -265,6 +392,9 @@ function ForgeForm({
   const [auth, setAuth] = useState<Auth>("agent")
   const [username, setUsername] = useState("")
   const [token, setToken] = useState("")
+  // An SSH forge's API, for pull requests; its token is token.
+  const [apiKind, setApiKind] = useState<APIKind | "">("")
+  const [apiUrl, setApiUrl] = useState("")
   const [scanned, setScanned] = useState<Scanned>()
   const [confirmed, setConfirmed] = useState(false)
   const [created, setCreated] = useState<Forge>()
@@ -298,6 +428,8 @@ function ForgeForm({
     setNameEdited(false)
     setRepoPath(parsed.path)
     setAuth(parsed.auth === "key" ? "key" : "agent")
+    setApiKind(parsed.apiKind ?? "")
+    setApiUrl(parsed.apiUrl ?? "")
     setScanned(undefined)
     setConfirmed(false)
     setError(undefined)
@@ -307,11 +439,18 @@ function ForgeForm({
   const canSave =
     forgeName !== "" &&
     baseUrl.trim() !== "" &&
-    (local || (ssh ? scanned !== undefined && confirmed : token !== ""))
+    (local ||
+      (ssh
+        ? scanned !== undefined &&
+          confirmed &&
+          (apiKind === "" || (apiUrl.trim() !== "" && token !== ""))
+        : token !== ""))
 
   const pickKind = (k: Kind) => {
     setKind(k)
     setBaseUrl(defaultBaseURLs[k])
+    setApiKind("")
+    setApiUrl("")
     setScanned(undefined)
     setConfirmed(false)
     setError(undefined)
@@ -330,7 +469,15 @@ function ForgeForm({
         ...(kind === "https" && username.trim()
           ? { username: username.trim() }
           : {}),
-        ...(local ? {} : ssh ? { hostKey: scanned?.key, auth } : { token }),
+        ...(local
+          ? {}
+          : ssh
+            ? {
+                hostKey: scanned?.key,
+                auth,
+                ...(apiKind ? { apiKind, apiUrl: apiUrl.trim(), token } : {}),
+              }
+            : { token }),
       },
     })
     setSaving(false)
@@ -404,7 +551,8 @@ function ForgeForm({
               "gitlab.com or a self-hosted GitLab. Approved pushes to other branches get a merge request."}
             {kind === "https" &&
               "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
-            {ssh && "Any host serving git over SSH. No pull requests."}
+            {ssh &&
+              "Any host serving git over SSH. Pull requests with the forge's API, below."}
             {local &&
               "Repositories in a folder here, such as ~/git. Approved pushes go in with your git, as git push to the folder would; no pull requests."}
           </FieldDescription>
@@ -507,18 +655,30 @@ function ForgeForm({
         </div>
       )}
       {local ? null : ssh ? (
-        <HostKeyCheck
-          env={env}
-          baseUrl={baseUrl}
-          scanned={scanned}
-          onScanned={(s, normalized) => {
-            setScanned(s)
-            setConfirmed(false)
-            if (normalized) setBaseUrl(normalized)
-          }}
-          confirmed={confirmed}
-          onConfirmed={setConfirmed}
-        />
+        <>
+          <HostKeyCheck
+            env={env}
+            baseUrl={baseUrl}
+            scanned={scanned}
+            onScanned={(s, normalized) => {
+              setScanned(s)
+              setConfirmed(false)
+              if (normalized) setBaseUrl(normalized)
+            }}
+            confirmed={confirmed}
+            onConfirmed={setConfirmed}
+          />
+          <APIFields
+            sshAddress={baseUrl}
+            kind={apiKind}
+            onKind={setApiKind}
+            url={apiUrl}
+            onURL={setApiUrl}
+            token={token}
+            onToken={setToken}
+            optional
+          />
+        </>
       ) : (
         <Field>
           <FieldLabel htmlFor="forge-token">Access token</FieldLabel>
@@ -530,28 +690,7 @@ function ForgeForm({
             onChange={(e) => setToken(e.target.value)}
           />
           <FieldDescription>
-            {kind === "github" ? (
-              <>
-                A{" "}
-                <a
-                  href={`${baseUrl.replace(/\/+$/, "") || "https://github.com"}/settings/personal-access-tokens/new`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  fine-grained token
-                </a>{" "}
-                for the repositories sandboxes may use, with Contents and Pull
-                requests read and write.
-              </>
-            ) : kind === "forgejo" ? (
-              "Needs read and write access to the repositories, and to issues for pull requests."
-            ) : kind === "gitlab" ? (
-              "A personal or project access token with the api and write_repository scopes."
-            ) : (
-              "Needs read and write access to the repositories."
-            )}{" "}
-            Studio keeps it; sandboxes never see it.
+            <TokenHint kind={kind} baseUrl={baseUrl} />
           </FieldDescription>
         </Field>
       )}
