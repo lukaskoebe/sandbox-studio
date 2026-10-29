@@ -279,3 +279,46 @@ test("a teammate's security level is a card, or the environment's default", asyn
   await picker.getByRole("radio", { name: /^Environment default/ }).click()
   await expect.poll(level).toBe("")
 })
+
+// The screen follows the open chat; another computer picked beside it is pinned there, and
+// the screen and the chat say which computer the chat works on until it is shown again.
+test("a computer pinned beside a chat says the chat works elsewhere", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Pin ${Math.random().toString(36).slice(2, 8)}`
+  const teammate = await addTeammate(api, env, name)
+  const shop = sandboxName("shop")
+  const docs = sandboxName("docs")
+  const id = await api.createSandbox(shop, teammate)
+  await api.createSandbox(docs, teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+
+  await page.goto(`/e/${env}/teammates/${teammate}?thread=${chat.id}`)
+  const onShop = page.getByRole("region", { name: `${shop}'s screen` })
+  await expect(onShop).toBeVisible({ timeout: 15_000 })
+  await onShop.getByTitle(new RegExp(`^${shop}:`)).click()
+  await expect(
+    page.getByRole("menuitem", { name: new RegExp(shop) })
+  ).toContainText("the open chat's")
+  await page.getByRole("menuitem", { name: new RegExp(docs) }).click()
+
+  const onDocs = page.getByRole("region", { name: `${docs}'s screen` })
+  await expect(onDocs.getByRole("status")).toHaveText(
+    `The open chat works on ${shop}. This screen shows ${docs}.Show ${shop}`
+  )
+  await onDocs.getByRole("button", { name: `Show ${shop}` }).click()
+  await expect(onShop).toBeVisible()
+  await expect(onShop.getByRole("status")).toHaveCount(0)
+
+  // The chat's own chip shows its computer again too.
+  await onShop.getByTitle(new RegExp(`^${shop}:`)).click()
+  await page.getByRole("menuitem", { name: new RegExp(docs) }).click()
+  await page.getByRole("button", { name: `on ${shop} · Show` }).click()
+  await expect(onShop).toBeVisible()
+})

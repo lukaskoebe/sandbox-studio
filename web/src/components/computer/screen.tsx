@@ -86,6 +86,7 @@ export function ComputerScreen({
   enlargeable,
   lead,
   thread,
+  chatComputer,
 }: {
   env: string
   sandbox: Sandbox
@@ -108,6 +109,11 @@ export function ComputerScreen({
     turnId?: string
     onTurn: (id: string) => void
   }
+  /**
+   * The computer the open thread works on, when the user pinned this one beside it instead: the
+   * screen says so, and its Show goes back to following the thread.
+   */
+  chatComputer?: Sandbox
 }) {
   const p = phase(sb)
   const previews = usePreviewSetting().enabled
@@ -210,6 +216,7 @@ export function ComputerScreen({
             sandbox={sb}
             computers={computers}
             owner={owner}
+            chatComputer={chatComputer?.id ?? thread?.chat.sandboxId}
             onPick={(id) => onChange({ computer: id })}
           />
           {shown.length ? (
@@ -298,6 +305,28 @@ export function ComputerScreen({
             )}
           </div>
         </div>
+        {chatComputer && (
+          <div
+            role="status"
+            className="mb-1.5 flex shrink-0 items-center gap-2 rounded-lg border border-(--st-waiting)/40 bg-(--st-waiting)/10 px-3 py-1 text-xs"
+          >
+            <WarningIcon className="size-3.5 shrink-0 text-(--st-waiting-fg)" />
+            <span className="min-w-0 flex-1">
+              The open chat works on{" "}
+              <b className="font-mono font-semibold">{chatComputer.name}</b>.
+              This screen shows{" "}
+              <b className="font-mono font-semibold">{sb.name}</b>.
+            </span>
+            <Button
+              variant="outline"
+              size="xs"
+              className="shrink-0"
+              onClick={() => onChange({ computer: chatComputer.id })}
+            >
+              Show <span className="font-mono">{chatComputer.name}</span>
+            </Button>
+          </div>
+        )}
         <MergeBanner env={env} sandbox={sb} />
         <RebaseFailedAlert env={env} sandbox={sb} />
         <Display
@@ -459,19 +488,23 @@ function Display({
 
 /**
  * The computer's name on the bezel, with its status dot: it switches between the computers it
- * lists, forks under the one they came from, and adds another for a teammate.
+ * lists, forks under the one they came from, and adds another for a teammate. While a thread is
+ * open the screen follows it; another computer picked is pinned beside it.
  */
 function Switcher({
   env,
   sandbox: sb,
   computers,
   owner,
+  chatComputer,
   onPick,
 }: {
   env: string
   sandbox: Sandbox
   computers: Sandbox[]
   owner?: Teammate
+  /** The open thread's computer. */
+  chatComputer?: string
   onPick: (id: string) => void
 }) {
   const [adding, setAdding] = useState(false)
@@ -525,8 +558,10 @@ function Switcher({
                   <StatusDot {...phaseDot(phase(c))} compact />
                 )}
                 <span className="min-w-0 truncate font-mono">{c.name}</span>
-                <span className="ml-auto text-caption text-muted-foreground">
-                  {phaseDot(phase(c)).label}
+                <span className="ml-auto text-caption whitespace-nowrap text-muted-foreground">
+                  {c.id === chatComputer
+                    ? "the open chat's"
+                    : phaseDot(phase(c)).label}
                 </span>
               </DropdownMenuItem>
             ))}

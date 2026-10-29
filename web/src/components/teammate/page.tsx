@@ -70,6 +70,13 @@ export function TeammatePage({
     ) ??
     owned.find((s) => s.id === latest.at(0)?.sandboxId) ??
     owned.at(0)
+  // The screen follows the open thread, unless the user pinned another computer beside it;
+  // the thread's computer is then off the screen.
+  const threadComputer = owned.find((s) => s.id === thread?.sandboxId)
+  const offScreen =
+    threadComputer && threadComputer.id !== computer?.id
+      ? threadComputer
+      : undefined
 
   const pending = usePendingApprovals()
   const waiting = teammateApprovals(
@@ -189,10 +196,9 @@ export function TeammatePage({
             env={env}
             teammate={teammate}
             log={log}
-            computer={
-              owned.length > 1
-                ? owned.find((s) => s.id === thread?.sandboxId)?.name
-                : undefined
+            computer={owned.length > 1 ? threadComputer?.name : undefined}
+            onShowComputer={
+              offScreen ? () => screen({ computer: offScreen.id }) : undefined
             }
             onBack={leaveThread}
             onShowChanges={(turn) => {
@@ -259,6 +265,7 @@ export function TeammatePage({
             search={{ ...search, fold: folded, full }}
             enlargeable={wide}
             onChange={screen}
+            chatComputer={offScreen}
             thread={
               thread && log.chat && thread.sandboxId === computer.id
                 ? {

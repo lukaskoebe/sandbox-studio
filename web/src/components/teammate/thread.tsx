@@ -49,6 +49,7 @@ export function TeammateThread({
   teammate,
   log,
   computer,
+  onShowComputer,
   onBack,
   onShowChanges,
   onOpenFile,
@@ -59,6 +60,8 @@ export function TeammateThread({
   log: ReturnType<typeof useChat>
   /** The computer it runs on, named when the teammate has more than one. */
   computer?: string
+  /** Shows its computer on the screen, which shows another. */
+  onShowComputer?: () => void
   onBack: () => void
   onShowChanges: (turnId: string) => void
   onOpenFile: (path: string) => void
@@ -95,11 +98,21 @@ export function TeammateThread({
             >
               {chatTitle(chat)}
             </h1>
-            {computer && (
-              <span className="shrink-0 rounded-full border px-2 font-mono text-caption text-muted-foreground max-sm:hidden">
-                on {computer}
-              </span>
-            )}
+            {computer &&
+              (onShowComputer ? (
+                <button
+                  type="button"
+                  title={`Show ${computer} on the screen`}
+                  className="shrink-0 rounded-full border border-(--st-waiting)/40 bg-(--st-waiting)/10 px-2 font-mono text-caption text-foreground hover:bg-(--st-waiting)/25 max-sm:hidden"
+                  onClick={onShowComputer}
+                >
+                  on {computer} · Show
+                </button>
+              ) : (
+                <span className="shrink-0 rounded-full border px-2 font-mono text-caption text-muted-foreground max-sm:hidden">
+                  on {computer}
+                </span>
+              ))}
             <span className="ml-auto flex shrink-0 items-center gap-1">
               <ChatStateBadge chat={chat} />
               <ThreadMenu
