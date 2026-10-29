@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **A terminal open during a rebase gets the secrets.** It reconnected as soon as the
+  rebased computer's agent did, before Studio had sent the environment's secrets, so its
+  shell went without them, and was bash where you picked zsh. A terminal now waits for them.
+
 ## v0.11.0 — 2026-10-29
 
 - **Loading a long chat's earlier turns keeps your place** while they render. The message

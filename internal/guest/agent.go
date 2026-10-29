@@ -51,6 +51,9 @@ type Agent struct {
 	user     *account
 	configMu sync.Mutex
 	shell    atomic.Pointer[string] // what Config.Shell last asked for
+	// configured is closed once the first configuration is applied (see awaitConfig).
+	configured             chan struct{}
+	configMake, configDone sync.Once
 	// browserTrust serializes and caches Chromium NSS CA preparation per browser agent.
 	browserTrust browserTrustState
 
@@ -250,7 +253,31 @@ func (a *Agent) configure(st net.Conn, br *bufio.Reader) error {
 		return agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error()})
 	}
 	a.shell.Store(&cfg.Shell)
+	a.markConfigured()
 	return agentproto.WriteJSONLine(st, struct{}{})
+}
+
+func (a *Agent) markConfigured() { a.configDone.Do(func() { close(a.configuredCh()) }) }
+
+func (a *Agent) configuredCh() chan struct{} {
+	a.configMake.Do(func() { a.configured = make(chan struct{}) })
+	return a.configured
+}
+
+// configWait bounds how long a new terminal waits for the first configuration.
+const configWait = 15 * time.Second
+
+// awaitConfig waits until Studio's first configuration is applied, or configWait has passed.
+// Studio pushes it right after the agent connects, but a terminal tab that was open
+// reconnects as soon as the agent does. On a fresh root disk, as after a rebase, a shell
+// started before then finds no secrets in the profile hook and keeps that environment,
+// and starts bash where the user picked zsh.
+func (a *Agent) awaitConfig() {
+	select {
+	case <-a.configuredCh():
+	case <-time.After(configWait):
+		a.log.Warn("starting a terminal before Studio sent the configuration", "waited", configWait)
+	}
 }
 
 // --- terminals ------------------------------------------------------------------------
@@ -260,6 +287,7 @@ func (a *Agent) servePTY(st net.Conn, br *bufio.Reader, h agentproto.Header) err
 	if !validSessionName(name) {
 		return agentproto.WriteFrame(st, agentproto.FrameExit, []byte("invalid session name"))
 	}
+	a.awaitConfig()
 	shell := a.terminalShell()
 	cmd := a.command("tmux", terminalCommand(name, shell)...)
 	cmd.Env = append(cmd.Env, "SHELL="+shell) // the later of two values wins

@@ -9,7 +9,36 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
+
+// A terminal that opens before Studio sent the configuration waits for it, as its shell
+// would miss the secrets and the shell setting; one opened later doesn't wait.
+func TestTerminalsWaitForTheConfiguration(t *testing.T) {
+	a := &Agent{log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	opened := make(chan struct{})
+	go func() {
+		a.awaitConfig()
+		close(opened)
+	}()
+	select {
+	case <-opened:
+		t.Fatal("the terminal opened before the configuration was applied")
+	case <-time.After(100 * time.Millisecond):
+	}
+	a.markConfigured()
+	select {
+	case <-opened:
+	case <-time.After(time.Second):
+		t.Fatal("the terminal still waits after the configuration was applied")
+	}
+	a.markConfigured() // a later push changes nothing
+	start := time.Now()
+	a.awaitConfig()
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Fatalf("a terminal waited %s after the configuration", d)
+	}
+}
 
 func TestTerminalShell(t *testing.T) {
 	home, bin := t.TempDir(), t.TempDir()
