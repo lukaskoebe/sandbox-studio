@@ -28,6 +28,16 @@ func TestAppBinary(t *testing.T) {
 	if got := appBinary(exe, "linux"); got != "" {
 		t.Fatalf("a bundle counts only on macOS: %q", got)
 	}
+	bare := filepath.Join(dir, "studio-app")
+	if err := os.WriteFile(bare, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := appBinary(exe, "darwin"); got != bundled {
+		t.Fatalf("macOS takes the bundle before a bare app: %q", got)
+	}
+	if got := appBinary(exe, "linux"); got != bare {
+		t.Fatalf("linux: %q", got)
+	}
 	plain := filepath.Join(dir, "studio-app.exe")
 	if err := os.WriteFile(plain, nil, 0o755); err != nil {
 		t.Fatal(err)

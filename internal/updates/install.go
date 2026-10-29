@@ -270,6 +270,16 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 			}
 		}
 	}
+	// On macOS the app is a bundle, which comes along whole, as its signature covers its files.
+	// An install with an earlier release's bare app gets the bundle in its place.
+	var bundle *companion
+	if goos == "darwin" && (dirExists(filepath.Join(exeDir, appBundle)) || fileExists(filepath.Join(exeDir, "studio-app"))) {
+		next := filepath.Join(exeDir, "."+appBundle+"-"+rel.Tag+".new")
+		if err := extractDir(archivePath, name+"/"+appBundle, next); err == nil {
+			bundle = &companion{filepath.Join(exeDir, appBundle), next}
+		}
+		defer os.RemoveAll(next)
+	}
 	os.Remove(archivePath)
 	keep := false
 	defer func() {
@@ -308,6 +318,13 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 		// the new one, which only starts, shows and stops studio.
 		if err := swap(c.path, c.next, oldExe(c.path)); err != nil {
 			in.log().Warn("updating "+filepath.Base(c.path), "err", err)
+		}
+	}
+	if bundle != nil {
+		if err := swapDir(bundle.path, bundle.next); err != nil {
+			in.log().Warn("updating "+appBundle, "err", err)
+		} else {
+			os.Remove(filepath.Join(exeDir, "studio-app")) // studio app starts the bundle now
 		}
 	}
 	in.log().Info("restarting into the Studio update", "version", rel.Tag)
@@ -404,6 +421,75 @@ func extract(archive, member, dst string) error {
 	return err
 }
 
+// extractDir unpacks the directory member of a .tar.gz archive, its directories and regular
+// files, into dst, which it replaces.
+func extractDir(archive, member, dst string) error {
+	if strings.HasSuffix(archive, ".zip") {
+		return errors.New("only a .tar.gz archive has a bundle")
+	}
+	f, err := os.Open(archive)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	found := false
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		rel, ok := strings.CutPrefix(strings.TrimSuffix(h.Name, "/"), member)
+		if !ok || (rel != "" && rel[0] != '/') {
+			continue
+		}
+		rel = strings.TrimPrefix(rel, "/")
+		if !filepath.IsLocal(filepath.FromSlash(rel)) && rel != "" {
+			return fmt.Errorf("%s leaves the bundle", h.Name)
+		}
+		found = true
+		path := filepath.Join(dst, filepath.FromSlash(rel))
+		switch h.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return err
+			}
+			out, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(h.Mode)&0o755)
+			if err != nil {
+				return err
+			}
+			n, err := io.Copy(out, io.LimitReader(tr, maxBinary+1))
+			if err == nil && n > maxBinary {
+				err = errors.New("a file of the bundle is too large")
+			}
+			if cerr := out.Close(); err == nil {
+				err = cerr
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if !found {
+		return fmt.Errorf("it has no %s", member)
+	}
+	return nil
+}
+
 func extractTo(archive, member string, out io.Writer) error {
 	copyMember := func(r io.Reader) error {
 		n, err := io.Copy(out, io.LimitReader(r, maxBinary+1))
@@ -476,6 +562,33 @@ func companionNames(goos string) []string {
 		return []string{"studiow.exe", "studio-app.exe"}
 	}
 	return []string{"studio-app"}
+}
+
+// appBundle is the Studio app on macOS, next to studio.
+const appBundle = "Sandbox Studio.app"
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// swapDir puts the directory next in path's place, and the old one away. A running app
+// keeps its open binary.
+func swapDir(path, next string) error {
+	old := path + ".old"
+	if err := os.RemoveAll(old); err != nil {
+		return err
+	}
+	if err := os.Rename(path, old); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("move the old one aside: %w", err)
+	}
+	if err := os.Rename(next, path); err != nil {
+		if rerr := os.Rename(old, path); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
+			return fmt.Errorf("move the new one in: %w; and put the old one back: %v", err, rerr)
+		}
+		return fmt.Errorf("move the new one in: %w", err)
+	}
+	return os.RemoveAll(old)
 }
 
 func fileExists(path string) bool {

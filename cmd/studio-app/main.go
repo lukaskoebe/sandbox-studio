@@ -17,6 +17,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -26,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/launcher"
@@ -33,6 +35,24 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
+
+// optionalNotifier is the system's notifications where the system may refuse them: macOS
+// takes them only from an app bundle with an identifier, and studio-app is a bare binary
+// there (docs/app.md). A notifier that doesn't start leaves the app running without it, and
+// the page keeps its own notifications. Nothing calls it then: on macOS that would crash.
+type optionalNotifier struct {
+	*notifications.NotificationService
+	on atomic.Bool // it started
+}
+
+func (n *optionalNotifier) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	if err := n.NotificationService.ServiceStartup(ctx, options); err != nil {
+		log.Printf("notifications: %v; the page shows its own", err)
+		return nil
+	}
+	n.on.Store(true)
+	return nil
+}
 
 //go:embed icon.png
 var icon []byte
@@ -64,7 +84,7 @@ func main() {
 
 	var app *application.App
 	var win *application.WebviewWindow
-	notifier := notifications.New()
+	notifier := &optionalNotifier{NotificationService: notifications.New()}
 	l := &launcher.Launcher{
 		Addr:    *addr,
 		Serving: launcher.HTTPServing(*addr),
@@ -90,6 +110,9 @@ func main() {
 		base: base,
 		open: func(url string) error { return app.Browser.OpenURL(url) },
 		notify: func(n notice) error {
+			if !notifier.on.Load() {
+				return errors.New("the system takes no notifications from the app")
+			}
 			return notifier.SendNotification(notifications.NotificationOptions{ID: n.ID, Title: n.Title, Body: n.Body})
 		},
 	}
@@ -154,11 +177,14 @@ func main() {
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		go func() {
 			// macOS shows notifications only for an app the user allowed, and a bare binary
-			// may get none; then the page keeps its own.
-			ok, err := notifier.RequestNotificationAuthorization()
-			notify = ok && err == nil
-			if err != nil {
-				log.Printf("notifications: %v", err)
+			// may get none; then the page keeps its own. The self-test asks no one: the
+			// question can wait for an answer.
+			if notifier.on.Load() && !*test {
+				ok, err := notifier.RequestNotificationAuthorization()
+				notify = ok && err == nil
+				if err != nil {
+					log.Printf("notifications: %v", err)
+				}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), launcher.StartWait)
 			defer cancel()
@@ -180,6 +206,7 @@ func main() {
 				out = map[string]any{"error": "no answer from the page in 60s"}
 			}
 			out["opened"] = b.opened
+			out["notifications"] = notifier.on.Load()
 			j, _ := json.MarshalIndent(out, "", "  ")
 			fmt.Println(string(j))
 			app.Quit()

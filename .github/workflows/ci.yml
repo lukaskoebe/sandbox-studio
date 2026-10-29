@@ -37,7 +37,7 @@ jobs:
         run: sh scripts/test-install.sh
       - name: shellcheck
         if: runner.os == 'Linux'
-        run: shellcheck install.sh scripts/test-install.sh
+        run: shellcheck install.sh scripts/test-install.sh scripts/macos-app.sh
 
   # The app (cmd/studio-app) is a module of its own, so the go job's ./... leaves it out.
   app:
@@ -66,6 +66,24 @@ jobs:
           go vet $tags .
           go test $tags .
           go build $tags -o studio-app-ci .
+      # Building isn't starting: v0.11.0's app built here and exited at once on macOS, where
+      # the notifications service wants a bundle. The self-test starts the app with its
+      # services, loads Studio (its fallback page) in a hidden window and prints what it saw.
+      - name: the app starts, bare and as Sandbox Studio.app (macOS)
+        if: runner.os == 'macOS'
+        working-directory: .
+        run: |
+          go build -o "$RUNNER_TEMP/studio" ./cmd/studio
+          scripts/macos-app.sh cmd/studio-app/studio-app-ci "$RUNNER_TEMP" dev
+          export SANDBOX_STUDIO_HOME="$RUNNER_TEMP/studio-home"
+          selftest() {
+            out=$("$1" -selftest -addr 127.0.0.1:7911 -studio "$RUNNER_TEMP/studio")
+            echo "$out"
+            if echo "$out" | grep -q '"error"'; then exit 1; fi
+            echo "$out" | grep -q "\"notifications\": $2" || { echo "notifications: want $2"; exit 1; }
+          }
+          selftest cmd/studio-app/studio-app-ci false
+          selftest "$RUNNER_TEMP/Sandbox Studio.app/Contents/MacOS/studio-app" true
 
   web:
     runs-on: ubuntu-latest

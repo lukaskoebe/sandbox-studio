@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The app opens on macOS, with the system's notifications.** `studio app` failed there
+  with "notifications require a valid bundle identifier" and fell back to the browser: macOS
+  gives notifications only to an app bundle, and the app was a bare binary. The macOS
+  release now has `Sandbox Studio.app`, which the install script and the updater put next to
+  `studio` in place of the bare `studio-app`. A bare `studio-app` starts too, without the
+  system's notifications, and Studio's page shows its own. CI now starts the app on macOS
+  rather than only building it.
 - **Long chats open quickly in `studio tui`.** A chat opened with its whole log, so switching
   to a long one took a while, and a chat whose log passed 16 MB never opened: it said
   "Studio answered with invalid JSON" and tried again every few seconds. A chat now opens

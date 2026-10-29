@@ -153,8 +153,8 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   `studiow.exe` too when the archive has one; the running tray keeps its old binary until it
   starts again. A named mutex keeps one tray per user, and the autostart entry starts the tray
   when it is there. The icon and menu are plain Win32 (`Shell_NotifyIconW`).
-- The Studio app (`cmd/studio-app`, `studio-app` next to `studio`, a Wails v3 module of its
-  own) is a window, a tray and the system's notifications around the running Studio, which it
+- The Studio app (`cmd/studio-app`, `studio-app` next to `studio` or `Sandbox Studio.app` on
+  macOS, a Wails v3 module of its own) is a window, a tray and the system's notifications around the running Studio, which it
   starts as the tray launcher does (`internal/launcher`, shared by both). `studio app` starts
   it, or opens the browser without it or a display. See [the Studio app](app.md).
 - Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),

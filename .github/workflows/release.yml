@@ -188,15 +188,19 @@ jobs:
             CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui" -o "dist/$NAME/studiow.exe" ./cmd/studiow
           fi
           # The app (cmd/studio-app), a module of its own: GTK3 and WebKitGTK 4.1 on Linux,
-          # WebKit on macOS, WebView2 and no cgo on Windows.
+          # WebKit on macOS, WebView2 and no cgo on Windows. On macOS it is Sandbox Studio.app,
+          # a bundle with an identifier, which the system's notifications need.
           (
             cd cmd/studio-app
             case "${{ matrix.goos }}" in
               linux) go build -trimpath -tags gtk3 -ldflags "-s -w -X main.version=$VERSION" -o "../../dist/$NAME/studio-app" . ;;
-              darwin) go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "../../dist/$NAME/studio-app" . ;;
+              darwin) go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$RUNNER_TEMP/studio-app" . ;;
               windows) CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VERSION" -o "../../dist/$NAME/studio-app.exe" . ;;
             esac
           )
+          if [ "${{ matrix.goos }}" = darwin ]; then
+            scripts/macos-app.sh "$RUNNER_TEMP/studio-app" "dist/$NAME" "$VERSION"
+          fi
           cp LICENSE README.md "dist/$NAME/"
           "dist/$NAME/$EXE" openapi > /dev/null
 
@@ -220,8 +224,8 @@ jobs:
             --entitlements packaging/macos/studio.entitlements \
             --sign "$APPLE_SIGNING_IDENTITY" "dist/$NAME/$EXE"
           codesign --verify --strict --verbose=2 "dist/$NAME/$EXE"
-          codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "dist/$NAME/studio-app"
-          codesign --verify --strict --verbose=2 "dist/$NAME/studio-app"
+          codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "dist/$NAME/Sandbox Studio.app"
+          codesign --verify --strict --verbose=2 "dist/$NAME/Sandbox Studio.app"
       - name: notarize (macOS)
         if: matrix.goos == 'darwin' && env.APPLE_CERTIFICATE_P12 != ''
         env:
@@ -229,10 +233,12 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          # A bare executable can't be stapled; Gatekeeper looks the ticket up online.
+          # A bare executable can't be stapled; Gatekeeper looks studio's ticket up online.
+          # The app's bundle takes its ticket along.
           ditto -c -k --keepParent "dist/$NAME" "$RUNNER_TEMP/notarize.zip"
           xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --wait \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          xcrun stapler staple "dist/$NAME/Sandbox Studio.app"
 
       - name: sign (Windows)
         if: matrix.goos == 'windows' && env.WINDOWS_CERT_PFX != ''

@@ -29,7 +29,14 @@ for platform in linux_amd64 linux_arm64 darwin_arm64; do
 	mkdir -p "$tmp/build/$name"
 	printf '#!/bin/sh\necho "studio %s"\n' "$version" >"$tmp/build/$name/studio"
 	chmod 755 "$tmp/build/$name/studio"
-	printf '#!/bin/sh\necho "studio-app %s"\n' "$version" >"$tmp/build/$name/studio-app"
+	app="$tmp/build/$name/studio-app"
+	if [ "$platform" = darwin_arm64 ]; then
+		# macOS gets the app as a bundle.
+		mkdir -p "$tmp/build/$name/Sandbox Studio.app/Contents/MacOS"
+		app="$tmp/build/$name/Sandbox Studio.app/Contents/MacOS/studio-app"
+	fi
+	printf '#!/bin/sh\necho "studio-app %s"\n' "$version" >"$app"
+	chmod 755 "$app"
 	tar -czf "$release/$name.tar.gz" -C "$tmp/build" "$name"
 	printf '%s  %s\n' "$(sha256 "$release/$name.tar.gz")" "$name.tar.gz" >>"$release/checksums.txt"
 done
@@ -48,14 +55,24 @@ run_install() {
 		sh "$root/install.sh" >"$tmp/out" 2>&1
 }
 
-# A good release installs a binary that runs.
+# A good release installs a binary that runs. On macOS an earlier release's bare app makes way
+# for the bundle.
+if [ "$(uname -s)" = Darwin ]; then
+	mkdir -p "$tmp/good"
+	printf '#!/bin/sh\necho old\n' >"$tmp/good/studio-app"
+fi
 run_install "$tmp/good" || {
 	cat "$tmp/out" >&2
 	fail "install of a good release failed"
 }
 [ "$("$tmp/good/studio")" = "studio $version" ] || fail "installed studio does not run"
 grep -q 'Checksum OK' "$tmp/out" || fail "no checksum confirmation in the output"
-[ "$("$tmp/good/studio-app")" = "studio-app $version" ] || fail "the app was not installed next to studio"
+if [ "$(uname -s)" = Darwin ]; then
+	[ "$("$tmp/good/Sandbox Studio.app/Contents/MacOS/studio-app")" = "studio-app $version" ] || fail "the app bundle was not installed next to studio"
+	[ ! -e "$tmp/good/studio-app" ] || fail "the earlier bare app was left next to the bundle"
+else
+	[ "$("$tmp/good/studio-app")" = "studio-app $version" ] || fail "the app was not installed next to studio"
+fi
 echo "ok: good release installs"
 
 # A tampered checksum fails and installs nothing.

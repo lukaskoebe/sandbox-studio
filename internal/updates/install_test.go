@@ -500,3 +500,90 @@ func TestInstallReplacesTheTrayLauncher(t *testing.T) {
 		t.Errorf("the binary is %q", got)
 	}
 }
+
+// On macOS the app is Sandbox Studio.app, replaced whole; an install with an earlier release's
+// bare studio-app gets the bundle in its place.
+func TestInstallReplacesTheAppBundle(t *testing.T) {
+	for _, before := range []string{"bundle", "bare app"} {
+		t.Run(before, func(t *testing.T) {
+			if runtime.GOOS == "windows" {
+				t.Skip("the fake release's studio is a shell script")
+			}
+			tag := "v1.1.0"
+			name := "sandbox-studio_" + tag + "_darwin_arm64"
+			var buf bytes.Buffer
+			gz := gzip.NewWriter(&buf)
+			tw := tar.NewWriter(gz)
+			app := name + "/Sandbox Studio.app/Contents/"
+			for _, f := range []struct {
+				name, body string
+				dir        bool
+			}{
+				{name: name + "/", dir: true},
+				{name: name + "/studio", body: "#!/bin/sh\necho \"studio " + tag + "\"\necho \"base image: x\"\n"},
+				{name: name + "/Sandbox Studio.app/", dir: true},
+				{name: app, dir: true},
+				{name: app + "Info.plist", body: "new plist"},
+				{name: app + "MacOS/studio-app", body: "new app"},
+			} {
+				h := &tar.Header{Name: f.name, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(f.body))}
+				if f.dir {
+					h.Typeflag, h.Size = tar.TypeDir, 0
+				}
+				if err := tw.WriteHeader(h); err != nil {
+					t.Fatal(err)
+				}
+				_, _ = io.WriteString(tw, f.body)
+			}
+			tw.Close()
+			gz.Close()
+			sum := sha256.Sum256(buf.Bytes())
+			r := &release{tag: tag, archive: buf.Bytes(), sums: hex.EncodeToString(sum[:]) + "  " + name + ".tar.gz\n"}
+			r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch {
+				case strings.HasSuffix(req.URL.Path, "/checksums.txt"):
+					_, _ = io.WriteString(w, r.sums)
+				case strings.HasSuffix(req.URL.Path, ".tar.gz"):
+					_, _ = w.Write(r.archive)
+				default:
+					http.NotFound(w, req)
+				}
+			}))
+			t.Cleanup(r.srv.Close)
+
+			f := newInstall(t, r)
+			dir := filepath.Dir(f.exe)
+			bundle := filepath.Join(dir, "Sandbox Studio.app")
+			bare := filepath.Join(dir, "studio-app")
+			if before == "bundle" {
+				if err := os.MkdirAll(filepath.Join(bundle, "Contents", "Resources"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(bundle, "Contents", "Resources", "stale"), []byte("old"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(bare, []byte("old app"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			f.in.GOOS, f.in.GOARCH = "darwin", "arm64"
+			base := "https://github.com/" + Repository + "/releases/download/" + tag + "/"
+			f.in.Start(Release{Tag: tag, Assets: []Asset{{Name: name + ".tar.gz", URL: base + name + ".tar.gz"}, {Name: "checksums.txt", URL: base + "checksums.txt"}}})
+			select {
+			case <-f.restarts:
+			case <-time.After(10 * time.Second):
+				t.Fatalf("no restart: %+v", f.in.Progress())
+			}
+			if got := read(t, filepath.Join(bundle, "Contents", "MacOS", "studio-app")); got != "new app" {
+				t.Errorf("the app is %q", got)
+			}
+			if got := read(t, filepath.Join(bundle, "Contents", "Info.plist")); got != "new plist" {
+				t.Errorf("the plist is %q", got)
+			}
+			for _, gone := range []string{filepath.Join(bundle, "Contents", "Resources", "stale"), bare, bundle + ".old", filepath.Join(dir, ".Sandbox Studio.app-"+tag+".new")} {
+				if _, err := os.Stat(gone); !errors.Is(err, os.ErrNotExist) {
+					t.Errorf("%s is left: %v", gone, err)
+				}
+			}
+		})
+	}
+}

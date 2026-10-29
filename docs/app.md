@@ -3,7 +3,10 @@
 `studio app` opens Studio in a window of its own, with a tray icon and the system's
 notifications. The app is `studio-app` (`studio-app.exe` on Windows), a [Wails
 v3](https://v3.wails.io) program in [`cmd/studio-app`](../cmd/studio-app) that each release
-archive carries next to `studio`. The browser keeps working beside it and instead of it: the
+archive carries next to `studio`. On macOS it is `Sandbox Studio.app` (identifier
+`dev.sandbox-studio.app`) with `studio-app` inside: macOS takes the system's notifications
+only from a bundle with an identifier. `studio app` starts the bundle's `studio-app` before a
+bare one, and the app finds `studio` next to its bundle. The browser keeps working beside it and instead of it: the
 server is still the product, and the app is a window and a tray around it.
 
 ## What it does
@@ -72,8 +75,17 @@ GOOS=windows CGO_ENABLED=0 go build -ldflags -H=windowsgui ./cmd/studio-app
 On Linux it builds with `-tags gtk3` against WebKitGTK 4.1 until Wails v3.1 takes GTK4 by
 default; `libgtk-3-dev` and `libwebkit2gtk-4.1-dev` on Debian and Ubuntu. On Windows it
 builds without cgo and uses WebView2, which Windows 10 and 11 ship. The `app` job in CI
-vets, tests and builds it on all three systems, and the release workflow builds it into each
-archive, signs it on macOS and Windows, and the updater replaces it with `studio`.
+vets, tests and builds it on all three systems, and on macOS runs the self-test (below) of
+the bare binary, whose notifications don't start, and of the bundle, whose do. The release
+workflow builds it into each archive, signs it on macOS and Windows, and the updater
+replaces it with `studio`.
+
+On macOS `scripts/macos-app.sh <studio-app> <out-dir> <version> [identity]` builds the bundle:
+[`packaging/macos/Info.plist`](../packaging/macos/Info.plist) with the version, the icon from
+`web/public/icon-512.png`, and an ad hoc signature, which the release replaces with its
+identity before notarizing and stapling the bundle. `install.sh` copies the bundle next to
+`studio`, and the updater replaces it whole (its signature covers its files); both remove a
+bare `studio-app` that an earlier release left there.
 
 `studio-app -selftest -addr <addr> -studio <studio>` loads Studio in a hidden window and
 prints, as JSON, the address the page ended on, whether the API took its session, whether a
@@ -83,6 +95,7 @@ an e2e Studio with its own `SANDBOX_STUDIO_HOME`.
 
 ## Not done yet
 
-- WebView2's messages and macOS are built in CI but untried by hand. On macOS the app is a
-  bare binary, not a bundle, so its notifications may be refused; the page keeps its own then.
+- WebView2's messages and macOS are built and self-tested in CI but untried by hand. A bare
+  `studio-app` on macOS, as `make app` builds it, gets no notifications: the service doesn't
+  start, the app runs without it, and the page keeps its own.
 - The autostart entry still starts `studio` (or `studiow.exe` on Windows), not the app.

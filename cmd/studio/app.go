@@ -20,7 +20,8 @@ import (
 const appStartWait = 3 * time.Second
 
 // appBinary returns the Studio app (cmd/studio-app) installed next to exe, or "" without one:
-// studio-app beside it, or on macOS also the one in Sandbox Studio.app beside it.
+// studio-app beside it, or on macOS first the one in Sandbox Studio.app beside it, as only
+// a bundle gets the system's notifications there.
 func appBinary(exe, goos string) string {
 	dir := filepath.Dir(exe)
 	name := "studio-app"
@@ -29,7 +30,7 @@ func appBinary(exe, goos string) string {
 	}
 	candidates := []string{filepath.Join(dir, name)}
 	if goos == "darwin" {
-		candidates = append(candidates, filepath.Join(dir, "Sandbox Studio.app", "Contents", "MacOS", name))
+		candidates = append([]string{filepath.Join(dir, "Sandbox Studio.app", "Contents", "MacOS", name)}, candidates...)
 	}
 	for _, c := range candidates {
 		if info, err := os.Stat(c); err == nil && info.Mode().IsRegular() {

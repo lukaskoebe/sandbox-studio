@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/inst
 
 The script downloads the latest release for your platform, checks it against the release's `checksums.txt` (and its build provenance, when the GitHub CLI `gh` is installed and signed in), and installs `studio` to `~/.local/bin` without sudo. If that directory is not on your `PATH`, it prints the line to add to your shell profile. It then checks KVM or Hypervisor.framework access and tells you what to fix; it never installs other software. Set `SANDBOX_STUDIO_VERSION` (for example `v0.3.4`) to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to change the directory.
 
-On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains the `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`. Next to it is `studio-app`, the [Studio app](#studio-in-a-window-of-its-own), and in the Windows archive also `studiow.exe`, the tray launcher; keep them in the same folder as `studio`.
+On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains the `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`. Next to it is `studio-app`, the [Studio app](#studio-in-a-window-of-its-own) (on macOS `Sandbox Studio.app`), and in the Windows archive also `studiow.exe`, the tray launcher; keep them in the same folder as `studio`.
 
 ### Build from source
 

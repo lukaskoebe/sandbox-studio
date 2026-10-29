@@ -141,6 +141,17 @@ install_binary() {
 		mv -f "$dir/.studio-app.$$" "$dir/studio-app"
 		say "Installed the app to $dir/studio-app."
 	fi
+	# On macOS the app is Sandbox Studio.app: the system's notifications need a bundle.
+	bundle="$tmp/x/${asset%.tar.gz}/Sandbox Studio.app"
+	if [ -d "$bundle" ] && [ ! -L "$bundle" ]; then
+		rm -rf "$dir/.Sandbox Studio.app.$$"
+		cp -pR "$bundle" "$dir/.Sandbox Studio.app.$$"
+		rm -rf "$dir/Sandbox Studio.app"
+		mv "$dir/.Sandbox Studio.app.$$" "$dir/Sandbox Studio.app"
+		# An earlier release's bare app, which studio app would start instead.
+		rm -f "$dir/studio-app"
+		say "Installed the app to $dir/Sandbox Studio.app."
+	fi
 }
 
 check_path() {
@@ -231,7 +242,7 @@ main() {
 	fi
 	say "  studio doctor   # check this host in detail"
 	say "  studio          # start Studio; it prints a one-time login link for http://127.0.0.1:7878"
-	if [ -f "$dir/studio-app" ]; then
+	if [ -f "$dir/studio-app" ] || [ -d "$dir/Sandbox Studio.app" ]; then
 		say "  studio app      # or open Studio in its own window; it starts Studio if it must"
 	fi
 }
