@@ -352,6 +352,8 @@ function TeammateRow({
     <SidebarMenuItem>
       <SidebarMenuButton
         tooltip={teammate.name}
+        // The avatar is wider than an icon; collapsed, the padding keeps it in the middle.
+        className="group-data-[collapsible=icon]:p-1.5!"
         isActive={
           !!matchRoute({
             to: "/e/$env/teammates/$id",
@@ -473,7 +475,7 @@ function EnvironmentSwitcher({ env }: { env: string }) {
             render={
               <SidebarMenuButton
                 size="sm"
-                className="font-mono data-popup-open:bg-sidebar-accent"
+                className="font-mono group-data-[collapsible=icon]:p-1.5! data-popup-open:bg-sidebar-accent"
               />
             }
           >
