@@ -17,6 +17,7 @@ import {
 } from "@/lib/browser-coords"
 import type { NoteSpot } from "@/lib/browser-notes"
 import { useFitPage, type PageSize } from "@/lib/browser-fit"
+import { PasswordCapture, type TypedPassword } from "@/lib/browser-logins"
 
 // Chrome accepts CDP char text one Unicode code point at a time.
 const mobileInputSentinel = "\u200b"
@@ -112,6 +113,8 @@ export function BrowserLive({
   onControlsOpen,
   fitRoom,
   onFit,
+  passwordField,
+  onPassword,
   className,
 }: {
   url: string
@@ -142,6 +145,13 @@ export function BrowserLive({
    */
   fitRoom?: HTMLElement | null
   onFit?: (size: PageSize) => void
+  /** Whether the page has a password field at a point, in CSS pixels of its viewport. */
+  passwordField?: (at: { x: number; y: number }) => Promise<boolean>
+  /**
+   * A password the user typed or pasted into a field of the page, once the field is left: the
+   * window offers to save it. It stays on this computer until then.
+   */
+  onPassword?: (typed: TypedPassword) => void
   className?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -183,6 +193,16 @@ export function BrowserLive({
     undefined
   )
   const controlLatched = useRef(false)
+  const capture = useRef(new PasswordCapture())
+  const passwordFieldRef = useRef(passwordField)
+  const onPasswordRef = useRef(onPassword)
+  useEffect(() => {
+    passwordFieldRef.current = passwordField
+    onPasswordRef.current = onPassword
+  })
+  const typed = (p: TypedPassword | undefined) => {
+    if (p) onPasswordRef.current?.(p)
+  }
   const [state, setState] = useState<"connecting" | "live" | "closed">(
     "connecting"
   )
@@ -539,6 +559,25 @@ export function BrowserLive({
     heldButton.current = undefined
     return mouse("mouseReleased", e, button, true)
   }
+  // A press may land in a password field: what is typed next is followed until the page says.
+  const pressed = (e: React.MouseEvent) => {
+    const at = pagePoint(e, false)
+    const look = passwordFieldRef.current
+    let host: string | undefined
+    try {
+      const u = new URL(activePageURLRef.current ?? "")
+      if (u.protocol === "https:") host = u.hostname
+    } catch {
+      // No page: nothing to save a password for.
+    }
+    const { id, done } = capture.current.press(at && look ? host : undefined)
+    typed(done)
+    if (!at || !look || !host) return
+    look(at).then(
+      (password) => capture.current.confirm(id, password),
+      () => capture.current.confirm(id, false)
+    )
+  }
   const lastMove = useRef(0)
   const keyboardEvent = (
     eventType: "keyDown" | "keyUp",
@@ -564,6 +603,7 @@ export function BrowserLive({
     windowsVirtualKeyCode: number,
     keyModifiers = controlLatched.current ? 2 : 0
   ) => {
+    track(key, keyModifiers)
     // Native agent-browser forwards text to CDP; Enter uses CR for input fields.
     if (
       !keyboardEvent(
@@ -578,6 +618,16 @@ export function BrowserLive({
       return false
     keyboardEvent("keyUp", key, code, windowsVirtualKeyCode, keyModifiers)
     return true
+  }
+
+  // Follows a key the page gets, for a password typed into it (capture).
+  const track = (key: string, keyModifiers: number, text?: string) => {
+    if (modifierKeys.has(key)) return
+    if (key === "Enter" || key === "Tab") typed(capture.current.finish())
+    else if (keyModifiers & ~8) capture.current.lose()
+    else if (key === "Backspace") capture.current.backspace()
+    else if (text) capture.current.type(text)
+    else capture.current.lose()
   }
 
   const key = (eventType: string, e: React.KeyboardEvent) => {
@@ -605,19 +655,22 @@ export function BrowserLive({
       }
       return
     }
+    const text =
+      eventType === "keyDown"
+        ? e.key === "Enter"
+          ? "\r"
+          : e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+            ? e.key
+            : undefined
+        : undefined
+    if (eventType === "keyDown")
+      track(e.key, modifiers(e), e.key === "Enter" ? undefined : text)
     send({
       type: "input_keyboard",
       eventType,
       key: e.key,
       code: e.code,
-      text:
-        eventType === "keyDown"
-          ? e.key === "Enter"
-            ? "\r"
-            : e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
-              ? e.key
-              : undefined
-          : undefined,
+      text,
       windowsVirtualKeyCode: e.keyCode,
       modifiers: modifiers(e),
     })
@@ -675,6 +728,7 @@ export function BrowserLive({
         })
       )
         return
+      capture.current.type(character)
     }
   }
 
@@ -976,7 +1030,10 @@ export function BrowserLive({
             if (e.pointerType === "mouse") e.currentTarget.focus()
             else e.preventDefault()
             const button = buttons[e.button]
-            if (mouse("mousePressed", e, button)) heldButton.current = button
+            if (mouse("mousePressed", e, button)) {
+              heldButton.current = button
+              pressed(e)
+            }
           }}
           onPointerMove={(e) => {
             if (!e.isPrimary) return

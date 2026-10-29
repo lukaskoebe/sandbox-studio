@@ -81,7 +81,7 @@ type Guest interface {
 type Vault interface {
 	Prepare(envID, name, value string, hosts []string, note string) (store.Secret, error)
 	Create(ctx context.Context, sec store.Secret, value string) (store.Secret, error)
-	Update(ctx context.Context, envID, id string, value *string, hosts []string, note string) (store.Secret, error)
+	Update(ctx context.Context, envID, id string, value *string, hosts []string, note string, username *string) (store.Secret, error)
 	Value(ctx context.Context, envID, id string) (string, error)
 	Changed(envID string)
 }
@@ -597,7 +597,7 @@ func (s *Service) storeKey(ctx context.Context, p store.Provider, value string, 
 		if err != nil {
 			return err
 		}
-		if _, err := s.Vault.Update(ctx, p.EnvironmentID, p.SecretID, &value, sec.Hosts, sec.Note); err != nil {
+		if _, err := s.Vault.Update(ctx, p.EnvironmentID, p.SecretID, &value, sec.Hosts, sec.Note, nil); err != nil {
 			return err
 		}
 		s.Vault.Changed(p.EnvironmentID)
@@ -637,7 +637,7 @@ func (s *Service) storeCodex(ctx context.Context, p store.Provider, l codexLogin
 		return err
 	}
 	if ok {
-		_, err = s.Vault.Update(ctx, p.EnvironmentID, sec.ID, &value, nil, sec.Note)
+		_, err = s.Vault.Update(ctx, p.EnvironmentID, sec.ID, &value, nil, sec.Note, nil)
 	} else {
 		_, err = s.Vault.Create(ctx, store.Secret{EnvironmentID: p.EnvironmentID, Name: teammates.LoginSecretName(p.Name, p.ID),
 			StudioOnly: true, Note: "Login of provider " + p.Name}, value)

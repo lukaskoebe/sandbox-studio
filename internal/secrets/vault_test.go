@@ -269,7 +269,7 @@ func TestHostValidation(t *testing.T) {
 	if want := []string{"api.example.com", "*.example.org", "10.0.0.1"}; !slices.Equal(sec.Hosts, want) {
 		t.Fatalf("hosts %v, want %v", sec.Hosts, want)
 	}
-	if _, err := v.Update(ctx, env, sec.ID, nil, nil, ""); !errors.Is(err, ErrInvalid) {
+	if _, err := v.Update(ctx, env, sec.ID, nil, nil, "", nil); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("update without hosts: %v", err)
 	}
 }
@@ -349,7 +349,7 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	}
 
 	newValue := "sk-two"
-	if _, err := v.Update(ctx, env, first.ID, &newValue, []string{"api.example.net"}, ""); err != nil {
+	if _, err := v.Update(ctx, env, first.ID, &newValue, []string{"api.example.net"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, cached := v.bindings[env]; cached {
@@ -361,7 +361,7 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	}
 
 	// Without a value the stored one stays, and the hosts still change.
-	if _, err := v.Update(ctx, env, first.ID, nil, []string{"api.example.org"}, "moved"); err != nil {
+	if _, err := v.Update(ctx, env, first.ID, nil, []string{"api.example.org"}, "moved", nil); err != nil {
 		t.Fatal(err)
 	}
 	b, _ = v.Bindings(ctx, store.Sandbox{EnvironmentID: env})
@@ -404,7 +404,7 @@ func TestPlaceholdersAreUniqueAndStable(t *testing.T) {
 	}
 
 	value := "new"
-	updated, err := v.Update(ctx, env, first.ID, &value, []string{"a.com"}, "")
+	updated, err := v.Update(ctx, env, first.ID, &value, []string{"a.com"}, "", nil)
 	if err != nil || updated.Placeholder != first.Placeholder {
 		t.Fatalf("placeholder changed by update: %q -> %q (%v)", first.Placeholder, updated.Placeholder, err)
 	}
@@ -505,7 +505,7 @@ func TestScopedBindingsAndEnv(t *testing.T) {
 
 	// Updating and deleting invalidate the cache too.
 	value := "box-token-2"
-	if _, err := v.Update(ctx, env, boxToken.ID, &value, []string{"api.github.com"}, ""); err != nil {
+	if _, err := v.Update(ctx, env, boxToken.ID, &value, []string{"api.github.com"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := v.Bindings(ctx, adaBox); !slices.ContainsFunc(b, func(x Binding) bool { return string(x.Value) == "box-token-2" }) {
@@ -548,5 +548,81 @@ func TestStudioOnlySecret(t *testing.T) {
 	}
 	if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "KEY"}, "v"); err == nil {
 		t.Fatal("an ordinary secret without hosts was accepted")
+	}
+}
+
+// A browser login belongs to a teammate and carries a username; no sandbox of the teammate sees
+// it, in its environment or its requests, and only the teammate's browser logins list it.
+func TestBrowserLogin(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	env := newEnv(t, st, "work")
+	v := newVault(t, st)
+	key, err := v.Prepare(env, "PROVIDER_A_KEY", "sk-provider", []string{"api.anthropic.com"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateProvider(ctx, store.Provider{ID: "p", EnvironmentID: env, Name: "a", Kind: "anthropic_api"}, &key); err != nil {
+		t.Fatal(err)
+	}
+	v.Changed(env)
+	for _, id := range []string{"ada", "bob"} {
+		if _, err := st.CreateTeammate(ctx, store.Teammate{ID: id, EnvironmentID: env, Name: id, Harness: "claude", ProviderID: "p", GitName: id, GitEmail: id + "@agents.invalid"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	adaBox, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env, Name: "ada-box", TeammateID: "ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, bad := range []store.Secret{
+		{EnvironmentID: env, Name: "SHOP", Hosts: []string{"shop.test"}, BrowserOnly: true},
+		{EnvironmentID: env, TeammateID: "ada", Name: "SHOP", Hosts: []string{"shop.test"}, BrowserOnly: true, Username: "a:b"},
+		{EnvironmentID: env, TeammateID: "ada", Name: "SHOP", Hosts: []string{"shop.test"}, BrowserOnly: true, Username: "a\nb"},
+		{EnvironmentID: env, TeammateID: "ada", Name: "SHOP", Hosts: []string{"shop.test"}, Username: "ada"},
+	} {
+		if _, err := v.Create(ctx, bad, "pw"); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%+v: %v", bad, err)
+		}
+	}
+	login, err := v.Create(ctx, store.Secret{EnvironmentID: env, TeammateID: "ada", Name: "SHOP", Hosts: []string{"shop.test"}, BrowserOnly: true, Username: "ada@example.com"}, "hunter2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !login.BrowserOnly || login.Username != "ada@example.com" {
+		t.Fatalf("created %+v", login)
+	}
+	if e, err := v.Env(ctx, adaBox); err != nil || e["SHOP"] != "" {
+		t.Errorf("the sandbox's environment has the login: %v %v", e, err)
+	}
+	b, err := v.Bindings(ctx, adaBox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range b {
+		if x.Name == "SHOP" && (!x.Foreign || x.Value != nil) {
+			t.Errorf("the sandbox's requests may carry the login: %+v", x)
+		}
+	}
+	logins, err := v.BrowserLogins(ctx, env, "ada")
+	if err != nil || len(logins) != 1 || logins[0].Username != "ada@example.com" || string(logins[0].Value) != "hunter2" ||
+		!slices.Equal(logins[0].Hosts, []string{"shop.test"}) {
+		t.Fatalf("ada's logins: %+v %v", logins, err)
+	}
+	if logins, _ := v.BrowserLogins(ctx, env, "bob"); len(logins) != 0 {
+		t.Errorf("bob's logins: %+v", logins)
+	}
+
+	// The username changes on its own; nil keeps it.
+	user := "ada2"
+	if sec, err := v.Update(ctx, env, login.ID, nil, []string{"shop.test"}, "", &user); err != nil || sec.Username != "ada2" {
+		t.Fatalf("update: %+v %v", sec, err)
+	}
+	if sec, err := v.Update(ctx, env, login.ID, nil, []string{"shop.test"}, "note", nil); err != nil || sec.Username != "ada2" {
+		t.Fatalf("update keeping the username: %+v %v", sec, err)
+	}
+	if logins, _ := v.BrowserLogins(ctx, env, "ada"); len(logins) != 1 || logins[0].Username != "ada2" {
+		t.Errorf("the cache kept the old username: %+v", logins)
 	}
 }

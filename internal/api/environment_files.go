@@ -192,8 +192,9 @@ func (s *Server) buildEnvironmentFile(ctx context.Context, envID string) (Enviro
 		})
 	}
 	for _, sec := range secretList {
-		// Studio's own secrets, sandbox-scoped ones and provider keys don't travel.
-		if sec.StudioOnly || sec.SandboxID != "" || providerKeys[sec.ID] {
+		// Studio's own secrets, sandbox-scoped ones, browser logins and provider keys don't
+		// travel.
+		if sec.StudioOnly || sec.SandboxID != "" || sec.BrowserOnly || providerKeys[sec.ID] {
 			continue
 		}
 		f.Secrets = append(f.Secrets, FileSecret{Name: sec.Name, Hosts: sec.Hosts, Note: sec.Note, Teammate: teammateName[sec.TeammateID]})

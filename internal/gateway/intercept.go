@@ -55,7 +55,10 @@ type interception struct {
 	gate       func(*http.Request) string // decides each request before it is rewritten; "" lets it on
 	proxy      *httputil.ReverseProxy
 	log        *slog.Logger
-	rejected   func(names []string) // told when the upstream refuses a request that carried secrets
+	rejected   func(names []string)  // told when the upstream refuses a request that carried secrets
+	login      *secrets.BrowserLogin // sent as Basic credentials to a page asking for them
+	held       string                // a login of the host's the agent driving may not use
+	signIn     func(*BasicAsk)       // told of the pages asking for Basic credentials, and nil after one that didn't
 
 	mu      sync.Mutex
 	problem string // the last refused request, for the connection log
@@ -143,7 +146,7 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
-func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, rejected func(names []string)) (sent, received int64, problem string) {
+func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, rejected func(names []string), auth *browserAuth) (sent, received int64, problem string) {
 	// Requests go to the rule's upstream, which is the host unless the rule names another. The
 	// secrets are bound to the upstream, since that is what receives them.
 	upstream, upPort := upstreamOf(rule.Config.Upstream, host, port)
@@ -155,6 +158,9 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 			if len(b.Value) > 0 {
 				ic.masked = append(ic.masked, b.Value)
 			}
+		}
+		if auth != nil && isTLS {
+			ic.useLogin(auth, upstream)
 		}
 		roots, err := g.upstreamCAs(rule.Config.CA)
 		if err != nil {
@@ -202,6 +208,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 		FlushInterval: -1, // streamed responses (server-sent events) pass through as they come
 		ModifyResponse: func(resp *http.Response) error {
 			ic.noteRejection(resp)
+			ic.noteSignIn(resp)
 			return ic.maskResponse(resp)
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -264,8 +271,12 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ic.proxy.ServeHTTP(w, out)
 }
 
-// sentSecrets are the names of the secrets whose values a request carries.
-type sentSecrets struct{ names []string }
+// sentSecrets are the names of the secrets whose values a request carries, and the browser
+// login it carries as Basic credentials.
+type sentSecrets struct {
+	names []string
+	login string
+}
 
 func (s *sentSecrets) add(name string) {
 	if s != nil && !slices.Contains(s.names, name) {
@@ -326,6 +337,11 @@ func (ic *interception) rewrite(r *http.Request, sent *sentSecrets) error {
 		}
 		r.Header.Set(name, v)
 	}
+	if ic.login != nil && r.Header.Get("Authorization") == "" {
+		creds := ic.login.Username + ":" + string(ic.login.Value)
+		r.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(creds)))
+		sent.login = ic.login.Name
+	}
 	if len(ic.masked) > 0 {
 		// Without an Accept-Encoding of the client's, the transport asks for gzip and
 		// decompresses it, so responses can be masked.
@@ -373,6 +389,91 @@ func (ic *interception) substitute(s, where string, escape func(string) string, 
 		sent.add(b.Name)
 	}
 	return s, nil
+}
+
+// --- browser logins -------------------------------------------------------------------------
+
+// browserAuth are the browser logins of the teammate whose browser VM a connection is from.
+type browserAuth struct {
+	logins []secrets.BrowserLogin
+	// agent: an agent drives the browser, and only the logins it may use are sent.
+	agent  bool
+	signIn func(*BasicAsk)
+}
+
+// BasicAsk is a page of a teammate's browser asking for HTTP Basic credentials.
+type BasicAsk struct {
+	Realm string
+	// Login is the browser login the gateway sent, which the host refused, or one it held
+	// back as the agent driving may not use it. Empty, the host has no login.
+	Login   string
+	Refused bool
+}
+
+// minMasked is the shortest browser login masked in responses: a shorter password is likely a
+// common word, and masking it would garble pages.
+const minMasked = 8
+
+// useLogin picks the browser login sent to upstream: the first with a username for it.
+func (ic *interception) useLogin(auth *browserAuth, upstream string) {
+	ic.signIn = auth.signIn
+	for i, l := range auth.logins {
+		if l.Username == "" || len(l.Value) == 0 || !slices.ContainsFunc(l.Hosts, func(p string) bool { return policy.Covers(p, upstream) }) {
+			continue
+		}
+		if auth.agent && !l.AgentMayUse {
+			if ic.held == "" {
+				ic.held = l.Name
+			}
+			continue
+		}
+		ic.login = &auth.logins[i]
+		if len(l.Value) >= minMasked {
+			ic.masked = append(ic.masked, l.Value)
+		}
+		return
+	}
+}
+
+// noteSignIn tells signIn whether a page asks for Basic credentials. Only pages count, not
+// what they load: the browser shows a page's 401 instead of asking, so the user is asked.
+func (ic *interception) noteSignIn(resp *http.Response) {
+	if ic.signIn == nil || resp.Request == nil || resp.Request.Header.Get("Sec-Fetch-Dest") != "document" {
+		return
+	}
+	realm, ok := basicRealm(resp)
+	if !ok {
+		ic.signIn(nil)
+		return
+	}
+	ask := &BasicAsk{Realm: realm, Login: ic.held}
+	if sent, _ := resp.Request.Context().Value(sentSecretsKey{}).(*sentSecrets); sent != nil && sent.login != "" {
+		ask.Login, ask.Refused = sent.login, true
+	}
+	ic.signIn(ask)
+}
+
+var realmParam = regexp.MustCompile(`(?i)\brealm="([^"]*)"`)
+
+// basicRealm reports whether resp asks for Basic credentials, and in which realm.
+func basicRealm(resp *http.Response) (string, bool) {
+	if resp.StatusCode != http.StatusUnauthorized {
+		return "", false
+	}
+	for _, v := range resp.Header.Values("WWW-Authenticate") {
+		if len(v) < 5 || !strings.EqualFold(v[:5], "basic") || len(v) > 5 && v[5] != ' ' {
+			continue
+		}
+		realm := ""
+		if m := realmParam.FindStringSubmatch(v); m != nil {
+			realm = strings.ToValidUTF8(m[1], "")
+			if len(realm) > 200 {
+				realm = strings.ToValidUTF8(realm[:200], "")
+			}
+		}
+		return realm, true
+	}
+	return "", false
 }
 
 // placeholderPrefix starts every placeholder, which saves searching strings without one.

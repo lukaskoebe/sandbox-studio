@@ -118,6 +118,7 @@ type Service struct {
 	mu       sync.Mutex
 	states   map[string]*state // by teammate ID
 	outcomes map[string]*credOutcome
+	signIns  signIns
 }
 
 // state is what the broker keeps about one teammate's browser. Fields below run are

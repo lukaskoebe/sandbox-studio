@@ -96,6 +96,18 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine,
 		gw.Rejected(sb, host, names)
 		return nil
 	}
+	e2e.SignIn = func(ctx context.Context, envID, teammateID, host string, realm *string, login string, refused bool) error {
+		sb, err := st.BrowserSandbox(ctx, envID, teammateID)
+		if err != nil {
+			return err
+		}
+		var ask *gateway.BasicAsk
+		if realm != nil {
+			ask = &gateway.BasicAsk{Realm: *realm, Login: login, Refused: refused}
+		}
+		gw.SignIn(sb, host, ask)
+		return nil
+	}
 	e2e.Requests = func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error) {
 		sb, err := st.LookupSandbox(ctx, sandboxID)
 		if err != nil {

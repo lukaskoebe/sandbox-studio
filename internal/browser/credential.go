@@ -101,7 +101,8 @@ func (s *Service) finishedOutcome(key string) (*credOutcome, bool) {
 }
 
 // credential finds a vault secret the page may receive, among those the agent sandbox
-// sandboxID of teammateID sees.
+// sandboxID of teammateID sees and the teammate's browser logins; a secret the sandbox sees
+// comes first.
 func (s *Service) credential(ctx context.Context, envID, teammateID, sandboxID, name, pageURL string) (store.Secret, error) {
 	u, err := url.Parse(pageURL)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" {
@@ -111,7 +112,7 @@ func (s *Service) credential(ctx context.Context, envID, teammateID, sandboxID, 
 	if err != nil {
 		return store.Secret{}, err
 	}
-	for _, sec := range store.VisibleSecrets(list, sandboxID, teammateID) {
+	for _, sec := range append(store.VisibleSecrets(list, sandboxID, teammateID), store.BrowserLogins(list, teammateID)...) {
 		if sec.Name != name {
 			continue
 		}
@@ -143,7 +144,8 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		return nil, err
 	}
 	origin := Origin(pageURL)
-	if _, err := c.s.credential(ctx, c.st.env, c.st.teammate, c.sb.ID, in.Name, pageURL); err != nil {
+	sec, err := c.s.credential(ctx, c.st.env, c.st.teammate, c.sb.ID, in.Name, pageURL)
+	if err != nil {
 		return nil, err
 	}
 	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.teammate)
@@ -166,8 +168,20 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		}
 		return result, nil
 	}
-	raw, _ := json.Marshal(CredentialPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
-		Session: c.pg.id, Credential: in.Name, Ref: ref, Origin: origin, URL: pageURL, Role: info.Role, Label: info.Name})
+	payload := CredentialPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
+		Session: c.pg.id, Credential: in.Name, Ref: ref, Origin: origin, URL: pageURL, Role: info.Role, Label: info.Name}
+	if sec.BrowserOnly && sec.AgentMayUse {
+		// The user lets the teammate's agents use this login without asking. Studio fills it
+		// as it would an approved one, and the action log says so.
+		<-c.st.run
+		err := c.s.fillApproved(ctx, c.st.env, payload)
+		c.st.run <- struct{}{}
+		if err != nil {
+			return nil, userError{err}
+		}
+		return result, nil
+	}
+	raw, _ := json.Marshal(payload)
 	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindCredential, Subject: subject, Payload: raw})
 	if err != nil {
 		return nil, err
@@ -203,6 +217,36 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		return nil, userError{o.err}
 	}
 	return result, nil
+}
+
+// loginsFor lists the teammate's browser logins bound to the page's host, for the agent:
+// their names and usernames, never their values.
+func (s *Service) loginsFor(ctx context.Context, envID, teammateID, pageURL string) string {
+	u, err := url.Parse(pageURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" {
+		return ""
+	}
+	list, err := s.Store.Secrets(ctx, envID)
+	if err != nil {
+		return ""
+	}
+	var names []string
+	for _, sec := range store.BrowserLogins(list, teammateID) {
+		for _, h := range sec.Hosts {
+			if policy.Covers(h, u.Hostname()) {
+				if sec.Username != "" {
+					names = append(names, fmt.Sprintf("%s (username %q)", sec.Name, sec.Username))
+				} else {
+					names = append(names, sec.Name)
+				}
+				break
+			}
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "saved logins for this site, for browser_fill_credential: " + strings.Join(names, ", ") + "\n"
 }
 
 // errDenied ends a credential request the user refused.

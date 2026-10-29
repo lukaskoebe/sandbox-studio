@@ -485,6 +485,9 @@ On intercepted connections (`intercept.go`):
   secret the sandbox doesn't see (another sandbox's or teammate's, or one a more specific
   secret of the same name overrides);
 - the rule's headers are set;
+- on a browser VM's connection, a teammate's [browser login](browser.md#browser-logins) for the
+  upstream is sent as `Authorization: Basic` when the request has none, and a top-level page
+  answering `401` with `WWW-Authenticate: Basic` is reported (`Gateway.SignIn`);
 - the Host header must match the approved host (no domain fronting);
 - responses mask the values of the host's secrets (same length, so `Content-Length` holds,
   overlapping values included), and secret-bearing responses drop trailers. This masks
@@ -538,6 +541,9 @@ rule.
   gateway refuses the placeholder of any other secret, and a write reconfigures only the
   sandboxes its scope covers. The browser's `fill_credential` uses the same visibility for
   the sandbox driving it.
+- A teammate's browser logins (`browserOnly`, with an optional username) are secrets no
+  sandbox sees; only that teammate's browser uses them, and their value can be read back
+  (`GET …/secrets/{id}/value`). See [browser logins](browser.md#browser-logins).
 - Provider API keys and forge tokens are secrets too, managed by their owner (the secrets
   API answers 409 for them). They always belong to the environment.
 

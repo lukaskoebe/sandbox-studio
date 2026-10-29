@@ -29,6 +29,10 @@ var Requests func(ctx context.Context, sandboxID, host string, port int, req pol
 // the gateway does (POST /api/e2e/rejected). Studio sets it.
 var Rejected func(ctx context.Context, sandboxID, host string, names []string) error
 
+// SignIn reports that a page of a teammate's browser on host asks for Basic credentials, as
+// the gateway does, or no longer does when realm is nil (POST /api/e2e/signin). Studio sets it.
+var SignIn func(ctx context.Context, envID, teammateID, host string, realm *string, login string, refused bool) error
+
 // SeedChat adds count ended turns to a chat, each a request and its answer, as a long chat
 // has (POST /api/e2e/chats/{id}/turns). Studio sets it.
 var SeedChat func(ctx context.Context, chatID string, count int) error
@@ -216,6 +220,25 @@ func (r *Runtime) Control() http.Handler {
 			return
 		}
 		if err := Rejected(req.Context(), body.SandboxID, body.Host, body.Names); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, struct{}{})
+	})
+	mux.HandleFunc("POST /api/e2e/signin", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			EnvironmentID string  `json:"environmentId"`
+			TeammateID    string  `json:"teammateId"`
+			Host          string  `json:"host"`
+			Realm         *string `json:"realm"`
+			Login         string  `json:"login"`
+			Refused       bool    `json:"refused"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.EnvironmentID == "" || body.TeammateID == "" || body.Host == "" {
+			http.Error(w, "want {environmentId, teammateId, host, realm?, login?, refused?}", http.StatusBadRequest)
+			return
+		}
+		if err := SignIn(req.Context(), body.EnvironmentID, body.TeammateID, body.Host, body.Realm, body.Login, body.Refused); err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}

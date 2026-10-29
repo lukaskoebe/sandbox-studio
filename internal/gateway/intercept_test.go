@@ -131,6 +131,11 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if user, pass, ok := r.BasicAuth(); r.URL.Path == "/private" && (!ok || user != "ada" || pass != "correct-horse") {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Staging", charset="UTF-8"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		if r.URL.Path == "/trailer" {
 			w.Header().Add("Trailer", "X-Echo-Secret")
 			w.WriteHeader(http.StatusOK)

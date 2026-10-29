@@ -45,7 +45,7 @@ func (v *fakeVault) Create(ctx context.Context, sec store.Secret, value string) 
 	return v.st.CreateSecret(ctx, sec)
 }
 
-func (v *fakeVault) Update(ctx context.Context, envID, id string, value *string, hosts []string, note string) (store.Secret, error) {
+func (v *fakeVault) Update(ctx context.Context, envID, id string, value *string, hosts []string, note string, username *string) (store.Secret, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if value != nil {

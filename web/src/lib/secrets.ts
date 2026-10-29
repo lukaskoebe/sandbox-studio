@@ -1,12 +1,18 @@
 import type { Secret } from "@/lib/api/client"
 
-/** The scope a secret applies in: the whole environment, one teammate's sandboxes or one sandbox. */
+/**
+ * The scope a secret applies in: the whole environment, one teammate's sandboxes or one sandbox,
+ * or one teammate's browser, for a browser login, which no sandbox sees.
+ */
 export type SecretScope =
   | { kind: "environment" }
   | { kind: "teammate"; id: string }
   | { kind: "sandbox"; id: string }
+  | { kind: "browser"; id: string }
 
 export function scopeOf(s: Secret): SecretScope {
+  if (s.browserOnly && s.teammateId)
+    return { kind: "browser", id: s.teammateId }
   if (s.sandboxId) return { kind: "sandbox", id: s.sandboxId }
   if (s.teammateId) return { kind: "teammate", id: s.teammateId }
   return { kind: "environment" }
@@ -16,6 +22,7 @@ export function scopeOf(s: Secret): SecretScope {
 export function scopeValue(scope: SecretScope) {
   if (scope.kind === "teammate") return `teammate:${scope.id}`
   if (scope.kind === "sandbox") return scope.id
+  if (scope.kind === "browser") return `browser:${scope.id}`
   return "environment"
 }
 
@@ -27,7 +34,7 @@ export type SecretGroup = {
   secrets: Secret[]
 }
 
-const rank = { environment: 0, teammate: 1, sandbox: 2 } as const
+const rank = { environment: 0, teammate: 1, sandbox: 2, browser: 3 } as const
 
 /**
  * Secrets by scope: the environment's first, then each teammate's, then each sandbox's, the
@@ -45,7 +52,7 @@ export function groupByScope(
     let group = groups.get(key)
     if (!group) {
       const name =
-        scope.kind === "teammate"
+        scope.kind === "teammate" || scope.kind === "browser"
           ? (teammates.get(scope.id) ?? "")
           : scope.kind === "sandbox"
             ? (sandboxes.get(scope.id) ?? "")
@@ -87,7 +94,9 @@ export function teammateSecrets(
   teammateId: string,
   sandboxIds: Set<string>
 ): TeammateSecret[] {
-  const own = list.filter((s) => s.teammateId === teammateId && !s.sandboxId)
+  const own = list.filter(
+    (s) => s.teammateId === teammateId && !s.sandboxId && !s.browserOnly
+  )
   const sandbox = list.filter((s) => s.sandboxId && sandboxIds.has(s.sandboxId))
   const env = list.filter((s) => !s.teammateId && !s.sandboxId && !s.studioOnly)
   const ownNames = new Set(own.map((s) => s.name))

@@ -13,6 +13,14 @@ Read-only actions such as snapshots and reading text are allowed. Opening a page
 
 Script execution, cookie access, storage access, and page state inspection are not available to the agent tools. Password-like and marked-sensitive fields are redacted from snapshots. When the agent asks to fill a credential, the **Browser credential** card names the secret; choose **Fill**, and Studio fills the host-side secret into the page without showing the value to the agent.
 
+### Save logins
+
+When you type or paste a password into a page while you drive, the browser offers to save it as one of the teammate's **browser logins**: a secret that only this teammate's browser uses, which no sandbox sees. Give it a username if the site needs one. The teammate's agents then fill it into that site's pages through the **Browser credential** card, or without asking when you turn on **agents use it without asking** for that login. **Never for this site** stops the offer in this browser.
+
+A site that asks for a username and password itself (HTTP Basic), such as a staging server, gets the saved login from Studio's gateway, for that site only. Without one, a line over the page says the site asks to sign in, and **Sign in…** saves the login and reloads. While an agent drives, the gateway sends only the logins it may use without asking.
+
+To see a saved password again, open the shield in the address bar and choose **Copy password** under **Logins**, or find it under the teammate's browser logins in **Settings → Secrets**.
+
 Browser network requests use the environment's network rules. When an agent drives the browser, requests use the driving sandbox's policy. See [Network rules](../network/) and [Secrets](../secrets/).
 
 ## Open what the sandbox serves

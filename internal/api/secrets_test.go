@@ -276,3 +276,59 @@ func TestScopedSecrets(t *testing.T) {
 	sees(adaBox, teammateSecret)
 	sees(loose, envSecret)
 }
+
+// A browser login is a teammate's: its value can be read back, unlike other secrets', and
+// whether agents use it without asking can be changed, off by default.
+func TestBrowserLogins(t *testing.T) {
+	h, s := newTestServer(t)
+	ctx := t.Context()
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID + "/secrets"
+	prov, _ := s.Store.CreateProvider(ctx, store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "claude", Kind: "claude_subscription"}, nil)
+	ada, err := s.Store.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: "Ada", Harness: "claude", ProviderID: prov.ID, GitName: "Ada", GitEmail: "ada@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := do(h, "POST", base, `{"name":"STAGING","value":"pw","hosts":["staging.example"],"browserOnly":true}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a login without a teammate: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base, `{"name":"STAGING","value":"pw","hosts":["staging.example"],"username":"ada"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a username on a secret: %d %s", rec.Code, rec.Body)
+	}
+	rec := do(h, "POST", base, `{"name":"STAGING","value":"correct-horse","hosts":["staging.example"],"browserOnly":true,"username":"ada","teammateId":"`+ada.ID+`"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	login := decode[store.Secret](t, rec)
+	if !login.BrowserOnly || login.Username != "ada" || login.AgentMayUse {
+		t.Fatalf("login %+v", login)
+	}
+	plain := decode[store.Secret](t, do(h, "POST", base, `{"name":"API","value":"v","hosts":["api.example"]}`))
+
+	value := decode[struct{ Value string }](t, do(h, "GET", base+"/"+login.ID+"/value", ""))
+	if value.Value != "correct-horse" {
+		t.Fatalf("value %q", value.Value)
+	}
+	if rec := do(h, "GET", base+"/"+plain.ID+"/value", ""); rec.Code != http.StatusConflict || strings.Contains(rec.Body.String(), `"v"`) {
+		t.Fatalf("a secret's value: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = do(h, "PUT", base+"/"+login.ID, `{"hosts":["staging.example"],"agentMayUse":true}`)
+	if rec.Code != http.StatusOK || !decode[store.Secret](t, rec).AgentMayUse {
+		t.Fatalf("let agents use it: %d %s", rec.Code, rec.Body)
+	}
+	logins, err := s.Vault.BrowserLogins(ctx, env.ID, ada.ID)
+	if err != nil || len(logins) != 1 || !logins[0].AgentMayUse || string(logins[0].Value) != "correct-horse" || logins[0].Username != "ada" {
+		t.Fatalf("the gateway's logins: %+v %v", logins, err)
+	}
+	if rec := do(h, "PUT", base+"/"+plain.ID, `{"hosts":["api.example"],"agentMayUse":true}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("agents on a secret: %d %s", rec.Code, rec.Body)
+	}
+	// No sandbox sees it, not even the teammate's.
+	b, _ := s.Vault.Bindings(ctx, store.Sandbox{EnvironmentID: env.ID, TeammateID: ada.ID})
+	for _, x := range b {
+		if x.Name == "STAGING" && !x.Foreign {
+			t.Fatalf("a sandbox sees the login: %+v", x)
+		}
+	}
+}

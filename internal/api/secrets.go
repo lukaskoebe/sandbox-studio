@@ -19,7 +19,8 @@ type secretPath struct {
 }
 
 // registerSecrets adds the secret endpoints. Values go in through writeOnly fields and never
-// come back out: responses are store.Secret, which has no value.
+// come back out: responses are store.Secret, which has no value. A browser login's password,
+// which the user typed in their teammate's browser, is the one exception (getSecretValue).
 func (s *Server) registerSecrets(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "listSecrets", Method: http.MethodGet, Path: "/api/environments/{env}/secrets", Tags: []string{"secrets"},
@@ -41,6 +42,10 @@ func (s *Server) registerSecrets(api huma.API) {
 			SandboxID  string   `json:"sandboxId,omitempty" doc:"Limits the secret to one sandbox of this environment"`
 			TeammateID string   `json:"teammateId,omitempty" doc:"Limits the secret to the sandboxes one teammate of this environment owns; excludes sandboxId"`
 			Note       string   `json:"note,omitempty" maxLength:"500"`
+			// A browser login: only the teammate's browser uses it, never a sandbox.
+			BrowserOnly bool   `json:"browserOnly,omitempty" doc:"Makes it a browser login of teammateId: Studio fills it into pages of its hosts and sends it to them as HTTP Basic credentials, and no sandbox sees it"`
+			Username    string `json:"username,omitempty" maxLength:"200" doc:"A browser login's username"`
+			AgentMayUse bool   `json:"agentMayUse,omitempty" doc:"Lets the teammate's agents use the browser login without asking"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -54,8 +59,11 @@ func (s *Server) registerSecrets(api huma.API) {
 		if err := s.checkScope(ctx, in.Env, in.Body.TeammateID, in.Body.SandboxID); err != nil {
 			return nil, err
 		}
+		if in.Body.BrowserOnly && in.Body.TeammateID == "" {
+			return nil, huma.Error422UnprocessableEntity("a browser login belongs to a teammate: set teammateId")
+		}
 		sec, err := s.Vault.Create(ctx, store.Secret{EnvironmentID: in.Env, TeammateID: in.Body.TeammateID, SandboxID: in.Body.SandboxID,
-			Name: in.Body.Name, Hosts: in.Body.Hosts, Note: in.Body.Note}, in.Body.Value)
+			Name: in.Body.Name, Hosts: in.Body.Hosts, Note: in.Body.Note, BrowserOnly: in.Body.BrowserOnly, Username: in.Body.Username, AgentMayUse: in.Body.AgentMayUse}, in.Body.Value)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -70,6 +78,10 @@ func (s *Server) registerSecrets(api huma.API) {
 			Value *string  `json:"value,omitempty" writeOnly:"true" doc:"A new value. Omit it to keep the stored one."`
 			Hosts []string `json:"hosts" minItems:"1" doc:"Host patterns the value may be sent to"`
 			Note  string   `json:"note,omitempty" maxLength:"500"`
+			// Username is a browser login's; omitted, it stays.
+			Username *string `json:"username,omitempty" maxLength:"200" doc:"A browser login's username; omit it to keep the stored one"`
+			// AgentMayUse is a browser login's; omitted, it stays.
+			AgentMayUse *bool `json:"agentMayUse,omitempty" doc:"Whether the teammate's agents use the browser login without asking; omit it to keep it"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -79,12 +91,48 @@ func (s *Server) registerSecrets(api huma.API) {
 		if err := s.checkUnmanaged(ctx, in.Env, in.ID); err != nil {
 			return nil, err
 		}
-		sec, err := s.Vault.Update(ctx, in.Env, in.ID, in.Body.Value, in.Body.Hosts, in.Body.Note)
+		sec, err := s.Vault.Update(ctx, in.Env, in.ID, in.Body.Value, in.Body.Hosts, in.Body.Note, in.Body.Username)
 		if err != nil {
 			return nil, apiError(err)
 		}
+		if in.Body.AgentMayUse != nil && *in.Body.AgentMayUse != sec.AgentMayUse {
+			if !sec.BrowserOnly {
+				return nil, huma.Error422UnprocessableEntity("only a browser login is used by agents without asking")
+			}
+			if sec, err = s.Vault.SetAgentMayUse(ctx, in.Env, in.ID, *in.Body.AgentMayUse); err != nil {
+				return nil, apiError(err)
+			}
+		}
 		s.publishSecret(sec)
 		return &struct{ Body store.Secret }{sec}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getSecretValue", Method: http.MethodGet, Path: "/api/environments/{env}/secrets/{id}/value", Tags: []string{"secrets"},
+		Description: "A browser login's password, for the user who saved it in their teammate's browser. No other secret's value ever comes back out: 409.",
+	}, func(ctx context.Context, in *secretPath) (*struct {
+		Body struct {
+			Value string `json:"value"`
+		}
+	}, error) {
+		sec, err := s.Store.SecretByID(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if !sec.BrowserOnly {
+			return nil, huma.Error409Conflict("only a browser login's password can be read back; other values never leave the vault")
+		}
+		value, err := s.Vault.Value(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		out := &struct {
+			Body struct {
+				Value string `json:"value"`
+			}
+		}{}
+		out.Body.Value = value
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{

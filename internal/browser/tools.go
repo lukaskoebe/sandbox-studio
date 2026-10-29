@@ -472,7 +472,7 @@ func (c *call) snapshot(ctx context.Context, params json.RawMessage) (any, error
 	if text == "" {
 		text = "(no elements)"
 	}
-	return "page: " + snap.Origin + "\n\n" + clip(text, maxAgentText), nil
+	return "page: " + snap.Origin + "\n" + c.s.loginsFor(ctx, c.st.env, c.st.teammate, snap.Origin) + "\n" + clip(text, maxAgentText), nil
 }
 
 // redactSnapshot reads the attributes of the snapshot's valued fields and blanks the

@@ -2111,6 +2111,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/secrets/{id}/value": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A browser login's password, for the user who saved it in their teammate's browser. No other secret's value ever comes back out: 409. */
+        get: operations["getSecretValue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/security-level": {
         parameters: {
             query?: never;
@@ -3204,6 +3221,8 @@ export interface components {
             opened: string;
             /** @description Name of the agent sandbox that opened it */
             sandbox: string;
+            /** @description The page asks for a username and password */
+            signIn?: components["schemas"]["SignIn"];
             /** @description The user drives this session; agent calls to it are paused */
             takeover: boolean;
             /** @description The page the broker last saw */
@@ -3218,6 +3237,8 @@ export interface components {
             sessionId?: string;
             /** @description Ephemeral sessions, oldest first */
             sessions: components["schemas"]["BrowserSession"][] | null;
+            /** @description The page asks for a username and password */
+            signIn?: components["schemas"]["SignIn"];
             /** @description The user drives the persistent profile; agent calls to it are paused */
             takeover: boolean;
             teammateId: string;
@@ -3571,6 +3592,10 @@ export interface components {
             teammateId?: string;
         };
         CreateSecretInBody: {
+            /** @description Lets the teammate's agents use the browser login without asking */
+            agentMayUse?: boolean;
+            /** @description Makes it a browser login of teammateId: Studio fills it into pages of its hosts and sends it to them as HTTP Basic credentials, and no sandbox sees it */
+            browserOnly?: boolean;
             /** @description Host patterns the value may be sent to, e.g. api.openai.com or *.example.com */
             hosts: string[] | null;
             /** @description Environment variable name sandboxes see, e.g. OPENAI_API_KEY. Unique per scope. */
@@ -3580,6 +3605,8 @@ export interface components {
             sandboxId?: string;
             /** @description Limits the secret to the sandboxes one teammate of this environment owns; excludes sandboxId */
             teammateId?: string;
+            /** @description A browser login's username */
+            username?: string;
             /** @description The secret value. It is sealed on arrival and never returned. */
             value: string;
         };
@@ -4248,6 +4275,9 @@ export interface components {
         };
         GetMemoryIndexResponse: {
             markdown: string;
+        };
+        GetSecretValueResponse: {
+            value: string;
         };
         GitCredentialPayload: {
             /** @description The host git asked credentials for, with its port when git named one */
@@ -5641,6 +5671,9 @@ export interface components {
             scope: string;
         };
         Secret: {
+            /** @description A browser login the teammate's agents fill, and send as Basic credentials, without asking the user */
+            agentMayUse: boolean;
+            browserOnly: boolean;
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -5656,6 +5689,8 @@ export interface components {
             teammateId?: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description A browser login's username, sent with it as HTTP Basic credentials */
+            username?: string;
         };
         SendCodeInBody: {
             /** @description The code Claude's sign-in page shows after the user authorized, or a Claude Code token */
@@ -5840,6 +5875,16 @@ export interface components {
             title?: string;
             /** @description The page the browser is on after opening it, in full */
             url: string;
+        };
+        SignIn: {
+            /** @description The page's host */
+            host: string;
+            /** @description The teammate's browser login for the host, which Studio sent (refused) or held back from the agent */
+            login?: string;
+            /** @description What the host says the credentials are for */
+            realm?: string;
+            /** @description The host refused the login Studio sent */
+            refused: boolean;
         };
         Source: {
             authorTeammate?: string;
@@ -6298,9 +6343,13 @@ export interface components {
             model?: string;
         };
         UpdateSecretInBody: {
+            /** @description Whether the teammate's agents use the browser login without asking; omit it to keep it */
+            agentMayUse?: boolean;
             /** @description Host patterns the value may be sent to */
             hosts: string[] | null;
             note?: string;
+            /** @description A browser login's username; omit it to keep the stored one */
+            username?: string;
             /** @description A new value. Omit it to keep the stored one. */
             value?: string;
         };
@@ -11740,6 +11789,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSecretValue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Secret ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSecretValueResponse"];
+                };
             };
             /** @description Error */
             default: {

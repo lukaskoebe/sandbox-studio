@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -40,6 +41,11 @@ import {
 import { BrowserDownloads } from "@/components/browser-downloads"
 import { BrowserLive } from "@/components/browser-live"
 import {
+  SaveLoginCard,
+  SignInStrip,
+  SiteLogins,
+} from "@/components/browser-logins"
+import {
   NoteMarkers,
   NotesBar,
   useBrowserNotes,
@@ -77,6 +83,7 @@ import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import {
   $api,
   errorMessage,
+  fetchClient,
   errorStatus,
   type Approval,
 } from "@/lib/api/client"
@@ -85,6 +92,7 @@ import { ruleClass, tileClass } from "@/lib/accents"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { isBrowserAsk } from "@/lib/approval-kinds"
 import { normalizeBrowserAddress } from "@/lib/browser-address"
+import { neverOffered, type TypedPassword } from "@/lib/browser-logins"
 import {
   defaultPageSize,
   fitPreferred,
@@ -207,6 +215,33 @@ export function BrowserWindow({
     !replay && refused && hostname(pageURL) === refused.host
       ? refused
       : undefined
+  // A page asks for a username and password, which the browser can't ask the user for.
+  const asked = session ? session.signIn : st?.signIn
+  const signIn =
+    !replay && asked && hostname(pageURL) === asked.host ? asked : undefined
+  // A password the user typed into the page, which the window offers to save.
+  const [typedPassword, setTypedPassword] = useState<TypedPassword>()
+  useEffect(() => setTypedPassword(undefined), [sessionID, running])
+  const offerPassword = useCallback((typed: TypedPassword) => {
+    if (!neverOffered(typed.host)) setTypedPassword(typed)
+  }, [])
+  const dismissPassword = useCallback(() => setTypedPassword(undefined), [])
+  const passwordField = useCallback(
+    async (at: { x: number; y: number }) => {
+      const { data } = await fetchClient.GET(
+        "/api/environments/{env}/teammates/{teammate}/browser/element",
+        {
+          params: {
+            path: { env, teammate },
+            query: { x: at.x, y: at.y, session: sessionID || undefined },
+          },
+          signal: AbortSignal.timeout(3000),
+        }
+      )
+      return data?.tag === "input" && data.type?.toLowerCase() === "password"
+    },
+    [env, teammate, sessionID]
+  )
   // The gateway logs the refusal as the page fails, after the live view reports its URL.
   const refetchStatus = status.refetch
   useEffect(() => {
@@ -612,6 +647,26 @@ export function BrowserWindow({
           </Button>
         </div>
       )}
+      {running && signIn && (
+        <SignInStrip
+          key={`${signIn.host} ${signIn.login ?? ""} ${signIn.refused}`}
+          env={env}
+          teammate={teammate}
+          name={name}
+          signIn={signIn}
+          onSignedIn={() => void go("reload")}
+        />
+      )}
+      {liveView && typedPassword && (
+        <SaveLoginCard
+          key={`${typedPassword.host} ${typedPassword.password}`}
+          env={env}
+          teammate={teammate}
+          name={name}
+          typed={typedPassword}
+          onDone={dismissPassword}
+        />
+      )}
       {noting && (
         <NotesBar
           env={env}
@@ -702,6 +757,8 @@ export function BrowserWindow({
               onControlsOpen={setKeys}
               fitRoom={fit ? room : undefined}
               onFit={fitPage}
+              passwordField={passwordField}
+              onPassword={offerPassword}
             />
             {!noting && (
               <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-caption text-background opacity-0 shadow-sm transition group-hover:opacity-100">
@@ -1038,7 +1095,14 @@ function SiteInfo({
                 </>
               )}
               <dt className="text-muted-foreground">Logins</dt>
-              <dd>Filled by Studio from the vault when you allow it</dd>
+              <dd>
+                <SiteLogins
+                  env={w.env}
+                  teammate={w.teammate}
+                  name={w.name}
+                  host={hostOf(url)}
+                />
+              </dd>
             </dl>
             {onSites && (
               <button

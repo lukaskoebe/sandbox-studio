@@ -81,6 +81,12 @@ type Gateway struct {
 	// gateway swapped in, with the names of those secrets. sb is the sandbox the secrets are
 	// the scope of.
 	Rejected func(sb store.Sandbox, host string, names []string)
+	// BrowserLogins, if set, returns the browser logins of a teammate, which the gateway sends
+	// as Basic credentials to the pages of their hosts that ask in the teammate's browser.
+	BrowserLogins func(ctx context.Context, envID, teammateID string) ([]secrets.BrowserLogin, error)
+	// SignIn, if set, is told whether a page of browser VM sb on host asks for Basic
+	// credentials: ask is nil once one didn't.
+	SignIn func(sb store.Sandbox, host string, ask *BasicAsk)
 
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
@@ -293,7 +299,11 @@ func (g *Gateway) handle(c net.Conn) {
 		if g.Rejected != nil {
 			rejected = func(names []string) { g.Rejected(decider, host, names) }
 		}
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, rejected)
+		var auth *browserAuth
+		if browserTLS && caddy == nil {
+			auth = g.browserAuth(sb, decider, host)
+		}
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, rejected, auth)
 		return
 	}
 
@@ -310,6 +320,23 @@ func (g *Gateway) handle(c net.Conn) {
 	g.Conns.opened(entry, ruleID, false)
 	verdict = VerdictAllowed
 	sent, received = splice(c, br, up)
+}
+
+// browserAuth returns the browser logins a connection of browser VM sb to host may send,
+// decided by decider.
+func (g *Gateway) browserAuth(sb, decider store.Sandbox, host string) *browserAuth {
+	auth := &browserAuth{agent: decider.ID != sb.ID}
+	if g.SignIn != nil {
+		auth.signIn = func(ask *BasicAsk) { g.SignIn(sb, host, ask) }
+	}
+	if g.BrowserLogins != nil && sb.TeammateID != "" {
+		logins, err := g.BrowserLogins(context.Background(), sb.EnvironmentID, sb.TeammateID)
+		if err != nil {
+			g.Log.Error("browser logins", "sandbox", sb.ID, "err", err)
+		}
+		auth.logins = logins
+	}
+	return auth
 }
 
 // decider returns the sandbox whose rules decide sb's connections: sb itself, unless the

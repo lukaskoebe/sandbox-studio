@@ -10,12 +10,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"golang.org/x/net/proxy"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -191,4 +193,125 @@ func TestBrowserVMTrackersAreRefused(t *testing.T) {
 		log := h.gw.Conns.List("vm1")
 		return len(log) == 1 && log[0].Verdict == VerdictDenied && log[0].Error == "tracker"
 	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("vm1")) })
+}
+
+// A teammate's browser login is sent as Basic credentials to the pages of its hosts: always
+// while the user drives, and while an agent drives only when the login lets agents use it.
+// Pages that still ask are reported, with the login refused or held back.
+func TestBrowserLoginsAreSentAsBasicCredentials(t *testing.T) {
+	h := newBrowserHarness(t)
+	agent := h.gw.Sandbox
+	h.gw.Sandbox = func(ctx context.Context, id string) (store.Sandbox, error) {
+		if id == "vm1" {
+			return store.Sandbox{ID: "vm1", EnvironmentID: h.envID, Name: "browser-dev", Kind: store.SandboxKindBrowser, TeammateID: "tm1"}, nil
+		}
+		return agent(ctx, id)
+	}
+	var mu sync.Mutex
+	driving, password, mayUse := false, "correct-horse", false
+	var asks []string
+	h.gw.Driver = func(_ context.Context, sb store.Sandbox) store.Sandbox {
+		mu.Lock()
+		defer mu.Unlock()
+		if driving {
+			return store.Sandbox{ID: "sb1", EnvironmentID: h.envID, Name: "dev"}
+		}
+		return sb
+	}
+	h.gw.BrowserLogins = func(_ context.Context, envID, teammateID string) ([]secrets.BrowserLogin, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if envID != h.envID || teammateID != "tm1" {
+			t.Errorf("logins of %s %s", envID, teammateID)
+		}
+		return []secrets.BrowserLogin{
+			{Name: "NO_USER", Hosts: []string{"splice.example"}, Value: []byte("nobody")},
+			{Name: "STAGING", Hosts: []string{"splice.example"}, Username: "ada", Value: []byte(password), AgentMayUse: mayUse},
+		}, nil
+	}
+	h.gw.SignIn = func(sb store.Sandbox, host string, ask *BasicAsk) {
+		mu.Lock()
+		defer mu.Unlock()
+		if ask == nil {
+			asks = append(asks, sb.ID+" "+host+" -")
+		} else {
+			asks = append(asks, fmt.Sprintf("%s %s %q %s %v", sb.ID, host, ask.Realm, ask.Login, ask.Refused))
+		}
+	}
+	page := func(url string, auth string) (int, string) {
+		t.Helper()
+		// Each request on a new connection, which picks the login afresh.
+		c := h.clientAs(t, "vm1", h.envCA)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		if auth != "" {
+			req.Header.Set("Authorization", auth)
+		}
+		resp, body := do(t, c, req)
+		return resp.StatusCode, body
+	}
+	lastAsk := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(asks) == 0 {
+			return ""
+		}
+		return asks[len(asks)-1]
+	}
+
+	if code, body := page("https://splice.example/private", ""); code != 200 || strings.Contains(body, "correct-horse") {
+		t.Fatalf("the user's page: %d %s", code, body)
+	}
+	if got := h.lastSeen(t).Header.Get("Authorization"); got != "Basic YWRhOmNvcnJlY3QtaG9yc2U=" {
+		t.Errorf("upstream saw %q", got)
+	}
+	if got := lastAsk(); got != "vm1 splice.example -" {
+		t.Errorf("sign-in %q", got)
+	}
+	// A page's own credentials are left alone.
+	page("https://splice.example/private", "Basic b3RoZXI6b3RoZXI=")
+	if got := h.lastSeen(t).Header.Get("Authorization"); got != "Basic b3RoZXI6b3RoZXI=" {
+		t.Errorf("upstream saw %q", got)
+	}
+	// Another host gets none.
+	page("https://example.com/", "")
+	if got := h.lastSeen(t).Header.Get("Authorization"); got != "" {
+		t.Errorf("example.com saw %q", got)
+	}
+
+	mu.Lock()
+	driving = true
+	mu.Unlock()
+	if code, _ := page("https://splice.example/private", ""); code != http.StatusUnauthorized {
+		t.Fatalf("an agent's page: %d", code)
+	}
+	if got := h.lastSeen(t).Header.Get("Authorization"); got != "" {
+		t.Errorf("the agent's page sent %q", got)
+	}
+	if got := lastAsk(); got != `vm1 splice.example "Staging" STAGING false` {
+		t.Errorf("sign-in %q", got)
+	}
+
+	mu.Lock()
+	mayUse, password = true, "wrong"
+	mu.Unlock()
+	if code, _ := page("https://splice.example/private", ""); code != http.StatusUnauthorized {
+		t.Fatalf("a wrong password: %d", code)
+	}
+	if got := lastAsk(); got != `vm1 splice.example "Staging" STAGING true` {
+		t.Errorf("sign-in %q", got)
+	}
+
+	mu.Lock()
+	password = "correct-horse"
+	mu.Unlock()
+	if code, body := page("https://splice.example/private", ""); code != 200 || strings.Contains(body, "correct-horse") {
+		t.Fatalf("an agent's page with a login it may use: %d %s", code, body)
+	}
+	// What a page loads doesn't count, only pages.
+	n := len(asks)
+	get(t, h.clientAs(t, "vm1", h.envCA), "https://splice.example/unauthorized")
+	if len(asks) != n {
+		t.Errorf("a subresource was reported: %v", asks[n:])
+	}
 }

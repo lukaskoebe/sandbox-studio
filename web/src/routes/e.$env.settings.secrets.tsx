@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import {
+  CopyIcon,
   CubeIcon,
+  GlobeSimpleIcon,
   KeyIcon,
   PencilSimpleIcon,
   PlusIcon,
@@ -26,6 +28,7 @@ import {
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
 import { SettingsPage } from "@/components/settings/page"
+import { copyPassword } from "@/components/browser-logins"
 import { SecretDialog } from "@/components/secret-dialog"
 import {
   DeleteSecret,
@@ -164,6 +167,12 @@ function groupHeading(group: SecretGroup) {
   switch (group.scope.kind) {
     case "teammate":
       return { label: `Teammate ${name}`, title: null, icon: UserIcon }
+    case "browser":
+      return {
+        label: `${name}'s browser logins`,
+        title: null,
+        icon: GlobeSimpleIcon,
+      }
     case "sandbox":
       return {
         label: `Sandbox ${name}`,
@@ -195,6 +204,8 @@ function ScopeSection({
   onEdit: (secret: Secret) => void
 }) {
   const { label, title, icon } = groupHeading(group)
+  // Browser logins are saved from the teammate's browser, which offers it as a password is typed.
+  const logins = group.scope.kind === "browser"
   return (
     <section className="space-y-2" aria-label={label}>
       <SectionHeader
@@ -202,24 +213,33 @@ function ScopeSection({
         icon={icon}
         count={group.secrets.length}
         actions={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title={`Add a secret to ${label}`}
-            aria-label={`Add a secret to ${label}`}
-            onClick={onAdd}
-          >
-            <PlusIcon />
-          </Button>
+          !logins && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={`Add a secret to ${label}`}
+              aria-label={`Add a secret to ${label}`}
+              onClick={onAdd}
+            >
+              <PlusIcon />
+            </Button>
+          )
         }
       />
+      {logins && (
+        <p className="text-xs/relaxed text-muted-foreground">
+          Filled into pages of their hosts, and sent to hosts that ask for a
+          username and password, in {group.name || "the teammate"}'s browser
+          alone. No sandbox sees them.
+        </p>
+      )}
       <div className="rounded-lg ring-1 ring-foreground/10">
         <Table className="min-w-[40rem] table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[34%]">Name</TableHead>
               <TableHead className="w-[22%]">Hosts</TableHead>
-              <TableHead>Placeholder</TableHead>
+              <TableHead>{logins ? "Username" : "Placeholder"}</TableHead>
               <TableHead className="w-24">Updated</TableHead>
               <TableHead className="sticky right-0 w-24 bg-background">
                 <span className="sr-only">Actions</span>
@@ -245,13 +265,37 @@ function ScopeSection({
                   <SecretHosts secret={s} />
                 </TableCell>
                 <TableCell>
-                  <SecretPlaceholder secret={s} />
+                  {logins ? (
+                    <div className="flex min-w-0 items-center gap-1">
+                      <span className="min-w-0 truncate">
+                        {s.username || (
+                          <span className="text-muted-foreground">None</span>
+                        )}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="ml-auto shrink-0"
+                        aria-label={`Copy the password of ${s.name}`}
+                        onClick={() => void copyPassword(env, s)}
+                      >
+                        <CopyIcon />
+                        Copy password
+                      </Button>
+                    </div>
+                  ) : (
+                    <SecretPlaceholder secret={s} />
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {formatAge(s.updatedAt)}
                 </TableCell>
                 <TableCell className="sticky right-0 bg-background">
-                  {editable(s, managed) ? (
+                  {logins ? (
+                    <div className="flex justify-end">
+                      <DeleteSecret env={env} secret={s} />
+                    </div>
+                  ) : editable(s, managed) ? (
                     <div className="flex justify-end gap-0.5">
                       <Button
                         variant="ghost"

@@ -227,6 +227,12 @@ func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (sto
 	if err != nil {
 		return store.Secret{}, err
 	}
+	if sec.BrowserOnly && (sec.TeammateID == "" || sec.SandboxID != "" || sec.StudioOnly) {
+		return store.Secret{}, fmt.Errorf("%w: a browser login belongs to a teammate", ErrInvalid)
+	}
+	if err := checkUsername(sec.Username, sec.BrowserOnly); err != nil {
+		return store.Secret{}, err
+	}
 	// A studio-only secret never reaches a sandbox, so it is bound to no host.
 	hosts := []string{}
 	if !sec.StudioOnly {
@@ -239,7 +245,7 @@ func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (sto
 	sec = store.Secret{
 		ID: id, EnvironmentID: sec.EnvironmentID, TeammateID: sec.TeammateID, SandboxID: sec.SandboxID,
 		Name: sec.Name, Sealed: v.Seal([]byte(value), []byte(id)), Hosts: hosts, Placeholder: newPlaceholder(), Note: sec.Note,
-		StudioOnly: sec.StudioOnly,
+		StudioOnly: sec.StudioOnly, BrowserOnly: sec.BrowserOnly, Username: sec.Username, AgentMayUse: sec.AgentMayUse && sec.BrowserOnly,
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -248,11 +254,18 @@ func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (sto
 	return out, err
 }
 
-// Update changes the hosts and note of a secret. A nil value keeps the stored one. The name
-// never changes.
-func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hosts []string, note string) (store.Secret, error) {
+// Update changes the hosts and note of a secret, and a browser login's username. A nil value
+// or username keeps the stored one. The name never changes.
+func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hosts []string, note string, username *string) (store.Secret, error) {
 	cur, err := v.st.SecretByID(ctx, envID, id)
 	if err != nil {
+		return store.Secret{}, err
+	}
+	user := cur.Username
+	if username != nil {
+		user = *username
+	}
+	if err := checkUsername(user, cur.BrowserOnly); err != nil {
 		return store.Secret{}, err
 	}
 	// A studio-only secret is bound to no host, so it has none to check.
@@ -261,7 +274,7 @@ func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hos
 	} else if hosts, err = normalizeHosts(hosts); err != nil {
 		return store.Secret{}, err
 	}
-	sec := store.Secret{ID: id, EnvironmentID: envID, Hosts: hosts, Note: note}
+	sec := store.Secret{ID: id, EnvironmentID: envID, Hosts: hosts, Note: note, Username: user}
 	if value != nil {
 		val, err := normalizeValue(*value)
 		if err != nil {
@@ -272,6 +285,16 @@ func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hos
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	out, err := v.st.UpdateSecret(ctx, sec)
+	delete(v.bindings, envID)
+	return out, err
+}
+
+// SetAgentMayUse sets whether the agents of a browser login's teammate fill it, and send it as
+// Basic credentials, without asking.
+func (v *Vault) SetAgentMayUse(ctx context.Context, envID, id string, on bool) (store.Secret, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	out, err := v.st.SetAgentMayUse(ctx, envID, id, on)
 	delete(v.bindings, envID)
 	return out, err
 }
@@ -315,6 +338,32 @@ func (v *Vault) Bindings(ctx context.Context, sb store.Sandbox) ([]Binding, erro
 			out = append(out, Binding{Name: u.sec.Name, Placeholder: u.sec.Placeholder, Hosts: u.sec.Hosts, Value: u.value})
 		} else {
 			out = append(out, Binding{Name: u.sec.Name, Placeholder: u.sec.Placeholder, Foreign: true})
+		}
+	}
+	return out, nil
+}
+
+// BrowserLogin is a decrypted browser login of a teammate, for its browser alone.
+type BrowserLogin struct {
+	Name     string
+	Hosts    []string
+	Username string
+	Value    []byte
+	// AgentMayUse: the teammate's agents use it without asking.
+	AgentMayUse bool
+}
+
+// BrowserLogins returns the decrypted browser logins of teammateID, from the cache the
+// gateway's bindings use. The caller must not modify the result.
+func (v *Vault) BrowserLogins(ctx context.Context, envID, teammateID string) ([]BrowserLogin, error) {
+	all, err := v.unsealed(ctx, envID)
+	if err != nil {
+		return nil, err
+	}
+	out := []BrowserLogin{}
+	for _, u := range all {
+		if u.sec.BrowserOnly && teammateID != "" && u.sec.TeammateID == teammateID {
+			out = append(out, BrowserLogin{Name: u.sec.Name, Hosts: u.sec.Hosts, Username: u.sec.Username, Value: u.value, AgentMayUse: u.sec.AgentMayUse})
 		}
 	}
 	return out, nil
@@ -385,6 +434,27 @@ func checkName(name string) error {
 	for _, p := range reservedPrefixes {
 		if strings.HasPrefix(name, p) {
 			return fmt.Errorf("%w: names starting with %s are reserved", ErrInvalid, p)
+		}
+	}
+	return nil
+}
+
+// checkUsername validates a browser login's username, which HTTP Basic credentials carry
+// before a colon; other secrets have none.
+func checkUsername(name string, login bool) error {
+	switch {
+	case name == "":
+		return nil
+	case !login:
+		return fmt.Errorf("%w: only a browser login has a username", ErrInvalid)
+	case len(name) > 200:
+		return fmt.Errorf("%w: the username is longer than 200 bytes", ErrInvalid)
+	case strings.ContainsRune(name, ':'):
+		return fmt.Errorf("%w: a username can't contain a colon", ErrInvalid)
+	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("%w: the username contains a control character", ErrInvalid)
 		}
 	}
 	return nil

@@ -662,6 +662,10 @@
             "description": "Name of the agent sandbox that opened it",
             "type": "string"
           },
+          "signIn": {
+            "$ref": "#/components/schemas/SignIn",
+            "description": "The page asks for a username and password"
+          },
           "takeover": {
             "description": "The user drives this session; agent calls to it are paused",
             "type": "boolean"
@@ -703,6 +707,10 @@
               "array",
               "null"
             ]
+          },
+          "signIn": {
+            "$ref": "#/components/schemas/SignIn",
+            "description": "The page asks for a username and password"
           },
           "takeover": {
             "description": "The user drives the persistent profile; agent calls to it are paused",
@@ -1767,6 +1775,14 @@
       "CreateSecretInBody": {
         "additionalProperties": false,
         "properties": {
+          "agentMayUse": {
+            "description": "Lets the teammate's agents use the browser login without asking",
+            "type": "boolean"
+          },
+          "browserOnly": {
+            "description": "Makes it a browser login of teammateId: Studio fills it into pages of its hosts and sends it to them as HTTP Basic credentials, and no sandbox sees it",
+            "type": "boolean"
+          },
           "hosts": {
             "description": "Host patterns the value may be sent to, e.g. api.openai.com or *.example.com",
             "items": {
@@ -1793,6 +1809,11 @@
           },
           "teammateId": {
             "description": "Limits the secret to the sandboxes one teammate of this environment owns; excludes sandboxId",
+            "type": "string"
+          },
+          "username": {
+            "description": "A browser login's username",
+            "maxLength": 200,
             "type": "string"
           },
           "value": {
@@ -3662,6 +3683,18 @@
         },
         "required": [
           "markdown"
+        ],
+        "type": "object"
+      },
+      "GetSecretValueResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
         ],
         "type": "object"
       },
@@ -7849,6 +7882,13 @@
       "Secret": {
         "additionalProperties": false,
         "properties": {
+          "agentMayUse": {
+            "description": "A browser login the teammate's agents fill, and send as Basic credentials, without asking the user",
+            "type": "boolean"
+          },
+          "browserOnly": {
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -7891,6 +7931,10 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "username": {
+            "description": "A browser login's username, sent with it as HTTP Basic credentials",
+            "type": "string"
           }
         },
         "required": [
@@ -7901,6 +7945,8 @@
           "placeholder",
           "note",
           "studioOnly",
+          "browserOnly",
+          "agentMayUse",
           "createdAt",
           "updatedAt"
         ],
@@ -8403,6 +8449,32 @@
           "sandboxId",
           "sandboxName",
           "url"
+        ],
+        "type": "object"
+      },
+      "SignIn": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "The page's host",
+            "type": "string"
+          },
+          "login": {
+            "description": "The teammate's browser login for the host, which Studio sent (refused) or held back from the agent",
+            "type": "string"
+          },
+          "realm": {
+            "description": "What the host says the credentials are for",
+            "type": "string"
+          },
+          "refused": {
+            "description": "The host refused the login Studio sent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host",
+          "refused"
         ],
         "type": "object"
       },
@@ -9735,6 +9807,10 @@
       "UpdateSecretInBody": {
         "additionalProperties": false,
         "properties": {
+          "agentMayUse": {
+            "description": "Whether the teammate's agents use the browser login without asking; omit it to keep it",
+            "type": "boolean"
+          },
           "hosts": {
             "description": "Host patterns the value may be sent to",
             "items": {
@@ -9748,6 +9824,11 @@
           },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "username": {
+            "description": "A browser login's username; omit it to keep the stored one",
+            "maxLength": 200,
             "type": "string"
           },
           "value": {
@@ -18608,6 +18689,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Secret"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/api/environments/{env}/secrets/{id}/value": {
+      "get": {
+        "description": "A browser login's password, for the user who saved it in their teammate's browser. No other secret's value ever comes back out: 409.",
+        "operationId": "getSecretValue",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Secret ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Secret ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSecretValueResponse"
                 }
               }
             },

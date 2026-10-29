@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- **A teammate's browser saves logins.** When you type or paste a password into a page while
+  you drive, the browser offers to save it as one of the teammate's *browser logins*, with
+  an optional username: a secret only that teammate's browser uses, which no sandbox sees.
+  The teammate's agents fill it into the site's pages through the credential card, or
+  without asking once you turn on **agents use it without asking** for that login (off by
+  default). **Copy password** in the site info, or under the teammate's browser logins in
+  Settings → Secrets, gives the password back when you need it. **Never for this site**
+  stops the offer in this browser.
+- **Sites that ask for a username and password (HTTP Basic) work in a teammate's browser.**
+  Studio's gateway sends the site's saved login to that site alone; agent-browser's own
+  credentials would have gone to every host a page loads from. A site without one says so
+  over the page, and **Sign in…** saves the login and reloads; a refused login can be
+  changed there, and one held back from the agent driving can be given to it.
+- **The browser page can fit the live view.** **Fit the page to this view** in the browser's
+  menu gives the page the view's size, so it shows at one pixel to one, and follows the
+  window as it changes. Turned off, the page goes back to 1280×720.
+- **Adding a forge starts with its repository.** Paste a repository's URL, or pick a folder
+  on this computer with **Pick a folder on this computer…**, and the dialog detects the
+  forge and asks only for what detecting left, such as a token. The forge's name defaults to
+  its host in kebab case. The dialog checks the API with the token before saving, with a box
+  to save it anyway, and a URL of an unknown host asks it which forge it runs.
+- **A paste into a teammate's live browser types this computer's clipboard.** The first
+  time, a warning says what the teammate can and can't read of it, and can be told not to
+  ask again.
+- **A page a deny rule blocks says so** over the page in the teammate's browser, naming the
+  rule, with **Open the rule** to edit it in the network settings.
+- **A computer pinned beside a chat on another says so**, on the screen and on the chat's
+  chip, with **Show** to go back to the chat's computer; the switcher marks the open chat's
+  computer.
+- **Alt+Shift+] and Alt+Shift+[ step through a computer's terminals**, and the terminal
+  switched to takes the keyboard.
+- The collapsed sidebar centres teammates' avatars and the environment's badge, and a
+  memory page's crumbs sit on one baseline, with a long slug ending in an ellipsis.
 - **A sandbox's disks can be resized.** **Disks** in the computer's menu, or **Resize
   disks…** on the strip that says a disk is nearly full, gives the workspace, Docker and
   home disks new sizes, bigger or smaller. A disk can't change its size in place, so Studio

@@ -244,9 +244,11 @@ Parsing that is not confirmed against a live Chromium is marked `// verify (live
 `fill_credential(ref, name)`:
 
 1. Checks that `name` is a vault secret the driving sandbox sees (its environment's, its
-   teammate's or its own) and that the page's host is bound to it.
+   teammate's or its own), or one of the teammate's [browser logins](#browser-logins), and
+   that the page's host is bound to it.
 2. Raises a `browser.credential` approval showing the teammate, field, origin and credential
-   name.
+   name. A browser login whose **agents use it without asking** is on skips this step: Studio
+   fills it at once, and the action log records the fill as usual.
 3. On Fill, Studio unseals the value and runs `fill @ref <value>` directly in the VM.
 4. The agent gets "filled <name>". It never sees the value.
 
@@ -259,6 +261,51 @@ The value never enters:
   on the page).
 
 `TestCredentialNeverLeaks` checks all of these with a sentinel secret.
+
+## Browser logins
+
+A browser login is a teammate secret with `browserOnly` set (migration
+`056_browser_logins.sql`): a password, an optional username, its hosts, and whether the
+teammate's agents use it without asking (`agentMayUse`, off by default). No sandbox sees it,
+not even the teammate's own: `Vault.Bindings` hands it out as foreign, and `Vault.Env` and the
+environment export leave it out. It is used in that teammate's browser alone, two ways:
+
+- **In forms.** A snapshot of a page of its hosts names the logins for the agent ("saved
+  logins for this site, for browser_fill_credential: NAME (username "u")"), never their
+  values, and `fill_credential` fills them as it does any credential.
+- **As HTTP Basic credentials.** On the browser VM's terminated HTTPS (`intercept.go`), the
+  gateway sets `Authorization: Basic` from the first login with a username whose hosts cover
+  the upstream, on requests that have no `Authorization` of their own. While the user drives
+  every login is sent; while an agent drives, only those it may use. A login of 8 characters
+  or more is masked in responses, like a bound secret. agent-browser's own `set credentials`
+  is not used: it sends the header to every host the page loads from.
+
+A page that answers `401` with `WWW-Authenticate: Basic` is reported to the broker
+(`Gateway.SignIn`, `SignInSeen`), only for top-level pages (`Sec-Fetch-Dest: document`), and
+the next page of that host that doesn't clears it. Headless Chromium can't ask the user for
+credentials, so the browser's status carries it as `signIn` on the page or session, and the
+window shows a strip over the page:
+
+- no login: "<host> asks for a username and password". **Sign in…** saves a login with a
+  username and reloads the page;
+- the login sent was refused: **Change the password…** updates it and reloads;
+- a login held back from the agent driving: **Let agents use it**.
+
+**Saving what the user types.** While the user drives, a left press on the page asks for the
+element under it (`GET …/browser/element`). If it is an `<input type=password>`, what the user
+types or pastes into it next is followed in the live view's memory, on the user's computer
+(`PasswordCapture`, `web/src/lib/browser-logins.ts`); an edit it can't follow, such as moving
+the caret or a shortcut, drops it. Leaving the field (another press, Enter or Tab) offers to
+save it: "Save this password for <host> in <Teammate>'s browser?", with its name (the host in
+upper case, made unique), an optional username and the agents' switch. A site with a login
+offers to update the first one instead, and a password one of its logins already holds is not
+offered. **Never for this site** is remembered in this browser's storage. Nothing reaches
+Studio until **Save**.
+
+**Reading one back.** `GET /api/environments/{env}/secrets/{id}/value` returns a browser
+login's value, and only a browser login's (409 for any other secret): the user typed it and may
+need it again. **Copy password** uses it in the site info card's **Logins** (with the agents'
+switch and delete) and under the teammate's **browser logins** in Settings → Secrets.
 
 ## Live view and takeover
 
@@ -581,6 +628,11 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
 - policy table and pattern validation;
 - redaction fixtures;
 - credential sentinel and refusals;
+- browser logins: offered in snapshots, filled with and without asking, the sign-in status
+  (`login_test.go`), the API's scope checks, reveal and switch (`secrets_test.go`), Basic
+  credentials sent, left alone, held back and reported (`browser_intercept_test.go`), and the
+  save card, site info, settings and sign-in strip in e2e (`browser-logins.spec.ts`, through
+  the `/api/e2e/signin` hook);
 - identity from the channel;
 - the paused gate;
 - approve and remember;
@@ -658,6 +710,11 @@ in that loop; a browser VM is.
   with the environment CA only, and its requests carry the `Sec-Fetch-*` headers the request
   decisions read (see [network](network.md#hold-and-ask)). The site approvals and tracker
   denials were checked with fakes and a fake runtime, not in a page.
+- Browser logins as Basic credentials in a real browser VM: a page behind Basic loads once a
+  login is saved, and the strip shows for one without. The fake browser doesn't go through
+  the gateway, so e2e reports the `401` through a hook.
+- The password field check on a live page: the element-at script's `type` of a focused
+  password input, and a page whose field is inside a shadow root.
 - The browser image and agent-browser's native binary on arm64.
 - Chromium's downloads into the folder with agent-browser 0.39's `--download-path` flag: a
   file the page saves should show in `browser_downloads`, and copy into `downloads/`.

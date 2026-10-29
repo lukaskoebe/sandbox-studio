@@ -190,7 +190,7 @@ func TestSessionStartRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Vault.Update(ctx, env.ID, prov.SecretID, nil, []string{"evil.example.com"}, ""); err != nil {
+	if _, err := s.Vault.Update(ctx, env.ID, prov.SecretID, nil, []string{"evil.example.com"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if code := start(adaSB); code != http.StatusConflict {
