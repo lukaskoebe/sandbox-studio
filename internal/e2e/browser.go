@@ -79,6 +79,8 @@ type browserVM struct {
 	stealth bool // whether the last command asked for stealth mode
 	// fetch loads a localhost page through the VM's forwarded ports, as Chromium would.
 	fetch func(u *url.URL) (string, bool)
+	// visit connects to a page's host through the VM's gateway, as Chromium would.
+	visit func(u *url.URL)
 }
 
 // tab is one agent-browser session: its history, the values typed into the page, and the
@@ -92,6 +94,7 @@ type tab struct {
 	// served are the localhost pages that loaded, by URL; fetch loads one.
 	served map[string]string
 	fetch  func(u *url.URL) (string, bool)
+	visit  func(u *url.URL)
 }
 
 func newTab() *tab {
@@ -183,6 +186,9 @@ func (t *tab) open(u string) {
 			}
 			t.served[u] = body
 		}
+	}
+	if pu, err := url.Parse(u); err == nil && strings.HasSuffix(pu.Hostname(), ".test") && t.visit != nil {
+		t.visit(pu)
 	}
 }
 
@@ -465,14 +471,14 @@ func (b *browserVM) command(req agentproto.BrowserCommand) (agentproto.BrowserRe
 			t.end()
 		}
 		t = newTab()
-		t.fetch = b.fetch
+		t.fetch, t.visit = b.fetch, b.visit
 		b.tabs[req.Ephemeral] = t
 	case t == nil && req.Ephemeral > 0:
 		return res, errors.New(agentproto.ErrBrowserEphemeralGone)
 	case t == nil:
 		// The first command starts the profile's daemon, and with it the live view.
 		t = newTab()
-		t.fetch = b.fetch
+		t.fetch, t.visit = b.fetch, b.visit
 		b.tabs[0] = t
 	}
 	changed := false
@@ -546,9 +552,26 @@ func (g *Guest) browserVM() *browserVM {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.browser == nil {
-		g.browser = &browserVM{fetch: g.fetchForwarded}
+		g.browser = &browserVM{fetch: g.fetchForwarded, visit: g.visit}
 	}
 	return g.browser
+}
+
+// visit connects to a page's host on a .test name, the only hosts the fake browser reaches,
+// so that a deny rule refuses it as it would Chromium's. It doesn't wait, as the gateway may
+// hold the connection for a decision.
+func (g *Guest) visit(u *url.URL) {
+	port := 443
+	if u.Scheme == "http" {
+		port = 80
+	}
+	if p, err := strconv.Atoi(u.Port()); err == nil {
+		port = p
+	}
+	g.mu.Lock()
+	egress := g.egress
+	g.mu.Unlock()
+	go request(egress, u.Hostname(), port)
 }
 
 // serveForwards answers a forwards stream: the fake VM listens nowhere, it only remembers

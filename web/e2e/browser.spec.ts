@@ -164,6 +164,51 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
 })
 
+// A page whose host a deny rule refuses says so over the live view, and links to the rule,
+// which the network settings open.
+test("a page a deny rule blocks says so, with a link to the rule", async ({
+  page,
+  api,
+  env,
+}) => {
+  const host = `shop-${Math.random().toString(36).slice(2, 8)}.test`
+  const rule = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/rules`,
+    { host: `*.${host}`, action: "deny" }
+  ))!
+  try {
+    const { base } = await browsing(page, api, env)
+    const address = page.getByLabel("Browser address")
+    await address.fill(`https://www.${host}/cart`)
+    await address.press("Enter")
+    await expect
+      .poll(async () => (await api.json<Status>("GET", base))!.url)
+      .toBe(`https://www.${host}/cart`)
+    const notice = page
+      .getByRole("status")
+      .filter({ hasText: "A network rule blocks" })
+    await expect(notice).toContainText(`www.${host}: deny *.${host}`)
+
+    // Another page leaves the notice behind.
+    await address.fill("https://example.com/a")
+    await address.press("Enter")
+    await expect(notice).toBeHidden()
+    await page.getByRole("button", { name: "Back", exact: true }).click()
+    await expect(notice).toBeVisible()
+
+    await notice.getByRole("link", { name: "Open the rule" }).click()
+    const dialog = page.getByRole("dialog", { name: "Edit rule" })
+    await expect(dialog).toBeVisible()
+    await expect(
+      dialog.getByRole("textbox", { name: "Host", exact: true })
+    ).toHaveValue(`*.${host}`)
+    await expect(page).toHaveURL(/\/settings\/network$/)
+  } finally {
+    await api.json("DELETE", `/api/environments/${env}/rules/${rule.id}`)
+  }
+})
+
 // While the user drives, an agent's call is paused and says so, and browser_request_control
 // asks on the page: Keep driving keeps the wheel, Hand back returns it and answers the call.
 test("an agent asks for the browser back while the user drives", async ({

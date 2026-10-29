@@ -407,6 +407,28 @@
         ],
         "type": "object"
       },
+      "Blocked": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "The page's host",
+            "type": "string"
+          },
+          "ruleHost": {
+            "description": "The rule's host pattern, such as *.example.com",
+            "type": "string"
+          },
+          "ruleId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "ruleId",
+          "ruleHost"
+        ],
+        "type": "object"
+      },
       "BranchResult": {
         "additionalProperties": false,
         "properties": {
@@ -625,6 +647,10 @@
       "BrowserSession": {
         "additionalProperties": false,
         "properties": {
+          "blocked": {
+            "$ref": "#/components/schemas/Blocked",
+            "description": "The deny rule that refused the page's host"
+          },
           "id": {
             "type": "string"
           },
@@ -656,6 +682,10 @@
       "BrowserStatus": {
         "additionalProperties": false,
         "properties": {
+          "blocked": {
+            "$ref": "#/components/schemas/Blocked",
+            "description": "The deny rule that refused the page's host"
+          },
           "driver": {
             "description": "Name of the agent sandbox that drove the browser last",
             "type": "string"

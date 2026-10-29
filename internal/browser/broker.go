@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -96,6 +97,10 @@ type Service struct {
 	Image  string // the browser image
 	Dir    string // where action screenshots are kept
 	Log    *slog.Logger
+	// Conns, when set, is the gateway's connection log: a page that a deny rule refused says so.
+	Conns interface {
+		List(sandboxID string) []gateway.Conn
+	}
 	// Notify, when set, is told that an environment has a new approval.
 	Notify func(envID string)
 	// Logged, when set, is told that a teammate's action log has a new entry.

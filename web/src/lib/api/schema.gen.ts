@@ -3106,6 +3106,13 @@ export interface components {
             reason?: string;
             teammateId: string;
         };
+        Blocked: {
+            /** @description The page's host */
+            host: string;
+            /** @description The rule's host pattern, such as *.example.com */
+            ruleHost: string;
+            ruleId: string;
+        };
         BranchResult: {
             branch: string;
             error?: string;
@@ -3173,6 +3180,8 @@ export interface components {
             verdict: "allow" | "deny" | "sensitive";
         };
         BrowserSession: {
+            /** @description The deny rule that refused the page's host */
+            blocked?: components["schemas"]["Blocked"];
             id: string;
             /** Format: date-time */
             opened: string;
@@ -3184,6 +3193,8 @@ export interface components {
             url?: string;
         };
         BrowserStatus: {
+            /** @description The deny rule that refused the page's host */
+            blocked?: components["schemas"]["Blocked"];
             /** @description Name of the agent sandbox that drove the browser last */
             driver?: string;
             /** @description The current run's session in the action log */

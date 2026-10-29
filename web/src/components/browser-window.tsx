@@ -193,6 +193,19 @@ export function BrowserWindow({
   const [streamURL, setStreamURL] = useState<string>()
   useEffect(() => setStreamURL(undefined), [sessionID, running])
   const pageURL = streamURL ?? (session ? session.url : st?.url)
+  // A deny rule refused the page's host: the window says so, with the rule a click away.
+  const refused = session ? session.blocked : st?.blocked
+  const blocked =
+    !replay && refused && hostname(pageURL) === refused.host
+      ? refused
+      : undefined
+  // The gateway logs the refusal as the page fails, after the live view reports its URL.
+  const refetchStatus = status.refetch
+  useEffect(() => {
+    if (!streamURL) return
+    const t = setTimeout(() => void refetchStatus(), 1000)
+    return () => clearTimeout(t)
+  }, [streamURL, refetchStatus])
 
   // The user's notes on the live view, on the frame they hold; they belong to that view.
   const notes = useBrowserNotes(env, teammate, sessionID)
@@ -529,6 +542,39 @@ export function BrowserWindow({
           {addressError}
         </p>
       )}
+      {running && blocked && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b bg-(--st-waiting)/10 px-3 py-1 text-xs"
+        >
+          <ShieldWarningIcon className="size-3.5 shrink-0 text-(--st-waiting-fg)" />
+          <span className="min-w-0 flex-1">
+            A network rule blocks{" "}
+            <b className="font-mono font-semibold whitespace-nowrap">
+              {blocked.host}
+            </b>
+            : deny{" "}
+            <span className="font-mono whitespace-nowrap">
+              {blocked.ruleHost}
+            </span>
+            .
+          </span>
+          <Button
+            variant="outline"
+            size="xs"
+            className="shrink-0"
+            render={
+              <Link
+                to="/e/$env/settings/network"
+                params={{ env }}
+                search={{ rule: blocked.ruleId }}
+              />
+            }
+          >
+            Open the rule
+          </Button>
+        </div>
+      )}
       {noting && (
         <NotesBar
           env={env}
@@ -675,6 +721,15 @@ type Win = {
   setWheel: (on: boolean) => Promise<boolean>
   endSession: (session: string) => void
   onReplay?: (replay: BrowserReplay | null) => void
+}
+
+/** The URL's host name, lower-cased as the gateway logs it; "" for none. */
+function hostname(url?: string) {
+  try {
+    return url ? new URL(url).hostname.toLowerCase() : ""
+  } catch {
+    return ""
+  }
 }
 
 function transitioning(vm?: BrowserStatus["vm"]) {

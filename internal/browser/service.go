@@ -102,6 +102,7 @@ type BrowserStatus struct {
 	URL        string           `json:"url,omitempty" doc:"The page the broker last saw"`
 	Driver     string           `json:"driver,omitempty" doc:"Name of the agent sandbox that drove the browser last"`
 	Sessions   []BrowserSession `json:"sessions" doc:"Ephemeral sessions, oldest first"`
+	Blocked    *Blocked         `json:"blocked,omitempty" doc:"The deny rule that refused the page's host"`
 }
 
 // statusLocked describes st's browser in a VM state.
@@ -120,7 +121,7 @@ func (s *Service) Status(ctx context.Context, envID, teammateID string) (Browser
 	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return BrowserStatus{}, err
 	}
-	_, vm, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
+	rec, vm, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
 	if err != nil {
 		return BrowserStatus{}, err
 	}
@@ -138,6 +139,10 @@ func (s *Service) Status(ctx context.Context, envID, teammateID string) (Browser
 		out = st.statusLocked(string(vm))
 	}
 	s.mu.Unlock()
+	out.Blocked = s.blocked(ctx, rec, out.URL)
+	for i := range out.Sessions {
+		out.Sessions[i].Blocked = s.blocked(ctx, rec, out.Sessions[i].URL)
+	}
 	return out, nil
 }
 

@@ -351,6 +351,7 @@ type BrowserSession struct {
 	URL      string    `json:"url,omitempty" doc:"The page the broker last saw"`
 	Takeover bool      `json:"takeover" doc:"The user drives this session; agent calls to it are paused"`
 	Opened   time.Time `json:"opened"`
+	Blocked  *Blocked  `json:"blocked,omitempty" doc:"The deny rule that refused the page's host"`
 }
 
 // closeSession is browser_close: it ends the ephemeral session the call names.

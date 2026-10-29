@@ -454,7 +454,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	tsk := &tasks.Service{Store: st, Bus: bus, Log: log}
 	hub.OnCall = routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)
 	hub.OnForward = brw.DialForward
-	brw.Runner, brw.VMs = hub, mgr
+	brw.Runner, brw.VMs, brw.Conns = hub, mgr, conns
 	go brw.Run(ctx)
 	go brw.FollowOwners(ctx, bus, sandboxStopped(mgr))
 	go mgr.FollowEnvironments(ctx, bus)

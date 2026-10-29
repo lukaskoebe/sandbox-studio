@@ -353,6 +353,11 @@ clears the local input buffer.
   `POST .../browser/navigate` accepts only HTTP(S) URLs and requires a running browser
   under user takeover. Navigation is serialized with agent commands, recorded as a user
   action, and remains subject to the gateway's network rules and approvals.
+- **Blocked pages.** When the browser VM's newest connection to the page's host was refused
+  by a deny rule, the status's `blocked` (and a session's) names the host and the rule, and
+  the window shows a strip over the page with **Open the rule**, which opens it in Settings
+  → Network (`?rule=<id>`). A newer connection the gateway let through, or a deleted rule,
+  clears it.
 - **Back, forward, reload.** `POST .../browser/go` with `to` `back`, `forward` or `reload`
   moves in the session's history under user takeover, like navigate, and answers with the
   status; anything else is 422.

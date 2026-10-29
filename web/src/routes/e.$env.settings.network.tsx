@@ -71,13 +71,17 @@ import { cn, formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings/network")({
   component: NetworkSettings,
-  validateSearch: (s: Record<string, unknown>): RuleFilter => ({
+  validateSearch: (
+    s: Record<string, unknown>
+  ): RuleFilter & { rule?: string } => ({
     q: typeof s.q === "string" && s.q !== "" ? s.q : undefined,
     scope: ruleScopes.find((v) => v === s.scope),
     action: ruleActions.find((v) => v === s.action),
     origin: ruleOrigins.find((v) => v === s.origin),
     // The URL holds 1; JSON parsing reads it back as a number, so accept the string too.
     unused: s.unused === 1 || s.unused === "1" ? 1 : undefined,
+    // A rule to open, as the browser's notice of a page a deny rule blocks links to it.
+    rule: typeof s.rule === "string" && s.rule !== "" ? s.rule : undefined,
   }),
 })
 
@@ -129,6 +133,17 @@ function RulesTab() {
     params: { path: { env } },
   })
   const teammateList = new Map((teammates.data ?? []).map((p) => [p.id, p]))
+  // A linked rule opens once the rules load; the URL then drops it, so closing it stays closed.
+  useEffect(() => {
+    if (!filter.rule || !rules.data) return
+    const linked = rules.data.find((r) => r.id === filter.rule)
+    if (linked) setDialog({ rule: linked })
+    else toast.error("That rule no longer exists")
+    void navigate({
+      search: (prev) => ({ ...prev, rule: undefined }),
+      replace: true,
+    })
+  }, [filter.rule, rules.data, navigate])
   const now = useNow()
   const shown = filterRules(rules.data ?? [], filter, now)
   const groups = groupRules(shown)
