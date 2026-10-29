@@ -73,7 +73,7 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   ])
 })
 
-test("a message sent while the agent works waits for its turn to end", async ({
+test("a message sent while the agent works goes into its turn, or with Alt waits for it", async ({
   page,
   api,
   env,
@@ -99,14 +99,24 @@ test("a message sent while the agent works waits for its turn to end", async ({
     main.getByRole("button", { name: "Stop", exact: true })
   ).toBeVisible()
 
+  // Enter steers: the message goes into the running turn and shows there.
   await box.fill("Then fix the lint")
   await box.press("Enter")
   await expect(box).toHaveValue("")
-  await box.fill("And write a changelog")
-  await main.getByRole("button", { name: "Queue", exact: true }).click()
+  await expect(main.getByText("Then fix the lint")).toBeVisible()
   const queued = main.getByRole("region", { name: "Queued messages" })
+  await expect(queued).toBeHidden()
+
+  // Alt waits for the turn to end.
+  await box.fill("Then update the docs")
+  await box.press("Alt+Enter")
+  await expect(box).toHaveValue("")
+  await box.fill("And write a changelog")
+  await main
+    .getByRole("button", { name: "Send now", exact: true })
+    .click({ modifiers: ["Alt"] })
   await expect(queued).toContainText("2 queued")
-  await expect(queued).toContainText("Then fix the lint")
+  await expect(queued).toContainText("Then update the docs")
   await expect(queued).toContainText("And write a changelog")
 
   // Edit takes a message back into the composer.
@@ -128,8 +138,9 @@ test("a message sent while the agent works waits for its turn to end", async ({
     main.getByRole("button", { name: "Allow", exact: true })
   ).toHaveCount(1)
   const agents = (await api.guest(id)).acp
+  expect(JSON.stringify(agents[0].steers)).toContain("Then fix the lint")
   expect(agents[0].prompts).toHaveLength(2)
-  expect(JSON.stringify(agents[0].prompts[1])).toContain("Then fix the lint")
+  expect(JSON.stringify(agents[0].prompts[1])).toContain("Then update the docs")
   expect(JSON.stringify(agents[0].prompts)).not.toContain("changelog")
 })
 

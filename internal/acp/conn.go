@@ -526,6 +526,17 @@ func (c *Conn) Prompt(ctx context.Context, id string, prompt []ContentBlock) (Pr
 	return result.Response, result.Err
 }
 
+// Steer puts prompt into the session's running turn. An agent that has no turn running
+// answers SteerPromptRequired and leaves the prompt to the client, unless it ignores the
+// request for that and starts a turn itself (SteerStartedNewTurn).
+func (c *Conn) Steer(ctx context.Context, id string, prompt []ContentBlock) (SteerResponse, error) {
+	req := SteerRequest{SessionID: id, Prompt: prompt, Meta: &SteerMeta{}}
+	req.Meta.Steering.IdleBehavior = SteerPromptRequired
+	var out SteerResponse
+	err := c.Call(ctx, MethodSessionSteering, req, &out)
+	return out, err
+}
+
 // Cancel asks the agent to end the running turn.
 func (c *Conn) Cancel(id string) error {
 	return c.Notify(MethodSessionCancel, SessionRequest{SessionID: id})

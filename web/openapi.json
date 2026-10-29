@@ -6511,7 +6511,11 @@
             "description": "The waiting prompt, when it waits"
           },
           "queued": {
-            "description": "The prompt waits for the running turn; otherwise it started a turn",
+            "description": "The prompt waits for the running turn; otherwise it started a turn, or went into the running one",
+            "type": "boolean"
+          },
+          "steered": {
+            "description": "The prompt went into the running turn",
             "type": "boolean"
           }
         },
@@ -11325,7 +11329,7 @@
     },
     "/api/environments/{env}/chats/{chat}/queue": {
       "post": {
-        "description": "Sends the prompt like sendPrompt, or, while a turn runs, queues it to go once the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still waiting when Studio stops are not sent.",
+        "description": "Sends the prompt like sendPrompt. While a turn runs, it goes into that turn where the chat's agent takes messages mid-turn, and shows there as the user's; otherwise, or with after, it is queued to go once the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still waiting when Studio stops are not sent.",
         "operationId": "queuePrompt",
         "parameters": [
           {
@@ -11346,6 +11350,16 @@
             "schema": {
               "description": "Chat ID",
               "type": "string"
+            }
+          },
+          {
+            "description": "Wait for the running turn to end rather than go into it",
+            "explode": false,
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "description": "Wait for the running turn to end rather than go into it",
+              "type": "boolean"
             }
           }
         ],

@@ -59,7 +59,7 @@ test("every page's text is on the type scale, in both styles", async ({
   await box.press("Enter")
   await expect(page.getByText("asks before going on").first()).toBeVisible()
   await box.fill("Then fix the lint")
-  await box.press("Enter")
+  await box.press("Alt+Enter")
   // It reads at the size of the messages, not bigger.
   const queued = page
     .getByRole("region", { name: "Queued messages" })

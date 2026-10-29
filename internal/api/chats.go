@@ -160,17 +160,25 @@ func (s *Server) registerChats(api huma.API) {
 		return &struct{ Body chat.Turn }{chat.TurnView(t)}, apiError(err)
 	})
 
+	type queueIn struct {
+		Env   string `path:"env" doc:"Environment ID"`
+		Chat  string `path:"chat" doc:"Chat ID"`
+		After bool   `query:"after" doc:"Wait for the running turn to end rather than go into it"`
+		Body  PromptRequest
+	}
 	type queueOut struct {
-		Queued bool               `json:"queued" doc:"The prompt waits for the running turn; otherwise it started a turn"`
-		Prompt *chat.QueuedPrompt `json:"prompt,omitempty" doc:"The waiting prompt, when it waits"`
+		Queued  bool               `json:"queued" doc:"The prompt waits for the running turn; otherwise it started a turn, or went into the running one"`
+		Steered bool               `json:"steered,omitempty" doc:"The prompt went into the running turn"`
+		Prompt  *chat.QueuedPrompt `json:"prompt,omitempty" doc:"The waiting prompt, when it waits"`
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "queuePrompt", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/queue", Tags: []string{"chats"},
 		DefaultStatus: http.StatusAccepted, MaxBodyBytes: maxPromptBytes,
-		Description: "Sends the prompt like sendPrompt, or, while a turn runs, queues it to go once the turn ends, " +
-			"after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still " +
-			"waiting when Studio stops are not sent.",
-	}, func(ctx context.Context, in *promptIn) (*struct{ Body queueOut }, error) {
+		Description: "Sends the prompt like sendPrompt. While a turn runs, it goes into that turn where the chat's agent " +
+			"takes messages mid-turn, and shows there as the user's; otherwise, or with after, it is queued to go once " +
+			"the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: " +
+			"prompts still waiting when Studio stops are not sent.",
+	}, func(ctx context.Context, in *queueIn) (*struct{ Body queueOut }, error) {
 		chats, err := s.chats()
 		if err != nil {
 			return nil, err
@@ -179,15 +187,20 @@ func (s *Server) registerChats(api huma.API) {
 		if err != nil {
 			return nil, err
 		}
-		q, queued, err := chats.Enqueue(context.WithoutCancel(ctx), in.Env, in.Chat, launch, in.Body.prompt(), nil)
+		var d chat.Delivery
+		if in.After {
+			var q chat.QueuedPrompt
+			var queued bool
+			if q, queued, err = chats.Enqueue(context.WithoutCancel(ctx), in.Env, in.Chat, launch, in.Body.prompt(), nil); queued {
+				d.Queued = &q
+			}
+		} else {
+			d, err = chats.Steer(context.WithoutCancel(ctx), in.Env, in.Chat, launch, in.Body.prompt(), nil)
+		}
 		if err != nil {
 			return nil, apiError(err)
 		}
-		out := queueOut{Queued: queued}
-		if queued {
-			out.Prompt = &q
-		}
-		return &struct{ Body queueOut }{out}, nil
+		return &struct{ Body queueOut }{queueOut{Queued: d.Queued != nil, Steered: d.Steered, Prompt: d.Queued}}, nil
 	})
 
 	type queuedPath struct {

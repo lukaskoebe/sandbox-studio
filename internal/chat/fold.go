@@ -83,6 +83,16 @@ func (f *folder) finish() []change {
 	return out
 }
 
+// busy says whether a tool call is still open.
+func (f *folder) busy() bool {
+	for _, e := range f.tools {
+		if b, ok := e.body.(*ToolBody); ok && toolOpen(b.Status) {
+			return true
+		}
+	}
+	return false
+}
+
 // ToolStopped is the status of a tool call whose turn ended before it did.
 const ToolStopped = "stopped"
 

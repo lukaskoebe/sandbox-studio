@@ -29,6 +29,9 @@ type Step struct {
 	Hang bool
 	// Pause waits that long before the next step, as an agent thinking before it answers.
 	Pause time.Duration
+	// WaitSteer blocks the turn until a message is steered into it (see Agent.Steering and
+	// Agent.Joins), or session/cancel arrives.
+	WaitSteer bool
 }
 
 // Turn is the script of one prompt.
@@ -56,6 +59,14 @@ type Agent struct {
 	// BeforePrompt runs in the prompt handler after session/prompt is received. Tests can
 	// hold it while Serve continues reading later messages from the wire.
 	BeforePrompt func()
+	// Steering advertises _session/steering and takes it into a running turn. With no turn
+	// running it answers promptRequired, or, with SteerStartsTurn, plays the next turn as one
+	// of its own, as Codex does, and answers startedNewTurn.
+	Steering        bool
+	SteerStartsTurn bool
+	// Joins takes a session/prompt that comes while a turn runs into that turn, as OpenCode
+	// does: it is answered when the turn is.
+	Joins bool
 
 	mu           sync.Mutex
 	Calls        []string          // methods called, in order, with notifications
@@ -64,7 +75,12 @@ type Agent struct {
 	NewReq       json.RawMessage   // the session/new params received
 	Outcomes     []json.RawMessage // permission answers
 	Answers      []json.RawMessage // elicitation answers
+	Steers       []json.RawMessage // prompt arrays steered or joined into a running turn
 	callsChanged chan struct{}
+
+	running int           // turns in progress
+	steered chan struct{} // a message was steered into a running turn
+	idle    chan struct{} // closed when no turn runs anymore
 
 	cancel chan struct{}
 	turn   int
@@ -95,6 +111,7 @@ func (a *Agent) Serve(rw io.ReadWriteCloser) {
 	a.cancel = make(chan struct{}, 1)
 	a.waits = map[int]chan json.RawMessage{}
 	a.callsChanged = make(chan struct{})
+	a.steered = make(chan struct{}, 16)
 	a.mu.Unlock()
 	br := bufio.NewReader(rw)
 	for {
@@ -191,6 +208,13 @@ func (a *Agent) WaitForCall(ctx context.Context, method string) error {
 	}
 }
 
+// Steered returns the prompt arrays steered or joined into running turns.
+func (a *Agent) Steered() []json.RawMessage {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]json.RawMessage(nil), a.Steers...)
+}
+
 // Snapshot returns copies of what the agent recorded.
 func (a *Agent) Snapshot() (prompts, outcomes, answers []json.RawMessage) {
 	a.mu.Lock()
@@ -216,6 +240,12 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 		if init == nil {
 			init = DefaultInit
 		}
+		if a.Steering {
+			var m map[string]any
+			_ = json.Unmarshal(init, &m)
+			m["_meta"] = map[string]any{"steering": map[string]any{"supported": true}}
+			init, _ = json.Marshal(m)
+		}
 		a.reply(id, init, nil)
 	case "session/new":
 		a.mu.Lock()
@@ -239,12 +269,81 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 		a.reply(id, struct{}{}, nil)
 	case "session/close":
 		a.reply(id, struct{}{}, nil)
+	case "_session/steering":
+		if !a.Steering {
+			a.reply(id, nil, &rpcError{Code: -32601, Message: "method not found"})
+			return
+		}
+		a.mu.Lock()
+		running := a.running > 0
+		if running || a.SteerStartsTurn {
+			a.Steers = append(a.Steers, p.Prompt)
+		}
+		a.mu.Unlock()
+		switch {
+		case running:
+			a.steered <- struct{}{}
+			a.reply(id, map[string]string{"outcome": "injected"}, nil)
+		case a.SteerStartsTurn:
+			a.reply(id, map[string]string{"outcome": "startedNewTurn"}, nil)
+			a.play(p.SessionID, p.Prompt)
+		default:
+			a.reply(id, map[string]string{"outcome": "promptRequired", "reason": "noRunningTurn"}, nil)
+		}
 	case "session/prompt":
 		a.mu.Lock()
-		a.Prompts = append(a.Prompts, p.Prompt)
-		n := a.turn
-		a.turn++
+		if a.Joins && a.running > 0 {
+			a.Steers = append(a.Steers, p.Prompt)
+			idle := a.idle
+			a.mu.Unlock()
+			a.steered <- struct{}{}
+			<-idle
+			a.reply(id, map[string]any{"stopReason": "end_turn"}, nil)
+			return
+		}
 		a.mu.Unlock()
+		stop, usage, fail, ok := a.play(p.SessionID, p.Prompt)
+		if !ok {
+			return
+		}
+		if fail != "" {
+			a.reply(id, nil, &rpcError{Code: -32603, Message: fail})
+			return
+		}
+		res := map[string]any{"stopReason": stop}
+		if usage != nil {
+			res["usage"] = usage
+		}
+		a.reply(id, res, nil)
+	default:
+		a.reply(id, nil, &rpcError{Code: -32601, Message: "method not found"})
+	}
+}
+
+// play runs the next turn's script for prompt. ok is false when the client went away during it.
+func (a *Agent) play(session string, prompt json.RawMessage) (stop string, usage json.RawMessage, fail string, ok bool) {
+	a.mu.Lock()
+	a.Prompts = append(a.Prompts, prompt)
+	n := a.turn
+	a.turn++
+	if a.running == 0 {
+		a.idle = make(chan struct{})
+		// Messages steered into an earlier turn don't count for this one.
+		for len(a.steered) > 0 {
+			<-a.steered
+		}
+	}
+	a.running++
+	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		if a.running--; a.running == 0 {
+			close(a.idle)
+		}
+		a.mu.Unlock()
+	}()
+	p := struct{ SessionID string }{session}
+	{
 		var t Turn
 		if n < len(a.Turns) {
 			t = a.Turns[n]
@@ -265,7 +364,7 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 				req["sessionId"], _ = json.Marshal(p.SessionID)
 				out, ok := a.request("session/request_permission", req)
 				if !ok {
-					return
+					return "", nil, "", false
 				}
 				a.mu.Lock()
 				a.Outcomes = append(a.Outcomes, out)
@@ -273,7 +372,7 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 			case s.Elicit != nil:
 				out, ok := a.request("elicitation/create", s.Elicit)
 				if !ok {
-					return
+					return "", nil, "", false
 				}
 				a.mu.Lock()
 				a.Answers = append(a.Answers, out)
@@ -285,22 +384,18 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 				select {}
 			case s.Pause > 0:
 				time.Sleep(s.Pause)
+			case s.WaitSteer:
+				select {
+				case <-a.steered:
+				case <-a.cancel:
+					stop = "cancelled"
+				}
 			}
 			if stop == "cancelled" {
 				break
 			}
 		}
-		if t.Fail != "" {
-			a.reply(id, nil, &rpcError{Code: -32603, Message: t.Fail})
-			return
-		}
-		res := map[string]any{"stopReason": stop}
-		if t.Usage != nil {
-			res["usage"] = t.Usage
-		}
-		a.reply(id, res, nil)
-	default:
-		a.reply(id, nil, &rpcError{Code: -32601, Message: "method not found"})
+		return stop, t.Usage, t.Fail, true
 	}
 }
 

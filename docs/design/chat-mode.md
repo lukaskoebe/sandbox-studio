@@ -203,14 +203,41 @@ visible thing, updated in place, not one row per chunk.
   `git ls-files --cached --others --exclude-standard` in each repository and walks other
   folders past `node_modules` and the like, at most 20,000 paths, with `git status` for the
   changed ones.
-- Only one prompt runs per chat. A prompt sent while a turn runs waits in the chat's queue
-  (`queuePrompt`, `chat.Service.Enqueue`): when the turn ends, however it ends (Stop
-  included), the next waiting prompt starts the next turn, one turn each, in order. ACP has
-  no way into a running turn, so steering means the next turn. The queue lives in memory,
-  per chat: prompts still waiting when Studio stops, or when the chat goes to the terminal,
-  are dropped. The chat's stream sends it whole as a `queue` event whenever it changes, and
-  `getChat` has it as `queued`; `unqueuePrompt` takes one off. The composer shows the
-  waiting prompts above the box: Edit takes one back into the draft, Remove drops it.
+- Only one turn runs per chat. A prompt sent while it runs goes into it where the agent
+  takes messages mid-turn (`queuePrompt`, `chat.Service.Steer`), and shows in the turn as a
+  user item after what the agent wrote until then; undoing the turn undoes it too. ACP v1
+  has no way into a running turn, so this rests on what each adapter does:
+  - Claude's and Codex's adapters advertise the `_session/steering` extension in the
+    initialize response (`_meta.steering.supported`). Studio sends it with
+    `_meta.steering.idleBehavior: promptRequired`. Claude puts the message into the
+    running turn at once, interrupting the model's generation or moving a running tool to
+    the background, and with a question or approval open, once that is answered; Codex
+    uses its app server's `turn/steer`, between steps. The turn's `session/prompt` is
+    answered once the agent answered the steered message too. The agent's updates wait
+    while the request is on its way, 30 s at most, so what it writes after taking the
+    message comes after it.
+  - With no turn running in the agent, which happens when its turn ended before Studio
+    heard so, Claude answers `promptRequired` and the prompt waits in the queue below, to
+    go as the next turn. Codex ignores `idleBehavior`: it starts a turn of its own and
+    answers `startedNewTurn`, and ACP says nothing when that turn ends. The chat's turn then
+    goes on until the agent has sent nothing for 30 s with no tool call or question open
+    (6 s once stopped).
+  - OpenCode doesn't advertise the extension, but its session loop reads the session's
+    messages again at every step and ends only once the last user message is answered. A
+    second `session/prompt` sent while a turn runs joins the running loop at its next step,
+    and both prompts are answered when it is done (`harness.PromptJoiner`). Studio sends it
+    as soon as the message comes; the turn ends once every prompt is answered, with the
+    first stop other than `end_turn`, if any.
+  - The Claude subscription shim takes no messages mid-turn yet.
+
+  Otherwise, and with `after` (Alt+Enter in the composer), the prompt waits in the chat's
+  queue (`chat.Service.Enqueue`): when the turn ends, however it ends (Stop included), the
+  next waiting prompt starts the next turn, one turn each, in order. A stopped turn takes no
+  more messages; they wait. The queue lives in memory, per chat: prompts still waiting when
+  Studio stops, or when the chat goes to the terminal, are dropped. The chat's stream sends
+  it whole as a `queue` event whenever it changes, and `getChat` has it as `queued`;
+  `unqueuePrompt` takes one off. The composer shows the waiting prompts above the box: Edit
+  takes one back into the draft, Remove drops it.
 
 **Cancelling.** Stop sends `session/cancel`. Studio settles every open `chat.permission`
 approval of the chat as dismissed and answers its requests with `outcome: cancelled`. The
@@ -391,7 +418,7 @@ Paths under `/api/environments/{env}`:
 | `GET /chats/{chat}` | `getChat` | The chat, its turns and items; with `?last=40`, every turn's header and the items of the last 40 turns (500 items at most, unless one turn has more), and `?before=<seq>` pages back from the log's `from` |
 | `DELETE /chats/{chat}` | `deleteChat` | Also `session/delete` when live |
 | `POST /chats/{chat}/prompt` | `sendPrompt` | Body `{text, attachments[]}` (base64, at most 10 MiB in total). 202 with the turn. 409 while running |
-| `POST /chats/{chat}/queue` | `queuePrompt` | Body as `sendPrompt`. 202 `{queued, prompt?}`: sent at once, or waiting for the running turn. The UI sends with this |
+| `POST /chats/{chat}/queue` | `queuePrompt` | Body as `sendPrompt`, `?after=true` to wait for the running turn. 202 `{queued, steered?, prompt?}`: sent at once, into the running turn, or waiting for it. The UI sends with this |
 | `DELETE /chats/{chat}/queue/{id}` | `unqueuePrompt` | 204, or 404 once the prompt went |
 | `POST /chats/{chat}/cancel` | `cancelChat` | |
 | `POST /chats/{chat}/turns/{turn}/undo` | `undoTurn` | 204. 409 while running, or once the turn is undone or its snapshot is gone |

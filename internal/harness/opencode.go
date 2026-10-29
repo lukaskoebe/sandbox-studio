@@ -117,6 +117,10 @@ func (OpenCode) TUICommand(opts SessionOpts) []string {
 // ACPCommand: https://opencode.ai/docs/acp/.
 func (OpenCode) ACPCommand(Provider) []string { return []string{"opencode", "acp"} }
 
+// JoinsPrompts: OpenCode's session loop reads the session's messages anew at every step, so a
+// prompt that comes while it runs is answered in the same loop.
+func (OpenCode) JoinsPrompts() bool { return true }
+
 // ACPEnv is empty: `opencode acp` reads the same config as the TUI.
 func (OpenCode) ACPEnv(Provider) map[string]string { return nil }
 

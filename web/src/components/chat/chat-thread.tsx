@@ -501,14 +501,18 @@ function ChatComposer({
     )
   }
 
-  // While a turn runs, a message waits for it to end, after the ones already waiting.
-  const send = async (prompt: Prompt) => {
+  // While a turn runs, a message goes into it where the agent takes one mid-turn, and
+  // otherwise, or asked to (after), waits for it to end after the ones already waiting.
+  const send = async (prompt: Prompt, { after }: { after: boolean }) => {
     setError(undefined)
     onSending(prompt)
     try {
       const res = await fetchClient.POST(
         "/api/environments/{env}/chats/{chat}/queue",
-        { params: { path }, body: prompt }
+        {
+          params: { path, query: after ? { after } : undefined },
+          body: prompt,
+        }
       )
       if (res.error) throw res.error
     } catch (err) {
@@ -548,7 +552,7 @@ function ChatComposer({
         mentionsIn={{ env, sandbox: chat.sandboxId }}
         placeholder={
           chat.state === "running"
-            ? `Steer ${teammateName}: this goes once the current turn ends`
+            ? `Steer ${teammateName}: this goes into the current turn, with Alt+Enter after it`
             : "Reply…"
         }
       />

@@ -17,6 +17,16 @@ const (
 	MethodSessionUpdate     = "session/update" // notification from the agent
 	MethodRequestPermission = "session/request_permission"
 	MethodElicitationCreate = "elicitation/create"
+	// MethodSessionSteering puts a message into the running turn: an extension that agents
+	// advertise in InitializeResponse.Meta.
+	MethodSessionSteering = "_session/steering"
+)
+
+// Outcomes of _session/steering.
+const (
+	SteerInjected       = "injected"       // the message joined the running turn
+	SteerStartedNewTurn = "startedNewTurn" // no turn ran; the agent started one of its own
+	SteerPromptRequired = "promptRequired" // no turn ran; the client sends it as session/prompt
 )
 
 // Stop reasons of a prompt turn.
@@ -82,7 +92,18 @@ type InitializeResponse struct {
 	AgentCapabilities AgentCapabilities `json:"agentCapabilities"`
 	AuthMethods       []json.RawMessage `json:"authMethods,omitempty"`
 	AgentInfo         *Implementation   `json:"agentInfo,omitempty"`
+	Meta              *InitializeMeta   `json:"_meta,omitempty"`
 }
+
+// InitializeMeta is the subset of the initialize response's _meta Studio reads.
+type InitializeMeta struct {
+	Steering struct {
+		Supported bool `json:"supported"`
+	} `json:"steering"`
+}
+
+// CanSteer reports whether the agent takes _session/steering.
+func (r InitializeResponse) CanSteer() bool { return r.Meta != nil && r.Meta.Steering.Supported }
 
 // AgentCapabilities is the subset Studio reads.
 type AgentCapabilities struct {
@@ -158,6 +179,27 @@ type SessionRequest struct {
 type PromptRequest struct {
 	SessionID string         `json:"sessionId"`
 	Prompt    []ContentBlock `json:"prompt"`
+}
+
+// SteerRequest is _session/steering's params.
+type SteerRequest struct {
+	SessionID string         `json:"sessionId"`
+	Prompt    []ContentBlock `json:"prompt"`
+	Meta      *SteerMeta     `json:"_meta,omitempty"`
+}
+
+// SteerMeta asks the agent what to do when no turn runs: promptRequired leaves the message
+// to the client.
+type SteerMeta struct {
+	Steering struct {
+		IdleBehavior string `json:"idleBehavior,omitempty"`
+	} `json:"steering"`
+}
+
+// SteerResponse says what became of a steering message.
+type SteerResponse struct {
+	Outcome string `json:"outcome"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // PromptResponse ends a turn.

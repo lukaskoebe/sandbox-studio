@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A message sent while the teammate works reaches it right away.** It used to wait until
+  the whole request was done; now the teammate reads it at its next step and the chat shows
+  it there, for Claude (on an API key or a provider other than the subscription), Codex and
+  OpenCode. **Alt+Enter** still makes a message wait for the request to end.
 - **A terminal open during a rebase gets the secrets.** It reconnected as soon as the
   rebased computer's agent did, before Studio had sent the environment's secrets, so its
   shell went without them, and was bash where you picked zsh. A terminal now waits for them.

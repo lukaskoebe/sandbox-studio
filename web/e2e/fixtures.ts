@@ -30,6 +30,7 @@ export type GuestState = {
     harness: string
     prompts: unknown[]
     outcomes: { outcome: { outcome: string; optionId?: string } }[]
+    steers: unknown[]
   }[]
   /** The folders repositories were cloned to (POST …/sandboxes/{id}/clone). */
   clones: string[]

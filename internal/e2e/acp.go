@@ -68,6 +68,7 @@ type ACPAgent struct {
 	Harness  string            `json:"harness"`
 	Prompts  []json.RawMessage `json:"prompts"`
 	Outcomes []json.RawMessage `json:"outcomes"`
+	Steers   []json.RawMessage `json:"steers" doc:"Messages steered or joined into a running turn"`
 }
 
 // acpInitWithoutImages is acptest.DefaultInit for an adapter that takes no images.
@@ -86,7 +87,9 @@ func (g *Guest) serveACP(st net.Conn, br *bufio.Reader) error {
 	if err := agentproto.ReadJSONLine(br, &req); err != nil {
 		return err
 	}
-	a := &acptest.Agent{SessionID: "e2e-session-" + req.Chat, Turns: acpTurns(20)}
+	// Like the adapters: OpenCode joins a prompt sent mid-turn into the turn, Claude and Codex
+	// take _session/steering.
+	a := &acptest.Agent{SessionID: "e2e-session-" + req.Chat, Turns: acpTurns(20), Joins: req.Harness == "opencode", Steering: req.Harness != "opencode"}
 	g.mu.Lock()
 	if g.noImages {
 		a.Init = acpInitWithoutImages
@@ -116,7 +119,7 @@ func (g *Guest) acpState() []ACPAgent {
 	out := []ACPAgent{}
 	for _, p := range procs {
 		prompts, outcomes, _ := p.agent.Snapshot()
-		out = append(out, ACPAgent{Chat: p.start.Chat, Harness: p.start.Harness, Prompts: orEmpty(prompts), Outcomes: orEmpty(outcomes)})
+		out = append(out, ACPAgent{Chat: p.start.Chat, Harness: p.start.Harness, Prompts: orEmpty(prompts), Outcomes: orEmpty(outcomes), Steers: orEmpty(p.agent.Steered())})
 	}
 	return out
 }

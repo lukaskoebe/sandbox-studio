@@ -39,6 +39,8 @@ var (
 	cancelGrace  = 10 * time.Second       // how long a cancelled turn may take to end
 	startTimeout = 90 * time.Second       // starting the agent and its session
 	idleTimeout  = 30 * time.Minute       // how long an agent runs on with no turn
+	quietAfter   = 30 * time.Second       // how long a turn without an answer to wait for may be quiet before it ends
+	steerTimeout = 30 * time.Second       // how long the agent may take to answer _session/steering
 	slotRetry    = 250 * time.Millisecond // how often a start looks for a free slot
 	slotWait     = 7 * time.Second        // how long a retired agent's slot may take to free
 )
@@ -495,6 +497,115 @@ func (s *Service) Enqueue(ctx context.Context, envID, chatID string, launch Laun
 	return view, true, nil
 }
 
+// Delivery is what became of a message Steer took: it started a turn, went into the running
+// one, or waits in the queue.
+type Delivery struct {
+	Steered bool
+	Queued  *QueuedPrompt
+}
+
+// Steer sends p like Send or, while a turn runs, into that turn, where the chat's agent takes
+// messages mid-turn: with _session/steering, or a session/prompt that joins the turn
+// (harness.PromptJoiner). It shows in the turn as the user's message, after what the agent
+// wrote until then. Where the agent can't take it, or the turn just ended, p waits like
+// Enqueue, and goes as the next turn.
+func (s *Service) Steer(ctx context.Context, envID, chatID string, launch Launch, p Prompt, sent func()) (Delivery, error) {
+	if l := s.get(chatID); l != nil {
+		ok, err := l.steer(ctx, p)
+		if err != nil {
+			return Delivery{}, err
+		}
+		if ok {
+			if sent != nil {
+				sent()
+			}
+			return Delivery{Steered: true}, nil
+		}
+	}
+	q, queued, err := s.Enqueue(ctx, envID, chatID, launch, p, sent)
+	if !queued {
+		return Delivery{}, err
+	}
+	return Delivery{Queued: &q}, err
+}
+
+// steer puts p into the running turn. It is false when no turn takes messages now: none runs,
+// it was stopped or is ending, the agent can't take any, or the agent's turn already ended.
+func (l *live) steer(ctx context.Context, p Prompt) (bool, error) {
+	if !l.steers && !l.joins {
+		return false, nil
+	}
+	if strings.TrimSpace(p.Text) == "" && len(p.Attachments) == 0 {
+		return false, fmt.Errorf("%w: the prompt is empty", ErrInvalid)
+	}
+	blocks, atts, err := l.prompt(p)
+	if err != nil {
+		return false, err
+	}
+	user := UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions}
+	l.mu.Lock()
+	r := l.turn
+	if r == nil || r.settled || r.cancelled {
+		l.mu.Unlock()
+		return false, nil
+	}
+	r.steering++
+	l.mu.Unlock()
+	defer func() {
+		l.mu.Lock()
+		r.steering--
+		r.wake()
+		l.mu.Unlock()
+	}()
+	<-r.promptSent
+	if !l.steers {
+		// The joined prompt's answer comes once the turn is done, so the message shows now.
+		l.mu.Lock()
+		l.add(r, &user)
+		l.mu.Unlock()
+		answer, err := l.conn.StartPrompt(context.Background(), l.session, blocks)
+		if err != nil {
+			return false, err
+		}
+		l.mu.Lock()
+		r.joined = append(r.joined, answer)
+		l.mu.Unlock()
+		return true, nil
+	}
+	// What the agent writes once it took the message goes after it: the updates wait for the
+	// answer, which says whether the message is in the turn.
+	l.mu.Lock()
+	r.holding++
+	l.mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, steerTimeout)
+	defer cancel()
+	resp, err := l.conn.Steer(ctx, l.session, blocks)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	ok := err == nil && (resp.Outcome == acp.SteerInjected || resp.Outcome == acp.SteerStartedNewTurn)
+	if ok {
+		l.add(r, &user)
+		// Codex starts a turn of its own when its last one just ended, and ACP says nothing
+		// when that one ends: this turn goes on until the agent is quiet.
+		r.detached = r.detached || resp.Outcome == acp.SteerStartedNewTurn
+	}
+	if r.holding--; r.holding == 0 {
+		for _, u := range r.held {
+			l.write(r, r.f.apply(u))
+		}
+		r.held = nil
+	}
+	return ok, err
+}
+
+// add appends the user's message to the running turn. Called with l.mu held.
+func (l *live) add(r *run, user *UserBody) {
+	l.used = time.Now()
+	r.updated = time.Now()
+	_, ch := r.f.add(KindUser, user)
+	l.write(r, ch)
+}
+
 // retryQueue clears the reason a waiting prompt couldn't go, so the queue goes on once the
 // chat is idle: the user sends another message.
 func (s *Service) retryQueue(envID, chatID string) {
@@ -654,6 +765,8 @@ type live struct {
 	conn      *acp.Conn
 	caps      acp.AgentCapabilities
 	textOnly  bool // the model can't take images, whatever caps says (Launch.NoImages)
+	steers    bool // the agent takes _session/steering
+	joins     bool // a session/prompt sent while a turn runs goes into it (harness.PromptJoiner)
 	session   string
 
 	mu     sync.Mutex
@@ -673,6 +786,16 @@ type run struct {
 	promptSent chan struct{} // closed after session/prompt is written
 	answered   chan struct{} // closed once the prompt's response or error arrived
 	done       chan struct{}
+
+	// Messages steered into the turn keep it open until they settled (see settle).
+	steering int                       // steering requests not yet answered
+	joined   []<-chan acp.PromptResult // the answers of prompts that joined the turn
+	detached bool                      // the agent started a turn of its own for a steered message
+	woken    chan struct{}             // tells settle that steering or joined changed
+	holding  int                       // steering requests whose answer the updates wait for
+	held     []acp.SessionUpdate       // the updates that came meanwhile
+	settled  bool                      // takes no more messages
+	updated  time.Time                 // when the agent last sent an update
 }
 
 func (s *Service) get(chatID string) *live {
@@ -716,6 +839,9 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 		return nil, nil, fmt.Errorf("starting %s's chat agent: %w", h.Name(), err)
 	}
 	l := &live{s: s, envID: c.EnvironmentID, chatID: c.ID, sandboxID: c.SandboxID, textOnly: launch.NoImages, asks: map[string]*ask{}, used: time.Now()}
+	if j, ok := h.(harness.PromptJoiner); ok {
+		l.joins = j.JoinsPrompts()
+	}
 	l.conn = acp.NewConn(rwc, l)
 	replay, err := l.open(ctx, c, h.ACPMCPServers(), reload)
 	if err != nil {
@@ -867,6 +993,7 @@ func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer, 
 		return nil, fmt.Errorf("initialize: %w", err)
 	}
 	l.caps = init.AgentCapabilities
+	l.steers = init.CanSteer()
 	newSession := func() (*folder, error) {
 		id, err := l.conn.NewSession(ctx, Workdir, servers)
 		if err != nil {
@@ -976,8 +1103,13 @@ func (l *live) SessionUpdate(n acp.SessionNotification) {
 		l.replay.apply(n.Update)
 		return
 	}
-	if l.turn != nil {
-		l.write(l.turn, l.turn.f.apply(n.Update))
+	if r := l.turn; r != nil {
+		r.updated = time.Now()
+		if r.holding > 0 {
+			r.held = append(r.held, n.Update)
+			return
+		}
+		l.write(r, r.f.apply(n.Update))
 	}
 }
 
@@ -1071,7 +1203,7 @@ func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []
 		return t, err
 	}
 	t = l.s.snapshot(ctx, c, t)
-	r := &run{turn: t, f: newFolder(store.NewID), promptSent: make(chan struct{}), answered: make(chan struct{}), done: make(chan struct{})}
+	r := &run{turn: t, f: newFolder(store.NewID), promptSent: make(chan struct{}), answered: make(chan struct{}), done: make(chan struct{}), woken: make(chan struct{}, 1), updated: time.Now()}
 	l.mu.Lock()
 	l.turn = r
 	l.used = time.Now()
@@ -1139,9 +1271,78 @@ func (l *live) run(r *run, prompt <-chan acp.PromptResult) {
 			}
 		}
 	}()
-	result := <-prompt
+	result := l.settle(r, <-prompt)
 	close(stop)
 	l.end(r, result.Response, result.Err)
+}
+
+// settle waits, once the turn's prompt is answered, for the messages steered into it: the
+// steering requests still on their way, the answers of prompts that joined it and, when the
+// agent made a turn of its own for one, until that goes quiet. It returns how the turn
+// ended: an error or a stop other than end_turn, or else the last answer.
+func (l *live) settle(r *run, result acp.PromptResult) acp.PromptResult {
+	for {
+		l.mu.Lock()
+		var next <-chan acp.PromptResult
+		switch {
+		case len(r.joined) > 0:
+			next, r.joined = r.joined[0], r.joined[1:]
+		case r.steering > 0:
+		case r.detached:
+			r.detached = false
+			l.mu.Unlock()
+			if !l.quiet(r) && result.Err == nil {
+				result.Err = acp.ErrClosed
+			}
+			continue
+		default:
+			r.settled = true
+			l.mu.Unlock()
+			return result
+		}
+		l.mu.Unlock()
+		if next == nil {
+			<-r.woken
+			continue
+		}
+		res := <-next
+		if result.Err == nil && (res.Err != nil || result.Response.StopReason == acp.StopEndTurn) {
+			result = res
+		}
+	}
+}
+
+// quiet waits until the agent has sent no update for quietAfter, with no tool call or question
+// open, which is all that tells a turn the agent started on its own has ended. It is false
+// when the agent went away first.
+func (l *live) quiet(r *run) bool {
+	tick := time.NewTicker(quietAfter / 10)
+	defer tick.Stop()
+	for {
+		select {
+		case <-l.conn.Done():
+			return false
+		case <-tick.C:
+		}
+		l.mu.Lock()
+		wait := quietAfter
+		if r.cancelled {
+			wait = quietAfter / 5
+		}
+		done := time.Since(r.updated) >= wait && !r.f.busy() && len(l.asks) == 0
+		l.mu.Unlock()
+		if done {
+			return true
+		}
+	}
+}
+
+// wake tells settle that what the turn waits for changed. Called with l.mu held.
+func (r *run) wake() {
+	select {
+	case r.woken <- struct{}{}:
+	default:
+	}
 }
 
 // end closes the turn: the last writes, a marker saying why it stopped, the usage.

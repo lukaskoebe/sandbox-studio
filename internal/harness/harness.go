@@ -99,6 +99,13 @@ type Harness interface {
 	RenderHookResponse(HookResult) []byte
 }
 
+// PromptJoiner is a harness whose ACP agent takes a session/prompt sent while a turn runs into
+// that turn at its next step, and answers both prompts once it is done. ACP leaves this open;
+// chats steer such an agent that way when it lacks _session/steering (docs/design/chat-mode.md).
+type PromptJoiner interface {
+	JoinsPrompts() bool
+}
+
 var all = []Harness{OpenCode{}, Claude{}, Codex{}}
 
 // Lookup returns the adapter of a harness by its name (teammates.Harness*).

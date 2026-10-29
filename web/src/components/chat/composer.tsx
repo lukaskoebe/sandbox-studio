@@ -54,9 +54,10 @@ const maxFiles = 20
 /**
  * Where the person writes to the agent: Enter sends, Shift+Enter starts a new line.
  * Files come from the paperclip or a paste; together they stay under the 10 MiB the server
- * takes. While the agent works, Stop joins the send button, and what is sent waits for the
- * turn to end: onSend queues it. With a sandbox to mention files of, @ opens a picker over
- * its workspace, and Files can mention a file here too.
+ * takes. While the agent works, Stop joins the send button, and what is sent goes into the
+ * running turn; with Alt it waits for the turn to end (onSend's after). With a sandbox to
+ * mention files of, @ opens a picker over its workspace, and Files can mention a file here
+ * too.
  */
 export function Composer({
   onSend,
@@ -73,8 +74,11 @@ export function Composer({
   mentionsIn,
   className,
 }: {
-  /** Sends the prompt; resolves true when it went through, so the draft clears. */
-  onSend: (p: Prompt) => Promise<boolean>
+  /**
+   * Sends the prompt; resolves true when it went through, so the draft clears. While running,
+   * after asks for it to wait for the turn to end rather than go into it.
+   */
+  onSend: (p: Prompt, opts: { after: boolean }) => Promise<boolean>
   onStop?: () => void
   running?: boolean
   /** Why nothing can be sent right now, shown instead of the box. */
@@ -195,7 +199,7 @@ export function Composer({
     setFiles(next)
   }
 
-  const send = async () => {
+  const send = async (after = false) => {
     if (sending || disabled) return
     if (!text.trim() && files.length === 0) return
     setSending(true)
@@ -220,11 +224,14 @@ export function Composer({
       setFiles([])
       setMentions([])
       setProblem(undefined)
-      const ok = await onSend({
-        text: text.trim() || undefined,
-        attachments: attachments.length > 0 ? attachments : undefined,
-        mentions: sent.length > 0 ? sent : undefined,
-      })
+      const ok = await onSend(
+        {
+          text: text.trim() || undefined,
+          attachments: attachments.length > 0 ? attachments : undefined,
+          mentions: sent.length > 0 ? sent : undefined,
+        },
+        { after: running && after }
+      )
       if (!ok) restore()
     } catch (err) {
       restore()
@@ -265,7 +272,7 @@ export function Composer({
     }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
-      void send()
+      void send(e.altKey)
     }
   }
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -420,14 +427,14 @@ export function Composer({
           <Button
             size="icon-sm"
             className={cn(!running && "ml-auto")}
-            aria-label={running ? "Queue" : "Send"}
+            aria-label={running ? "Send now" : "Send"}
             title={
               running
-                ? "Queue (Enter): it goes once this turn ends"
+                ? "Send now (Enter): it goes into this turn. With Alt, it waits for the turn to end"
                 : "Send (Enter)"
             }
             disabled={sending || (!text.trim() && files.length === 0)}
-            onClick={() => void send()}
+            onClick={(e) => void send(e.altKey)}
           >
             {sending ? <Spinner /> : <ArrowUpIcon />}
           </Button>

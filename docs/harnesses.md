@@ -196,8 +196,11 @@ message to a stopped chat starts its agent again and resumes the session. A sess
 agent no longer finds ends the chat (orphaned), unless the agent never answered in it, as
 when its first message was stopped: then the chat starts a new one.
 
-A message sent while a turn runs waits in a queue in memory and goes once the chat is idle,
-one turn each. One that can't go then, because the agent can't start, stays first with the
+A message sent while a turn runs goes into it: with `_session/steering` for Claude's and
+Codex's adapters, and as a second `session/prompt` that joins the running loop for
+OpenCode (docs/design/chat-mode.md). The Claude subscription shim takes none yet. There,
+and when asked to wait (Alt+Enter), it waits in a queue in memory and goes once the chat is
+idle, one turn each. One that can't go then, because the agent can't start, stays first with the
 reason; the rest wait behind it until the user's next message, which tries again. Stop
 while the agent still starts stops the message before it goes, and the composer gets it
 back.

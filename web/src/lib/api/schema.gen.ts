@@ -358,7 +358,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Sends the prompt like sendPrompt, or, while a turn runs, queues it to go once the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still waiting when Studio stops are not sent. */
+        /** @description Sends the prompt like sendPrompt. While a turn runs, it goes into that turn where the chat's agent takes messages mid-turn, and shows there as the user's; otherwise, or with after, it is queued to go once the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still waiting when Studio stops are not sent. */
         post: operations["queuePrompt"];
         delete?: never;
         options?: never;
@@ -5085,8 +5085,10 @@ export interface components {
         QueueOut: {
             /** @description The waiting prompt, when it waits */
             prompt?: components["schemas"]["QueuedPrompt"];
-            /** @description The prompt waits for the running turn; otherwise it started a turn */
+            /** @description The prompt waits for the running turn; otherwise it started a turn, or went into the running one */
             queued: boolean;
+            /** @description The prompt went into the running turn */
+            steered?: boolean;
         };
         QueuedPrompt: {
             /** @description The names of its files */
@@ -7142,7 +7144,10 @@ export interface operations {
     };
     queuePrompt: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Wait for the running turn to end rather than go into it */
+                after?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Environment ID */
