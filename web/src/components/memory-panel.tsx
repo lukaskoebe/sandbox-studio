@@ -1175,15 +1175,19 @@ function Crumbs({
 }) {
   return (
     <div className="flex min-h-7 items-center gap-2 text-xs">
-      <button
-        type="button"
-        className="text-muted-foreground hover:text-foreground"
-        onClick={ctx.back}
-      >
-        Memory
-      </button>
-      <span className="text-muted-foreground">/</span>
-      <span className="min-w-0 truncate">{here}</span>
+      {/* On one baseline: "Memory" and a slug are in different fonts, which centred boxes
+          put at different heights where the fonts' metrics differ. */}
+      <div className="flex min-w-0 items-baseline gap-2">
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={ctx.back}
+        >
+          Memory
+        </button>
+        <span className="text-muted-foreground">/</span>
+        <span className="min-w-0 truncate">{here}</span>
+      </div>
       {actions && (
         <div className="ml-auto flex items-center gap-1">{actions}</div>
       )}
@@ -1297,7 +1301,11 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
       <article className="space-y-5">
         <Crumbs
           ctx={ctx}
-          here={<Ident>{p.slug}</Ident>}
+          here={
+            <span title={p.slug} className="font-mono">
+              {p.slug}
+            </span>
+          }
           actions={
             <>
               <Button
