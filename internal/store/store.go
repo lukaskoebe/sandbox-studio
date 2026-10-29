@@ -257,6 +257,7 @@ type Sandbox struct {
 	LiveMemoryMiB int       `json:"liveMemoryMiB,omitempty" doc:"The memory the running VM has while a change waits for its next start; absent when it has memoryMiB"`
 	WorkspaceMiB  int       `json:"workspaceMiB"`
 	DockerMiB     int       `json:"dockerMiB"`
+	HomeMiB       int       `json:"homeMiB,omitempty" doc:"The size of the home disk at /home/agent; absent for a sandbox whose home is on its root disk, as with a template built before home disks"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
 	// Kind is empty for ordinary sandboxes, SandboxKindBrowser for a teammate's browser VM and
@@ -282,7 +283,7 @@ type Sandbox struct {
 // SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib, base_image, base_version"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib, base_image, base_version, home_mib"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest port no
 // other sandbox has and nothing on the host listens on.
@@ -292,7 +293,7 @@ func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created, forkedAt, startedAt int64
 	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind,
-		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB, &sb.BaseImage, &sb.BaseVersion)
+		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB, &sb.BaseImage, &sb.BaseVersion, &sb.HomeMiB)
 	sb.CreatedAt = time.Unix(created, 0)
 	if forkedAt != 0 {
 		sb.ForkedAt = time.Unix(forkedAt, 0)
@@ -366,9 +367,9 @@ func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error)
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind, forked_from_sandbox_id, forked_from_generation, forked_at, base_image, base_version) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, 0), ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind, forked_from_sandbox_id, forked_from_generation, forked_at, base_image, base_version, home_mib) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, 0), ?, ?, ?)",
 		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.TeammateID, sb.Kind,
-		sb.ForkedFromID, sb.ForkedFromGeneration, forkedAtUnix(sb.ForkedAt), sb.BaseImage, sb.BaseVersion)
+		sb.ForkedFromID, sb.ForkedFromGeneration, forkedAtUnix(sb.ForkedAt), sb.BaseImage, sb.BaseVersion, sb.HomeMiB)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}

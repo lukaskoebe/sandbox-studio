@@ -15,6 +15,8 @@ const (
 	DefaultMemoryMiB    = 4096
 	DefaultWorkspaceMiB = 20480
 	DefaultDockerMiB    = 20480
+	// DefaultHomeMiB is the home disk's size where HomeMiB is 0.
+	DefaultHomeMiB = 4096
 )
 
 const maxMiBValue = int64(1<<32 - 1)
@@ -26,6 +28,17 @@ type Resources struct {
 	MaxMemoryMiB int64 `json:"maxMemoryMiB"`
 	WorkspaceMiB int64 `json:"workspaceMiB"`
 	DockerMiB    int64 `json:"dockerMiB"`
+	// HomeMiB is the home disk's size, for a sandbox that has one; 0 is DefaultHomeMiB. It
+	// stays 0 unless set, so a template spec that doesn't name it keeps its cache key.
+	HomeMiB int64 `json:"homeMiB,omitempty"`
+}
+
+// Home is the home disk's size: HomeMiB, or DefaultHomeMiB where it is 0.
+func (r Resources) Home() int64 {
+	if r.HomeMiB == 0 {
+		return DefaultHomeMiB
+	}
+	return r.HomeMiB
 }
 
 // Defaults returns Studio's default resources. The memory ceiling initially
@@ -49,12 +62,16 @@ func (r Resources) Validate() error {
 	if r.DockerMiB < 1024 {
 		return fmt.Errorf("%w: dockerMiB must be at least 1024", ErrInvalid)
 	}
+	if r.HomeMiB != 0 && r.HomeMiB < 1024 {
+		return fmt.Errorf("%w: homeMiB must be at least 1024", ErrInvalid)
+	}
 	for _, field := range []struct {
 		name  string
 		value int64
 	}{
 		{"workspaceMiB", r.WorkspaceMiB},
 		{"dockerMiB", r.DockerMiB},
+		{"homeMiB", r.HomeMiB},
 	} {
 		if field.value > maxMiBValue {
 			return fmt.Errorf("%w: %s must not exceed %d", ErrInvalid, field.name, maxMiBValue)

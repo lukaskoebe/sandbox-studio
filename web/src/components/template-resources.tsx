@@ -36,6 +36,13 @@ export function TemplateResources({
           <dt className="text-muted-foreground">Docker disk</dt>
           <dd>{formatMiB(resources.dockerMiB)}</dd>
         </div>
+        {/* Unnamed, a new sandbox's is 4 GiB and a rebased one keeps its own. */}
+        {resources.homeMiB ? (
+          <div className={row}>
+            <dt className="text-muted-foreground">Home disk</dt>
+            <dd>{formatMiB(resources.homeMiB)}</dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   )

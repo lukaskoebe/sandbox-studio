@@ -84,7 +84,7 @@ func TestExportIncludesTemplateSpecThatReparses(t *testing.T) {
 	tf := newTransferFake(f)
 	template := rebaseTemplate(t, f, rebaseResources)
 	sb, err := f.store.CreateSandbox(f.ctx, store.Sandbox{EnvironmentID: f.env.ID, TemplateID: template.ID, Name: "templated",
-		CPUs: 2, MemoryMiB: 1024, MaxMemoryMiB: 2048, WorkspaceMiB: 4096, DockerMiB: 2048})
+		CPUs: 2, MemoryMiB: 1024, MaxMemoryMiB: 2048, WorkspaceMiB: 4096, DockerMiB: 2048, HomeMiB: DefaultHomeMiB})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestImportWithoutTemplateRecreatesSandbox(t *testing.T) {
 		t.Fatalf("sandbox = %+v", sb)
 	}
 	vm := VMName(sb)
-	if tf.workspace(vm) != "workspace-archive" || tf.home(vm) != "home" || !tf.booted[vm] || tf.specs[vm].Image != nil || tf.specs[vm].HomeMiB != HomeMiB {
+	if tf.workspace(vm) != "workspace-archive" || tf.home(vm) != "home" || !tf.booted[vm] || tf.specs[vm].Image != nil || tf.specs[vm].HomeMiB != DefaultHomeMiB {
 		t.Fatalf("workspace %q, home %q, booted %v, spec %+v", tf.workspace(vm), tf.home(vm), tf.booted[vm], tf.specs[vm])
 	}
 	if len(builds.submitted) != 0 || len(stagedFiles(t, f)) != 0 {
@@ -329,7 +329,6 @@ func TestImportRejectsMalformedFiles(t *testing.T) {
 		"bad name":        header(manifestJSON(func(m map[string]any) { m["name"] = "../etc" })),
 		"bad resources":   header(manifestJSON(func(m map[string]any) { m["resources"].(map[string]any)["cpus"] = 0 })),
 		"bad spec":        header(manifestJSON(func(m map[string]any) { m["templateSpecYAML"] = badSpec })),
-		"spec mismatch":   header(manifestJSON(func(m map[string]any) { m["templateSpecYAML"] = "tools: {}\n" })),
 		"negative bytes":  header(manifestJSON(func(m map[string]any) { m["workspaceBytes"] = -1 })),
 		"length mismatch": header(manifestJSON(func(m map[string]any) { m["workspaceBytes"] = 3 })),
 		"missing archive": valid[:len(valid)-len("archive")],
@@ -383,7 +382,7 @@ func TestImportFormat1HasNoHome(t *testing.T) {
 	}
 	vm := VMName(sb)
 	// The home disk is seeded from the image when the sandbox boots.
-	if tf.workspace(vm) != "workspace-archive" || tf.countCall("import-home:"+vm) != 0 || tf.specs[vm].HomeMiB != HomeMiB || !tf.booted[vm] {
+	if tf.workspace(vm) != "workspace-archive" || tf.countCall("import-home:"+vm) != 0 || tf.specs[vm].HomeMiB != DefaultHomeMiB || !tf.booted[vm] {
 		t.Fatalf("workspace %q, calls %v, spec %+v", tf.workspace(vm), tf.calls, tf.specs[vm])
 	}
 }

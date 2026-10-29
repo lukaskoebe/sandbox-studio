@@ -1633,6 +1633,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "homeMiB": {
+            "description": "The size of the home disk at /home/agent; 4096 when omitted",
+            "format": "int64",
+            "type": "integer"
+          },
           "maxMemoryMiB": {
             "format": "int64",
             "type": "integer"
@@ -6933,6 +6938,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "homeMiB": {
+            "description": "The size of the home disk at /home/agent; absent for a sandbox whose home is on its root disk, as with a template built before home disks",
+            "format": "int64",
+            "type": "integer"
+          },
           "id": {
             "type": "string"
           },
@@ -7068,6 +7078,10 @@
             "type": "integer"
           },
           "dockerMiB": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "homeMiB": {
             "format": "int64",
             "type": "integer"
           },
@@ -9923,6 +9937,11 @@
             "type": "string"
           },
           "generation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "homeMiB": {
+            "description": "The size of the home disk at /home/agent; absent for a sandbox whose home is on its root disk, as with a template built before home disks",
             "format": "int64",
             "type": "integer"
           },

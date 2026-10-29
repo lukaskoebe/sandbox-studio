@@ -245,17 +245,25 @@ func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, man
 		if templateID, err = m.waitForBuild(ctx, envID, job); err != nil {
 			return err
 		}
-		if resolved, err = m.templateResources(ctx, envID, templateID); err != nil {
+		// The template gives the image; the sandbox keeps the exported resources, which a
+		// resize may have moved away from the template's.
+		if _, err = m.templateResources(ctx, envID, templateID); err != nil {
 			return err
 		}
-		if resolved != manifest.Resources {
-			return importError("the built template's resources differ from the export")
-		}
+	}
+	// The new sandbox gets a home disk if its template has one; the export's home, if it has
+	// one, can only go onto that disk.
+	home, err := m.homeFor(ctx, envID, templateID, resolved.Home())
+	if err != nil {
+		return err
+	}
+	if homeBlob != "" && home == 0 {
+		return importError("the template was built before the home directory existed, so it cannot keep the exported home; rebuild the template")
 	}
 	if err := m.Store.AdvanceSandboxImport(ctx, envID, imp.ID, store.ImportBuilding, store.ImportCreating, ""); err != nil {
 		return errImportCancelled
 	}
-	rec, err := m.createImportRecord(ctx, imp, manifest.Name, resolved, templateID)
+	rec, err := m.createImportRecord(ctx, imp, manifest.Name, resolved, home, templateID)
 	if err != nil {
 		return err
 	}
@@ -272,16 +280,8 @@ func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, man
 }
 
 func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.SandboxImport, rec store.Sandbox, blob, homeBlob string) error {
-	// The new sandbox gets a home disk if its template has one; the export's home, if it has
-	// one, can only go onto that disk.
-	home, err := m.homeMiBFor(ctx, rec.EnvironmentID, rec.TemplateID)
-	if err != nil {
-		return err
-	}
-	if homeBlob != "" && home == 0 {
-		return importError("the template was built before the home directory existed, so it cannot keep the exported home; rebuild the template")
-	}
 	var image *runtime.ImageSource
+	var err error
 	if rec.TemplateID != "" {
 		if image, err = m.templateImage(ctx, rec.EnvironmentID, rec.TemplateID); err != nil {
 			return err
@@ -295,7 +295,7 @@ func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		return err
 	}
-	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress, home), sock, sandboxLabels(rec)); err != nil {
+	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress), sock, sandboxLabels(rec)); err != nil {
 		return err
 	}
 	if err := m.Store.AdvanceSandboxImport(ctx, rec.EnvironmentID, imp.ID, store.ImportCreating, store.ImportImporting, ""); err != nil {
@@ -333,13 +333,13 @@ func importArchive(ctx context.Context, rt transferRuntime, rec store.Sandbox, t
 
 // createImportRecord records the sandbox under the exported name, or the first free
 // name-N, linked to the import in the same transaction.
-func (m *Manager) createImportRecord(ctx context.Context, imp store.SandboxImport, name string, res resources.Resources, templateID string) (store.Sandbox, error) {
+func (m *Manager) createImportRecord(ctx context.Context, imp store.SandboxImport, name string, res resources.Resources, homeMiB int, templateID string) (store.Sandbox, error) {
 	for i := 1; i <= maxImportNameTries; i++ {
 		candidate := importName(name, i)
 		rec, err := m.Store.CreateImportedSandbox(ctx, imp.ID, store.Sandbox{
 			EnvironmentID: imp.EnvironmentID, TemplateID: templateID, Name: candidate,
 			CPUs: int(res.CPUs), MemoryMiB: int(res.MemoryMiB), MaxMemoryMiB: int(res.MaxMemoryMiB),
-			WorkspaceMiB: int(res.WorkspaceMiB), DockerMiB: int(res.DockerMiB),
+			WorkspaceMiB: int(res.WorkspaceMiB), DockerMiB: int(res.DockerMiB), HomeMiB: homeMiB,
 			BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
 		})
 		if errors.Is(err, store.ErrExists) {

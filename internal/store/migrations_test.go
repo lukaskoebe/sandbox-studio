@@ -807,3 +807,52 @@ func TestMigrateBaseImages(t *testing.T) {
 		t.Fatalf("after a rebase onto the default image: %+v, %v", sb, err)
 	}
 }
+
+// Sandboxes that had a home disk before its size was recorded get the 4 GiB they had: those
+// without a template and those of a template with a home skeleton. A legacy template's and a
+// browser's have none.
+func TestMigrateHomeSize(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 53); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Work', 1)`,
+		`INSERT INTO templates (id, environment_id, cache_key, spec, base_ref, base_digest, platform, exporter_version, state, created_at)
+		 VALUES ('current', 'env', 'k2', '{}', 'base', 'sha256:a', 'linux/amd64', '2', 'ready', 1),
+		        ('legacy', 'env', 'k1', '{}', 'base', 'sha256:a', 'linux/amd64', '1', 'ready', 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at) VALUES ('plain', 'env', 'plain', 1, 512, 1024, 1024, 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, template_id) VALUES ('new', 'env', 'new', 1, 512, 1024, 1024, 1, 'current')`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, template_id) VALUES ('old', 'env', 'old', 1, 512, 1024, 1024, 1, 'legacy')`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, kind) VALUES ('browser', 'env', 'browser', 1, 512, 1024, 256, 1, 'browser')`,
+		`INSERT INTO rebases (sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib)
+		 VALUES ('new', 'env', 'current', 1, 2, 1, 512, 512, 1024, 1024)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]int{"plain": 4096, "new": 4096, "old": 0, "browser": 0} {
+		var got int
+		if err := db.QueryRowContext(ctx, "SELECT home_mib FROM sandboxes WHERE id = ?", id).Scan(&got); err != nil || got != want {
+			t.Errorf("%s's home after migrating: %d, %v; want %d", id, got, err, want)
+		}
+	}
+	ops, err := s.Rebases(ctx)
+	if err != nil || len(ops) != 1 || ops[0].HomeMiB != 4096 {
+		t.Fatalf("rebases after migrating: %+v, %v", ops, err)
+	}
+	if sb, err := s.Sandbox(ctx, "env", "plain"); err != nil || sb.HomeMiB != 4096 {
+		t.Fatalf("plain: %+v, %v", sb, err)
+	}
+}

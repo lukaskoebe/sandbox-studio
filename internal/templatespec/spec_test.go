@@ -346,3 +346,46 @@ func TestNixToolNeedsAPinnedRelease(t *testing.T) {
 		t.Fatal("a constructed spec with an unpinned nix was canonicalized")
 	}
 }
+
+// A spec may name the home disk's size; one that doesn't keeps the canonical form, and with
+// it the cache key, it had before the key existed.
+func TestHomeDiskSize(t *testing.T) {
+	spec, err := ParseYAML([]byte("resources:\n  home: 8GiB\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Resources.HomeMiB != 8192 || spec.Resources.Home() != 8192 {
+		t.Fatalf("home = %d", spec.Resources.HomeMiB)
+	}
+	canonical, err := CanonicalJSON(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(canonical), `"dockerMiB":20480,"homeMiB":8192}`) {
+		t.Fatalf("canonical = %s", canonical)
+	}
+	again, err := ParseCanonicalJSON(canonical)
+	if err != nil || again.Resources != spec.Resources {
+		t.Fatalf("reparsed = %+v, %v", again.Resources, err)
+	}
+	rendered, err := YAML(spec)
+	if err != nil || !strings.Contains(string(rendered), "home: 8192MiB") {
+		t.Fatalf("rendered = %s, %v", rendered, err)
+	}
+
+	plain, err := ParseYAML([]byte("resources:\n  cpus: 2\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.Resources.HomeMiB != 0 || plain.Resources.Home() != resources.DefaultHomeMiB {
+		t.Fatalf("home = %d", plain.Resources.HomeMiB)
+	}
+	if rendered, _ := YAML(plain); strings.Contains(string(rendered), "home") {
+		t.Fatalf("rendered = %s", rendered)
+	}
+
+	_, err = ParseYAML([]byte("resources:\n  home: 512MiB\n"))
+	if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "line 2, column 9") {
+		t.Fatalf("a 512 MiB home: %v", err)
+	}
+}

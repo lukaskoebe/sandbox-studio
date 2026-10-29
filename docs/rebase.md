@@ -36,8 +36,8 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
   staged on the host. The workspace and the home are copied at the same time, since they
   are separate disks; the first to fail stops the other, and its error is the one reported.
 - The workspace stream is limited to the target's workspace size, and the home stream to
-  the 4 GiB home disk. A home that doesn't fit fails with a message that says to delete
-  caches and try again. If either side fails, the copy fails.
+  the target's home disk (`homeMiB`, 4 GiB unless set). A home that doesn't fit fails with a
+  message that says to delete caches, or give the sandbox a bigger home disk, and try again. If either side fails, the copy fails.
 - Transfer mode creates or starts a VM without `studio-agent boot`, so no guest services
   or containers run. `Boot` starts them afterwards.
 

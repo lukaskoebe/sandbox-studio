@@ -15,7 +15,8 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, nam
 
 // createOwnedRecord inserts the catalog record of a new sandbox. teammateID, if set, must be
 // a teammate of the environment; ownership never changes afterwards.
-func (m *Manager) createOwnedRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID, teammateID string) (store.Sandbox, error) {
+// homeMiB is its home disk, 0 for none (see homeFor).
+func (m *Manager) createOwnedRecord(ctx context.Context, envID, name string, resolved resources.Resources, homeMiB int, templateID, teammateID string) (store.Sandbox, error) {
 	return m.Store.CreateSandbox(ctx, store.Sandbox{
 		EnvironmentID: envID,
 		TemplateID:    templateID,
@@ -26,6 +27,7 @@ func (m *Manager) createOwnedRecord(ctx context.Context, envID, name string, res
 		MaxMemoryMiB:  int(resolved.MaxMemoryMiB),
 		WorkspaceMiB:  int(resolved.WorkspaceMiB),
 		DockerMiB:     int(resolved.DockerMiB),
+		HomeMiB:       homeMiB,
 		BaseImage:     m.BaseImage,
 		BaseVersion:   m.BaseVersion,
 	})

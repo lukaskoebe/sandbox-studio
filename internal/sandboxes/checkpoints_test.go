@@ -497,7 +497,7 @@ func newCheckpointFixture(t *testing.T) *checkpointFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sb, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "checkpoint-box", CPUs: 1, MemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024})
+	sb, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "checkpoint-box", CPUs: 1, MemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024, HomeMiB: DefaultHomeMiB})
 	if err != nil {
 		t.Fatal(err)
 	}

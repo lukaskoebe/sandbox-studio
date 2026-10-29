@@ -49,9 +49,8 @@ export function templateSpecCompletion(
     const after = line.text.slice(context.pos - line.from)
 
     // A unit after a size number, such as memory: 4 then GiB.
-    const size = /^\s*(?:memory|max_memory|workspace|docker):\s*("?)\d+$/.exec(
-      before
-    )
+    const size =
+      /^\s*(?:memory|max_memory|workspace|docker|home):\s*("?)\d+$/.exec(before)
     if (size) {
       const closeQuote = size[1] === '"' && !after.startsWith('"')
       return {

@@ -18,7 +18,7 @@ type Vocabulary struct {
 func EditorVocabulary() Vocabulary {
 	return Vocabulary{
 		TopLevelKeys: []string{"resources", "tools", "apt", "setup"},
-		ResourceKeys: []string{"cpus", "memory", "max_memory", "workspace", "docker"},
+		ResourceKeys: []string{"cpus", "memory", "max_memory", "workspace", "docker", "home"},
 		Tools:        slices.Clone(toolNames),
 		SizeUnits:    []string{"MiB", "GiB"},
 	}

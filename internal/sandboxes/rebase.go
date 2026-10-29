@@ -1,6 +1,7 @@
 package sandboxes
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -58,24 +59,22 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	}
 	resolved := resources.Resources{
 		CPUs: int64(sb.CPUs), MemoryMiB: int64(sb.MemoryMiB), MaxMemoryMiB: int64(sb.MaxMemoryMiB),
-		WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB),
+		WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB), HomeMiB: int64(sb.HomeMiB),
 	}
 	if templateID != "" {
 		if resolved, err = m.templateResources(ctx, envID, templateID); err != nil {
 			return View{}, err
 		}
+		// A template that names no home size keeps the sandbox's.
+		resolved.HomeMiB = cmp.Or(resolved.HomeMiB, int64(sb.HomeMiB))
 	}
 	// The home disk moves with the sandbox only onto a template that has one. A sandbox with
 	// a home disk is refused rather than losing its home.
-	targetHome, err := m.homeMiBFor(ctx, envID, templateID)
+	targetHome, err := m.homeFor(ctx, envID, templateID, resolved.Home())
 	if err != nil {
 		return View{}, err
 	}
-	sourceHome, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
-	if err != nil {
-		return View{}, err
-	}
-	if sourceHome > 0 && targetHome == 0 {
+	if sb.HomeMiB > 0 && targetHome == 0 {
 		return View{}, ErrTemplateWithoutHome
 	}
 	status, err := m.Runtime.Status(ctx, VMName(sb))
@@ -103,18 +102,18 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	req := store.RebaseOperation{
 		SandboxID: sb.ID, EnvironmentID: envID, TemplateID: templateID,
 		CPUs: int(resolved.CPUs), MemoryMiB: int(resolved.MemoryMiB), MaxMemoryMiB: int(resolved.MaxMemoryMiB),
-		WorkspaceMiB: int(resolved.WorkspaceMiB), DockerMiB: int(resolved.DockerMiB),
+		WorkspaceMiB: int(resolved.WorkspaceMiB), DockerMiB: int(resolved.DockerMiB), HomeMiB: targetHome,
 		BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
 	}
 	m.background(sb, transferTimeout, unlock, func(ctx context.Context) error {
-		return m.rebase(ctx, rt, sb, req, image, wasRunning, targetHome)
+		return m.rebase(ctx, rt, sb, req, image, wasRunning)
 	})
 	return m.acceptedView(ctx, sb), nil
 }
 
 // rebase runs a rebase that Rebase accepted: it records it durably, builds and fills the
 // new generation and switches the catalog to it, or rolls back.
-func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning bool, targetHome uint32) error {
+func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning bool) error {
 	op, err := m.Store.BeginRebase(ctx, req)
 	if err != nil {
 		return err
@@ -123,7 +122,7 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 		return m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, targetHome); err != nil {
+	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning); err != nil {
 		return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
@@ -156,11 +155,11 @@ func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 	sb.Generation, sb.TemplateID = op.ToGeneration, op.TemplateID
 	sb.BaseImage, sb.BaseVersion = op.BaseImage, op.BaseVersion
 	sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB = op.CPUs, op.MemoryMiB, op.MaxMemoryMiB
-	sb.WorkspaceMiB, sb.DockerMiB = op.WorkspaceMiB, op.DockerMiB
+	sb.WorkspaceMiB, sb.DockerMiB, sb.HomeMiB = op.WorkspaceMiB, op.DockerMiB, op.HomeMiB
 	return sb
 }
 
-func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning bool, targetHome uint32) error {
+func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning bool) error {
 	if wasRunning {
 		if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
 			return err
@@ -179,13 +178,13 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 	}
 	m.advance(sb.ID, StepPull)
 	sock := m.Paths.AgentSocket(sb.ID)
-	spec := transferSpec(target, image, egress, targetHome)
+	spec := transferSpec(target, image, egress)
 	spec.Progress = m.runtimeProgress(sb.ID)
 	if err := rt.CreateForTransfer(ctx, VMName(target), spec, sock, sandboxLabels(target)); err != nil {
 		return err
 	}
 	m.advance(sb.ID, StepCopy)
-	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, targetHome > 0); err != nil {
+	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, target.HomeMiB); err != nil {
 		return err
 	}
 	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {

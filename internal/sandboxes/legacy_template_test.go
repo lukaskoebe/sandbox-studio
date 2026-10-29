@@ -73,8 +73,8 @@ func TestCreateFromLegacyTemplateHasNoHomeDisk(t *testing.T) {
 	}
 
 	view, rt = createFromTemplate(t, f, rebaseTemplate(t, f, rebaseResources), "current-box")
-	if rt.spec.HomeMiB != HomeMiB || view.TemplateID == "" {
-		t.Fatalf("current sandbox spec home = %d, want %d", rt.spec.HomeMiB, HomeMiB)
+	if rt.spec.HomeMiB != DefaultHomeMiB || view.TemplateID == "" {
+		t.Fatalf("current sandbox spec home = %d, want %d", rt.spec.HomeMiB, DefaultHomeMiB)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestRebaseLegacySandboxOntoCurrentTemplateCopiesRootHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := VMName(view.Sandbox)
-	if view.TemplateID != current.ID || tf.specs[target].HomeMiB != HomeMiB || tf.workspace(target) != "files" ||
+	if view.TemplateID != current.ID || tf.specs[target].HomeMiB != DefaultHomeMiB || tf.workspace(target) != "files" ||
 		tf.home(target) != "root home" || !tf.booted[target] {
 		t.Fatalf("rebased home disk = %d, workspace %q, home %q, booted %v", tf.specs[target].HomeMiB, tf.workspace(target), tf.home(target), tf.booted[target])
 	}
@@ -209,7 +209,7 @@ func TestImportOfExportWithoutHomeTakesHomeDiskFromTemplate(t *testing.T) {
 		home     uint32
 	}{
 		{name: "legacy", template: legacy, job: "job-legacy", home: 0},
-		{name: "current", template: current, job: "job-current", home: HomeMiB},
+		{name: "current", template: current, job: "job-current", home: DefaultHomeMiB},
 	} {
 		builds.set(store.BuildJob{ID: tc.job, Status: store.BuildReady, TemplateID: tc.template.ID})
 		imp, err := f.manager.Import(f.ctx, f.env.ID, bytes.NewReader(exportFileWithoutHome(t, m, "archive")), -1)

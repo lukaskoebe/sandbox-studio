@@ -36,11 +36,8 @@ const (
 	DefaultMemoryMiB    = resources.DefaultMemoryMiB
 	DefaultWorkspaceMiB = resources.DefaultWorkspaceMiB
 	DefaultDockerMiB    = resources.DefaultDockerMiB
+	DefaultHomeMiB      = resources.DefaultHomeMiB
 )
-
-// HomeMiB is the size of the home disk every new sandbox gets at /home/agent. It is fixed
-// and separate from the workspace's.
-const HomeMiB = 4096
 
 // Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
 type Manager struct {
@@ -150,6 +147,7 @@ type CreateRequest struct {
 	MaxMemoryMiB int    `json:"maxMemoryMiB,omitempty"`
 	WorkspaceMiB int    `json:"workspaceMiB,omitempty"`
 	DockerMiB    int    `json:"dockerMiB,omitempty"`
+	HomeMiB      int    `json:"homeMiB,omitempty" doc:"The size of the home disk at /home/agent; 4096 when omitted"`
 	TeammateID   string `json:"teammateId,omitempty" doc:"The teammate that owns the sandbox; omit for an unowned sandbox"`
 }
 
@@ -263,11 +261,11 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err := runtime.ValidName(req.Name); err != nil {
 		return View{}, err
 	}
-	rec, err := m.createOwnedRecord(ctx, envID, req.Name, resolved, "", req.TeammateID)
+	rec, err := m.createOwnedRecord(ctx, envID, req.Name, resolved, int(resolved.Home()), "", req.TeammateID)
 	if err != nil {
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, nil, HomeMiB)
+	return m.bootSandbox(ctx, rec, resolved, nil)
 }
 
 // CreateFromTemplateFor creates a fresh sandbox, owned by teammateID if it is set, from one
@@ -282,11 +280,11 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 	if err != nil {
 		return View{}, err
 	}
-	home, err := m.homeMiBFor(ctx, envID, templateID)
+	home, err := m.homeFor(ctx, envID, templateID, resolved.Home())
 	if err != nil {
 		return View{}, err
 	}
-	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, teammateID)
+	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, home, templateID, teammateID)
 	if err != nil {
 		return View{}, err
 	}
@@ -297,7 +295,7 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 		}
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, image, home)
+	return m.bootSandbox(ctx, rec, resolved, image)
 }
 
 // templateResources checks that a template can back a sandbox on this host and returns
@@ -334,13 +332,13 @@ func (m *Manager) templateResources(ctx context.Context, envID, templateID strin
 	return resolved, nil
 }
 
-// homeMiBFor is the home disk a sandbox made from templateID gets, or 0 for none. A sandbox
+// homeFor is the home disk a sandbox made from templateID gets: mib, or 0 for none. A sandbox
 // without a template is made from the base image, which has the home skeleton. A sandbox of
 // a legacy template keeps its home on the root layer, next to the toolchains it needs: a
 // home disk would hide them.
-func (m *Manager) homeMiBFor(ctx context.Context, envID, templateID string) (uint32, error) {
+func (m *Manager) homeFor(ctx context.Context, envID, templateID string, mib int64) (int, error) {
 	if templateID == "" {
-		return HomeMiB, nil
+		return int(mib), nil
 	}
 	template, err := m.Store.Template(ctx, envID, templateID)
 	if err != nil {
@@ -349,7 +347,7 @@ func (m *Manager) homeMiBFor(ctx context.Context, envID, templateID string) (uin
 	if !templateimage.HasHomeSkeleton(template.ExporterVersion) {
 		return 0, nil
 	}
-	return HomeMiB, nil
+	return int(mib), nil
 }
 
 // templateImage resolves the registry image of a template. A catalog record must pin the
@@ -372,7 +370,7 @@ func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (
 // VM in the background and returns the sandbox in state creating. Until the background
 // create starts, a failure removes the record. After that, a failure removes the VM and
 // leaves the record failed, with the step, until it is deleted.
-func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, homeMiB uint32) (View, error) {
+func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource) (View, error) {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		return View{}, m.discardRecord(ctx, rec, err)
@@ -391,7 +389,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: homeMiB,
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: uint32(rec.HomeMiB),
 		Image: image, Egress: egress, Progress: m.runtimeProgress(rec.ID),
 	}
 	labels := sandboxLabels(rec)
@@ -852,6 +850,7 @@ func resolveResources(req CreateRequest) resources.Resources {
 		MaxMemoryMiB: maxMemory,
 		WorkspaceMiB: resourceOrDefault(req.WorkspaceMiB, defaults.WorkspaceMiB),
 		DockerMiB:    resourceOrDefault(req.DockerMiB, defaults.DockerMiB),
+		HomeMiB:      int64(req.HomeMiB),
 	}
 }
 

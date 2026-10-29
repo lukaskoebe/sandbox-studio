@@ -22,17 +22,18 @@ type RebaseOperation struct {
 	MaxMemoryMiB   int
 	WorkspaceMiB   int
 	DockerMiB      int
+	HomeMiB        int // the new generation's home disk; 0 for none
 	BaseImage      string
 	BaseVersion    string
 }
 
-const rebaseCols = "sandbox_id, environment_id, IFNULL(template_id, ''), from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version"
-const rebaseInsertCols = "sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version"
+const rebaseCols = "sandbox_id, environment_id, IFNULL(template_id, ''), from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version, home_mib"
+const rebaseInsertCols = "sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version, home_mib"
 
 func scanRebase(row interface{ Scan(...any) error }) (RebaseOperation, error) {
 	var op RebaseOperation
 	err := row.Scan(&op.SandboxID, &op.EnvironmentID, &op.TemplateID, &op.FromGeneration, &op.ToGeneration,
-		&op.CPUs, &op.MemoryMiB, &op.MaxMemoryMiB, &op.WorkspaceMiB, &op.DockerMiB, &op.BaseImage, &op.BaseVersion)
+		&op.CPUs, &op.MemoryMiB, &op.MaxMemoryMiB, &op.WorkspaceMiB, &op.DockerMiB, &op.BaseImage, &op.BaseVersion, &op.HomeMiB)
 	return op, err
 }
 
@@ -78,9 +79,9 @@ func (s *Store) BeginRebase(ctx context.Context, op RebaseOperation) (RebaseOper
 		return RebaseOperation{}, ErrConflict
 	}
 	op.FromGeneration, op.ToGeneration = generation, generation+1
-	if _, err := tx.ExecContext(ctx, "INSERT INTO rebases ("+rebaseInsertCols+") VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	if _, err := tx.ExecContext(ctx, "INSERT INTO rebases ("+rebaseInsertCols+") VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		op.SandboxID, op.EnvironmentID, op.TemplateID, op.FromGeneration, op.ToGeneration,
-		op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion); err != nil {
+		op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion, op.HomeMiB); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return RebaseOperation{}, ErrConflict
 		}
@@ -137,8 +138,8 @@ func (s *Store) CommitRebase(ctx context.Context, op RebaseOperation) error {
 		return err
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE sandboxes SET generation = ?, template_id = NULLIF(?, ''), cpus = ?, memory_mib = ?, max_memory_mib = ?, workspace_mib = ?, docker_mib = ?,
-		base_image = ?, base_version = ? WHERE environment_id = ? AND id = ? AND generation = ?`,
-		op.ToGeneration, op.TemplateID, op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion,
+		home_mib = ?, base_image = ?, base_version = ? WHERE environment_id = ? AND id = ? AND generation = ?`,
+		op.ToGeneration, op.TemplateID, op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.HomeMiB, op.BaseImage, op.BaseVersion,
 		op.EnvironmentID, op.SandboxID, op.FromGeneration)
 	if err != nil {
 		return err

@@ -49,6 +49,10 @@ func renderYAML(spec Spec, setupStyle yaml.Style) ([]byte, error) {
 			str("docker", 0), size(r.DockerMiB),
 		),
 	)
+	if r.HomeMiB != 0 {
+		res := root.Content[1]
+		res.Content = append(res.Content, str("home", 0), size(r.HomeMiB))
+	}
 	if len(spec.Tools) > 0 {
 		tools := mapping()
 		for _, tool := range spec.Tools {

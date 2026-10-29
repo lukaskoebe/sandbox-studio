@@ -169,6 +169,7 @@ func CanonicalJSON(spec Spec) ([]byte, error) {
 			MaxMemoryMiB: spec.Resources.MaxMemoryMiB,
 			WorkspaceMiB: spec.Resources.WorkspaceMiB,
 			DockerMiB:    spec.Resources.DockerMiB,
+			HomeMiB:      spec.Resources.HomeMiB,
 		},
 		Tools: tools,
 		Apt:   apt,
@@ -214,6 +215,7 @@ func ParseCanonicalJSON(data []byte) (Spec, error) {
 			CPUs: canonical.Resources.CPUs, MemoryMiB: canonical.Resources.MemoryMiB,
 			MaxMemoryMiB: canonical.Resources.MaxMemoryMiB,
 			WorkspaceMiB: canonical.Resources.WorkspaceMiB, DockerMiB: canonical.Resources.DockerMiB,
+			HomeMiB: canonical.Resources.HomeMiB,
 		},
 		Tools: canonical.Tools,
 		Apt:   canonical.Apt,
@@ -243,12 +245,13 @@ type canonicalResources struct {
 	MaxMemoryMiB int64 `json:"maxMemoryMiB"`
 	WorkspaceMiB int64 `json:"workspaceMiB"`
 	DockerMiB    int64 `json:"dockerMiB"`
+	HomeMiB      int64 `json:"homeMiB,omitempty"` // omitted when unset, as before it existed
 }
 
 // resourceKeys maps the field names in resources.Validate errors to spec keys.
 var resourceKeys = map[string]string{
 	"cpus": "cpus", "memoryMiB": "memory", "maxMemoryMiB": "max_memory",
-	"workspaceMiB": "workspace", "dockerMiB": "docker",
+	"workspaceMiB": "workspace", "dockerMiB": "docker", "homeMiB": "home",
 }
 
 func parseResources(key, node *yaml.Node, defaults resources.Resources, p *problems) resources.Resources {
@@ -275,6 +278,8 @@ func parseResources(key, node *yaml.Node, defaults resources.Resources, p *probl
 			resolved.WorkspaceMiB, err = parseSize(value)
 		case "docker":
 			resolved.DockerMiB, err = parseSize(value)
+		case "home":
+			resolved.HomeMiB, err = parseSize(value)
 		default:
 			p.add(name, "unknown resources key %q", name.Value)
 			continue

@@ -66,7 +66,8 @@ The UI of a Studio running in a sandbox can't be opened through a preview yet: p
 strip Studio's own cookies before they reach the sandbox, and the inner Studio uses the
 same names. Its Playwright tests run headless in the sandbox instead.
 
-`resources` accepts `cpus`, `memory`, `max_memory`, `workspace`, and `docker`. CPU
+`resources` accepts `cpus`, `memory`, `max_memory`, `workspace`, `docker`, and `home` (the
+home disk, 4 GiB by default; a spec without it keeps its cache key). CPU
 counts are plain decimal integers. Memory and disk sizes are strings in `MiB`, `GiB`, or
 `G`; Studio validates the resolved values against shared limits before persisting the
 job. If omitted, resources use Studio defaults, and `max_memory` defaults to `memory`.

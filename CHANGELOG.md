@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A sandbox's home disk can be bigger than 4 GiB.** `home: 8GiB` under `resources` in a
+  template's spec, or `homeMiB` when creating a sandbox through the API, sizes the disk that
+  holds `/home/agent`, where agents keep their sessions and caches. Forks keep the size, and
+  so does a rebase onto a template that names none. An export of a template's sandbox whose
+  CPUs or memory were resized no longer fails to import with "resources do not match the
+  template spec": the import keeps the sandbox's own resources.
 - **An SSH forge can have pull requests.** Give it its host's API and a token (Forgejo or
   Gitea, GitHub, or GitLab) in the Add forge dialog, or later with **Add an API token** in
   its row. git keeps going over SSH, and through the API Studio lists the forge's

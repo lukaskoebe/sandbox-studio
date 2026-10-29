@@ -126,12 +126,9 @@ func ParseExportManifest(body []byte) (ExportManifest, error) {
 		return ExportManifest{}, invalidExport("workspaceBytes is out of range")
 	}
 	if m.TemplateSpecYAML != nil {
-		spec, err := templatespec.ParseYAML([]byte(*m.TemplateSpecYAML))
-		if err != nil {
+		// The resources may differ from the spec's: a resize changes the sandbox's.
+		if _, err := templatespec.ParseYAML([]byte(*m.TemplateSpecYAML)); err != nil {
 			return ExportManifest{}, invalidExport("%v", err)
-		}
-		if spec.Resources != m.Resources {
-			return ExportManifest{}, invalidExport("resources do not match the template spec")
 		}
 	}
 	return m, nil
@@ -147,7 +144,7 @@ func (m ExportManifest) HomeLimit() int64 {
 	if m.Format < 2 {
 		return 0
 	}
-	return HomeMiB << 20
+	return m.Resources.Home() << 20
 }
 
 // chunkWriter frames what it is given as chunks of at most maxChunkBytes.
@@ -240,6 +237,11 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 			WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB),
 		},
 	}
+	// The home's size is named only where it isn't the default, so the file stays one that a
+	// Studio from before the size, which refuses fields it doesn't know, imports.
+	if sb.HomeMiB != DefaultHomeMiB {
+		manifest.Resources.HomeMiB = int64(sb.HomeMiB)
+	}
 	if sb.TemplateID != "" {
 		source, err := m.templateSourceYAML(ctx, envID, sb.TemplateID)
 		if err != nil {
@@ -249,10 +251,6 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 	}
 	// A sandbox without a home disk exports an empty home section. Its home lives on the
 	// template's root layer, which an export does not carry.
-	homeMiB, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
-	if err != nil {
-		return err
-	}
 	if status == runtime.StatusStopped {
 		if _, err := m.Egress.Attach(sb); err != nil {
 			return err
@@ -274,7 +272,7 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 		return err
 	}
 	home := chunkWriter{w: w}
-	if homeMiB > 0 {
+	if sb.HomeMiB > 0 {
 		if err := rt.ExportTree(ctx, ownedVM(sb), runtime.TreeHome, false, &limitWriter{w: home, left: manifest.HomeLimit(), err: ErrHomeTooLarge}); err != nil {
 			return err
 		}

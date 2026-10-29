@@ -372,7 +372,7 @@ func TestRebaseRunningSandboxCopiesWorkspaceAndBootsTarget(t *testing.T) {
 		t.Fatal("source VM remains")
 	}
 	spec := tf.specs[target]
-	if spec.CPUs != 2 || spec.WorkspaceMiB != 4096 || spec.HomeMiB != HomeMiB || spec.Image == nil || spec.Egress != (fakeEgress{}).egress(f.sandbox.ID) {
+	if spec.CPUs != 2 || spec.WorkspaceMiB != 4096 || spec.HomeMiB != DefaultHomeMiB || spec.Image == nil || spec.Egress != (fakeEgress{}).egress(f.sandbox.ID) {
 		t.Fatalf("target spec = %+v", spec)
 	}
 	if tf.labels[target]["studio.template-id"] != template.ID || tf.labels[target]["studio.sandbox-id"] != f.sandbox.ID {
@@ -587,7 +587,7 @@ func TestForkCopiesWorkspaceAndHomeIntoNewSandbox(t *testing.T) {
 			if tf.workspace(fork) != "files" || tf.home(fork) != "dotfiles" || !tf.booted[fork] || view.Status != runtime.StatusRunning {
 				t.Fatalf("fork workspace %q, home %q, booted %v, status %s", tf.workspace(fork), tf.home(fork), tf.booted[fork], view.Status)
 			}
-			if tf.specs[fork].HomeMiB != HomeMiB {
+			if tf.specs[fork].HomeMiB != DefaultHomeMiB {
 				t.Fatalf("fork spec = %+v", tf.specs[fork])
 			}
 			if tf.specs[fork].Egress != (fakeEgress{}).egress(view.ID) {
@@ -714,7 +714,7 @@ func TestRebaseOntoTheCurrentBaseKeepsResources(t *testing.T) {
 		t.Fatalf("view resources = %+v", view.Sandbox)
 	}
 	target := VMName(view.Sandbox)
-	if spec := tf.specs[target]; spec.Image != nil || spec.HomeMiB != HomeMiB {
+	if spec := tf.specs[target]; spec.Image != nil || spec.HomeMiB != DefaultHomeMiB {
 		t.Fatalf("target spec = %+v", spec)
 	}
 	if tf.workspace(target) != "files" {
@@ -755,7 +755,7 @@ func TestReconcileLearnsTheBaseOfOlderSandboxes(t *testing.T) {
 func TestNewSandboxesRecordTheirBase(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.manager.BaseImage, f.manager.BaseVersion = "sandbox-studio-base:dev", "v0.8.1"
-	rec, err := f.manager.createOwnedRecord(f.ctx, f.env.ID, "fresh", rebaseResources, "", "")
+	rec, err := f.manager.createOwnedRecord(f.ctx, f.env.ID, "fresh", rebaseResources, DefaultHomeMiB, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

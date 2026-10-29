@@ -71,9 +71,11 @@ The states are `uploading`, `building`, `creating`, `importing`, `ready` (with
 
 1. Studio checks the header and manifest before anything is stored. The file is
    untrusted: reads are bounded, unknown fields are rejected, names must be valid and the
-   template spec must parse and match the manifest resources.
+   template spec must parse. The manifest's resources are the sandbox's, which a resize may
+   have moved away from its template's; the import keeps them, and `homeMiB` (absent: 4 GiB)
+   sizes the home disk.
 2. Free disk must cover the archives plus 1 GiB. The upload is capped at the workspace size
-   plus the 4 GiB home, and staged under `<data>/imports`. Nothing is extracted on the host.
+   plus the home disk's size, and staged under `<data>/imports`. Nothing is extracted on the host.
 3. The template spec goes through the normal template build, so a cached template is reused.
 4. Studio creates the sandbox in transfer mode, streams the home archive into `home-import`
    (when the file has one) and the workspace archive into `workspace-import` in the guest,

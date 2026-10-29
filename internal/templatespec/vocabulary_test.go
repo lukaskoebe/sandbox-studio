@@ -18,6 +18,7 @@ func TestEditorVocabularyParses(t *testing.T) {
 		"max_memory": "resources:\n  max_memory: 4096MiB\n",
 		"workspace":  "resources:\n  workspace: 20GiB\n",
 		"docker":     "resources:\n  docker: 20GiB\n",
+		"home":       "resources:\n  home: 8GiB\n",
 		"go":         "tools:\n  go: \"1.24\"\n",
 		"nix":        "tools:\n  nix: \"2.35.1\"\n",
 		"node":       "tools:\n  node: \"22\"\n",

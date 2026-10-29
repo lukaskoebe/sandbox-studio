@@ -26,7 +26,7 @@ setup: |
   corepack enable
 ```
 
-Quote tool versions. The currently supported tools are `go`, `node`, `nix`, and `python`. `nix` takes only the Nix releases Studio pins, currently 2.35.1. Resource sizes use `MiB`, `GiB`, or `G`; CPU counts are whole numbers.
+Quote tool versions. The currently supported tools are `go`, `node`, `nix`, and `python`. `nix` takes only the Nix releases Studio pins, currently 2.35.1. Resource sizes use `MiB`, `GiB`, or `G`; CPU counts are whole numbers. `resources` also takes `home`, the size of the disk that holds `/home/agent` with the agents' sessions and caches; it is 4 GiB unless you name another.
 
 ## Importing YAML does not run it
 

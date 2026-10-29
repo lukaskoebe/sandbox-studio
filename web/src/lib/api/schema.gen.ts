@@ -3479,6 +3479,11 @@ export interface components {
             cpus?: number;
             /** Format: int64 */
             dockerMiB?: number;
+            /**
+             * Format: int64
+             * @description The size of the home disk at /home/agent; 4096 when omitted
+             */
+            homeMiB?: number;
             /** Format: int64 */
             maxMemoryMiB?: number;
             /** Format: int64 */
@@ -5248,6 +5253,11 @@ export interface components {
             forkOf?: string;
             /** Format: int64 */
             generation: number;
+            /**
+             * Format: int64
+             * @description The size of the home disk at /home/agent; absent for a sandbox whose home is on its root disk, as with a template built before home disks
+             */
+            homeMiB?: number;
             id: string;
             /**
              * Format: int64
@@ -5310,6 +5320,8 @@ export interface components {
             cpus: number;
             /** Format: int64 */
             dockerMiB: number;
+            /** Format: int64 */
+            homeMiB?: number;
             /** Format: int64 */
             maxMemoryMiB: number;
             /** Format: int64 */
@@ -6302,6 +6314,11 @@ export interface components {
             forkOf?: string;
             /** Format: int64 */
             generation: number;
+            /**
+             * Format: int64
+             * @description The size of the home disk at /home/agent; absent for a sandbox whose home is on its root disk, as with a template built before home disks
+             */
+            homeMiB?: number;
             id: string;
             /**
              * Format: int64

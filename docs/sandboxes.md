@@ -40,8 +40,10 @@ without browser-only or expired rules, their configuration or notes; the first 5
 
 The home disk is seeded once, on the sandbox's first boot, from the skeleton the image keeps
 at `/usr/share/sandbox-studio/home-skel` (the base image's home, or the template's home as
-its last build step left it). Nothing seeds it again, so files you delete stay deleted. Its
-size is fixed and not a setting. Browser VMs and template build VMs have no home disk.
+its last build step left it). Nothing seeds it again, so files you delete stay deleted. It
+has 4 GiB unless the create request (`homeMiB`) or the template's spec (`home`) names another
+size; the sandbox's record keeps it (`homeMiB`, absent without a home disk), and forks get
+it. Browser VMs and template build VMs have no home disk.
 
 While a tab is open, Studio asks each running sandbox's guest every minute how full its home,
 workspace and Docker disks are (`KindDisk`, as the agent user sees them). A disk with less than a
@@ -129,9 +131,11 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
 
 ## Resources
 
-Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk. The 4 GiB home disk is
-fixed. A template's spec fixes the resources of sandboxes created from it, and a rebase builds
-the new generation from the template, so it resets the CPUs and memory as well.
+Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk, 4 GiB home disk. A
+template's spec fixes the resources of sandboxes created from it, and a rebase builds the new
+generation from the template, so it resets the CPUs and memory as well. A template that
+names no home size keeps the sandbox's on a rebase. An export carries the sandbox's own
+resources, which an import keeps even where they differ from its template's.
 
 **Boot-time room.** msb 0.7.8 resizes a running VM live, but only up to the CPU maximum and
 the memory ceiling it booted with. So Studio boots every VM with room to grow
