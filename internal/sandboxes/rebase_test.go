@@ -19,14 +19,16 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 )
 
-// transferFake adds transfer mode and tree copies to fakeSandboxRuntime. A workspace and
-// a home are a byte string per VM name. Workspace copies record export:<vm> and
-// import:<vm>, home copies export-home:<vm> and import-home:<vm>.
+// transferFake adds transfer mode and tree copies to fakeSandboxRuntime. A workspace, a
+// home and Docker's data are a byte string per VM name. Workspace copies record
+// export:<vm> and import:<vm>, home copies export-home:<vm> and import-home:<vm>, and
+// Docker copies export-docker:<vm> and import-docker:<vm>.
 type transferFake struct {
 	*fakeSandboxRuntime
 	mu         sync.Mutex
 	workspaces map[string][]byte
 	homes      map[string][]byte
+	dockers    map[string][]byte
 	specs      map[string]runtime.Spec
 	labels     map[string]map[string]string
 	booted     map[string]bool
@@ -36,7 +38,7 @@ type transferFake struct {
 }
 
 func newTransferFake(f *checkpointFixture) *transferFake {
-	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, specs: map[string]runtime.Spec{},
+	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, dockers: map[string][]byte{}, specs: map[string]runtime.Spec{},
 		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}, busy: map[string]bool{}}
 	f.manager.Runtime = tf
 	f.manager.Templates = perTemplateResolver{}
@@ -80,8 +82,11 @@ func (f *transferFake) Boot(_ context.Context, name string) error {
 }
 
 func (f *transferFake) trees(tree runtime.Tree) (map[string][]byte, string) {
-	if tree == runtime.TreeHome {
+	switch tree {
+	case runtime.TreeHome:
 		return f.homes, "-home"
+	case runtime.TreeDocker:
+		return f.dockers, "-docker"
 	}
 	return f.workspaces, ""
 }

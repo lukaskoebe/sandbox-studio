@@ -125,7 +125,7 @@ func ExportHomeAs(home string, w io.Writer, warn io.Writer, c Compression) error
 	if !mounted {
 		skip = func(rel string) bool { return rel == legacyMiseDir }
 	}
-	return exportTree(home, w, warn, skip, c)
+	return exportTree(home, w, warn, treeOptions{skip: skip}, c)
 }
 
 // ImportHome extracts a home archive into the empty home disk, drops the mise login

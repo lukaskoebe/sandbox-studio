@@ -95,17 +95,18 @@ sandbox runs. Sandboxes started before this field existed have none until their 
 
 ## Creation progress
 
-A create, a create from a template, a fork and a rebase return at once with the sandbox in
-state `creating`. Its VM is pulled, started and booted in the background (`Manager.bootSandbox`,
-`Manager.Fork`, `Manager.Rebase`). The sandbox view's `progress` names the operation
-(`create`, `fork` or `rebase`) and the step it is on:
+A create, a create from a template, a fork, a rebase and a disk resize return at once with the
+sandbox in state `creating`. Its VM is pulled, started and booted in the background
+(`Manager.bootSandbox`, `Manager.Fork`, `Manager.Rebase`, `Manager.ResizeDisks`). The sandbox
+view's `progress` names the operation (`create`, `fork`, `rebase` or `disks`) and the step it
+is on:
 
 | Step | Meaning |
 |---|---|
-| `prepare` | the sandbox stops and starts again for the copy (rebase only) |
+| `prepare` | the sandbox stops and starts again for the copy (rebase and disk resize) |
 | `pull` | the image; the view carries layers and bytes while the pull reports them |
 | `vm` | the VM starts |
-| `copy` | the workspace copy (fork and rebase) |
+| `copy` | the workspace copy (fork and rebase), and Docker's data's for a disk resize |
 | `boot` | `studio-agent boot` runs |
 | `services` | the supervisor starts containerd, Docker and the agent |
 | `agent` | the agent answers requests |
@@ -127,7 +128,8 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
   failed rebase rolls back ([rebase](rebase.md#rebase)), so the sandbox keeps its status;
   only its `progress` stays, in state `failed` with the step and the error, until the next
   rebase, a delete, a restart of Studio, or `DELETE …/sandboxes/{id}/progress` (the
-  Dismiss button). A rebase's progress isn't saved: its own rebase record recovers it.
+  Dismiss button). A rebase's progress isn't saved: its own rebase record recovers it. A
+  disk resize is a rebase in all of this, with the operation `disks`.
 
 ## Resources
 
@@ -203,6 +205,15 @@ Verified on 2026-10-26 with msb 0.7.8 in a scratch `MSB_HOME`, on a VM booted wi
 both and took effect at the next start. Under msb 0.7.7 every change to a running VM was
 `nextStart`. The Studio side is also covered by fake-runtime, API and e2e tests (the e2e
 runtime boots with room for twice its size).
+
+### Disk sizes
+
+The workspace, Docker and home disks keep the size they were made with: msb 0.7.8 can grow a
+VM's root disk but not its other volumes. `PUT /api/environments/{env}/sandboxes/{id}/disks`
+with any of `workspaceMiB`, `dockerMiB` and `homeMiB` (each at least 1024) gives them new
+sizes as a rebase onto the sandbox's own template does, and copies Docker's data too: see
+[disk resize](rebase.md#disk-resize). The **Disks** item in the computer's menu opens its
+dialog, and so does the **Resize disks…** button on the strip that says a disk is nearly full.
 
 ### Live use
 
@@ -324,14 +335,14 @@ as the guard.
 
 Each sandbox keeps its history in `sandbox_events` (`store.SandboxEvent`): one row per
 successful step, in order. The kinds are `create` (also an import), `fork`, `rebase`,
-`restore`, `checkpoint`, `merge` and `delete`. A failed operation writes nothing. Code:
+`disks` (a disk resize), `restore`, `checkpoint`, `merge` and `delete`. A failed operation writes nothing. Code:
 `internal/sandboxes/lineage.go` and `internal/store/lineage.go`.
 
 - A fork refers to its source by ID, generation and time (`forked_from_*` on the sandbox,
   with no foreign key). The fork records a `fork` event on each side: the child's history
   starts with it, and the source's shows the child it branched off to. Both are recorded once
   the copy has booted.
-- A rebase or restore records its event in the same transaction as the generation switch
+- A rebase, disk resize or restore records its event in the same transaction as the generation switch
   (`CommitRebase`, `CommitRestore`), so it is recorded once, even when cleanup or recovery
   runs later.
 - An accepted merge records a `merge` event on the source, with the fork as the other

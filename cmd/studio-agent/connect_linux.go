@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/guest"
 	"github.com/lukaskoebe/sandbox-studio/internal/guestcapture"
 )
@@ -79,4 +80,16 @@ func homeExport(dst, warn io.Writer, zstd bool) error {
 
 func homeImport(src io.Reader) error {
 	return guest.ImportHome(guest.Home, bufio.NewReaderSize(src, 1<<20))
+}
+
+func dockerExport(dst, warn io.Writer, zstd bool) error {
+	w := bufio.NewWriterSize(dst, 1<<20)
+	if err := guest.ExportDocker(agentproto.DockerDir, w, warn, compression(zstd)); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
+func dockerImport(src io.Reader) error {
+	return guest.ImportDocker(agentproto.DockerDir, bufio.NewReaderSize(src, 1<<20))
 }

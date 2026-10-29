@@ -12,6 +12,7 @@ const (
 	EventCreate     = "create"     // made from a template or not, or imported
 	EventFork       = "fork"       // forked; OtherSandboxID is the other side of the fork
 	EventRebase     = "rebase"     // moved to another template: a new generation
+	EventDisks      = "disks"      // its disks resized: a new generation on its own template
 	EventRestore    = "restore"    // restored from a checkpoint: a new generation
 	EventCheckpoint = "checkpoint" // a checkpoint was saved
 	EventDelete     = "delete"     // deleted; the event is the sandbox's tombstone
@@ -23,7 +24,7 @@ type SandboxEvent struct {
 	ID             int64     `json:"id"`
 	EnvironmentID  string    `json:"environmentId"`
 	SandboxID      string    `json:"sandboxId"`
-	Kind           string    `json:"kind" enum:"create,fork,rebase,restore,checkpoint,delete,merge"`
+	Kind           string    `json:"kind" enum:"create,fork,rebase,restore,checkpoint,delete,merge,disks"`
 	Generation     int       `json:"generation" doc:"The sandbox's generation after the event"`
 	Name           string    `json:"name" doc:"The sandbox's name at the time"`
 	TemplateID     string    `json:"templateId,omitempty" doc:"The template of the generation; empty for none"`

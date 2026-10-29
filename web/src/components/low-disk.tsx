@@ -1,4 +1,8 @@
+import { useState } from "react"
 import { HardDriveIcon } from "@phosphor-icons/react"
+import { Button } from "@/components/ui/button"
+import { ResizeDisksDialog } from "@/components/resize-disks-dialog"
+import type { Sandbox } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { formatBytes } from "@/lib/utils"
 
@@ -49,10 +53,19 @@ function advice(disks: Disk[]) {
 
 /**
  * A strip above a sandbox's screen or chat while one of its disks is nearly full, as Studio
- * last heard from the sandbox.
+ * last heard from the sandbox, with a way to give the disks more room.
  */
-export function LowDiskStatus({ disks }: { disks?: Disk[] | null }) {
-  if (!disks?.length) return null
+export function LowDiskStatus({
+  env,
+  sandbox,
+}: {
+  env: string
+  sandbox?: Sandbox
+}) {
+  const [resizing, setResizing] = useState(false)
+  const disks = sandbox?.lowDisks
+  if (!sandbox || !disks?.length) return null
+  const available = sandbox.status === "running" || sandbox.status === "stopped"
   return (
     <div
       role="status"
@@ -63,6 +76,22 @@ export function LowDiskStatus({ disks }: { disks?: Disk[] | null }) {
       <span>
         {lowDiskText(disks)}. {advice(disks)}
       </span>
+      {available && (
+        <Button
+          variant="outline"
+          size="xs"
+          className="ml-auto shrink-0"
+          onClick={() => setResizing(true)}
+        >
+          Resize disks…
+        </Button>
+      )}
+      <ResizeDisksDialog
+        env={env}
+        sandbox={sandbox}
+        open={resizing}
+        onOpenChange={setResizing}
+      />
     </div>
   )
 }

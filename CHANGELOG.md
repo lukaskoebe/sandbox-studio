@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **A sandbox's disks can be resized.** **Disks** in the computer's menu, or **Resize
+  disks…** on the strip that says a disk is nearly full, gives the workspace, Docker and
+  home disks new sizes, bigger or smaller. A disk can't change its size in place, so Studio
+  moves the sandbox to a new generation on its own template, as a rebase does, and copies
+  `/workspace`, the home and Docker's images, containers and volumes into it; the CPUs and
+  memory stay. The history shows it as *disks resized*. Through the API it is
+  `PUT …/sandboxes/{id}/disks`.
 - **A sandbox's home disk can be bigger than 4 GiB.** `home: 8GiB` under `resources` in a
   template's spec, or `homeMiB` when creating a sandbox through the API, sizes the disk that
   holds `/home/agent`, where agents keep their sessions and caches. Forks keep the size, and

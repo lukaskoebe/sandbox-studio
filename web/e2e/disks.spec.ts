@@ -46,3 +46,36 @@ test("Home and the sandbox's page say when its home or Docker disk is nearly ful
   await api.json("PUT", `/api/e2e/sandboxes/${id}/disks`, { disks: null })
   await expect(strip).toBeHidden({ timeout: 15_000 })
 })
+
+// The strip opens the disk resize dialog with the sandbox's sizes. The e2e runtime can't
+// copy between VMs, so the resize itself answers why and the sandbox stays as it was.
+test("The low-disk strip opens the disk resize dialog", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("resize-disks")
+  const id = await api.createSandbox(name)
+  await api.json("PUT", `/api/e2e/sandboxes/${id}/disks`, {
+    disks: [{ name: "docker", free: 300 * 2 ** 20, total: 20 * 2 ** 30 }],
+  })
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  const strip = page.getByRole("status", { name: "Disk space" })
+  await strip
+    .getByRole("button", { name: "Resize disks…" })
+    .click({ timeout: 15_000 })
+
+  const dialog = page.getByRole("dialog", { name: `Disks of ${name}` })
+  const docker = dialog.getByLabel(
+    "Docker images, containers and volumes (GiB)"
+  )
+  await expect(docker).toHaveValue("20")
+  await expect(dialog).toContainText("300 MB of 20 GB free now.")
+  const resize = dialog.getByRole("button", { name: "Resize" })
+  await expect(resize).toBeDisabled()
+  await docker.fill("40")
+  await resize.click()
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Could not resize the disks: this runtime cannot copy workspaces"
+  )
+})

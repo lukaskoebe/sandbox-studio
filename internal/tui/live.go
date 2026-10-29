@@ -351,7 +351,7 @@ func (m *app) historyLine(sb sandboxes.View, w int) []string {
 			} else {
 				marks = append(marks, "●")
 			}
-		case store.EventRestore, store.EventRebase:
+		case store.EventRestore, store.EventRebase, store.EventDisks:
 			counts["restore"]++
 			marks = append(marks, "◇")
 		}

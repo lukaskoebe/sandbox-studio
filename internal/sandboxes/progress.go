@@ -36,7 +36,15 @@ const (
 	// A rebase isn't saved: its own record recovers it (rebase.go). A failed one leaves the
 	// sandbox as it was, so its status stays and only the progress tells of the failure.
 	OperationRebase = "rebase"
+	// A disk resize is a rebase onto the sandbox's own template or base (diskresize.go).
+	OperationDisks = "disks"
 )
+
+// rebasing reports whether operation is a rebase or a disk resize, which leave the sandbox
+// as it was when they fail.
+func rebasing(operation string) bool {
+	return operation == OperationRebase || operation == OperationDisks
+}
 
 // Progress states.
 const (
@@ -63,6 +71,8 @@ const (
 	createTimeout = 10 * time.Minute
 	// A workspace copy can take a while.
 	transferTimeout = 30 * time.Minute
+	// A disk resize copies Docker's data too, which can be much bigger.
+	diskResizeTimeout = 2 * time.Hour
 	// guestTimeout bounds the wait for the agent once `studio-agent boot` ran.
 	guestTimeout = 2 * time.Minute
 	// Pull updates are published at most this often; step changes always are.
@@ -74,8 +84,8 @@ const (
 
 // Progress is where a sandbox's create, fork or rebase stands.
 type Progress struct {
-	Operation string        `json:"operation" enum:"create,fork,rebase"`
-	State     string        `json:"state" enum:"running,failed" doc:"A failed create or fork leaves the sandbox failed; a failed rebase leaves it on its old template, in its status"`
+	Operation string        `json:"operation" enum:"create,fork,rebase,disks" doc:"disks is a disk resize"`
+	State     string        `json:"state" enum:"running,failed" doc:"A failed create or fork leaves the sandbox failed; a failed rebase or disk resize leaves it as it was, in its status"`
 	Steps     []string      `json:"steps" enum:"prepare,pull,vm,copy,boot,services,agent,configure" doc:"The operation's steps, in order"`
 	Step      string        `json:"step" enum:"prepare,pull,vm,copy,boot,services,agent,configure" doc:"The step that runs, or the one that failed"`
 	Error     string        `json:"error,omitempty" doc:"Why the step failed"`
@@ -107,7 +117,7 @@ type savedProgress struct {
 
 // saved reports whether an operation's progress is saved, so a restart can tell that it
 // was running. A rebase has its own durable record instead.
-func saved(p Progress) bool { return p.Operation != OperationRebase }
+func saved(p Progress) bool { return !rebasing(p.Operation) }
 
 // begin records that a create, fork or rebase of rec started, at its first step.
 func (m *Manager) begin(ctx context.Context, rec store.Sandbox, kind string, steps []string) error {
@@ -262,7 +272,7 @@ func (m *Manager) failedCreation(id string) bool {
 	m.opsMu.Lock()
 	defer m.opsMu.Unlock()
 	op := m.ops[id]
-	return op != nil && op.progress.State == ProgressFailed && op.progress.Operation != OperationRebase
+	return op != nil && op.progress.State == ProgressFailed && !rebasing(op.progress.Operation)
 }
 
 // ClearProgress dismisses the report of a sandbox's failed rebase. A running operation and
@@ -277,9 +287,9 @@ func (m *Manager) ClearProgress(ctx context.Context, envID, id string) error {
 		m.opsMu.Unlock()
 		return nil
 	}
-	if op.progress.State != ProgressFailed || op.progress.Operation != OperationRebase {
+	if op.progress.State != ProgressFailed || !rebasing(op.progress.Operation) {
 		m.opsMu.Unlock()
-		return lifecycleError("only a failed rebase can be dismissed")
+		return lifecycleError("only a failed rebase or disk resize can be dismissed")
 	}
 	delete(m.ops, id)
 	m.opsMu.Unlock()
@@ -313,7 +323,7 @@ func (m *Manager) withProgress(v View) View {
 	}
 	m.opsMu.Unlock()
 	v.Progress = &p
-	if p.Operation == OperationRebase && p.State == ProgressFailed {
+	if rebasing(p.Operation) && p.State == ProgressFailed {
 		return v // rolled back: the sandbox is as it was
 	}
 	v.Status, v.Agent = StatusCreating, nil

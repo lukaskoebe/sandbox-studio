@@ -1,7 +1,8 @@
-# Rebase and fork
+# Rebase, disk resize and fork
 
-Both move `/workspace` from one VM to another, and `/home/agent` too when the sandbox has a
-home disk ([sandboxes](sandboxes.md#storage-and-mounts)). Neither uses msb restore or msb fork.
+All three move `/workspace` from one VM to another, and `/home/agent` too when the sandbox has
+a home disk ([sandboxes](sandboxes.md#storage-and-mounts)); a disk resize moves Docker's data
+as well. None uses msb restore or msb fork.
 Restore drops Studio's DNS and proxy egress
 ([#1736](https://github.com/superradcompany/microsandbox/issues/1736)).
 Both need a running or stopped sandbox; a suspended one is refused until it is resumed.
@@ -21,6 +22,15 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
   not a directory from the archive, and hardlinks to anything but an earlier regular file.
   Symlinks are created but never followed. Parents are opened with `openat2` and
   `RESOLVE_BENEATH`.
+- `studio-agent docker-export` and `docker-import` do the same for `/var/lib/docker`, which
+  only a disk resize copies. Docker's data is made of what a workspace archive leaves out:
+  overlay whiteouts are character devices 0/0, an opaque directory is the
+  `trusted.overlay.opaque` xattr, and image files keep `security.capability`. So these keep
+  character and block devices, FIFOs and every extended attribute, as `SCHILY.xattr.*` PAX
+  records, the way GNU tar does. The import sets a file's xattrs after its owner, since a
+  chown drops `security.capability`, and a symlink's or a device's through
+  `/proc/self/fd/<parent>/<name>`, so nothing is followed. Sockets are still skipped.
+  Docker and containerd don't run in transfer mode, so the data holds still.
 - `home-import` also marks the home, so the home disk is never seeded from the skeleton
   over the copy. Before that it removes the mise login block that templates built before
   `/opt/mise` appended to `~/.profile`, since it would point the home back at toolchains
@@ -35,9 +45,11 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
 - All run as root through msb exec. The host joins them with an `io.Pipe`. Nothing is
   staged on the host. The workspace and the home are copied at the same time, since they
   are separate disks; the first to fail stops the other, and its error is the one reported.
-- The workspace stream is limited to the target's workspace size, and the home stream to
-  the target's home disk (`homeMiB`, 4 GiB unless set). A home that doesn't fit fails with a
-  message that says to delete caches, or give the sandbox a bigger home disk, and try again. If either side fails, the copy fails.
+- The workspace stream is limited to the target's workspace size, the home stream to the
+  target's home disk (`homeMiB`, 4 GiB unless set), and Docker's to its Docker disk. A home
+  that doesn't fit fails with a message that says to delete caches, or give the sandbox a
+  bigger home disk, and try again; Docker's data, with one that says to prune. If either
+  side fails, the copy fails.
 - Transfer mode creates or starts a VM without `studio-agent boot`, so no guest services
   or containers run. `Boot` starts them afterwards.
 
@@ -90,6 +102,36 @@ sandbox's history, see [lineage](sandboxes.md#lineage). With a home disk on the 
 survive, and a chat resumes its agent session in the new generation
 ([chat mode](design/chat-mode.md)).
 
+## Disk resize
+
+`PUT /api/environments/{env}/sandboxes/{id}/disks` with any of `workspaceMiB`, `dockerMiB` and
+`homeMiB`; a size left out stays (`Manager.ResizeDisks`). msb 0.7.8 can't change the size of
+a VM's disk volumes, only grow its root disk, so a resize is a rebase onto the sandbox's own
+template, or onto the default image for a sandbox without one, with other disk sizes:
+
+- It keeps the sandbox's CPUs and memory, not the template's, so a sandbox resized after it
+  was made keeps that.
+- After the workspace and the home, it copies Docker's images, containers and volumes, so
+  they survive. Containers with a restart policy start again when Docker does.
+- A disk may shrink as long as what it holds fits; a copy that doesn't fit fails and rolls
+  back. A request that changes nothing, a size under 1024 MiB, or a home size for a sandbox
+  without a home disk (a legacy template's) is refused with 422 before anything changes.
+- Its record is a rebase record of kind `disks` (migration 055), so failure, rollback and
+  recovery are the rebase's. The progress operation is `disks`, with the rebase's steps, and
+  its background run may take 2 hours instead of 30 minutes, for a big Docker disk.
+- The switch records a `disks` event in the sandbox's history, which the history timeline
+  shows as "disks resized".
+
+As with a rebase, what was installed outside the three disks is lost, the root disk is new,
+and tmux sessions end. A sandbox without a template moves to the current base image, as a
+fork does. While the copy runs, the copied data takes its space twice on the host. The dialog
+shows each disk's size, and its free space where the guest reported the disk nearly full.
+
+It has not been run against a real VM yet. The Docker archive's whiteouts, FIFOs and xattrs
+are covered by a unit test that runs as a normal user, so with `user.*` xattrs; the
+`trusted.*` ones and block devices need the guest's root, and Docker starting on the copied
+data needs a live run.
+
 ## Fork
 
 `POST /api/environments/{env}/sandboxes/{id}/fork` with `{"name": "..."}`.
@@ -107,8 +149,8 @@ On success the fork and its source each record a `fork` event in their history, 
 ## Limits
 
 - The size limit counts compressed bytes. A full guest disk also fails the import.
-- The home disk is 4 GiB. A home that holds more fails the copy; delete caches in it and
-  try again.
+- The home disk is 4 GiB unless the sandbox has another size. A home that holds more fails
+  the copy; delete caches in it, or resize the home disk, and try again.
 - Recovery after a crash leaves the sandbox stopped, even if it was running.
 - Restoring a checkpoint from before a rebase would bring back the old root while the
   sandbox names the new template. Restore is gated, so this cannot happen yet.

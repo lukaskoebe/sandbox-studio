@@ -54,6 +54,14 @@ func homeImport(io.Reader) error {
 	return errors.New("studio-agent home-import only runs inside Linux sandboxes")
 }
 
+func dockerExport(io.Writer, io.Writer, bool) error {
+	return errors.New("studio-agent docker-export only runs inside Linux sandboxes")
+}
+
+func dockerImport(io.Reader) error {
+	return errors.New("studio-agent docker-import only runs inside Linux sandboxes")
+}
+
 func merge(string, []string, io.Reader, io.Writer) error {
 	return errors.New("studio-agent merge commands only run inside Linux sandboxes")
 }

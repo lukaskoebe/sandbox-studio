@@ -13,18 +13,22 @@ const HomePath = "/home/agent"
 // Tree is a directory that fork, rebase and export copy between VMs.
 type Tree string
 
-// The copied trees: the workspace, and the agent user's home.
+// The copied trees: the workspace, the agent user's home, and Docker's data, which only a
+// disk resize copies.
 const (
 	TreeWorkspace Tree = "workspace"
 	TreeHome      Tree = "home"
+	TreeDocker    Tree = "docker"
 )
+
+func (t Tree) known() bool { return t == TreeWorkspace || t == TreeHome || t == TreeDocker }
 
 // ExportTree streams the archive of a tree of a running VM to w, compressed with zstd when
 // fast is set and with gzip otherwise. It runs `studio-agent <tree>-export` as root. The
 // guest agent comes from the host, so both sides of a fork read zstd; an export file stays
 // gzip, which older Studios import.
 func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, fast bool, w io.Writer) error {
-	if tree != TreeWorkspace && tree != TreeHome {
+	if !tree.known() {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
 	args := []string{string(tree) + "-export"}
@@ -37,7 +41,7 @@ func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, fast
 // ImportTree extracts an archive from rd into the empty tree of a running VM. It runs
 // `studio-agent <tree>-import` as root.
 func (r *Runtime) ImportTree(ctx context.Context, owned OwnedVM, tree Tree, rd io.Reader) error {
-	if tree != TreeWorkspace && tree != TreeHome {
+	if !tree.known() {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
 	return r.runAgent(ctx, owned, string(tree)+"-import", RunCommand{Stdin: rd})

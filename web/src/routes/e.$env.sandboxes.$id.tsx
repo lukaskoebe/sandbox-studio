@@ -181,7 +181,7 @@ function SandboxPage() {
         updatedAt={sandbox.dataUpdatedAt}
         error={sandbox.error}
       />
-      <LowDiskStatus disks={sb.lowDisks} />
+      <LowDiskStatus env={env} sandbox={sb} />
       <div className="flex min-h-0 flex-1">
         <ComputerScreen
           key={sb.id}

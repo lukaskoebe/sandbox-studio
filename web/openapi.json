@@ -2052,6 +2052,27 @@
         ],
         "type": "object"
       },
+      "DiskSizes": {
+        "additionalProperties": false,
+        "properties": {
+          "dockerMiB": {
+            "description": "The size of Docker's disk in MiB, at least 1024",
+            "format": "int64",
+            "type": "integer"
+          },
+          "homeMiB": {
+            "description": "The size of /home/agent in MiB, at least 1024; only for a sandbox with a home disk",
+            "format": "int64",
+            "type": "integer"
+          },
+          "workspaceMiB": {
+            "description": "The size of /workspace in MiB, at least 1024",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "DoctorReport": {
         "additionalProperties": false,
         "properties": {
@@ -4533,7 +4554,8 @@
               "restore",
               "checkpoint",
               "delete",
-              "merge"
+              "merge",
+              "disks"
             ],
             "type": "string"
           },
@@ -5846,10 +5868,12 @@
             "type": "string"
           },
           "operation": {
+            "description": "disks is a disk resize",
             "enum": [
               "create",
               "fork",
-              "rebase"
+              "rebase",
+              "disks"
             ],
             "type": "string"
           },
@@ -5858,7 +5882,7 @@
             "description": "The image pull, once it reports sizes"
           },
           "state": {
-            "description": "A failed create or fork leaves the sandbox failed; a failed rebase leaves it on its old template, in its status",
+            "description": "A failed create or fork leaves the sandbox failed; a failed rebase or disk resize leaves it as it was, in its status",
             "enum": [
               "running",
               "failed"
@@ -16669,6 +16693,80 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/disks": {
+      "put": {
+        "description": "Gives /workspace, Docker's disk and /home/agent new sizes; a size left out stays. A disk can't change its size in place, so this is a rebase onto the sandbox's own template, or onto the current base image for a sandbox without one, that keeps its CPUs and memory and copies Docker's images, containers and volumes as well as the workspace and the home. A disk may shrink as long as what it holds fits. Software installed outside the three disks, such as apt packages, is lost, and tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress. If the resize fails, the sandbox stays as it was, and its progress names the step that failed until it is dismissed (DELETE …/progress).",
+        "operationId": "resizeSandboxDisks",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Answer once the resize has ended, with the resized sandbox or why it failed, instead of at once",
+            "explode": false,
+            "in": "query",
+            "name": "wait",
+            "schema": {
+              "description": "Answer once the resize has ended, with the resized sandbox or why it failed, instead of at once",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiskSizes"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Resize a sandbox's disks",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/export": {
       "get": {
         "description": "Streams the template spec, resources, /workspace and /home/agent. Secrets, network identity, approvals, checkpoints and Docker state are not included. A running sandbox is exported while it runs, so files written meanwhile may be inconsistent. A stopped one is started without services and stopped again.",
@@ -17466,7 +17564,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/progress": {
       "delete": {
-        "description": "Clears the report of the sandbox's failed rebase from its progress. A running operation, or a failed create or fork, can't be dismissed: delete the sandbox instead.",
+        "description": "Clears the report of the sandbox's failed rebase or disk resize from its progress. A running operation, or a failed create or fork, can't be dismissed: delete the sandbox instead.",
         "operationId": "dismissSandboxProgress",
         "parameters": [
           {
@@ -17505,7 +17603,7 @@
             "description": "Error"
           }
         },
-        "summary": "Dismiss a failed rebase",
+        "summary": "Dismiss a failed rebase or disk resize",
         "tags": [
           "sandboxes"
         ]

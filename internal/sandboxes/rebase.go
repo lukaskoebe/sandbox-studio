@@ -27,6 +27,40 @@ import (
 // does; Wait returns its outcome. A failed rebase leaves the sandbox on its old template,
 // and its view keeps the step that failed until the next rebase, ClearProgress or a delete.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
+	return m.startRebase(ctx, envID, id, OperationRebase, func(sb store.Sandbox) (store.RebaseOperation, error) {
+		resolved := resources.Resources{
+			CPUs: int64(sb.CPUs), MemoryMiB: int64(sb.MemoryMiB), MaxMemoryMiB: int64(sb.MaxMemoryMiB),
+			WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB), HomeMiB: int64(sb.HomeMiB),
+		}
+		if templateID != "" {
+			var err error
+			if resolved, err = m.templateResources(ctx, envID, templateID); err != nil {
+				return store.RebaseOperation{}, err
+			}
+			// A template that names no home size keeps the sandbox's.
+			resolved.HomeMiB = cmp.Or(resolved.HomeMiB, int64(sb.HomeMiB))
+		}
+		// The home disk moves with the sandbox only onto a template that has one. A sandbox with
+		// a home disk is refused rather than losing its home.
+		targetHome, err := m.homeFor(ctx, envID, templateID, resolved.Home())
+		if err != nil {
+			return store.RebaseOperation{}, err
+		}
+		if sb.HomeMiB > 0 && targetHome == 0 {
+			return store.RebaseOperation{}, ErrTemplateWithoutHome
+		}
+		return store.RebaseOperation{
+			Kind: store.RebaseTemplate, SandboxID: sb.ID, EnvironmentID: envID, TemplateID: templateID,
+			CPUs: int(resolved.CPUs), MemoryMiB: int(resolved.MemoryMiB), MaxMemoryMiB: int(resolved.MaxMemoryMiB),
+			WorkspaceMiB: int(resolved.WorkspaceMiB), DockerMiB: int(resolved.DockerMiB), HomeMiB: targetHome,
+			BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
+		}, nil
+	})
+}
+
+// startRebase runs a rebase or a disk resize, operation, of a running or stopped sandbox:
+// plan says where it goes, and the rest is the same.
+func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, plan func(store.Sandbox) (store.RebaseOperation, error)) (View, error) {
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -57,25 +91,9 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if err != nil {
 		return View{}, err
 	}
-	resolved := resources.Resources{
-		CPUs: int64(sb.CPUs), MemoryMiB: int64(sb.MemoryMiB), MaxMemoryMiB: int64(sb.MaxMemoryMiB),
-		WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB), HomeMiB: int64(sb.HomeMiB),
-	}
-	if templateID != "" {
-		if resolved, err = m.templateResources(ctx, envID, templateID); err != nil {
-			return View{}, err
-		}
-		// A template that names no home size keeps the sandbox's.
-		resolved.HomeMiB = cmp.Or(resolved.HomeMiB, int64(sb.HomeMiB))
-	}
-	// The home disk moves with the sandbox only onto a template that has one. A sandbox with
-	// a home disk is refused rather than losing its home.
-	targetHome, err := m.homeFor(ctx, envID, templateID, resolved.Home())
+	req, err := plan(sb)
 	if err != nil {
 		return View{}, err
-	}
-	if sb.HomeMiB > 0 && targetHome == 0 {
-		return View{}, ErrTemplateWithoutHome
 	}
 	status, err := m.Runtime.Status(ctx, VMName(sb))
 	if err != nil {
@@ -85,8 +103,8 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 		return View{}, ErrLifecycleState
 	}
 	var image *runtime.ImageSource // the default image
-	if templateID != "" {
-		if image, err = m.templateImage(ctx, envID, templateID); err != nil {
+	if req.TemplateID != "" {
+		if image, err = m.templateImage(ctx, envID, req.TemplateID); err != nil {
 			return View{}, err
 		}
 	}
@@ -95,17 +113,15 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if wasRunning {
 		steps = rebaseRunningSteps
 	}
-	if err := m.begin(ctx, sb, OperationRebase, steps); err != nil {
+	if err := m.begin(ctx, sb, operation, steps); err != nil {
 		return View{}, err
 	}
 	handedOff = true
-	req := store.RebaseOperation{
-		SandboxID: sb.ID, EnvironmentID: envID, TemplateID: templateID,
-		CPUs: int(resolved.CPUs), MemoryMiB: int(resolved.MemoryMiB), MaxMemoryMiB: int(resolved.MaxMemoryMiB),
-		WorkspaceMiB: int(resolved.WorkspaceMiB), DockerMiB: int(resolved.DockerMiB), HomeMiB: targetHome,
-		BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
+	timeout := transferTimeout
+	if req.Kind == store.RebaseDisks {
+		timeout = diskResizeTimeout
 	}
-	m.background(sb, transferTimeout, unlock, func(ctx context.Context) error {
+	m.background(sb, timeout, unlock, func(ctx context.Context) error {
 		return m.rebase(ctx, rt, sb, req, image, wasRunning)
 	})
 	return m.acceptedView(ctx, sb), nil
@@ -122,7 +138,7 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 		return m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning); err != nil {
+	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, op.Kind == store.RebaseDisks); err != nil {
 		return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
@@ -159,7 +175,8 @@ func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 	return sb
 }
 
-func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning bool) error {
+// rebaseInto builds and fills target, copying Docker's data too when docker is set.
+func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning, docker bool) error {
 	if wasRunning {
 		if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
 			return err
@@ -186,6 +203,12 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 	m.advance(sb.ID, StepCopy)
 	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, target.HomeMiB); err != nil {
 		return err
+	}
+	if docker {
+		limit := &limitWriter{left: int64(target.DockerMiB) << 20, err: ErrDockerTooLarge}
+		if err := copyTree(ctx, rt, ownedVM(sb), ownedVM(target), runtime.TreeDocker, limit); err != nil {
+			return err
+		}
 	}
 	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
 		return err

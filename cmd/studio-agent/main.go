@@ -66,6 +66,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: home-import: %v\n", err)
 			os.Exit(1)
 		}
+	case "docker-export":
+		// The same for Docker's data, which a disk resize copies with Docker stopped.
+		if err := dockerExport(os.Stdout, os.Stderr, slices.Contains(os.Args[2:], "--zstd")); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: docker-export: %v\n", err)
+			os.Exit(1)
+		}
+	case "docker-import":
+		if err := dockerImport(os.Stdin); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: docker-import: %v\n", err)
+			os.Exit(1)
+		}
 	case "merge-base", "merge-export", "merge-apply", "merge-status", "merge-replay-export", "merge-replay":
 		// Studio runs these as the agent user to merge a fork back: see forkmerge.
 		if err := merge(cmd, os.Args[2:], os.Stdin, os.Stdout); err != nil {
@@ -171,7 +182,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

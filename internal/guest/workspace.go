@@ -51,7 +51,7 @@ func ExportWorkspace(root string, w io.Writer, warn io.Writer) error {
 
 // ExportWorkspaceAs is ExportWorkspace with the archive compressed as c.
 func ExportWorkspaceAs(root string, w io.Writer, warn io.Writer, c Compression) error {
-	return exportTree(root, w, warn, nil, c)
+	return exportTree(root, w, warn, treeOptions{}, c)
 }
 
 func compressor(w io.Writer, c Compression) (io.WriteCloser, error) {
@@ -61,9 +61,17 @@ func compressor(w io.Writer, c Compression) (io.WriteCloser, error) {
 	return gzip.NewWriterLevel(w, gzip.BestSpeed)
 }
 
-// exportTree is ExportWorkspaceAs, leaving out what skip, if set, reports for a relative
-// name.
-func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) bool, c Compression) error {
+// treeOptions are what an archive of a tree keeps beyond a workspace's.
+type treeOptions struct {
+	// skip, if set, leaves out what it reports for a relative name.
+	skip func(rel string) bool
+	// special keeps devices, FIFOs and extended attributes, as Docker's data needs: overlay
+	// whiteouts are character devices and opaque directories an xattr.
+	special bool
+}
+
+// exportTree is ExportWorkspaceAs with opts.
+func exportTree(root string, w io.Writer, warn io.Writer, opts treeOptions, c Compression) error {
 	gz, err := compressor(w, c)
 	if err != nil {
 		return err
@@ -86,7 +94,7 @@ func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) 
 		if rel == lostFound && d.IsDir() {
 			return fs.SkipDir
 		}
-		if skip != nil && skip(rel) {
+		if opts.skip != nil && opts.skip(rel) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
@@ -100,7 +108,7 @@ func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) 
 		if err != nil {
 			return err
 		}
-		return exportEntry(tw, p, rel, info, links, warn)
+		return exportEntry(tw, p, rel, info, links, opts.special, warn)
 	})
 	if err != nil {
 		return err
@@ -111,7 +119,7 @@ func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) 
 	return gz.Close()
 }
 
-func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]uint64]string, warn io.Writer) error {
+func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]uint64]string, special bool, warn io.Writer) error {
 	st, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
 		return fmt.Errorf("%s: no file status", rel)
@@ -123,6 +131,18 @@ func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]u
 		Gid:     int(st.Gid),
 		ModTime: time.Unix(st.Mtim.Sec, st.Mtim.Nsec),
 		Format:  tar.FormatPAX,
+	}
+	if special {
+		attrs, err := xattrs(p)
+		if err != nil {
+			return skipVanished(err, rel, warn)
+		}
+		for name, value := range attrs {
+			if h.PAXRecords == nil {
+				h.PAXRecords = map[string]string{}
+			}
+			h.PAXRecords[xattrPrefix+name] = value
+		}
 	}
 	switch st.Mode & unix.S_IFMT {
 	case unix.S_IFDIR:
@@ -161,10 +181,52 @@ func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]u
 			_, err = io.CopyN(tw, zeroReader{}, st.Size-n)
 		}
 		return err
+	case unix.S_IFCHR, unix.S_IFBLK, unix.S_IFIFO:
+		if !special {
+			fmt.Fprintf(warn, "skipped %s: sockets, FIFOs and devices are not copied\n", rel)
+			return nil
+		}
+		h.Typeflag = map[uint32]byte{unix.S_IFCHR: tar.TypeChar, unix.S_IFBLK: tar.TypeBlock, unix.S_IFIFO: tar.TypeFifo}[st.Mode&unix.S_IFMT]
+		h.Devmajor, h.Devminor = int64(unix.Major(st.Rdev)), int64(unix.Minor(st.Rdev))
+		return tw.WriteHeader(h)
 	default:
-		fmt.Fprintf(warn, "skipped %s: sockets, FIFOs and devices are not copied\n", rel)
+		fmt.Fprintf(warn, "skipped %s: sockets are not copied\n", rel)
 		return nil
 	}
+}
+
+// xattrPrefix names an extended attribute in a PAX record, as GNU tar and Go's reader do.
+const xattrPrefix = "SCHILY.xattr."
+
+// xattrs reads the extended attributes of p without following a symlink.
+func xattrs(p string) (map[string]string, error) {
+	size, err := unix.Llistxattr(p, nil)
+	if errors.Is(err, unix.ENOTSUP) || size == 0 {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	list := make([]byte, size)
+	if size, err = unix.Llistxattr(p, list); err != nil {
+		return nil, err
+	}
+	attrs := map[string]string{}
+	for _, name := range strings.Split(string(list[:size]), "\x00") {
+		if name == "" {
+			continue
+		}
+		n, err := unix.Lgetxattr(p, name, nil)
+		if err != nil {
+			return nil, fmt.Errorf("xattr %s: %w", name, err)
+		}
+		value := make([]byte, n)
+		if n, err = unix.Lgetxattr(p, name, value); err != nil {
+			return nil, fmt.Errorf("xattr %s: %w", name, err)
+		}
+		attrs[name] = string(value[:n])
+	}
+	return attrs, nil
 }
 
 func skipVanished(err error, rel string, warn io.Writer) error {
@@ -188,6 +250,12 @@ func (zeroReader) Read(p []byte) (int, error) {
 // entry types other than files, directories, symlinks and hardlinks. It restores owners,
 // modes and mtimes. A failed import leaves a partial tree; the caller discards it.
 func ImportWorkspace(root string, r io.Reader) error {
+	return importTree(root, r, false)
+}
+
+// importTree is ImportWorkspace. With special it also creates devices and FIFOs and sets
+// extended attributes, the entries an export with treeOptions.special writes.
+func importTree(root string, r io.Reader, special bool) error {
 	rootFD, err := unix.Open(root, unix.O_DIRECTORY|unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return fmt.Errorf("open workspace: %w", err)
@@ -201,7 +269,7 @@ func ImportWorkspace(root string, r io.Reader) error {
 		return fmt.Errorf("read archive: %w", err)
 	}
 	defer gz.Close()
-	im := &importer{root: rootFD, seen: map[string]byte{}}
+	im := &importer{root: rootFD, seen: map[string]byte{}, special: special}
 	tr := tar.NewReader(gz)
 	for {
 		h, err := tr.Next()
@@ -253,9 +321,10 @@ func checkEmpty(root string) error {
 }
 
 type importer struct {
-	root int
-	seen map[string]byte // archive name → type flag
-	dirs []*tar.Header   // in archive order; their metadata is applied last
+	root    int
+	seen    map[string]byte // archive name → type flag
+	dirs    []*tar.Header   // in archive order; their metadata is applied last
+	special bool
 }
 
 func (im *importer) entry(h *tar.Header, r io.Reader) error {
@@ -309,6 +378,10 @@ func (im *importer) entry(h *tar.Header, r io.Reader) error {
 		if err == nil {
 			err = setMetadata(fd, h)
 		}
+		if err == nil && im.special {
+			// After the chown, which drops security.capability.
+			err = setXattrs(h, func(name string, value []byte) error { return unix.Fsetxattr(fd, name, value, 0) })
+		}
 		if closeErr := f.Close(); err == nil {
 			err = closeErr
 		}
@@ -327,6 +400,30 @@ func (im *importer) entry(h *tar.Header, r io.Reader) error {
 		}
 		ts := []unix.Timespec{unix.NsecToTimespec(h.ModTime.UnixNano()), unix.NsecToTimespec(h.ModTime.UnixNano())}
 		if err := unix.UtimesNanoAt(parent, base, ts, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			return err
+		}
+		if err := im.setXattrsAt(parent, base, h); err != nil {
+			return err
+		}
+	case tar.TypeChar, tar.TypeBlock, tar.TypeFifo:
+		if !im.special {
+			return fmt.Errorf("unsupported entry type %q", h.Typeflag)
+		}
+		kind := map[byte]uint32{tar.TypeChar: unix.S_IFCHR, tar.TypeBlock: unix.S_IFBLK, tar.TypeFifo: unix.S_IFIFO}[h.Typeflag]
+		if err := unix.Mknodat(parent, base, kind|0o600, int(unix.Mkdev(uint32(h.Devmajor), uint32(h.Devminor)))); err != nil {
+			return err
+		}
+		if err := unix.Fchownat(parent, base, h.Uid, h.Gid, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			return err
+		}
+		if err := unix.Fchmodat(parent, base, uint32(h.Mode&0o7777), 0); err != nil {
+			return err
+		}
+		ts := []unix.Timespec{unix.NsecToTimespec(h.ModTime.UnixNano()), unix.NsecToTimespec(h.ModTime.UnixNano())}
+		if err := unix.UtimesNanoAt(parent, base, ts, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			return err
+		}
+		if err := im.setXattrsAt(parent, base, h); err != nil {
 			return err
 		}
 	case tar.TypeLink:
@@ -378,9 +475,36 @@ func (im *importer) finishDirs() error {
 			return fmt.Errorf("%q: %w", h.Name, err)
 		}
 		err = setMetadata(fd, h)
+		if err == nil && im.special {
+			err = setXattrs(h, func(name string, value []byte) error { return unix.Fsetxattr(fd, name, value, 0) })
+		}
 		unix.Close(fd)
 		if err != nil {
 			return fmt.Errorf("%q: %w", h.Name, err)
+		}
+	}
+	return nil
+}
+
+// setXattrsAt sets the extended attributes of an entry that can't be opened, a symlink or a
+// device, through its parent's descriptor, which resolves without following symlinks.
+func (im *importer) setXattrsAt(parent int, base string, h *tar.Header) error {
+	if !im.special {
+		return nil
+	}
+	p := fmt.Sprintf("/proc/self/fd/%d/%s", parent, base)
+	return setXattrs(h, func(name string, value []byte) error { return unix.Lsetxattr(p, name, value, 0) })
+}
+
+// setXattrs sets the extended attributes an entry's PAX records name.
+func setXattrs(h *tar.Header, set func(name string, value []byte) error) error {
+	for k, v := range h.PAXRecords {
+		name, ok := strings.CutPrefix(k, xattrPrefix)
+		if !ok {
+			continue
+		}
+		if err := set(name, []byte(v)); err != nil {
+			return fmt.Errorf("xattr %s: %w", name, err)
 		}
 	}
 	return nil

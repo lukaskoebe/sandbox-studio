@@ -41,11 +41,14 @@ The power button stops a running computer and starts one that is off; a computer
 | **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not, nor is what was installed elsewhere, such as apt packages and tools from `mise use -g`. The fork gets its own network approvals. |
 | **Connections** | Lists where the sandbox connects. |
 | **Resources** | Changes its CPUs and memory (see below). |
+| **Disks** | Changes the size of the workspace, Docker and home disks (see below). |
 | **Rebase** | Moves the sandbox onto the current base image or another template (see below). |
 | **Export** | Saves a portable copy (see [Export a workspace](#export-a-workspace)). |
 | **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
 
 A running sandbox takes a change of CPUs or memory right away, up or down, while it fits the room the sandbox started with: twice its memory, and its CPUs plus as many again (at most 4 more). The dialog says per resource whether a value applies now or needs a restart. A change past that room waits for the next start, and the menu shows it, such as *2 CPU · 4 GiB · 12 GiB after restart*. **Save and restart** applies all of it now; programs and terminal sessions end, files stay. A stopped or suspended sandbox takes any change at its next start.
+
+A disk can't change its size in place, so **Disks** gives the sandbox a new generation with the sizes you pick and copies `/workspace`, the home directory and Docker's images, containers and volumes into it. A disk can also shrink, as long as what it holds fits. A running sandbox stops for the copy and starts again; a big Docker disk takes a while. As with a rebase, apt packages, tools from `mise use -g` and terminal sessions are not carried over. When a disk is nearly full, the strip above the screen or chat that says so has a **Resize disks…** button. A sandbox from a template built before the home directory existed keeps its home on the root disk, so only its workspace and Docker disks can be resized. If the resize fails, the sandbox keeps its disks and the page names the step that failed.
 
 Rebasing moves the sandbox onto the current base image, which is what new sandboxes get, or onto a ready template, and carries over `/workspace` and the home directory with your logins and harness sessions; Docker data, apt packages, tools from `mise use -g` and terminal sessions are not carried over.
 
@@ -55,7 +58,7 @@ Each Studio release can bring a newer base image, with newer harnesses and chat 
 
 **Checkpoints** in the **⋯** menu opens the sandbox's history. It draws the sandbox's history as a line from left to right, in the order things happened.
 
-- Each generation of the sandbox is labelled with its template. A rebase shows as a change of template, and a restore shows as a jump back to a checkpoint.
+- Each generation of the sandbox is labelled with its template. A rebase shows as a change of template, a disk resize as *disks resized*, and a restore as a jump back to a checkpoint.
 - Checkpoints are the points on the line. Select one for its menu: **Restore** when the runtime allows it, **Fork from here**, **Rename** and **Delete**.
 - Forks branch off to their child sandboxes, and a forked sandbox shows the one it came from. A deleted sandbox stays in the history, marked as deleted.
 - The end of the line is the sandbox as it is now. **Save checkpoint** in the **Checkpoints** section below saves its current state.

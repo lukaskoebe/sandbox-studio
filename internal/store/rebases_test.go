@@ -135,3 +135,40 @@ func TestRebaseRefusedDuringRestore(t *testing.T) {
 		t.Fatalf("BeginRebase() during restore error = %v, want ErrConflict", err)
 	}
 }
+
+// A disk resize is a rebase onto the sandbox's own template that records a disks event.
+func TestDiskResizeRecordsItsEvent(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, err := s.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: env.ID, Name: "box", CPUs: 1, MemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024, HomeMiB: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.BeginRebase(ctx, RebaseOperation{Kind: RebaseDisks, SandboxID: sb.ID, EnvironmentID: env.ID, CPUs: 1, MemoryMiB: 512,
+		WorkspaceMiB: 8192, DockerMiB: 16384, HomeMiB: 8192})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ops, err := s.Rebases(ctx); err != nil || len(ops) != 1 || ops[0] != op {
+		t.Fatalf("Rebases() = %+v, %v; want %+v", ops, err, op)
+	}
+	if err := s.CommitRebase(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Sandbox(ctx, env.ID, sb.ID)
+	if err != nil || got.WorkspaceMiB != 8192 || got.DockerMiB != 16384 || got.HomeMiB != 8192 || got.Generation != 2 {
+		t.Fatalf("sandbox = %+v, %v", got, err)
+	}
+	evs, err := s.SandboxEvents(ctx, env.ID, sb.ID)
+	if err != nil || len(evs) == 0 || evs[len(evs)-1].Kind != EventDisks || evs[len(evs)-1].Generation != 2 {
+		t.Fatalf("events = %+v, %v", evs, err)
+	}
+}

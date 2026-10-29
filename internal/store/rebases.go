@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -10,8 +11,10 @@ import (
 // RebaseOperation records a move of a sandbox to another template, or to the default image
 // when TemplateID is empty. The catalog keeps FromGeneration until CommitRebase adopts
 // ToGeneration, the template, its resources and BaseImage, the base the new VM runs, which
-// BaseVersion names when it is the default image.
+// BaseVersion names when it is the default image. A disk resize is a rebase of kind
+// RebaseDisks onto the sandbox's own template or base.
 type RebaseOperation struct {
+	Kind           string // RebaseTemplate, or RebaseDisks
 	SandboxID      string
 	EnvironmentID  string
 	TemplateID     string
@@ -27,13 +30,19 @@ type RebaseOperation struct {
 	BaseVersion    string
 }
 
-const rebaseCols = "sandbox_id, environment_id, IFNULL(template_id, ''), from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version, home_mib"
-const rebaseInsertCols = "sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version, home_mib"
+// Kinds of rebase.
+const (
+	RebaseTemplate = "rebase" // onto another template or the base
+	RebaseDisks    = "disks"  // onto its own, with other disk sizes
+)
+
+const rebaseCols = "sandbox_id, environment_id, IFNULL(template_id, ''), from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version, home_mib, kind"
+const rebaseInsertCols = "sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version, home_mib, kind"
 
 func scanRebase(row interface{ Scan(...any) error }) (RebaseOperation, error) {
 	var op RebaseOperation
 	err := row.Scan(&op.SandboxID, &op.EnvironmentID, &op.TemplateID, &op.FromGeneration, &op.ToGeneration,
-		&op.CPUs, &op.MemoryMiB, &op.MaxMemoryMiB, &op.WorkspaceMiB, &op.DockerMiB, &op.BaseImage, &op.BaseVersion, &op.HomeMiB)
+		&op.CPUs, &op.MemoryMiB, &op.MaxMemoryMiB, &op.WorkspaceMiB, &op.DockerMiB, &op.BaseImage, &op.BaseVersion, &op.HomeMiB, &op.Kind)
 	return op, err
 }
 
@@ -79,9 +88,10 @@ func (s *Store) BeginRebase(ctx context.Context, op RebaseOperation) (RebaseOper
 		return RebaseOperation{}, ErrConflict
 	}
 	op.FromGeneration, op.ToGeneration = generation, generation+1
-	if _, err := tx.ExecContext(ctx, "INSERT INTO rebases ("+rebaseInsertCols+") VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	op.Kind = cmp.Or(op.Kind, RebaseTemplate)
+	if _, err := tx.ExecContext(ctx, "INSERT INTO rebases ("+rebaseInsertCols+") VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		op.SandboxID, op.EnvironmentID, op.TemplateID, op.FromGeneration, op.ToGeneration,
-		op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion, op.HomeMiB); err != nil {
+		op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion, op.HomeMiB, op.Kind); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return RebaseOperation{}, ErrConflict
 		}
@@ -147,8 +157,12 @@ func (s *Store) CommitRebase(ctx context.Context, op RebaseOperation) error {
 	if n, _ := res.RowsAffected(); n != 1 {
 		return ErrConflict
 	}
+	kind := EventRebase
+	if op.Kind == RebaseDisks {
+		kind = EventDisks
+	}
 	if err := insertSandboxEvent(ctx, tx, SandboxEvent{
-		EnvironmentID: op.EnvironmentID, SandboxID: op.SandboxID, Kind: EventRebase, Generation: op.ToGeneration,
+		EnvironmentID: op.EnvironmentID, SandboxID: op.SandboxID, Kind: kind, Generation: op.ToGeneration,
 		Name: name, TemplateID: op.TemplateID, FromTemplateID: fromTemplate,
 	}); err != nil {
 		return err

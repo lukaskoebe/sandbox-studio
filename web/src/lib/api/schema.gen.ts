@@ -1623,6 +1623,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/disks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Resize a sandbox's disks
+         * @description Gives /workspace, Docker's disk and /home/agent new sizes; a size left out stays. A disk can't change its size in place, so this is a rebase onto the sandbox's own template, or onto the current base image for a sandbox without one, that keeps its CPUs and memory and copies Docker's images, containers and volumes as well as the workspace and the home. A disk may shrink as long as what it holds fits. Software installed outside the three disks, such as apt packages, is lost, and tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress. If the resize fails, the sandbox stays as it was, and its progress names the step that failed until it is dismissed (DELETE …/progress).
+         */
+        put: operations["resizeSandboxDisks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/export": {
         parameters: {
             query?: never;
@@ -1838,8 +1858,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Dismiss a failed rebase
-         * @description Clears the report of the sandbox's failed rebase from its progress. A running operation, or a failed create or fork, can't be dismissed: delete the sandbox instead.
+         * Dismiss a failed rebase or disk resize
+         * @description Clears the report of the sandbox's failed rebase or disk resize from its progress. A running operation, or a failed create or fork, can't be dismissed: delete the sandbox instead.
          */
         delete: operations["dismissSandboxProgress"];
         options?: never;
@@ -3622,6 +3642,23 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        DiskSizes: {
+            /**
+             * Format: int64
+             * @description The size of Docker's disk in MiB, at least 1024
+             */
+            dockerMiB?: number;
+            /**
+             * Format: int64
+             * @description The size of /home/agent in MiB, at least 1024; only for a sandbox with a home disk
+             */
+            homeMiB?: number;
+            /**
+             * Format: int64
+             * @description The size of /workspace in MiB, at least 1024
+             */
+            workspaceMiB?: number;
+        };
         DoctorReport: {
             /** Format: date-time */
             checkedAt: string;
@@ -4487,7 +4524,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete" | "merge";
+            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete" | "merge" | "disks";
             /** @description The sandbox's name at the time */
             name: string;
             /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from. For a merge, the fork merged */
@@ -4884,12 +4921,15 @@ export interface components {
         Progress: {
             /** @description Why the step failed */
             error?: string;
-            /** @enum {string} */
-            operation: "create" | "fork" | "rebase";
+            /**
+             * @description disks is a disk resize
+             * @enum {string}
+             */
+            operation: "create" | "fork" | "rebase" | "disks";
             /** @description The image pull, once it reports sizes */
             pull?: components["schemas"]["PullProgress"];
             /**
-             * @description A failed create or fork leaves the sandbox failed; a failed rebase leaves it on its old template, in its status
+             * @description A failed create or fork leaves the sandbox failed; a failed rebase or disk resize leaves it as it was, in its status
              * @enum {string}
              */
             state: "running" | "failed";
@@ -10539,6 +10579,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conn"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resizeSandboxDisks: {
+        parameters: {
+            query?: {
+                /** @description Answer once the resize has ended, with the resized sandbox or why it failed, instead of at once */
+                wait?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiskSizes"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
                 };
             };
             /** @description Error */

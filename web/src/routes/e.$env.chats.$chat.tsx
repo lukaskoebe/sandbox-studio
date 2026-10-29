@@ -196,7 +196,7 @@ function ChatPage() {
             : "Reconnecting… new messages show up once Studio is back."}
         </div>
       )}
-      <LowDiskStatus disks={sandbox.data?.lowDisks} />
+      <LowDiskStatus env={env} sandbox={sandbox.data} />
       <div className="flex min-h-0 flex-1">
         <ChatThread
           env={env}

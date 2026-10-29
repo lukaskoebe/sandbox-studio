@@ -56,6 +56,11 @@ func (r Resources) Validate() error {
 	if err := r.ValidateSize(); err != nil {
 		return err
 	}
+	return r.ValidateDisks()
+}
+
+// ValidateDisks checks the disk sizes: the part of the resources a disk resize changes.
+func (r Resources) ValidateDisks() error {
 	if r.WorkspaceMiB < 1024 {
 		return fmt.Errorf("%w: workspaceMiB must be at least 1024", ErrInvalid)
 	}

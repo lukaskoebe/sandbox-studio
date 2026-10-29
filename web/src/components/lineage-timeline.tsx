@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import {
   ArrowCounterClockwiseIcon,
   GitForkIcon,
+  HardDriveIcon,
   PencilSimpleIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
@@ -344,6 +345,26 @@ function StepMarker({
           title={title}
           label={`${shortTemplate(step.fromTemplateId, step.fromTemplateName)} → ${shortTemplate(step.templateId, step.templateName)}`}
           dot={<span className="size-2 rotate-45 bg-muted-foreground" />}
+          meta={generation}
+          template={
+            <TemplateName
+              templateId={step.templateId}
+              name={step.templateName}
+            />
+          }
+        />
+      )
+    case "disks":
+      return (
+        <Marker
+          left={left}
+          title={title}
+          label="disks resized"
+          dot={
+            <span className="grid size-4 place-items-center rounded-full border bg-background text-muted-foreground">
+              <HardDriveIcon className="size-2.5" />
+            </span>
+          }
           meta={generation}
           template={
             <TemplateName

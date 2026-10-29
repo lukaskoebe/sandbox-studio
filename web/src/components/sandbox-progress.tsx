@@ -28,7 +28,7 @@ type Step = Run["step"]
 type Pull = NonNullable<Run["pull"]>
 type StepState = "done" | "running" | "failed" | "pending"
 
-/** What each step of a create, fork or rebase is called on screen. */
+/** What each step of a create, fork, rebase or disk resize is called on screen. */
 const stepLabels: Record<Step, string> = {
   prepare: "Preparing the sandbox for the copy",
   pull: "Pulling the image",
@@ -44,14 +44,19 @@ const verbs: Record<Run["operation"], string> = {
   create: "Creating",
   fork: "Forking",
   rebase: "Rebasing",
+  disks: "Resizing the disks of",
 }
 
 /**
- * Whether the sandbox's last rebase failed. The sandbox is back as it was; only its progress
- * tells.
+ * Whether the sandbox's last rebase or disk resize failed. The sandbox is back as it was;
+ * only its progress tells.
  */
 export function rebaseFailed(sb: Sandbox) {
-  return sb.progress?.operation === "rebase" && sb.progress.state === "failed"
+  return (
+    (sb.progress?.operation === "rebase" ||
+      sb.progress?.operation === "disks") &&
+    sb.progress.state === "failed"
+  )
 }
 
 const labelTones: Record<StepState, string> = {
@@ -74,7 +79,7 @@ export function SandboxProgress({
   action?: ReactNode
 }) {
   const run = sb.progress
-  const rebase = run?.operation === "rebase"
+  const rebase = run?.operation === "rebase" || run?.operation === "disks"
   const failed = sb.status === "failed" || run?.state === "failed"
   const verb = run ? verbs[run.operation] : "Creating"
   const steps: Step[] = run?.steps?.length ? run.steps : run ? [run.step] : []
@@ -92,7 +97,9 @@ export function SandboxProgress({
         <EmptyDescription>
           {failed
             ? rebase
-              ? "The sandbox stays on its old template, in the state it was in."
+              ? run.operation === "disks"
+                ? "The sandbox keeps its disks, in the state it was in."
+                : "The sandbox stays on its old template, in the state it was in."
               : "Delete the sandbox to try again."
             : "This can take a few minutes. The work keeps going in the background."}
         </EmptyDescription>
@@ -180,7 +187,7 @@ function PullBar({ pull }: { pull?: Pull }) {
   )
 }
 
-/** Dismisses the report of a failed rebase. */
+/** Dismisses the report of a failed rebase or disk resize. */
 export function DismissRebaseButton({
   env,
   sandbox,
@@ -221,7 +228,10 @@ export function DismissRebaseButton({
   )
 }
 
-/** A note above the workspace that the sandbox's last rebase failed, and at which step. */
+/**
+ * A note above the workspace that the sandbox's last rebase or disk resize failed, and at
+ * which step.
+ */
 export function RebaseFailedAlert({
   env,
   sandbox: sb,
@@ -235,9 +245,14 @@ export function RebaseFailedAlert({
     <Alert variant="destructive" role="alert" className="m-2 w-auto shrink-0">
       <WarningIcon />
       <div className="min-w-0 space-y-2">
-        <AlertTitle>Rebase failed: {stepLabels[run.step]} failed</AlertTitle>
+        <AlertTitle>
+          {run.operation === "disks" ? "Disk resize" : "Rebase"} failed:{" "}
+          {stepLabels[run.step]} failed
+        </AlertTitle>
         <AlertDescription>
-          The sandbox stays on its old template.{" "}
+          {run.operation === "disks"
+            ? "The sandbox keeps its disks."
+            : "The sandbox stays on its old template."}{" "}
           {run.error || "No details were recorded."}
         </AlertDescription>
         <DismissRebaseButton env={env} sandbox={sb} />

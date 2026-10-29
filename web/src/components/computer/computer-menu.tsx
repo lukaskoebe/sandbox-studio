@@ -8,6 +8,7 @@ import {
   FloppyDiskIcon,
   GitForkIcon,
   GitMergeIcon,
+  HardDriveIcon,
   PauseIcon,
   PlayIcon,
   PlugsConnectedIcon,
@@ -21,6 +22,7 @@ import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { MergeForkDialog } from "@/components/merge-fork"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
+import { ResizeDisksDialog } from "@/components/resize-disks-dialog"
 import {
   ResizeSandboxDialog,
   sandboxSize,
@@ -64,6 +66,7 @@ type Dialog =
   | "merge"
   | "rebase"
   | "resources"
+  | "disks"
   | "connections"
   | "ssh"
   | "another"
@@ -71,7 +74,7 @@ type Dialog =
 
 /**
  * The computer's ⋯ on the screen's bezel: what it is and what it uses, then what is off the
- * everyday path: checkpoints, fork and merge, rebase, resources, its connections, SSH,
+ * everyday path: checkpoints, fork and merge, rebase, resources and disks, its connections, SSH,
  * export, another computer, suspend and delete. Power has its own button beside it.
  */
 export function ComputerMenu({
@@ -267,6 +270,22 @@ export function ComputerMenu({
                   disabled={!available}
                   title={
                     available
+                      ? "Give the workspace, Docker and home disks other sizes"
+                      : "Only a running or stopped computer's disks can be resized"
+                  }
+                  onClick={() => setDialog("disks")}
+                >
+                  <HardDriveIcon />
+                  Disks
+                  <span className="ml-auto text-caption text-muted-foreground">
+                    {formatMiB(sb.workspaceMiB)} · {formatMiB(sb.dockerMiB)}
+                    {sb.homeMiB ? ` · ${formatMiB(sb.homeMiB)}` : ""}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!available}
+                  title={
+                    available
                       ? "Move this computer onto the current base or another template"
                       : "Only a running or stopped computer can be rebased"
                   }
@@ -374,6 +393,12 @@ export function ComputerMenu({
         env={env}
         sandbox={sb}
         open={dialog === "resources"}
+        onOpenChange={close}
+      />
+      <ResizeDisksDialog
+        env={env}
+        sandbox={sb}
+        open={dialog === "disks"}
         onOpenChange={close}
       />
       <Sheet open={dialog === "connections"} onOpenChange={close}>

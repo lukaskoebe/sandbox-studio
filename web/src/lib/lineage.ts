@@ -77,6 +77,11 @@ export type Step =
       templateName?: string
     })
   | (StepBase & {
+      kind: "disks"
+      templateId: string
+      templateName?: string
+    })
+  | (StepBase & {
       kind: "restore"
       name: string
       templateId: string
@@ -140,6 +145,14 @@ export function buildTimeline(lineage: Lineage): Timeline {
           templateName: event.templateName,
         })
         break
+      case "disks":
+        steps.push({
+          ...base,
+          kind: "disks",
+          templateId: event.templateId ?? "",
+          templateName: event.templateName,
+        })
+        break
       case "restore": {
         const checkpoint = checkpoints.find(
           (item) => item.id === event.checkpointId
@@ -176,6 +189,7 @@ export function buildTimeline(lineage: Lineage): Timeline {
     if (
       step.kind === "origin" ||
       step.kind === "rebase" ||
+      step.kind === "disks" ||
       step.kind === "restore"
     ) {
       segments.push({
@@ -200,6 +214,8 @@ export function summarize(step: Step): string {
       ].join(", ")
     case "rebase":
       return `Rebased from ${shortTemplate(step.fromTemplateId, step.fromTemplateName)} to ${shortTemplate(step.templateId, step.templateName)}, ${generation}`
+    case "disks":
+      return `Disks resized, ${generation}`
     case "restore":
       return `Restored checkpoint ${step.name}, ${generation}`
     case "checkpoint":
