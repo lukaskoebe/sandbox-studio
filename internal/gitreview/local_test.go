@@ -163,4 +163,22 @@ func TestParseLocalRepoURL(t *testing.T) {
 	if _, err := ParseRepoURL(filepath.Join(folder, "missing")); err == nil {
 		t.Fatal("a missing folder was parsed")
 	}
+	// A folder with a repository in it is the forge itself.
+	if err := os.Mkdir(filepath.Join(folder, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "app", ".git"), []byte("gitdir: elsewhere\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err = ParseRepoURL(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (RepoURL{Kind: KindLocal, BaseURL: folder, Name: "local", Auth: store.ForgeAuthNone}); r != want {
+		t.Fatalf("folder of repositories: %+v, want %+v", r, want)
+	}
+	// The repository itself is still one of the folder's.
+	if r, err := ParseRepoURL(filepath.Join(folder, "app")); err != nil || r.BaseURL != folder || r.Path != "app" {
+		t.Fatalf("repository: %+v %v", r, err)
+	}
 }

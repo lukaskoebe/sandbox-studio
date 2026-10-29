@@ -31,11 +31,12 @@ var sshAPIHosts = map[string]string{"github.com": "github.com", "ssh.github.com"
 	"codeberg.org": "codeberg.org", "gitlab.com": "gitlab.com", "altssh.gitlab.com": "gitlab.com"}
 
 // ParseRepoURL reads a repository URL: git@host:owner/repo.git, ssh://git@host:port/owner/repo.git
-// or https://host/owner/repo(.git). SSH URLs make an ssh forge signing with the agent, also
-// for github.com; HTTPS URLs make a github or forgejo forge for hosts with that API, else
-// an https one. Name is the host's main label, such as github, and not checked for
-// uniqueness. A path on this computer, /home/me/git/repo, ~/git/repo or file:///..., makes
-// a local forge for the folder the repository is in, named local.
+// or https://host/owner/repo(.git), or a forge's https://host alone. SSH URLs make an ssh forge
+// signing with the agent, also for github.com; HTTPS URLs make a github or forgejo forge for
+// hosts with that API, else an https one. Name comes from the host (shortName), such as
+// github, and is not checked for uniqueness. A path on this computer, /home/me/git/repo,
+// ~/git/repo or file:///..., makes a local forge for the folder the repository is in, or for
+// the folder itself when it holds repositories, named local.
 func ParseRepoURL(raw string) (RepoURL, error) {
 	return parseRepoURL(raw, nil)
 }
@@ -108,16 +109,19 @@ func parseRepoURL(raw string, known map[string]string) (RepoURL, error) {
 		}
 		r.Kind, r.BaseURL, r.Auth, path = KindSSH, u.Base, store.ForgeAuthAgent, p
 	}
-	owner, repo, ok := splitPath(strings.Trim(path, "/"))
-	if !ok {
-		return bad("the repository path must be 1 to 8 segments of letters, digits, dots, dashes and underscores")
-	}
-	r.Path = repo
-	if owner != "" {
-		r.Path = owner + "/" + repo
-	}
-	if badOwner(r.Kind, owner) {
-		return bad("repositories on this host are owner/repo")
+	// An HTTPS forge's own address, such as https://codeberg.org, names no repository.
+	if p := strings.Trim(path, "/"); p != "" || !strings.HasPrefix(raw, "https://") {
+		owner, repo, ok := splitPath(p)
+		if !ok {
+			return bad("the repository path must be 1 to 8 segments of letters, digits, dots, dashes and underscores")
+		}
+		r.Path = repo
+		if owner != "" {
+			r.Path = owner + "/" + repo
+		}
+		if badOwner(r.Kind, owner) {
+			return bad("repositories on this host are owner/repo")
+		}
 	}
 	host := r.BaseURL
 	if r.Kind == KindSSH {
@@ -135,29 +139,41 @@ func parseRepoURL(raw string, known map[string]string) (RepoURL, error) {
 	return r, nil
 }
 
-// shortName names a forge after its host: the label before the top-level domain, so
-// github.com and git.example.org become github and example.
+// shortName names a forge after its host, in kebab case: its labels without the domain ending,
+// or a leading www, git, ssh or altssh, or a git- prefix, so forgejo.mycompany.com,
+// git.example.org and ssh.github.com become forgejo-mycompany, example and github.
 func shortName(host string) string {
-	name := "git"
-	if net.ParseIP(host) == nil {
-		labels := strings.Split(host, ".")
-		n := len(labels)
-		switch {
-		case n >= 3 && len(labels[n-2]) <= 2: // example.co.uk
-			name = labels[n-3]
-		case n >= 2:
-			name = labels[n-2]
-		default:
-			name = labels[0]
+	if net.ParseIP(host) != nil {
+		return "git"
+	}
+	labels := strings.FieldsFunc(strings.ToLower(host), func(c rune) bool { return c == '.' })
+	n := len(labels)
+	switch {
+	case n >= 3 && len(labels[n-2]) <= 2: // example.co.uk
+		labels = labels[:n-2]
+	case n >= 2:
+		labels = labels[:n-1]
+	}
+	for len(labels) > 1 && hostWords[labels[0]] {
+		labels = labels[1:]
+	}
+	if len(labels) > 0 && strings.HasPrefix(labels[0], "git-") {
+		if rest := strings.Trim(labels[0][len("git-"):], "-_"); rest != "" {
+			labels[0] = rest
+		} else if len(labels) > 1 {
+			labels = labels[1:]
 		}
 	}
 	var b strings.Builder
-	for _, c := range strings.ToLower(name) {
-		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' && b.Len() > 0 {
+	for _, c := range strings.Join(labels, "-") {
+		switch {
+		case c >= 'a' && c <= 'z' || c >= '0' && c <= '9':
 			b.WriteRune(c)
+		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
+			b.WriteByte('-')
 		}
 	}
-	name = strings.TrimRight(b.String(), "-")
+	name := strings.TrimRight(b.String(), "-")
 	if len(name) > 24 {
 		name = strings.TrimRight(name[:24], "-")
 	}
@@ -166,6 +182,9 @@ func shortName(host string) string {
 	}
 	return name
 }
+
+// hostWords are a host's leading labels that say nothing about the forge.
+var hostWords = map[string]bool{"www": true, "git": true, "ssh": true, "altssh": true}
 
 // FreeName returns name, or name-2, name-3 and so on if a forge in taken has it.
 func FreeName(name string, taken []store.Forge) string {
@@ -181,11 +200,15 @@ func FreeName(name string, taken []store.Forge) string {
 }
 
 // parseLocalRepo makes a local forge from a repository's path on this computer: the folder
-// it is in, and its name without .git.
+// it is in, and its name without .git; or from a folder of repositories, that folder.
 func parseLocalRepo(raw string) (RepoURL, error) {
 	u, err := CheckLocalPath(raw)
 	if err != nil {
 		return RepoURL{}, err
+	}
+	// A folder with repositories in it, such as ~/git, is the forge itself.
+	if holdsRepositories(u.Base) {
+		return RepoURL{Kind: KindLocal, BaseURL: u.Base, Name: "local", Auth: store.ForgeAuthNone}, nil
 	}
 	repo := strings.TrimSuffix(filepath.Base(u.Base), ".git")
 	if _, _, ok := splitPath(repo); !ok {

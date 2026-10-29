@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 )
 
 // maxFolderEntries caps a folder listing; a folder with more subfolders is truncated.
@@ -85,7 +87,7 @@ func hostFolder(raw string, hidden bool) (HostFolder, error) {
 		}
 		return HostFolder{}, fmt.Errorf("cannot read %s: %v", dir, err)
 	}
-	out := HostFolder{Path: dir, Short: shortPath(dir, home), Home: home, Git: isRepository(dir), Entries: []HostFolderEntry{}}
+	out := HostFolder{Path: dir, Short: shortPath(dir, home), Home: home, Git: gitreview.IsRepository(dir), Entries: []HostFolderEntry{}}
 	if parent := filepath.Dir(dir); !root(parent) {
 		out.Parent = parent
 	}
@@ -102,7 +104,7 @@ func hostFolder(raw string, hidden bool) (HostFolder, error) {
 			out.Truncated = true
 			break
 		}
-		out.Entries = append(out.Entries, HostFolderEntry{Name: e.Name(), Path: p, Git: isRepository(p)})
+		out.Entries = append(out.Entries, HostFolderEntry{Name: e.Name(), Path: p, Git: gitreview.IsRepository(p)})
 	}
 	return out, nil
 }
@@ -119,16 +121,6 @@ func shortPath(dir, home string) string {
 		return "~" + string(filepath.Separator) + rest
 	}
 	return dir
-}
-
-// isRepository reports whether dir is a git repository the way a local forge finds one: a
-// working copy with .git, or a bare repository with HEAD and objects.
-func isRepository(dir string) bool {
-	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-		return true
-	}
-	_, err := os.Stat(filepath.Join(dir, "HEAD"))
-	return err == nil && isDir(filepath.Join(dir, "objects"))
 }
 
 func isDir(p string) bool {

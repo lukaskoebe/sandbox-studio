@@ -24,12 +24,23 @@ API with a token of its own. The kind chooses the transport (HTTPS or SSH) and w
 an API for pull requests.
 
 - Per environment: name (`^[a-z0-9][a-z0-9-]{0,31}$`, used in the remote URL), kind and
-  base URL. Pasting a repository URL such as `git@github.com:owner/repo.git` into the Add
-  forge dialog fills these in. The dialog calls the name "Name in Studio" and fills it in
-  from the host as the URL is typed (`github.com` and `git.example.org` become `github` and
-  `example`, a folder `local`, with `-2` and so on if taken), until the user types their
-  own; it shows the remote URL sandboxes will use. An HTTPS base URL follows the same rules as a provider's: `https://`, a public
+  base URL. An HTTPS base URL follows the same rules as a provider's: `https://`, a public
   host, no credentials, query or fragment.
+- The **Add forge** dialog has two steps. The first takes a repository: its clone URL, HTTPS
+  or SSH, its page in the browser, a forge's own address such as `https://codeberg.org`, or a
+  folder here, typed or picked with **Pick a folder on this computer…**. **Detect**
+  (`POST …/forges/parse-url` with `detect`) reads it and asks a host Studio doesn't know
+  which forge it runs. The second step says what Studio found (`git.example.org runs
+  Forgejo`, the repository, whether pull requests work) and asks only for what is left: the
+  token, or for SSH the host key, the authentication and an optional API token. A host that
+  answers as no known forge, **Not right? Pick the kind**, and **Set it up by hand instead**
+  show the kinds to pick from; an HTTPS address stays when another HTTPS kind is picked.
+  **More** holds the name ("Name in Studio") and the addresses. The name comes from the host
+  in kebab case, without its domain ending or a leading `www`, `git`, `ssh` or `altssh`, or a
+  `git-` prefix: `forgejo.mycompany.com`, `git.example.org` and `ssh.github.com` become
+  `forgejo-mycompany`, `example` and `github`; a folder is `local`; `-2` and so on if taken.
+  It stays the host's until the user types their own, and the dialog shows the remote URL
+  sandboxes will use.
 - Kinds:
   - `forgejo` (Forgejo, Gitea, Codeberg): git over HTTPS as `sandbox-studio:<token>`, API
     `<base>/api/v1`.
@@ -93,7 +104,7 @@ The config holds only these internal URLs, never a token or key.
 - The base URL is `ssh://<user>@<host>[:<port>]`; the dialog also takes `git@host` and
   `git@host:` and normalizes them (user `git` if left out, port 22 omitted).
 - A pasted `git@host:owner/repo.git` or `ssh://` URL in the Add forge dialog fills in the
-  rest of the form.
+  rest of the form; the second step scans the host key straight away.
 - **Agent (the default):** Studio signs with the keys in your SSH agent, the one `ssh` uses:
   `SSH_AUTH_SOCK` on Linux and macOS, the OpenSSH agent's pipe `\\.\pipe\openssh-ssh-agent`
   on Windows. Studio reads the environment it was started with, so start it from a shell where
@@ -170,8 +181,10 @@ here, reviewed like any other push.
   the subfolders of a folder (only folders, dot folders with `hidden=true`, at most 1000),
   marks the git repositories (a `.git`, or `HEAD` and `objects`), and gives its parent. It
   starts at the home directory, or at the folder the field names, and refuses the root, as
-  a forge's folder does. Like every `/api` route it needs the owner's session. Pasting a repository's
-  path (`~/git/app`) fills in the form: the folder it is in, named `local`, path `app`.
+  a forge's folder does. Like every `/api` route it needs the owner's session. The dialog's
+  first step offers the same picker as **Pick a folder on this computer…**. A repository's
+  path, picked or pasted (`~/git/app`), makes the folder it is in the forge, named `local`,
+  path `app`; a folder with repositories in it (`~/git`) is the forge itself.
 - `https://git.studio.internal/<forge>/<path>.git` is `<folder>/<path>.git` (bare) or
   `<folder>/<path>` (a working copy, or bare). `splitPath` already refuses `..` and segments
   starting with a dot, so the path stays in the folder. Every repository in the folder can

@@ -420,8 +420,11 @@ test("a connection to a forge's SSH port offers a forge", async ({
   await expect(card.getByText(/This is git over SSH/)).toBeVisible()
   await card.getByRole("button", { name: "Add forge for codeberg.org" }).click()
   await expect(page).toHaveURL(/\/settings\/forges\?add=/)
+  // The forge's address alone is detected, with no repository.
   await expect(
-    page.getByRole("dialog", { name: "Add forge" }).getByLabel("Repository URL")
-  ).toHaveValue("https://codeberg.org/")
+    page
+      .getByRole("dialog", { name: "Add forge" })
+      .getByRole("region", { name: "What Studio found" })
+  ).toContainText("codeberg.org runs Forgejo")
   await api.dismissApprovals()
 })

@@ -61,10 +61,15 @@ export function defaultAPIKind(sshAddress: string): APIKind {
   return "forgejo"
 }
 
+/** A host's leading labels that say nothing about the forge. */
+const hostWords = new Set(["www", "git", "ssh", "altssh"])
+
 /**
  * The name a forge gets in Studio when the user doesn't pick one, as the server names a forge
- * from a pasted repository URL: the host's main label (github.com and git.example.org become
- * github and example), local for a folder, and kind's own name until there is a host.
+ * from a pasted repository URL: the host in kebab case, without its domain ending, a leading
+ * www, git, ssh or altssh, or a git- prefix (forgejo.mycompany.com, git.example.org and
+ * ssh.github.com become forgejo-mycompany, example and github), local for a folder, and
+ * kind's own name until there is a host.
  */
 export function suggestedName(kind: Kind, baseUrl: string) {
   if (kind === "local") return "local"
@@ -82,16 +87,19 @@ export function suggestedName(kind: Kind, baseUrl: string) {
       ssh: "git",
     }[kind]
   if (/^[\d.]+$/.test(host) || host.includes(":")) return "git"
-  const labels = host.toLowerCase().split(".")
+  let labels = host.toLowerCase().split(".").filter(Boolean)
   const n = labels.length
-  const label =
-    n >= 3 && labels[n - 2].length <= 2
-      ? labels[n - 3]
-      : n >= 2
-        ? labels[n - 2]
-        : labels[0]
-  const name = label
-    .replace(/[^a-z0-9-]/g, "")
+  if (n >= 3 && labels[n - 2].length <= 2) labels = labels.slice(0, n - 2)
+  else if (n >= 2) labels = labels.slice(0, n - 1)
+  while (labels.length > 1 && hostWords.has(labels[0])) labels = labels.slice(1)
+  if (labels[0]?.startsWith("git-")) {
+    const rest = labels[0].slice(4).replace(/^[-_]+|[-_]+$/g, "")
+    if (rest) labels[0] = rest
+    else if (labels.length > 1) labels = labels.slice(1)
+  }
+  const name = labels
+    .join("-")
+    .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+/, "")
     .slice(0, 24)
     .replace(/-+$/, "")

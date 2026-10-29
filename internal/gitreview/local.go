@@ -67,11 +67,34 @@ func CheckLocalPath(raw string) (ForgeURL, error) {
 func localRepo(t target) (string, error) {
 	p := filepath.Join(t.forge.BaseURL, filepath.FromSlash(t.path()))
 	for _, dir := range []string{p + ".git", p} {
-		if isFile(filepath.Join(dir, ".git")) || isFile(filepath.Join(dir, "HEAD")) && isDir(filepath.Join(dir, "objects")) {
+		if IsRepository(dir) {
 			return dir, nil
 		}
 	}
 	return "", fmt.Errorf("%w: %s has no repository %s", transport.ErrRepositoryNotFound, t.forge.BaseURL, t.path())
+}
+
+// IsRepository reports whether dir is a git repository the way a local forge finds one: a
+// working copy with .git, or a bare repository with HEAD and objects.
+func IsRepository(dir string) bool {
+	return isFile(filepath.Join(dir, ".git")) || isFile(filepath.Join(dir, "HEAD")) && isDir(filepath.Join(dir, "objects"))
+}
+
+// holdsRepositories reports whether dir, not a repository itself, has one in it.
+func holdsRepositories(dir string) bool {
+	if IsRepository(dir) {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() && IsRepository(filepath.Join(dir, e.Name())) {
+			return true
+		}
+	}
+	return false
 }
 
 func isFile(p string) bool {

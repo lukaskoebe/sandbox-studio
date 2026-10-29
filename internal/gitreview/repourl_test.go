@@ -12,7 +12,7 @@ func TestParseRepoURL(t *testing.T) {
 		"git@github.com:owner/repo.git":                    {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent", APIKind: KindGitHub, APIURL: "https://github.com"},
 		"git@github.com:owner/repo":                        {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent", APIKind: KindGitHub, APIURL: "https://github.com"},
 		"ssh://git@git.example.org:2222/team/x.git":        {Kind: KindSSH, BaseURL: "ssh://git@git.example.org:2222", Name: "example", Path: "team/x", Auth: "agent"},
-		"ssh://gitolite@Box.Example.co.uk/repo":            {Kind: KindSSH, BaseURL: "ssh://gitolite@box.example.co.uk", Name: "example", Path: "repo", Auth: "agent"},
+		"ssh://gitolite@Box.Example.co.uk/repo":            {Kind: KindSSH, BaseURL: "ssh://gitolite@box.example.co.uk", Name: "box-example", Path: "repo", Auth: "agent"},
 		"https://github.com/owner/repo":                    {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
 		"https://github.com/owner/repo.git":                {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
 		"https://github.com/owner/repo/tree/main":          {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
@@ -20,6 +20,7 @@ func TestParseRepoURL(t *testing.T) {
 		"https://gitlab.com/group/sub/project.git":         {Kind: KindGitLab, BaseURL: "https://gitlab.com", Name: "gitlab", Path: "group/sub/project"},
 		"https://gitlab.com/group/sub/project/-/tree/main": {Kind: KindGitLab, BaseURL: "https://gitlab.com", Name: "gitlab", Path: "group/sub/project"},
 		"https://git.example.org/group/project.git":        {Kind: KindHTTPS, BaseURL: "https://git.example.org", Name: "example", Path: "group/project"},
+		"https://codeberg.org/":                            {Kind: KindForgejo, BaseURL: "https://codeberg.org", Name: "codeberg"},
 	} {
 		got, err := ParseRepoURL(in)
 		if err != nil || got != want {
@@ -41,5 +42,31 @@ func TestParseRepoURL(t *testing.T) {
 	}
 	if got := FreeName("gitlab", taken); got != "gitlab" {
 		t.Errorf("free name = %q", got)
+	}
+}
+
+// A forge's name is its host in kebab case, without the domain ending and the labels that
+// only say it serves git.
+func TestShortName(t *testing.T) {
+	for host, want := range map[string]string{
+		"forgejo.mycompany.com":             "forgejo-mycompany",
+		"git.mycompany.com":                 "mycompany",
+		"gitlab.com":                        "gitlab",
+		"code.example.co.uk":                "code-example",
+		"ssh.github.com":                    "github",
+		"altssh.gitlab.com":                 "gitlab",
+		"www.git.example.org":               "example",
+		"git-code.example.net":              "code-example",
+		"git.code.example.net":              "code-example",
+		"git.com":                           "git",
+		"localhost":                         "localhost",
+		"my_host.example.org":               "my-host-example",
+		"a.very.long.host.name.example.org": "a-very-long-host-name-ex",
+		"10.0.0.1":                          "git",
+		"git-.example.org":                  "example",
+	} {
+		if got := shortName(host); got != want {
+			t.Errorf("shortName(%q) = %q, want %q", host, got, want)
+		}
 	}
 }

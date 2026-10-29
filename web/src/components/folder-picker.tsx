@@ -29,12 +29,15 @@ export function FolderPickerDialog({
   onOpenChange,
   start,
   onPick,
+  repositories,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   start?: string
-  /** The picked folder, as ~/... when it is in the home directory. */
-  onPick: (path: string) => void
+  /** The picked folder, as ~/... when it is in the home directory, and if it is a repository. */
+  onPick: (path: string, git: boolean) => void
+  /** A repository may be picked too, not only the folder repositories are in. */
+  repositories?: boolean
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -42,8 +45,9 @@ export function FolderPickerDialog({
         {open && (
           <FolderBrowser
             start={start?.trim() ?? ""}
-            onPick={(p) => {
-              onPick(p)
+            repositories={repositories}
+            onPick={(p, git) => {
+              onPick(p, git)
               onOpenChange(false)
             }}
             onCancel={() => onOpenChange(false)}
@@ -58,10 +62,12 @@ function FolderBrowser({
   start,
   onPick,
   onCancel,
+  repositories,
 }: {
   start: string
-  onPick: (path: string) => void
+  onPick: (path: string, git: boolean) => void
   onCancel: () => void
+  repositories?: boolean
 }) {
   const [path, setPath] = useState(start)
   const [hidden, setHidden] = useState(false)
@@ -76,7 +82,10 @@ function FolderBrowser({
       <DialogHeader>
         <DialogTitle>Choose a folder</DialogTitle>
         <DialogDescription>
-          Folders on this computer. Pick the one your repositories are in.
+          Folders on this computer.{" "}
+          {repositories
+            ? "Pick a repository, or the folder your repositories are in."
+            : "Pick the one your repositories are in."}
         </DialogDescription>
       </DialogHeader>
       <div className="flex items-center gap-1">
@@ -154,7 +163,9 @@ function FolderBrowser({
       {f && (
         <p className="text-xs text-muted-foreground">
           {f.git
-            ? "This folder is a repository itself. A forge is the folder the repositories are in, such as the one above."
+            ? repositories
+              ? "This folder is a repository. Studio adds the folder it is in, with this repository among its."
+              : "This folder is a repository itself. A forge is the folder the repositories are in, such as the one above."
             : repos === 1
               ? "1 repository in this folder."
               : `${repos} repositories in this folder.`}
@@ -168,7 +179,7 @@ function FolderBrowser({
         <Button
           type="button"
           disabled={!f}
-          onClick={() => f && onPick(f.short)}
+          onClick={() => f && onPick(f.short, f.git)}
         >
           Use this folder
         </Button>
