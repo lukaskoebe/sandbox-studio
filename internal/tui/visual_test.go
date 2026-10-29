@@ -180,6 +180,7 @@ func TestGoldenWideChatRunning(t *testing.T) {
 	run := item("i8", 8, chat.KindTool)
 	run.TurnID, run.Tool = "t2", &chat.ToolBody{Title: "npm test -- login", Kind: "execute", Status: "in_progress"}
 	m.chats.items["i6"], m.chats.items["i7"], m.chats.items["i8"] = prompt, plan, run
+	m.chats.sorted = nil // sorted again, as the stream would
 	goldenVisual(t, "wide_chat_140x40", m, false)
 }
 

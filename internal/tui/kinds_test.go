@@ -265,6 +265,7 @@ func pendingAsks(m *app, schema string) *app {
 	q.Status = chat.StatusPending
 	q.Question = &chat.QuestionBody{Message: "Which port should the dev server use?", Schema: json.RawMessage(schema)}
 	m.chats.items[perm.ID], m.chats.items[q.ID] = perm, q
+	m.chats.sorted = nil // sorted again, as the stream would
 	return m
 }
 
@@ -289,6 +290,7 @@ func TestChatAnswersItsAsksInPlace(t *testing.T) {
 	perm := m.chats.items["p1"]
 	perm.Status = chat.StatusApproved
 	m.chats.items["p1"] = perm
+	m.chats.sorted = nil // sorted again, as the stream would
 	m = pressRun(t, m, "2")
 	if got := rec.last(t); got.path != "/api/environments/env1/chats/c1/items/q1/answer" || got.body != `{"action":"accept","content":{"port":8080}}` {
 		t.Fatalf("answer: %+v", got)
@@ -306,6 +308,7 @@ func TestChatQuestionsTakeTypedAnswers(t *testing.T) {
 	m := pendingAsks(sampleChat(sampleApp()), `{"type":"object","properties":{"name":{"type":"string"}}}`)
 	m.client = client
 	delete(m.chats.items, "p1")
+	m.chats.sorted = nil // sorted again, as the stream would
 	m = press(m, "r", "w", "e", "b")
 	if m.typing == nil || !strings.Contains(stripANSI(m.noticeLine(80)), "Answer: web") {
 		t.Fatalf("r opens no answer line: %q", stripANSI(m.noticeLine(80)))
@@ -317,6 +320,7 @@ func TestChatQuestionsTakeTypedAnswers(t *testing.T) {
 
 	m = pendingAsks(m, `{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}}}`)
 	delete(m.chats.items, "p1")
+	m.chats.sorted = nil // sorted again, as the stream would
 	before := rec.count()
 	m = press(m, "1")
 	if rec.count() != before || !strings.HasPrefix(m.notice.text, "open in browser: ") {

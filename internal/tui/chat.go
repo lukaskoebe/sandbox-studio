@@ -25,6 +25,10 @@ const (
 	chatReloadDelay = 5 * time.Second
 )
 
+// chatPageTurns is how many turns a page of a chat's log brings, as on the web: a long chat
+// opens with its last turns, and the earlier ones load as the transcript reaches its top.
+const chatPageTurns = 40
+
 // chatState is what the chat screen shows: a chat of a sandbox with its transcript, kept
 // current from the chat's stream.
 type chatState struct {
@@ -44,9 +48,13 @@ type chatState struct {
 	turns  map[string]chat.Turn
 	items  map[string]chat.Item
 	rev    int64 // the last rev seen, where the stream resumes
+	from   int   // the first turn, by seq, whose items are loaded; 0 for every item
+	early  bool  // the turns before from are on their way
 
 	expanded map[string]bool         // the folded items the user opened, by item ID
 	rendered map[string]renderedText // the agent's messages drawn as markdown, by item ID
+	laid     map[string]laidItem     // the transcript's items laid out, by item ID
+	sorted   []chat.Item             // the items in order, until one changes; nil to sort again
 	fold     int                     // the folded item under the cursor, among the foldable ones; -1 for none
 	scroll   int                     // rows the transcript is scrolled up from its end
 
@@ -75,6 +83,11 @@ type (
 	chatEventMsg struct {
 		gen int
 		ev  ChatEvent
+	}
+	chatEarlier struct {
+		gen int
+		log chat.Log
+		err error
 	}
 	chatStreamEnded struct{ gen int }
 	chatRetry       struct{ gen int }
@@ -157,6 +170,8 @@ func (m *app) openChat(id string) tea.Cmd {
 	c.id, c.loaded, c.live, c.gone = id, false, false, false
 	c.chat, c.rev = store.Chat{}, 0
 	c.turns, c.items, c.expanded = map[string]chat.Turn{}, map[string]chat.Item{}, map[string]bool{}
+	c.laid, c.sorted = map[string]laidItem{}, nil
+	c.from, c.early = 0, false
 	c.fold, c.scroll = -1, 0
 	if !c.inPane {
 		m.screen = screenChat
@@ -182,9 +197,47 @@ func (m *app) loadChat() tea.Cmd {
 	return func() tea.Msg {
 		rctx, cancel := requestContext(ctx)
 		defer cancel()
-		log, err := client.Chat(rctx, env, id)
+		log, err := client.Chat(rctx, env, id, chatPageTurns, 0)
 		return chatLoaded{gen: gen, log: log, err: err}
 	}
+}
+
+// earlierTurns loads the page of turns before the first one loaded, once the transcript shows
+// its top. The view keeps its place: it is held in rows from the end.
+func (m *app) earlierTurns() tea.Cmd {
+	c := &m.chats
+	if !c.loaded || c.earlier() == 0 || c.early || c.id == "" || !m.chatShows() || !m.transcriptAtTop() {
+		return nil
+	}
+	c.early = true
+	ctx, client, env, id, gen, before := m.ctx, m.client, m.env.ID, c.id, c.gen, c.from
+	return func() tea.Msg {
+		rctx, cancel := requestContext(ctx)
+		defer cancel()
+		log, err := client.Chat(rctx, env, id, chatPageTurns, before)
+		return chatEarlier{gen: gen, log: log, err: err}
+	}
+}
+
+// earlier is how many turns before the loaded ones have their items still to load.
+func (c *chatState) earlier() int {
+	n := 0
+	for _, t := range c.turns {
+		if t.Seq < c.from {
+			n++
+		}
+	}
+	return n
+}
+
+// transcriptAtTop reports whether the transcript's first row is on show.
+func (m *app) transcriptAtTop() bool {
+	c := &m.chats
+	scroll := c.scroll
+	if c.fold >= 0 {
+		scroll = m.foldScroll(c.fold)
+	}
+	return len(m.transcript(m.chatWidth()).lines)-scroll <= m.transcriptRows()
 }
 
 // followChat opens the chat's stream from the last rev seen.
@@ -254,8 +307,42 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 			for _, it := range msg.log.Items {
 				c.items[it.ID] = it
 			}
+			c.from, c.sorted = msg.log.From, nil
 		}
-		return m.followChat(), true
+		return tea.Batch(m.followChat(), m.earlierTurns()), true
+	case chatEarlier:
+		if !current(msg.gen) {
+			return nil, true
+		}
+		c.early = false
+		if msg.err != nil {
+			m.setNotice("Could not load the earlier turns: "+msg.err.Error(), true)
+			return nil, true
+		}
+		// The cursor stays on its folded item, which the turns above it move down the list.
+		cursor := ""
+		if t := m.transcript(m.chatWidth()); c.fold >= 0 && c.fold < len(t.folds) {
+			cursor = t.folds[c.fold].id
+		}
+		for _, t := range msg.log.Turns {
+			if old, ok := c.turns[t.ID]; !ok || old.Rev <= t.Rev {
+				c.turns[t.ID] = t
+			}
+		}
+		for _, it := range msg.log.Items {
+			if old, ok := c.items[it.ID]; !ok || old.Rev <= it.Rev {
+				c.items[it.ID] = it
+			}
+		}
+		c.from, c.sorted = msg.log.From, nil
+		if cursor != "" {
+			for i, f := range m.transcript(m.chatWidth()).folds {
+				if f.id == cursor {
+					c.fold = i
+				}
+			}
+		}
+		return m.earlierTurns(), true
 	case chatStreamed:
 		if !current(msg.gen) {
 			return nil, true
@@ -329,22 +416,33 @@ func (c *chatState) apply(ev ChatEvent) {
 	case ev.Turn != nil:
 		if old, ok := c.turns[ev.Turn.ID]; !ok || old.Rev <= ev.Turn.Rev {
 			c.turns[ev.Turn.ID] = *ev.Turn
+			c.sorted = nil // a turn places its items before or after from
 		}
 	case ev.Item != nil:
 		if old, ok := c.items[ev.Item.ID]; !ok || old.Rev <= ev.Item.Rev {
 			c.items[ev.Item.ID] = *ev.Item
+			c.sorted = nil
 		}
 	}
 	c.rev = max(c.rev, ev.Rev)
 }
 
-// sortedItems is the transcript in order.
+// sortedItems is the transcript in order. It is sorted again only once an item changes, as the
+// transcript is laid out for every frame; callers don't change it. The items the stream brings
+// for a turn before the loaded ones wait for their page, so they don't show out of their place.
 func (c *chatState) sortedItems() []chat.Item {
+	if c.sorted != nil {
+		return c.sorted
+	}
 	out := make([]chat.Item, 0, len(c.items))
 	for _, it := range c.items {
+		if t, ok := c.turns[it.TurnID]; ok && c.from > 0 && t.Seq < c.from {
+			continue
+		}
 		out = append(out, it)
 	}
 	slices.SortFunc(out, func(a, b chat.Item) int { return a.Seq - b.Seq })
+	c.sorted = out
 	return out
 }
 
@@ -434,7 +532,7 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
-	return m, nil
+	return m, m.earlierTurns()
 }
 
 // askKey answers the permission request or question the agent waits on, as the web's cards in
@@ -674,6 +772,13 @@ func (m *app) transcript(w int) transcriptView {
 	}
 	ask, _ := c.pendingAsk()
 	askID := ask.ID
+	if n := c.earlier(); n > 0 {
+		more := fmt.Sprintf("↑ %d earlier %s · scroll up to load them", n, plural(n, "turn", "turns"))
+		if c.early {
+			more = fmt.Sprintf("Loading %d earlier %s…", n, plural(n, "turn", "turns"))
+		}
+		out.lines = append(out.lines, "  "+styleDim.Render(more), "")
+	}
 	prevKind := ""
 	for _, it := range items {
 		gap := prevKind != "" && (it.Kind == chat.KindUser || it.Kind == chat.KindAgent || prevKind == chat.KindUser || prevKind == chat.KindAgent)
@@ -681,55 +786,12 @@ func (m *app) transcript(w int) transcriptView {
 			out.lines = append(out.lines, "")
 		}
 		prevKind = it.Kind
-		switch it.Kind {
-		case chat.KindUser:
-			if it.User == nil {
-				continue
-			}
-			text := it.User.Text
-			for _, a := range it.User.Attachments {
-				text += "\n[" + a.Name + "]"
-			}
-			for i, line := range wrapText(text, w-2) {
-				mark := "  "
-				switch {
-				case !m.look.plain:
-					mark = m.pal.hue(areaChat).Render("┃") + " " // the prompt's rule, as the web marks a turn
-				case i == 0:
-					mark = styleAccent.Render("›") + " "
-				}
-				out.lines = append(out.lines, mark+styleBold.Render(line))
-			}
-		case chat.KindAgent:
-			if it.Text == nil {
-				continue
-			}
-			out.lines = append(out.lines, c.markdown(it, w, !m.look.plain)...)
-			if it.Text.Truncated {
-				out.lines = append(out.lines, styleDim.Render("The rest of this message was too long to keep."))
-			}
-		case chat.KindThought, chat.KindTool:
-			out.addFold(m.foldLines(it, it.ID == liveID, w))
-			out.folds[len(out.folds)-1].id = it.ID
-		case chat.KindPlan:
-			if m.look.plain {
-				out.lines = append(out.lines, planLines(it, w)...)
-			} else {
-				out.lines = append(out.lines, m.checklist(it, w)...)
-			}
-		case chat.KindPermission:
-			out.lines = append(out.lines, permissionLine(it, w))
-			switch {
-			case it.ID == askID && m.buttonAt(askOwner(it)) >= 0:
-				row, _ := m.buttonsLine(askCaps(it), m.buttonAt(askOwner(it)))
-				out.lines = append(out.lines, "    "+row)
-			case it.ID == askID && it.Permission != nil:
-				out.lines = append(out.lines, "    "+picksText(permissionPicks(it.Permission.Options))+styleDim.Render("  i ignore"))
-			}
-		case chat.KindQuestion:
-			out.lines = append(out.lines, m.questionLines(it, it.ID == askID, w)...)
-		case chat.KindMarker:
-			out.lines = append(out.lines, markerLine(it, w))
+		if it.Kind == chat.KindThought || it.Kind == chat.KindTool {
+			out.folds = append(out.folds, folded{id: it.ID, line: len(out.lines)})
+		}
+		out.lines = append(out.lines, m.itemLines(it, it.ID == liveID, it.ID == askID, w)...)
+		if it.Kind == chat.KindThought || it.Kind == chat.KindTool {
+			out.folds[len(out.folds)-1].end = len(out.lines)
 		}
 	}
 	if c.running() && liveID == "" {
@@ -747,10 +809,98 @@ func (m *app) transcript(w int) transcriptView {
 	return out
 }
 
-// addFold appends a folded item's lines and records where they are.
-func (t *transcriptView) addFold(lines []string) {
-	t.folds = append(t.folds, folded{line: len(t.lines), end: len(t.lines) + len(lines)})
-	t.lines = append(t.lines, lines...)
+// laidItem is an item of the transcript laid out, with what it was laid out from.
+type laidItem struct {
+	key   laidKey
+	lines []string
+}
+
+// laidKey is what an item's lines are drawn from, besides the item: the palette follows the look.
+type laidKey struct {
+	rev  int64
+	w    int
+	look look
+	open bool
+	name string
+}
+
+// itemLines is an item of the transcript as lines of w cells. A long chat would otherwise be
+// laid out again for every frame and key, so an item's lines are kept until it or its drawing
+// changes. The live item, a tool call at work and the ask waiting on the user are drawn
+// fresh: their spinners turn and their buttons follow the pointer.
+func (m *app) itemLines(it chat.Item, live, ask bool, w int) []string {
+	c := &m.chats
+	fresh := live || ask || it.Status == chat.StatusPending || (it.Tool != nil && toolStatus(it.Tool.Status) == "working")
+	key := laidKey{rev: it.Rev, w: w, look: m.look, open: c.expanded[it.ID], name: m.teammateName()}
+	if !fresh {
+		if l, ok := c.laid[it.ID]; ok && l.key == key {
+			return l.lines
+		}
+	}
+	lines := m.layItem(it, live, ask, w)
+	if !fresh {
+		if c.laid == nil {
+			c.laid = map[string]laidItem{}
+		}
+		c.laid[it.ID] = laidItem{key: key, lines: lines}
+	}
+	return lines
+}
+
+// layItem lays an item of the transcript out in w cells.
+func (m *app) layItem(it chat.Item, live, ask bool, w int) []string {
+	c := &m.chats
+	var lines []string
+	switch it.Kind {
+	case chat.KindUser:
+		if it.User == nil {
+			return nil
+		}
+		text := it.User.Text
+		for _, a := range it.User.Attachments {
+			text += "\n[" + a.Name + "]"
+		}
+		for i, line := range wrapText(text, w-2) {
+			mark := "  "
+			switch {
+			case !m.look.plain:
+				mark = m.pal.hue(areaChat).Render("┃") + " " // the prompt's rule, as the web marks a turn
+			case i == 0:
+				mark = styleAccent.Render("›") + " "
+			}
+			lines = append(lines, mark+styleBold.Render(line))
+		}
+	case chat.KindAgent:
+		if it.Text == nil {
+			return nil
+		}
+		lines = append(lines, c.markdown(it, w, !m.look.plain)...)
+		if it.Text.Truncated {
+			lines = append(lines, styleDim.Render("The rest of this message was too long to keep."))
+		}
+	case chat.KindThought, chat.KindTool:
+		lines = m.foldLines(it, live, w)
+	case chat.KindPlan:
+		if m.look.plain {
+			lines = append(lines, planLines(it, w)...)
+		} else {
+			lines = append(lines, m.checklist(it, w)...)
+		}
+	case chat.KindPermission:
+		lines = append(lines, permissionLine(it, w))
+		switch {
+		case ask && m.buttonAt(askOwner(it)) >= 0:
+			row, _ := m.buttonsLine(askCaps(it), m.buttonAt(askOwner(it)))
+			lines = append(lines, "    "+row)
+		case ask && it.Permission != nil:
+			lines = append(lines, "    "+picksText(permissionPicks(it.Permission.Options))+styleDim.Render("  i ignore"))
+		}
+	case chat.KindQuestion:
+		lines = append(lines, m.questionLines(it, ask, w)...)
+	case chat.KindMarker:
+		lines = append(lines, markerLine(it, w))
+	}
+	return lines
 }
 
 // teammateName is the name of the teammate of the chat on show.

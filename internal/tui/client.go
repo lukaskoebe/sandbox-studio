@@ -29,8 +29,12 @@ import (
 // ErrNotRunning means no Studio answers at the address the TUI was started for.
 var ErrNotRunning = errors.New("Studio is not running")
 
-// maxAnswer bounds what the client reads from one answer.
-const maxAnswer = 16 << 20
+// maxAnswer bounds what the client reads from one answer. A page of a chat's log may be larger:
+// its items are bounded each, and a page's count of them.
+const (
+	maxAnswer  = 16 << 20
+	maxChatLog = chat.PageItems*chat.MaxBody*2 + maxAnswer // a body's JSON may escape to twice its size
+)
 
 // APIError is an answer that is not a success. Detail is the API's problem detail when it
 // has one, else the status text.
@@ -289,10 +293,13 @@ func (c *Client) SandboxChats(ctx context.Context, env, sandbox string) ([]store
 	return out, err
 }
 
-// Chat reads a chat with its turns and items. Its stream follows on from the chat's rev.
-func (c *Client) Chat(ctx context.Context, env, id string) (chat.Log, error) {
+// Chat reads a chat with its turns and the items of its last turns before turn seq before (0:
+// of its last turns), at most last of them; 0 for every item. Its stream follows on from the
+// chat's rev, and the log's From is where the next page back starts.
+func (c *Client) Chat(ctx context.Context, env, id string, last, before int) (chat.Log, error) {
 	var out chat.Log
-	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/chats/"+id, nil, nil, &out)
+	path := fmt.Sprintf("/api/environments/%s/chats/%s?last=%d&before=%d", env, id, last, before)
+	_, err := c.sendUpTo(ctx, maxChatLog, http.MethodGet, path, nil, nil, &out)
 	return out, err
 }
 
@@ -494,6 +501,11 @@ func decodeChatEvent(name string, rev int64, data string) (ChatEvent, bool) {
 // into out when out is not nil, or kept as it is when out is a *[]byte. The response is returned with its body read and closed, so
 // its headers, such as cookies, stay available.
 func (c *Client) send(ctx context.Context, method, path string, header http.Header, in, out any) (*http.Response, error) {
+	return c.sendUpTo(ctx, maxAnswer, method, path, header, in, out)
+}
+
+// sendUpTo is send, reading up to limit bytes of the answer.
+func (c *Client) sendUpTo(ctx context.Context, limit int64, method, path string, header http.Header, in, out any) (*http.Response, error) {
 	var body io.Reader
 	if in != nil {
 		data, err := json.Marshal(in)
@@ -518,9 +530,12 @@ func (c *Client) send(ctx context.Context, method, path string, header http.Head
 		return nil, err
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return resp, err
+	}
+	if int64(len(data)) > limit {
+		return resp, fmt.Errorf("Studio's answer is larger than the %d MB the TUI reads", limit>>20)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return resp, apiError(resp.StatusCode, data)

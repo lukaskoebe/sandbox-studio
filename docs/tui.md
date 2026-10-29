@@ -286,11 +286,19 @@ changes does. Comments on lines of the diff are written in the browser.
 A chat is opened from its session on Home, or with `c` and `C`. A sandbox without a teammate
 has no chats, and `c` says so.
 
-A chat loads its log (`GET .../chats/{chat}`), then follows its stream (`GET
+A chat loads its log (`GET .../chats/{chat}?last=40`), then follows its stream (`GET
 .../chats/{chat}/stream?after=<rev>`), the SSE the web follows. Each event carries a chat, turn
 or item row at a new rev; the TUI keeps the newest version of each row, so an event that
 arrives late changes nothing. A lost stream resumes from the last rev after 2 seconds, and a
 chat that is gone (404) says so.
+
+As on the web, the log is a page: every turn's header, and the items of the last 40 turns
+(no more than 500 items). The transcript starts with `↑ 12 earlier turns · scroll up to load
+them`; once its top is on show (by `pgup`, `g`, the wheel, or a page that fits the screen) the
+next page back loads (`?last=40&before=<from>`) and the view keeps its place. The stream's
+items for a turn not loaded yet wait for their page. The transcript keeps each item's lines
+until the item, the width, the look or its fold changes, so a long chat's frames stay cheap;
+the item at work and the ask waiting on you are drawn fresh.
 
 The transcript:
 

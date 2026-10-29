@@ -223,6 +223,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.click(msg)
 	case tea.MouseWheelMsg:
 		m.wheel(msg)
+		return m, m.earlierTurns()
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.keys.SetWidth(msg.Width)

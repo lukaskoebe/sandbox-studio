@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -75,6 +77,7 @@ func TestGoldenChatRunning(t *testing.T) {
 	run := item("i7", 7, chat.KindTool)
 	run.TurnID, run.Tool = "t2", &chat.ToolBody{Title: "npm test -- login", Kind: "execute", Status: "in_progress"}
 	m.chats.items["i6"], m.chats.items["i7"] = prompt, run
+	m.chats.sorted = nil // sorted again, as the stream would
 	golden(t, "chat_running", m)
 }
 
@@ -360,7 +363,7 @@ func TestChatStreamFollowsAChat(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Title != "Greeting" {
 		t.Fatalf("chats: %+v, %v", list, err)
 	}
-	log, err := client.Chat(ctx, s.Env.ID, c.ID)
+	log, err := client.Chat(ctx, s.Env.ID, c.ID, 0, 0)
 	if err != nil || len(log.Items) != 3 || len(log.Turns) != 1 {
 		t.Fatalf("chat: %d items, %d turns, %v", len(log.Items), len(log.Turns), err)
 	}
@@ -429,4 +432,71 @@ func TestChatScreensLoadFromTheServer(t *testing.T) {
 		t.Fatalf("stream: live %v", m.chats.live)
 	}
 	m.stopChat()
+}
+
+// A long chat opens with its last turns, as the web's does; the earlier ones load once the
+// transcript shows its top, and the view keeps its place. The stream's items for a turn not
+// loaded yet wait for their page.
+func TestChatLoadsEarlierTurnsAtItsTop(t *testing.T) {
+	ctx := context.Background()
+	s := startStudio(t)
+	sb := s.addSandbox(t, "blub", runtime.StatusRunning)
+	c, err := s.Store.CreateChat(ctx, store.Chat{EnvironmentID: s.Env.ID, SandboxID: sb.ID, TeammateID: "t1", Harness: "claude", Title: "Long"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var early store.ChatItem // an answer of the chat's third turn
+	for i := range chatPageTurns + 10 {
+		turn, err := s.Store.StartChatTurn(ctx, c.ID, "chat", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range []struct{ kind, body string }{
+			{chat.KindUser, fmt.Sprintf(`{"text":"prompt %d"}`, i)},
+			{chat.KindAgent, fmt.Sprintf(`{"text":"answer %d"}`, i)},
+		} {
+			added, err := s.Store.AddChatItem(ctx, store.ChatItem{ChatID: c.ID, TurnID: turn.ID, Kind: it.kind, Body: json.RawMessage(it.body)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if i == 2 && it.kind == chat.KindAgent {
+				early = added
+			}
+		}
+		if _, err := s.Store.EndChatTurn(ctx, c.ID, turn.ID, "end_turn", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := newApp(ctx, connect(t, s), s.Addr)
+	m.env, m.width, m.height = s.Env, 100, 30
+	m.chats = chatState{sandbox: sandboxes.View{Sandbox: sb}, back: screenHome, fold: -1}
+	m = run(m, m.openChat(c.ID))
+	shown := func() string { return stripANSI(strings.Join(m.transcript(m.chatWidth()).lines, "\n")) }
+	if got := shown(); !strings.Contains(got, "prompt 49") || strings.Contains(got, "prompt 9\n") ||
+		!strings.Contains(got, "↑ 10 earlier turns · scroll up to load them") || m.chats.from != 11 {
+		t.Fatalf("the first page: from %d\n%s", m.chats.from, got)
+	}
+
+	// The stream changes an answer of a turn not loaded: it waits for its page.
+	early.Body, early.Rev = json.RawMessage(`{"text":"answer 2, edited"}`), m.chats.rev+1
+	ev := chat.ItemView(early)
+	m.chats.apply(ChatEvent{Rev: early.Rev, Item: &ev})
+	if strings.Contains(shown(), "answer 2,") {
+		t.Fatal("an item of a turn not loaded shows")
+	}
+
+	// g goes to the top, which loads the turns before; the rows from the end stay as they were.
+	m, cmd := pressCmd(m, "g")
+	if cmd == nil || !strings.Contains(shown(), "Loading 10 earlier turns…") {
+		t.Fatalf("g at the top loads nothing:\n%s", shown())
+	}
+	scroll := m.chats.scroll
+	m = run(m, cmd)
+	got := shown()
+	if !strings.Contains(got, "prompt 0\n") || strings.Contains(got, "earlier turn") || m.chats.earlier() != 0 || m.chats.scroll != scroll {
+		t.Fatalf("the earlier turns: from %d, scroll %d (was %d)\n%s", m.chats.from, m.chats.scroll, scroll, got)
+	}
+	if !strings.Contains(got, "answer 2, edited") {
+		t.Fatalf("the stream's newer answer lost to the page's older one:\n%s", got)
+	}
 }

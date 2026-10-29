@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Long chats open quickly in `studio tui`.** A chat opened with its whole log, so switching
+  to a long one took a while, and a chat whose log passed 16 MB never opened: it said
+  "Studio answered with invalid JSON" and tried again every few seconds. A chat now opens
+  with its last 40 turns, as on the web, and the earlier ones load when you scroll to the
+  top. The chat screen also lays out only what changed, so its frames take about 2 ms
+  where a chat of a few hundred turns took tens of milliseconds for each frame and key.
 - **A message sent while the teammate works reaches it right away.** It used to wait until
   the whole request was done; now the teammate reads it at its next step and the chat shows
   it there, for Claude (on an API key or a provider other than the subscription), Codex and
