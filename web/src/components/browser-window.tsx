@@ -605,6 +605,7 @@ export function BrowserWindow({
             <BrowserLive
               key={sessionID}
               url={live}
+              name={name}
               driving={driving}
               inputEnabled={!busy}
               pageURL={pageURL}

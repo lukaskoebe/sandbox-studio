@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from "react"
 import { GlobeSimpleIcon } from "@phosphor-icons/react"
+import { PasteWarning, pasteAllowed } from "@/components/browser-paste"
 import { cn } from "@/lib/utils"
 import {
   pointerToPage,
@@ -97,6 +98,7 @@ function wheelPixels(delta: number, mode: number) {
 
 export function BrowserLive({
   url,
+  name = "The teammate",
   driving,
   inputEnabled = true,
   pageURL,
@@ -110,6 +112,8 @@ export function BrowserLive({
   className,
 }: {
   url: string
+  /** The teammate whose browser it is, for the warning before a paste. */
+  name?: string
   driving: boolean
   inputEnabled?: boolean
   pageURL?: string
@@ -554,8 +558,19 @@ export function BrowserLive({
 
   const key = (eventType: string, e: React.KeyboardEvent) => {
     if (!canDrive) return
-    e.preventDefault()
     const keyID = e.code || e.key
+    // Ctrl+V or ⌘V pastes this computer's clipboard (paste, below), not the remote browser's:
+    // the key stays here, so the page gets the paste event.
+    if (
+      eventType === "keyDown" &&
+      e.key.toLowerCase() === "v" &&
+      (e.ctrlKey || e.metaKey) &&
+      !e.altKey
+    ) {
+      handledKeyUps.current.add(keyID)
+      return
+    }
+    e.preventDefault()
     if (eventType === "keyUp" && handledKeyUps.current.delete(keyID)) return
     if (eventType === "keyDown" && controlLatched.current) {
       const sent = pressKey(e.key, e.code, e.keyCode, modifiers(e) | 2)
@@ -823,11 +838,19 @@ export function BrowserLive({
     }, 250)
   }
 
+  // A paste may be a password: it goes in once the user has read what the teammate sees of it.
+  const [pasting, setPasting] = useState<string>()
+  const paste = (text: string) => {
+    if (!text || !canDrive || state !== "live") return
+    if (pasteAllowed()) sendText(text, false)
+    else setPasting(text)
+  }
+
   const pasteText = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     const text = e.clipboardData.getData("text/plain")
     primeMobileInput(e.currentTarget)
-    sendText(text, false)
+    paste(text)
   }
 
   const focusMobileInput = () => {
@@ -953,6 +976,10 @@ export function BrowserLive({
           }
           onKeyDown={(e) => key("keyDown", e)}
           onKeyUp={(e) => key("keyUp", e)}
+          onPaste={(e) => {
+            e.preventDefault()
+            paste(e.clipboardData.getData("text/plain"))
+          }}
         />
         {/* Inside the frame, which fills the view: a ring around it would be clipped. */}
         {canDrive && (
@@ -963,6 +990,15 @@ export function BrowserLive({
         )}
         {overlay}
       </div>
+      <PasteWarning
+        name={name}
+        text={pasting}
+        onPaste={(text) => {
+          setPasting(undefined)
+          sendText(text, false)
+        }}
+        onCancel={() => setPasting(undefined)}
+      />
       <textarea
         ref={mobileInput}
         aria-label="Type into the remote browser"

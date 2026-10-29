@@ -91,7 +91,14 @@ type Call = { id: number; done: boolean; result?: unknown; error?: string }
 type FakeBrowser = {
   browser?: {
     sessions: { slot: number; url: string }[]
-    inputs: { type: string; eventType?: string; x?: number; y?: number }[]
+    inputs: {
+      type: string
+      eventType?: string
+      x?: number
+      y?: number
+      key?: string
+      text?: string
+    }[]
     stealth: boolean
   }
 }
@@ -275,6 +282,73 @@ test("a click on the live view lands on the right page coordinates", async ({
   )!
   expect(Math.abs(press.x! - 120)).toBeLessThanOrEqual(2)
   expect(Math.abs(press.y! - 306)).toBeLessThanOrEqual(2)
+})
+
+// A paste on the live view types this computer's clipboard into the page, once the user has
+// read what the teammate sees of it; Ctrl+V doesn't reach the remote browser as a key.
+test("a paste into the live view types the clipboard, after a warning", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { name, tm } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("https://example.com/login")
+  await address.press("Enter")
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
+  const canvas = page.getByLabel("Live view of the browser")
+  await canvas.focus()
+  await page.keyboard.press("ControlOrMeta+v")
+
+  const paste = (text: string) =>
+    canvas.evaluate((el, text) => {
+      const data = new DataTransfer()
+      data.setData("text/plain", text)
+      el.dispatchEvent(
+        new ClipboardEvent("paste", {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    }, text)
+  const typed = async () => {
+    const state = (await api.json<FakeBrowser>(
+      "GET",
+      `/api/e2e/teammates/${tm}/browser`
+    ))!
+    return state
+      .browser!.inputs.filter(
+        (i) => i.type === "input_keyboard" && i.eventType === "char"
+      )
+      .map((i) => i.text)
+      .join("")
+  }
+  await paste("hunter2")
+  const warning = page.getByRole("alertdialog", {
+    name: `Paste into ${name}'s browser?`,
+  })
+  await expect(warning).toContainText("The 7 characters on your clipboard")
+  await expect(warning).toContainText(
+    `In a password field, ${name} can't read it`
+  )
+  await warning
+    .getByRole("checkbox", { name: "Don't ask again in this browser" })
+    .check()
+  await warning.getByRole("button", { name: "Paste" }).click()
+  await expect.poll(typed).toBe("hunter2")
+
+  // Told not to ask, the next paste goes straight in.
+  await paste("!")
+  await expect.poll(typed).toBe("hunter2!")
+  await expect(warning).toHaveCount(0)
+  const state = (await api.json<FakeBrowser>(
+    "GET",
+    `/api/e2e/teammates/${tm}/browser`
+  ))!
+  expect(
+    state.browser!.inputs.filter((i) => i.key?.toLowerCase() === "v")
+  ).toEqual([])
 })
 
 // The teammate's question shows on the page, not also in the approval stack; once allowed, the
