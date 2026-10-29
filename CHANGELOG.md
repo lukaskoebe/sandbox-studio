@@ -5,6 +5,10 @@
 - **A terminal open during a rebase gets the secrets.** It reconnected as soon as the
   rebased computer's agent did, before Studio had sent the environment's secrets, so its
   shell went without them, and was bash where you picked zsh. A terminal now waits for them.
+- **A terminal's text no longer turns invisible.** When the browser took the terminal's
+  WebGL context away, as after sleep or a GPU restart, most characters showed in the
+  background's color until a theme switch or a reload. The terminal now draws without
+  WebGL until it is shown again, and then uses it again.
 
 ## v0.11.0 — 2026-10-29
 

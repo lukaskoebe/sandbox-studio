@@ -190,6 +190,8 @@ export function Terminal({
   const container = useRef<HTMLDivElement>(null)
   const fitRef = useRef<FitAddon>(null)
   const termRef = useRef<XTerm>(null)
+  // Puts the WebGL renderer back after it lost its context, see the terminal's creation.
+  const webglRef = useRef<() => void>(null)
   // The terminal follows the page's light or dark theme, unless this browser keeps it dark.
   const palette = palettes[useTerminalTheme()]
   const keptDark = useTerminalsDark()
@@ -346,10 +348,24 @@ export function Terminal({
       return true
     })
     term.open(el)
-    try {
-      term.loadAddon(new WebglAddon())
-    } catch {
-      // The DOM renderer is fine where WebGL is unavailable.
+    // The browser can take the WebGL context away, as after sleep or a GPU restart, or for
+    // another canvas when too many are open; one it gives back has lost the glyphs drawn
+    // before, so most text showed in the background's color. The DOM renderer takes over
+    // instead, and the next time the terminal is shown it tries WebGL again.
+    let webgl: WebglAddon | undefined
+    const loadWebgl = () => {
+      if (webgl || disposed) return
+      try {
+        const addon = new WebglAddon()
+        addon.onContextLoss(() => {
+          if (webgl === addon) webgl = undefined
+          addon.dispose()
+        })
+        term.loadAddon(addon)
+        webgl = addon
+      } catch {
+        // The DOM renderer is fine where WebGL is unavailable.
+      }
     }
     termRef.current = term
     fitRef.current = fit
@@ -357,6 +373,8 @@ export function Terminal({
     const encoder = new TextEncoder()
     let ws: WebSocket | null = null
     let disposed = false
+    loadWebgl()
+    webglRef.current = loadWebgl
     let retry: ReturnType<typeof setTimeout> | undefined
     let attempts = 0
     let parked = false
@@ -484,6 +502,7 @@ export function Terminal({
 
     return () => {
       parkRef.current = null
+      webglRef.current = null
       disposed = true
       clearTimeout(retry)
       observer.disconnect()
@@ -518,6 +537,7 @@ export function Terminal({
       setCtrlArmed(false)
       return
     }
+    webglRef.current?.()
     fitRef.current?.fit()
     // A box being typed in elsewhere on the page, such as the chat's, keeps the keys.
     const typing = document.activeElement?.closest(
