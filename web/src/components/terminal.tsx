@@ -539,11 +539,18 @@ export function Terminal({
     }
     webglRef.current?.()
     fitRef.current?.fit()
-    // A box being typed in elsewhere on the page, such as the chat's, keeps the keys.
+    // A box being typed in elsewhere on the page, such as the chat's, keeps the keys. Another
+    // terminal's input doesn't: switching sessions by key leaves it focused, and the keys
+    // follow to the session switched to.
     const typing = document.activeElement?.closest(
       "input, textarea, [contenteditable='true']"
     )
-    if (!typing || container.current?.contains(typing)) termRef.current?.focus()
+    if (
+      !typing ||
+      typing.classList.contains("xterm-helper-textarea") ||
+      container.current?.contains(typing)
+    )
+      termRef.current?.focus()
   }, [active])
 
   return (

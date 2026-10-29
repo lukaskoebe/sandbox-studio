@@ -72,6 +72,12 @@ test("the terminal's tabs open, switch, rename and close sessions", async ({
   await expect(terminal(page).line("first")).toHaveCount(1)
   await page.keyboard.press("Alt+Shift+BracketRight")
   await expect.poll(() => termOf(page)).toBe("2")
+  // The session switched to has the keys, so they go on switching.
+  await page.keyboard.press("Alt+Shift+BracketRight")
+  await expect.poll(() => termOf(page)).toBe("main")
+  await page.keyboard.press("Alt+Shift+BracketLeft")
+  await expect.poll(() => termOf(page)).toBe("2")
+  await expect(page.locator(".xterm-helper-textarea:focus")).toHaveCount(1)
 
   // A program in the foreground names the tab, until the user names it.
   await api.setTerminal(id, "2", {
