@@ -42,7 +42,7 @@ type BrowserDownloadInput struct {
 func (s *Server) browserError(err error) error {
 	switch {
 	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL), errors.Is(err, browser.ErrBadMove),
-		errors.Is(err, browser.ErrBadPoint):
+		errors.Is(err, browser.ErrBadPoint), errors.Is(err, browser.ErrBadViewport):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover), errors.Is(err, browser.ErrHidden),
 		errors.Is(err, browser.ErrBusy):
@@ -148,6 +148,26 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, s.browserError(err)
 		}
 		return &struct{ Body browser.BrowserStatus }{st}, nil
+	})
+
+	type resizeBrowserIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Body     struct {
+			Width   int    `json:"width" minimum:"320" maximum:"1920" doc:"The page's width in CSS pixels"`
+			Height  int    `json:"height" minimum:"200" maximum:"1080" doc:"The page's height in CSS pixels"`
+			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "resizeBrowser", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{teammate}/browser/viewport", Tags: []string{"browser"},
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720.",
+	}, func(ctx context.Context, in *resizeBrowserIn) (*struct{}, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		return nil, s.browserError(s.Browser.Resize(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Width, in.Body.Height))
 	})
 
 	type closeSessionIn struct {

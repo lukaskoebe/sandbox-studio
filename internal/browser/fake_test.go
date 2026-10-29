@@ -132,6 +132,8 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 		return map[string]any{"filled": args[1]}, nil
 	case "close":
 		return map[string]any{}, nil
+	case "set":
+		return map[string]any{"width": args[2], "height": args[3]}, nil
 	case "click", "press", "select", "scroll", "back", "forward", "reload", "wait":
 		return map[string]any{}, nil
 	case agentproto.BrowserElementAt:

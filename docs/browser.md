@@ -279,7 +279,7 @@ The window has, top to bottom:
 - **Toolbar**, one line like any browser's: Back, Forward and Reload
   (`POST …/browser/go {to, session}`), the address bar, who drives, the keyboard controls,
   Downloads (once there are any), Activity and the options menu (Put to sleep / Wake up,
-  Network rules, Reset profile…). The shield in the address bar opens the site's info: what
+  Network rules, Fit the page to this view, Reset profile…). The shield in the address bar opens the site's info: what
   the teammate may do there (Ask first, Allowed, Blocked), its hidden fields and other rules.
   Who drives is a chip with a face and a few words: the teammate is using the browser, is
   waiting for you, or isn't using it, each with **Take the wheel**; you're driving, with
@@ -372,6 +372,20 @@ clears the local input buffer.
   scrolled.
   `e2e/browser-layout.spec.ts` checks that the body never overflows while watching, driving,
   with the keyboard controls open and after handing back, in four window sizes and on a phone.
+- **Fit the page to this view.** An option of the menu, kept by this computer (local storage),
+  gives the page the size of the window's body, less the controls under the frame, so it shows
+  at one pixel to one instead of scaled (`lib/browser-fit.ts`). Once the room has stopped
+  changing for 300 ms, as after dragging a panel, the view asks
+  `PUT …/browser/viewport {width, height, session}`, which runs agent-browser's
+  `set viewport` in the session: the user needn't have taken over, it isn't logged, and it
+  waits up to 5 s for another command (409 then). Sizes are 320×200 to 1920×1080, the screen
+  stealth Chromium reports; a larger room gets a page of its shape that fits, shown a little
+  scaled. While frames still have another size 5 s after asking, as after the browser restarts,
+  the view asks again, but only from the window in use, so two views of one browser don't take
+  turns: the last to resize or be focused wins. Notes hold the size. Turning it off asks for
+  agent-browser's own 1280×720. Agents get the page at whatever size it has, as a user's
+  window would give them. The guest allows `set` only as `set viewport <width> <height>`,
+  outside a batch.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
   (device width, offset and page scale), its shape, and the letterbox of the canvas. The
   page's height comes from the frame's shape, not the metadata: agent-browser 0.39 reports
@@ -589,6 +603,8 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
   (`internal/browser`);
 - the channel's write limit: a 740 KB reply through the guest's yamux session, with every
   write under 16 KiB (`internal/guest`, `TestChannelWritesStayBounded`);
+- fitting the page: the guest's `set viewport` check, `Resize` (bounds, sessions, nothing
+  logged), and the fake browser's frames following the size in `e2e/browser.spec.ts`;
 - localhost: the guest's listeners and their relay, the reserved and taken ports
   (`internal/guest`), and a page on a forwarded port through the Hub, the broker and the fake
   guests, with a port that stopped and refused forwards (`internal/e2e`,
@@ -666,6 +682,9 @@ in that loop; a browser VM is.
   processes in the 2 GiB VM.
 - Live mouse mapping in a browser VM since the frame-shape fix, and the Playwright run that
   clicks known targets at several viewport sizes and zoom levels.
+- Fitting the page in a browser VM: that agent-browser 0.39's `set viewport` (device metrics
+  and `Browser.setContentsSize`) gives frames of exactly the asked size, in the plain and the
+  stealth Chromium, and that a size up to 1920×1080 isn't cut by the window's screen.
 
 ## Limitations
 

@@ -2550,6 +2550,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/viewport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720. */
+        put: operations["resizeBrowser"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/{action}": {
         parameters: {
             query?: never;
@@ -5274,6 +5291,20 @@ export interface components {
             cpus: "unchanged" | "live" | "nextStart";
             /** @enum {string} */
             memoryMiB: "unchanged" | "live" | "nextStart";
+        };
+        ResizeBrowserInBody: {
+            /**
+             * Format: int64
+             * @description The page's height in CSS pixels
+             */
+            height: number;
+            /** @description An ephemeral session's ID; empty for the persistent profile */
+            session?: string;
+            /**
+             * Format: int64
+             * @description The page's width in CSS pixels
+             */
+            width: number;
         };
         ResizeRequest: {
             /**
@@ -12896,6 +12927,42 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BrowserStatus"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resizeBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResizeBrowserInBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

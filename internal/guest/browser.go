@@ -87,6 +87,7 @@ var browserCommands = map[string][]string{
 	"wait": {"--text", "-t", "--url", "-u", "--load", "-l"}, "back": nil, "forward": nil, "reload": nil,
 	"get": nil, "upload": nil, "download": nil,
 	"screenshot": {"--screenshot-format", "--screenshot-quality"},
+	"set":        nil,
 }
 
 // browserGets are the `get` subcommands allowed; `get value` is not, nor html or cdp-url.
@@ -115,6 +116,9 @@ func checkBrowserArgs(args []string, batch bool) error {
 	if args[0] == "get" && (len(args) < 2 || !slices.Contains(browserGets, args[1])) {
 		return errors.New("only get text, attr, url and title are allowed")
 	}
+	if args[0] == "set" && (batch || !viewportArgs(args)) {
+		return errors.New("only set viewport, with a width and a height, is allowed")
+	}
 	for i, a := range args[1:] {
 		if !strings.HasPrefix(a, "-") || a == "-" {
 			continue
@@ -128,6 +132,20 @@ func checkBrowserArgs(args []string, batch bool) error {
 		}
 	}
 	return nil
+}
+
+// viewportArgs reports whether args are set viewport <width> <height>, the size a live view
+// fits the page to: whole pixels of a screen, with no scale, which would be a phone's.
+func viewportArgs(args []string) bool {
+	if len(args) != 4 || args[1] != "viewport" {
+		return false
+	}
+	for _, a := range args[2:] {
+		if n, err := strconv.Atoi(a); err != nil || n < 1 || n > 10000 || strconv.Itoa(n) != a {
+			return false
+		}
+	}
+	return true
 }
 
 // checkBrowserSession picks the command's session. close is allowed only as the whole

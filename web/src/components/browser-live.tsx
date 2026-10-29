@@ -16,6 +16,7 @@ import {
   type FrameMetadata,
 } from "@/lib/browser-coords"
 import type { NoteSpot } from "@/lib/browser-notes"
+import { useFitPage, type PageSize } from "@/lib/browser-fit"
 
 // Chrome accepts CDP char text one Unicode code point at a time.
 const mobileInputSentinel = "\u200b"
@@ -109,6 +110,8 @@ export function BrowserLive({
   canvasRef,
   controlsOpen = false,
   onControlsOpen,
+  fitRoom,
+  onFit,
   className,
 }: {
   url: string
@@ -133,6 +136,12 @@ export function BrowserLive({
   controlsOpen?: boolean
   /** Closes them when the wheel goes or the view disconnects. */
   onControlsOpen?: (open: boolean) => void
+  /**
+   * The room the view has, to fit the page to: given it, the view asks onFit for a page of its
+   * size, less the controls under the frame, so the page shows at one pixel to one.
+   */
+  fitRoom?: HTMLElement | null
+  onFit?: (size: PageSize) => void
   className?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -187,7 +196,17 @@ export function BrowserLive({
     useState(false)
   // The height of the controls under the frame, which wrap on a narrow window.
   const [controlsHeight, setControlsHeight] = useState(0)
+  // The size of the frames, which is the page's.
+  const [frameSize, setFrameSize] = useState<PageSize>()
   const canDrive = driving && inputEnabled && !frozen
+  // Notes hold the frame they were made on, so the page keeps its size while there are any.
+  useFitPage({
+    room: fitRoom,
+    reserved: controlsHeight,
+    frame: frameSize,
+    enabled: !!fitRoom && !!onFit && state === "live" && !frozen,
+    onFit: (size) => onFit?.(size),
+  })
   // While frozen, frames are still acknowledged, so the screencast keeps coming, but not
   // painted: the notes stay on the frame they were made on. The newest one waits here and is
   // painted when the view thaws, as a page that stopped changing sends no more frames.
@@ -378,6 +397,11 @@ export function BrowserLive({
             c.height = img.height
             c.style.setProperty("--aspect", String(img.width / img.height))
           }
+          setFrameSize((size) =>
+            size?.width === img.width && size.height === img.height
+              ? size
+              : { width: img.width, height: img.height }
+          )
           const context = c.getContext("2d")
           if (!context) return
           context.drawImage(img, 0, 0)

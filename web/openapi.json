@@ -6930,6 +6930,35 @@
         ],
         "type": "object"
       },
+      "ResizeBrowserInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "description": "The page's height in CSS pixels",
+            "format": "int64",
+            "maximum": 1080,
+            "minimum": 200,
+            "type": "integer"
+          },
+          "session": {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "maxLength": 32,
+            "type": "string"
+          },
+          "width": {
+            "description": "The page's width in CSS pixels",
+            "format": "int64",
+            "maximum": 1920,
+            "minimum": 320,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "type": "object"
+      },
       "ResizeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -20559,6 +20588,62 @@
               }
             },
             "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/viewport": {
+      "put": {
+        "description": "Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720.",
+        "operationId": "resizeBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResizeBrowserInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "default": {
             "content": {

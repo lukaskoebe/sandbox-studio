@@ -90,7 +90,7 @@ type Status = {
 type Call = { id: number; done: boolean; result?: unknown; error?: string }
 type FakeBrowser = {
   browser?: {
-    sessions: { slot: number; url: string }[]
+    sessions: { slot: number; url: string; viewport: [number, number] }[]
     inputs: {
       type: string
       eventType?: string
@@ -327,6 +327,56 @@ test("a click on the live view lands on the right page coordinates", async ({
   )!
   expect(Math.abs(press.x! - 120)).toBeLessThanOrEqual(2)
   expect(Math.abs(press.y! - 306)).toBeLessThanOrEqual(2)
+})
+
+// Fit the page to this view gives the page the size of the view's body, one pixel to one, and
+// follows the window; turned off, the page goes back to agent-browser's own size.
+test("the page can be fitted to the live view, and follows its size", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { tm } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("https://example.com/login")
+  await address.press("Enter")
+  const canvas = page.getByLabel("Live view of the browser")
+  await expect(canvas).toHaveAttribute("width", "640")
+  const viewport = async () =>
+    (await api.json<FakeBrowser>(
+      "GET",
+      `/api/e2e/teammates/${tm}/browser`
+    ))!.browser!.sessions.find((s) => s.slot === 0)!.viewport
+  const room = async () => {
+    const box = (await page.getByTestId("browser-view").boundingBox())!
+    return [Math.floor(box.width), Math.floor(box.height)]
+  }
+  const options = page.getByRole("button", { name: "Browser options" })
+  const fit = page.getByRole("menuitemcheckbox", {
+    name: "Fit the page to this view",
+  })
+
+  await options.click()
+  await expect(fit).toHaveAttribute("aria-checked", "false")
+  await fit.click()
+  await page.keyboard.press("Escape")
+  await expect.poll(viewport).toEqual(await room())
+  const [width] = await room()
+  await expect(canvas).toHaveAttribute("width", String(width))
+  // At one pixel to one, the frame is as wide as the room.
+  expect(Math.round((await canvas.boundingBox())!.width)).toBe(width)
+
+  await page.setViewportSize({ width: 1100, height: 700 })
+  await expect.poll(viewport).toEqual(await room())
+  expect((await room())[0]).toBeLessThan(width)
+
+  // The choice is this computer's: it holds after a reload.
+  await page.reload()
+  await options.click()
+  await expect(fit).toHaveAttribute("aria-checked", "true")
+  await fit.click()
+  await expect.poll(viewport).toEqual([1280, 720])
+  await expect(canvas).toHaveAttribute("width", "1280")
 })
 
 // A paste on the live view types this computer's clipboard into the page, once the user has

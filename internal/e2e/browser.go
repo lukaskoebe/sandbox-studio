@@ -39,7 +39,7 @@ import (
 // {"type":"frame"} messages with a JPEG of the page, and mouse and keyboard input that clicks
 // and types into it. Nothing leaves the process: pages are made up from their URL.
 
-// Size of the fake viewport: frames and screenshots.
+// Size of the fake viewport, frames and screenshots, until set viewport changes it.
 const viewW, viewH = 640, 400
 
 // windowH is the height frame metadata reports, as agent-browser 0.39 does: it sends the
@@ -95,10 +95,14 @@ type tab struct {
 	served map[string]string
 	fetch  func(u *url.URL) (string, bool)
 	visit  func(u *url.URL)
+	// w and h are the viewport; set viewport makes them its size and frames report it whole,
+	// where the launch size reports the window's height (windowH).
+	w, h    int
+	resized bool
 }
 
 func newTab() *tab {
-	return &tab{history: []string{"about:blank"}, values: map[string]string{}, watchers: map[chan struct{}]struct{}{}}
+	return &tab{history: []string{"about:blank"}, values: map[string]string{}, watchers: map[chan struct{}]struct{}{}, w: viewW, h: viewH}
 }
 
 func (t *tab) url() string { return t.history[t.at] }
@@ -171,7 +175,7 @@ func (t *tab) elementAt(x, y float64) any {
 		}
 		return out
 	}
-	return map[string]any{"tag": "body", "selector": "body", "box": box(image.Rect(0, 0, viewW, viewH))}
+	return map[string]any{"tag": "body", "selector": "body", "box": box(image.Rect(0, 0, t.w, t.h))}
 }
 
 // open goes to a new page: the forward history and the old page's values are gone.
@@ -347,6 +351,14 @@ func (t *tab) answer(args []string) (any, bool, error) {
 		return map[string]any{}, true, nil
 	case "select", "scroll", "wait", "screenshot":
 		return map[string]any{}, false, nil
+	case "set":
+		w, errW := strconv.Atoi(arg(2))
+		h, errH := strconv.Atoi(arg(3))
+		if arg(1) != "viewport" || errW != nil || errH != nil || w < 1 || h < 1 || w > 4000 || h > 4000 {
+			return nil, false, fmt.Errorf("unknown set %q", arg(1))
+		}
+		t.w, t.h, t.resized = w, h, true
+		return map[string]any{"width": w, "height": h, "deviceScaleFactor": 1, "mobile": false}, true, nil
 	case agentproto.BrowserElementAt:
 		// The guest evaluates its own script for this; eval answers with its result.
 		x, errX := strconv.ParseFloat(arg(1), 64)
@@ -362,13 +374,13 @@ func (t *tab) answer(args []string) (any, bool, error) {
 // render draws the page: a bar in a colour of its URL, and its elements, filled in by
 // what was typed. Password fields show dots like the rest; no text is drawn.
 func (t *tab) render() []byte {
-	img := image.NewRGBA(image.Rect(0, 0, viewW, viewH))
+	img := image.NewRGBA(image.Rect(0, 0, t.w, t.h))
 	draw.Draw(img, img.Bounds(), image.NewUniform(color.RGBA{250, 250, 250, 255}), image.Point{}, draw.Src)
 	h := fnv.New32a()
 	io.WriteString(h, t.url())
 	sum := h.Sum32()
 	bar := color.RGBA{uint8(sum), uint8(sum >> 8), uint8(sum >> 16), 255}
-	draw.Draw(img, image.Rect(0, 0, viewW, 56), image.NewUniform(bar), image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(0, 0, t.w, 56), image.NewUniform(bar), image.Point{}, draw.Src)
 	for _, e := range t.elements() {
 		fill := color.RGBA{255, 255, 255, 255}
 		switch {
@@ -701,6 +713,10 @@ func (b *browserVM) screencast(ctx context.Context, c *websocket.Conn, t *tab) {
 	for {
 		b.mu.Lock()
 		u, shot := t.url(), t.render()
+		w, h := t.w, windowH
+		if t.resized {
+			h = t.h
+		}
 		b.mu.Unlock()
 		msg, _ := json.Marshal(map[string]any{"type": "url", "url": u})
 		if c.Write(ctx, websocket.MessageText, msg) != nil {
@@ -708,7 +724,7 @@ func (b *browserVM) screencast(ctx context.Context, c *websocket.Conn, t *tab) {
 		}
 		seq++
 		frame, _ := json.Marshal(map[string]any{"type": "frame", "seq": seq, "data": base64.StdEncoding.EncodeToString(shot),
-			"metadata": map[string]any{"deviceWidth": viewW, "deviceHeight": windowH, "offsetTop": 0, "pageScaleFactor": 1,
+			"metadata": map[string]any{"deviceWidth": w, "deviceHeight": h, "offsetTop": 0, "pageScaleFactor": 1,
 				"scrollOffsetX": 0, "scrollOffsetY": 0, "timestamp": float64(time.Now().UnixMilli()) / 1000}})
 		if c.Write(ctx, websocket.MessageText, frame) != nil {
 			return
@@ -744,6 +760,7 @@ type BrowserSession struct {
 	Values   map[string]string `json:"values"`
 	Focus    string            `json:"focus,omitempty"`
 	Watchers int               `json:"watchers"`
+	Viewport [2]int            `json:"viewport"` // width, height
 }
 
 // BrowserState reports the guest's browser; ok is false before its first browser stream.
@@ -766,7 +783,8 @@ func (g *Guest) BrowserState() (BrowserState, bool) {
 			values[k] = v
 		}
 		out.Sessions = append(out.Sessions, BrowserSession{Slot: slot, URL: t.url(), Title: t.title(),
-			History: append([]string{}, t.history...), At: t.at, Values: values, Focus: t.focus, Watchers: len(t.watchers)})
+			History: append([]string{}, t.history...), At: t.at, Values: values, Focus: t.focus, Watchers: len(t.watchers),
+			Viewport: [2]int{t.w, t.h}})
 	}
 	return out, true
 }

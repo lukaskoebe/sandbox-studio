@@ -70,6 +70,7 @@ func TestCheckBrowserArgs(t *testing.T) {
 		{"wait", "--text", "-Done-"},
 		{"screenshot", "/tmp/x.jpg", "--screenshot-format", "jpeg", "--screenshot-quality", "60"},
 		{"batch"},
+		{"set", "viewport", "1024", "640"},
 	}
 	for _, args := range ok {
 		if err := checkBrowserArgs(args, false); err != nil {
@@ -94,6 +95,13 @@ func TestCheckBrowserArgs(t *testing.T) {
 		{"open", "https://x", "--cdp", "9222"},
 		{"click", "@e1", "--args", "--remote-debugging-port=9222"},
 		{"batch", "x"},
+		{"set", "credentials", "u", "p"},
+		{"set", "headers", "{}"},
+		{"set", "viewport", "1024"},
+		{"set", "viewport", "1024", "640", "3"},
+		{"set", "viewport", "-1", "640"},
+		{"set", "viewport", "0x10", "640"},
+		{"set", "viewport", "1024", "99999"},
 	}
 	for _, args := range bad {
 		if err := checkBrowserArgs(args, false); err == nil {
@@ -106,7 +114,7 @@ func TestCheckBrowserArgs(t *testing.T) {
 	if err := checkBrowserBatch(`[["fill","@e3","s3cret"],["get","attr","@e3","type"]]`); err != nil {
 		t.Errorf("batch refused: %v", err)
 	}
-	for _, in := range []string{`[["eval","1"]]`, `[]`, `{}`, `[["batch"]]`} {
+	for _, in := range []string{`[["eval","1"]]`, `[]`, `{}`, `[["batch"]]`, `[["set","viewport","800","600"]]`} {
 		if err := checkBrowserBatch(in); err == nil {
 			t.Errorf("batch %s allowed", in)
 		}

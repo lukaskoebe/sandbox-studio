@@ -12,6 +12,7 @@ import {
   ArrowClockwiseIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowsOutIcon,
   CaretLeftIcon,
   CaretRightIcon,
   ClockCounterClockwiseIcon,
@@ -58,6 +59,7 @@ import {
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -83,6 +85,12 @@ import { ruleClass, tileClass } from "@/lib/accents"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { isBrowserAsk } from "@/lib/approval-kinds"
 import { normalizeBrowserAddress } from "@/lib/browser-address"
+import {
+  defaultPageSize,
+  fitPreferred,
+  setFitPreferred,
+  type PageSize,
+} from "@/lib/browser-fit"
 import {
   elementWords,
   hostOf,
@@ -215,6 +223,10 @@ export function BrowserWindow({
   useEffect(() => clearNotes(), [sessionID, running, clearNotes])
   // The keys the page can't get from a keyboard, under the frame while you drive.
   const [keys, setKeys] = useState(false)
+  // Whether the page takes the size of the view, a choice of this computer's; the view's
+  // body is the room it fits.
+  const [fit, setFit] = useState(fitPreferred)
+  const [room, setRoom] = useState<HTMLDivElement | null>(null)
 
   const pending = usePendingApprovals()
   const asks = (pending.data ?? []).filter(
@@ -249,6 +261,20 @@ export function BrowserWindow({
     `${statusPath}/sessions/{session}`,
     { onSettled: refresh, onError: onError("end the session") }
   )
+  // A failed fit leaves the page as it was; the view asks again when its frames say so.
+  const resize = $api.useMutation("put", `${statusPath}/viewport`)
+  const fitPage = (size: PageSize) =>
+    resize.mutate({ params: { path }, body: { ...size, session: sessionID } })
+  const changeFit = (on: boolean) => {
+    setFit(on)
+    setFitPreferred(on)
+    // The page may have been fitted by an earlier visit, so it goes back either way.
+    if (on || !running) return
+    resize.mutate({
+      params: { path },
+      body: { ...defaultPageSize, session: sessionID },
+    })
+  }
   const [addressError, setAddressError] = useState("")
   const landed = (next: BrowserStatus) => {
     queryClient.setQueryData<BrowserStatus>(
@@ -522,6 +548,17 @@ export function BrowserWindow({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+              <DropdownMenuCheckboxItem
+                checked={fit}
+                onCheckedChange={changeFit}
+                title="The page takes the size of this view, so it shows at full size. Agents get the same page."
+              >
+                <ArrowsOutIcon />
+                Fit the page to this view
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
               <DropdownMenuItem
                 variant="destructive"
                 disabled={busy || !st || st.vm === "absent"}
@@ -604,6 +641,7 @@ export function BrowserWindow({
         </div>
       )}
       <div
+        ref={setRoom}
         data-testid="browser-view"
         className={cn(
           // A size container: the live view fits its frame into the room it has (cqw, cqh).
@@ -662,6 +700,8 @@ export function BrowserWindow({
               canvasRef={frame}
               controlsOpen={keys}
               onControlsOpen={setKeys}
+              fitRoom={fit ? room : undefined}
+              onFit={fitPage}
             />
             {!noting && (
               <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-caption text-background opacity-0 shadow-sm transition group-hover:opacity-100">
