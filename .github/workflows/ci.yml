@@ -73,7 +73,7 @@ jobs:
         if: runner.os == 'macOS'
         working-directory: .
         run: |
-          go build -o "$RUNNER_TEMP/studio" ./cmd/studio
+          make agent && go build -o "$RUNNER_TEMP/studio" ./cmd/studio
           scripts/macos-app.sh cmd/studio-app/studio-app-ci "$RUNNER_TEMP" dev
           export SANDBOX_STUDIO_HOME="$RUNNER_TEMP/studio-home"
           selftest() {
