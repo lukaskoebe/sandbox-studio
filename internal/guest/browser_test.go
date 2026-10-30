@@ -52,7 +52,7 @@ func TestBrowserArgvInStealthMode(t *testing.T) {
 	// The user agent has commas, which agent-browser's --args would split; the script hands
 	// it to Chromium whole, and its screen size comes after agent-browser's.
 	for _, want := range []string{`"--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major:-140}.0.0.0 Safari/537.36"`,
-		"--disable-blink-features=AutomationControlled", `"$@" --ozone-override-screen-size=1920,1080`} {
+		"--disable-blink-features=AutomationControlled", `"$@" --ozone-override-screen-size=3840,2160`} {
 		if !strings.Contains(browserStealthScript, want) {
 			t.Errorf("the stealth script lacks %s", want)
 		}

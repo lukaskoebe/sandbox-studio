@@ -17,7 +17,9 @@
   changed there, and one held back from the agent driving can be given to it.
 - **The browser page can fit the live view.** **Fit the page to this view** in the browser's
   menu gives the page the view's size, so it shows at one pixel to one, and follows the
-  window as it changes. Turned off, the page goes back to 1280×720.
+  window as it changes, up to 3840×2160, so a large or enlarged panel is filled at full size
+  too. Turned off, the page goes back to 1280×720. In stealth mode, the browser's screen is
+  3840×2160.
 - **Adding a forge starts with its repository.** Paste a repository's URL, or pick a folder
   on this computer with **Pick a folder on this computer…**, and the dialog detects the
   forge and asks only for what detecting left, such as a token. The forge's name defaults to

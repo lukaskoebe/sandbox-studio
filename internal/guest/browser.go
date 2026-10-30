@@ -53,7 +53,7 @@ const browserStealthScript = `#!/bin/sh
 major=$(/usr/bin/chromium --version 2>/dev/null | grep -o '[0-9][0-9]*\.' | head -n 1 | tr -d .)
 exec /usr/bin/chromium --disable-blink-features=AutomationControlled \
 	"--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major:-140}.0.0.0 Safari/537.36" \
-	"$@" --ozone-override-screen-size=1920,1080
+	"$@" --ozone-override-screen-size=3840,2160
 `
 
 // browserSlot is where one agent-browser session keeps its state.

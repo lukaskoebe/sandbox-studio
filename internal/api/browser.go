@@ -154,8 +154,8 @@ func (s *Server) registerBrowser(api huma.API) {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`
 		Body     struct {
-			Width   int    `json:"width" minimum:"320" maximum:"1920" doc:"The page's width in CSS pixels"`
-			Height  int    `json:"height" minimum:"200" maximum:"1080" doc:"The page's height in CSS pixels"`
+			Width   int    `json:"width" minimum:"320" maximum:"3840" doc:"The page's width in CSS pixels"`
+			Height  int    `json:"height" minimum:"200" maximum:"2160" doc:"The page's height in CSS pixels"`
 			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
 		}
 	}

@@ -13,10 +13,10 @@ import (
 // stealth mode's Chromium reports (internal/guest), so a page never outgrows its screen.
 const (
 	MinViewportWidth, MinViewportHeight = 320, 200
-	MaxViewportWidth, MaxViewportHeight = 1920, 1080
+	MaxViewportWidth, MaxViewportHeight = 3840, 2160
 )
 
-var ErrBadViewport = errors.New("a viewport is 320 to 1920 pixels wide and 200 to 1080 tall")
+var ErrBadViewport = errors.New("a viewport is 320 to 3840 pixels wide and 200 to 2160 tall")
 
 const (
 	// viewportWait is how long a resize waits for another command to finish; the live view

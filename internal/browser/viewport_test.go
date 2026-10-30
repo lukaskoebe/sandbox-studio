@@ -34,7 +34,7 @@ func TestResizeSetsTheViewport(t *testing.T) {
 	}
 
 	sent := len(cmds)
-	for _, size := range [][2]int{{319, 640}, {1921, 640}, {1024, 199}, {1024, 1081}} {
+	for _, size := range [][2]int{{319, 640}, {3841, 640}, {1024, 199}, {1024, 2161}} {
 		if err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", size[0], size[1]); !errors.Is(err, ErrBadViewport) {
 			t.Errorf("%v: %v", size, err)
 		}

@@ -6,8 +6,8 @@ export type PageSize = { width: number; height: number }
 // The sizes Studio sets (internal/browser/viewport.go): the largest is the browser VM's screen.
 const minWidth = 320
 const minHeight = 200
-const maxWidth = 1920
-const maxHeight = 1080
+const maxWidth = 3840
+const maxHeight = 2160
 
 /** agent-browser's own page size, which the page goes back to when the view stops fitting it. */
 export const defaultPageSize: PageSize = { width: 1280, height: 720 }

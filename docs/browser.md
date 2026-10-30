@@ -425,7 +425,7 @@ clears the local input buffer.
   changing for 300 ms, as after dragging a panel, the view asks
   `PUT …/browser/viewport {width, height, session}`, which runs agent-browser's
   `set viewport` in the session: the user needn't have taken over, it isn't logged, and it
-  waits up to 5 s for another command (409 then). Sizes are 320×200 to 1920×1080, the screen
+  waits up to 5 s for another command (409 then). Sizes are 320×200 to 3840×2160, the screen
   stealth Chromium reports; a larger room gets a page of its shape that fits, shown a little
   scaled. While frames still have another size 5 s after asking, as after the browser restarts,
   the view asks again, but only from the window in use, so two views of one browser don't take
@@ -599,7 +599,7 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
 | User agent | `… HeadlessChrome/<major>.0.0.0 …` | `… Chrome/<major>.0.0.0 …`, the one desktop Chromium sends on Linux |
 | Client hints (`Sec-CH-UA`, `navigator.userAgentData`) | Chromium's brands | the same brands |
 | `navigator.webdriver` | `true` | `false` (`--disable-blink-features=AutomationControlled`) |
-| `screen` | 800×600, smaller than the window | 1920×1080 |
+| `screen` | 800×600, smaller than the window | 3840×2160 |
 | Agents' clicks | the pointer jumps to the target | agent-browser's `--input-mode human`: a curved path to it, about 130 ms more per click |
 
 - **How.** `BrowserCommand.Stealth` carries the teammate's setting on every command; the
@@ -741,7 +741,7 @@ in that loop; a browser VM is.
   clicks known targets at several viewport sizes and zoom levels.
 - Fitting the page in a browser VM: that agent-browser 0.39's `set viewport` (device metrics
   and `Browser.setContentsSize`) gives frames of exactly the asked size, in the plain and the
-  stealth Chromium, and that a size up to 1920×1080 isn't cut by the window's screen.
+  stealth Chromium, and that a size up to 3840×2160 isn't cut by the window's screen.
 
 ## Limitations
 
