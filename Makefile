@@ -8,7 +8,7 @@ TAGS := nobadger,nomysql,nopgx
 # pipefail in the image recipes needs bash.
 SHELL := bash
 
-.PHONY: all web build app agent api test lint e2e e2e-bin dev clean image image-browser
+.PHONY: all web build app agent api test lint check e2e e2e-bin dev clean image image-browser
 
 all: web build
 
@@ -41,6 +41,23 @@ test:
 lint:
 	test -z "$$(gofmt -l .)"
 	cd web && pnpm typecheck && pnpm lint && pnpm check
+
+# What ci checks that this machine can, before a push and always before a release
+# (docs/release.md): formatting, golangci-lint at ci's version, vet and the tests, the app's
+# module, the API schema and the web client's types, and the web checks. ci's other jobs (the
+# macOS and Windows builds, the app's start on macOS, e2e) stay there; run `make e2e` too when
+# the UI changed.
+GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+check: lint test
+	$(GOLANGCI_LINT) run ./...
+	go vet -tags e2e,nobadger,nomysql,nopgx ./...
+	cd cmd/studio-app && go vet -tags "$(APP_TAGS)" . && go test -tags "$(APP_TAGS)" .
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null ./cmd/studio-agent
+	go run ./cmd/studio openapi | diff -u web/openapi.json -
+	t=$$(mktemp -d) && cd web && pnpm exec openapi-typescript openapi.json -o "$$t/schema.gen.ts" >/dev/null && diff -u src/lib/api/schema.gen.ts "$$t/schema.gen.ts"; s=$$?; rm -rf "$$t"; exit $$s
+	cd web && node --test ../internal/harness/opencode-plugin.test.mjs
+	sh scripts/test-install.sh
+	if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/test-install.sh scripts/macos-app.sh; else echo "shellcheck isn't installed: ci runs it"; fi
 
 # End-to-end tests: the web UI against Studio built with in-process fakes instead of VMs
 # (internal/e2e). Needs Chromium; see CONTRIBUTING.md.
