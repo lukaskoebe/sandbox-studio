@@ -257,7 +257,7 @@ type tap struct {
 	http.ResponseWriter
 	ic       *interception
 	x        *Exchange
-	req      *capture
+	req      *teeBody
 	resp     capture
 	answered bool
 	refused  string
@@ -279,8 +279,8 @@ func (ic *interception) tap(w http.ResponseWriter, r *http.Request) *tap {
 	}
 	t := &tap{ResponseWriter: w, ic: ic, x: x}
 	if r.Body != nil && r.Body != http.NoBody {
-		t.req = &capture{limit: ic.captureLimit()}
-		r.Body = &teeBody{ReadCloser: r.Body, c: t.req}
+		t.req = &teeBody{ReadCloser: r.Body, t: t, c: capture{limit: ic.captureLimit()}}
+		r.Body = t.req
 	}
 	t.resp.limit = ic.captureLimit()
 	return t
@@ -354,9 +354,8 @@ func (t *tap) Unwrap() http.ResponseWriter { return t.ResponseWriter }
 // done records the bodies once the response is complete.
 func (t *tap) done() {
 	now := t.ic.record.r.clock()
-	var req Body
 	if t.req != nil {
-		req = t.ic.body(t.req, "")
+		t.req.record()
 	}
 	encoding := ""
 	if t.answered {
@@ -364,7 +363,7 @@ func (t *tap) done() {
 	}
 	resp := t.ic.body(&t.resp, encoding)
 	t.ic.record.r.update(func() {
-		t.x.Ended, t.x.ReqBody, t.x.RespBody, t.x.Refused = &now, req, resp, t.refused
+		t.x.Ended, t.x.RespBody, t.x.Refused = &now, resp, t.refused
 	})
 }
 
@@ -435,14 +434,33 @@ func (c *capture) write(p []byte) {
 	}
 }
 
-// teeBody captures a request body as the proxy reads it.
+// teeBody captures a request body as the proxy reads it. The transport reads and closes it on
+// a goroutine of its own, which may outlast the response: the body is recorded as far as it
+// was read when the response ends, and again when the transport closes it.
 type teeBody struct {
 	io.ReadCloser
-	c *capture
+	t  *tap
+	mu sync.Mutex
+	c  capture
 }
 
 func (b *teeBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
+	b.mu.Lock()
 	b.c.write(p[:n])
+	b.mu.Unlock()
 	return n, err
+}
+
+func (b *teeBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.record()
+	return err
+}
+
+func (b *teeBody) record() {
+	b.mu.Lock()
+	body := b.t.ic.body(&b.c, "")
+	b.mu.Unlock()
+	b.t.ic.record.r.update(func() { b.t.x.ReqBody = body })
 }

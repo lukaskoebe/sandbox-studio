@@ -36,7 +36,12 @@ func TestRecordingKeepsInterceptedRequests(t *testing.T) {
 	get(t, c, "https://proxied.example/headers")
 	get(t, c, "https://badref.example/x")
 
+	// The transport closes the request body after the response at times; it is recorded then.
 	list := h.gw.Records.List("sb1")
+	for deadline := time.Now().Add(2 * time.Second); len(list) == 4 && list[3].ReqBody.Size == 0 && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+		list = h.gw.Records.List("sb1")
+	}
 	if len(list) != 4 {
 		t.Fatalf("recorded %d requests: %+v", len(list), list)
 	}
