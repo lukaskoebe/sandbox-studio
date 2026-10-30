@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.12.0 — 2026-10-30
 
 - **A computer's intercepted traffic can be recorded.** **Record intercepted traffic** in the
   Connections panel keeps the HTTP requests Studio handles for the computer (a browser's
