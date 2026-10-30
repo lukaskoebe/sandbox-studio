@@ -4,6 +4,18 @@ Releases are built by [`.github/workflows/release.yml`](../.github/workflows/rel
 A release is cut from a release branch, and its version tag is pushed only after everything
 has built and passed on that branch:
 
+Before a release, check main on this machine: whoever cuts it, a person or an agent, runs
+
+```sh
+make check   # gofmt, golangci-lint, vet, the Go tests, the app module, API schema drift, web typecheck/lint/format, install.sh
+make e2e     # when the UI changed since the last release
+```
+
+and fixes what fails on main first. A push costs a ci run of six minutes or more, and a
+release one of the dry run's too, so formatting, lint, a failing test or a stale schema
+should never be what fails them. What only GitHub's runners can show (the macOS and Windows
+builds, the app starting on macOS, the smoke tests) is what the branch's runs are for.
+
 1. Branch `release/v0.6.0` from main. On the branch, give the version's section in
    [CHANGELOG.md](../CHANGELOG.md) its date, commit, and push the branch:
 

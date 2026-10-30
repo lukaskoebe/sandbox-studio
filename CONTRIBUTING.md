@@ -12,7 +12,8 @@ base image, Docker. See "Building from source" in [README.md](README.md).
 
 ## Checks
 
-Run these before sending a change; CI runs them too.
+Run `make check` before sending a change: it runs what CI checks that this machine can
+(golangci-lint at CI's version, without installing it). Or one by one:
 
 ```sh
 gofmt -l .                                    # must print nothing
