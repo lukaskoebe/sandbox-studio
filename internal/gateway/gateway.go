@@ -49,6 +49,7 @@ type Gateway struct {
 	Sandbox   func(ctx context.Context, id string) (store.Sandbox, error)
 	Resolvers *Resolvers
 	Conns     *ConnLog
+	Records   *Recorder // the recordings of intercepted traffic; nil records nothing
 	Log       *slog.Logger
 	// Dial connects upstream, replacing the dialer of upstreamDialer; nil uses that dialer, which
 	// refuses non-public addresses except for the names on the private hosts list.
@@ -125,6 +126,7 @@ func (g *Gateway) Detach(sandboxID string) {
 	g.Resolvers.Stop(sandboxID)
 	os.Unsetenv(PasswordEnv(sandboxID))
 	g.Conns.Forget(sandboxID)
+	g.Records.Forget(sandboxID)
 }
 
 // Password returns the SOCKS5 password of a sandbox.
@@ -303,7 +305,7 @@ func (g *Gateway) handle(c net.Conn) {
 		if browserTLS && caddy == nil {
 			auth = g.browserAuth(sb, decider, host)
 		}
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, rejected, auth)
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, rejected, auth, recordTo{g.Records, sb.ID, entry.ID})
 		return
 	}
 

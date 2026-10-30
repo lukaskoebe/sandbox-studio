@@ -776,6 +776,61 @@ func (s *Server) registerNetwork(api huma.API) {
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil
 	})
+
+	recordings := func(ctx context.Context, envID, id string) error {
+		if s.Records == nil {
+			return huma.Error503ServiceUnavailable("Recording traffic isn't available.")
+		}
+		_, err := s.publicSandbox(ctx, envID, id)
+		return apiError(err)
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getRecording", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/recording", Tags: []string{"network"},
+		Description: "Whether the sandbox's intercepted traffic is being recorded, and how much was kept.",
+	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body gateway.RecordingState }, error) {
+		if err := recordings(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
+		return &struct{ Body gateway.RecordingState }{s.Records.State(in.ID)}, nil
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "setRecording", Method: http.MethodPut, Path: "/api/environments/{env}/sandboxes/{id}/recording", Tags: []string{"network"},
+		Description: "Starts or stops recording the HTTP requests the sandbox makes over the connections Studio intercepts (a browser VM's HTTPS, proxy and Caddy rules, hosts with secrets), with their responses. A recording stops by itself after 15 minutes; starting it again restarts the 15 minutes. What it kept is in memory only and goes an hour after it stopped, or when it is cleared.",
+	}, func(ctx context.Context, in *struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Body struct {
+			Recording bool `json:"recording"`
+		}
+	}) (*struct{ Body gateway.RecordingState }, error) {
+		if err := recordings(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
+		if in.Body.Recording {
+			return &struct{ Body gateway.RecordingState }{s.Records.Start(in.ID, gateway.RecordFor)}, nil
+		}
+		return &struct{ Body gateway.RecordingState }{s.Records.Stop(in.ID)}, nil
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "clearRecording", Method: http.MethodDelete, Path: "/api/environments/{env}/sandboxes/{id}/recording", Tags: []string{"network"},
+		Description:   "Stops recording the sandbox's traffic and drops what was kept.",
+		DefaultStatus: http.StatusNoContent,
+	}, func(ctx context.Context, in *sandboxPath) (*struct{}, error) {
+		if err := recordings(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
+		s.Records.Forget(in.ID)
+		return nil, nil
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "listRecordedRequests", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/recording/requests", Tags: []string{"network"},
+		Description: "The requests the sandbox's recording kept, newest first, with their responses: what the sandbox sent and got, with secret values masked.",
+	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []gateway.Exchange }, error) {
+		if err := recordings(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
+		return &struct{ Body []gateway.Exchange }{s.Records.List(in.ID)}, nil
+	})
 }
 
 // reviewerView says whether the AI reviewer of the assisted level can answer, and with which model.

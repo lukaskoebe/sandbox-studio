@@ -61,6 +61,9 @@ func TestBuilderPrivateAPIValidationAndUserApproval(t *testing.T) {
 	if rec := do(h, http.MethodGet, base+"/connections", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("list builder connections: got %d, want 404 (%s)", rec.Code, rec.Body)
 	}
+	if rec := do(h, http.MethodPut, base+"/recording", `{"recording":true}`); rec.Code != http.StatusNotFound {
+		t.Errorf("record builder traffic: got %d, want 404 (%s)", rec.Code, rec.Body)
+	}
 	if rec := do(h, http.MethodPost, "http://localhost:7878/api/environments/"+url.PathEscape(env.ID)+"/rules",
 		`{"host":"example.com","action":"allow","sandboxId":"`+sb.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("create rule scoped to builder: got %d, want 422 (%s)", rec.Code, rec.Body)

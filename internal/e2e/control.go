@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -32,6 +33,11 @@ var Rejected func(ctx context.Context, sandboxID, host string, names []string) e
 // SignIn reports that a page of a teammate's browser on host asks for Basic credentials, as
 // the gateway does, or no longer does when realm is nil (POST /api/e2e/signin). Studio sets it.
 var SignIn func(ctx context.Context, envID, teammateID, host string, realm *string, login string, refused bool) error
+
+// Recorded adds a request and its response to a sandbox's recording, as the gateway does for
+// one it intercepts (POST /api/e2e/sandboxes/{id}/recorded). It reports false when the
+// sandbox's traffic isn't being recorded. Studio sets it.
+var Recorded func(sandboxID string, x gateway.Exchange) bool
 
 // SeedChat adds count ended turns to a chat, each a request and its answer, as a long chat
 // has (POST /api/e2e/chats/{id}/turns). Studio sets it.
@@ -240,6 +246,18 @@ func (r *Runtime) Control() http.Handler {
 		}
 		if err := SignIn(req.Context(), body.EnvironmentID, body.TeammateID, body.Host, body.Realm, body.Login, body.Refused); err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, struct{}{})
+	})
+	mux.HandleFunc("POST /api/e2e/sandboxes/{id}/recorded", func(w http.ResponseWriter, req *http.Request) {
+		var x gateway.Exchange
+		if err := json.NewDecoder(io.LimitReader(req.Body, 1<<20)).Decode(&x); err != nil || x.Method == "" || x.URL == "" {
+			http.Error(w, "want an exchange: {method, url, status, requestHeaders, responseBody, …}", http.StatusBadRequest)
+			return
+		}
+		if !Recorded(req.PathValue("id"), x) {
+			http.Error(w, "the sandbox's traffic isn't being recorded", http.StatusConflict)
 			return
 		}
 		writeJSON(w, http.StatusAccepted, struct{}{})

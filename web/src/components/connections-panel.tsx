@@ -1,5 +1,7 @@
+import { useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react"
+import { CountPill } from "@/components/count-pill"
 import { Ident } from "@/components/ident"
 import { StatusDot, type Status } from "@/components/status-dot"
 import {
@@ -8,8 +10,14 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import {
+  RecordedRequests,
+  RecordingControl,
+  useRecording,
+} from "@/components/recorded-requests"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Tooltip,
   TooltipContent,
@@ -23,7 +31,10 @@ import {
 } from "@/lib/api/client"
 import { cn, formatBytes, hostPort } from "@/lib/utils"
 
-/** The body of a sandbox's Connections panel: where it connects, newest first. */
+/**
+ * The body of a sandbox's Connections panel: where it connects, newest first, and the
+ * requests a recording of its intercepted traffic kept.
+ */
 export function ConnectionsPanel({
   env,
   sandbox,
@@ -31,6 +42,10 @@ export function ConnectionsPanel({
   env: string
   sandbox: Sandbox
 }) {
+  const recording = useRecording(env, sandbox.id)
+  const state = recording.data
+  const [tab, setTab] = useState<"connections" | "requests">("connections")
+  const recorded = !!state && (state.recording || state.count > 0)
   return (
     <>
       <p className="px-4 pt-3 pb-2 text-xs text-muted-foreground">
@@ -44,7 +59,40 @@ export function ConnectionsPanel({
         </Link>
         .
       </p>
-      <ConnectionLog env={env} id={sandbox.id} />
+      <RecordingControl
+        env={env}
+        id={sandbox.id}
+        name={sandbox.name}
+        state={state}
+      />
+      {recorded ? (
+        <Tabs
+          value={tab}
+          onValueChange={(v: "connections" | "requests") => setTab(v)}
+          className="min-h-0 flex-1"
+        >
+          <TabsList className="mx-4">
+            <TabsTrigger value="connections">Connections</TabsTrigger>
+            <TabsTrigger value="requests">
+              Requests
+              <CountPill count={state.count} />
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="connections" className="flex min-h-0 flex-col">
+            <ConnectionLog env={env} id={sandbox.id} />
+          </TabsContent>
+          <TabsContent value="requests">
+            <RecordedRequests
+              env={env}
+              id={sandbox.id}
+              name={sandbox.name}
+              recording={state.recording}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <ConnectionLog env={env} id={sandbox.id} />
+      )}
     </>
   )
 }

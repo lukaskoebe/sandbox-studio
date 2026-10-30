@@ -40,14 +40,15 @@ func newTestServer(t *testing.T) (http.Handler, *Server) {
 	}
 	bus := &events.Bus{}
 	s := &Server{
-		Store:  st,
-		Policy: &policy.Engine{Store: st, Bus: bus, Hold: 5 * time.Second},
-		Vault:  vault,
-		Bus:    bus,
-		Conns:  &gateway.ConnLog{},
-		Caddy:  testCaddy(),
-		Log:    log,
-		Addr:   "127.0.0.1:7878",
+		Store:   st,
+		Policy:  &policy.Engine{Store: st, Bus: bus, Hold: 5 * time.Second},
+		Vault:   vault,
+		Bus:     bus,
+		Conns:   &gateway.ConnLog{},
+		Records: &gateway.Recorder{},
+		Caddy:   testCaddy(),
+		Log:     log,
+		Addr:    "127.0.0.1:7878",
 	}
 	mux := http.NewServeMux()
 	s.Register(mux)

@@ -1887,6 +1887,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Whether the sandbox's intercepted traffic is being recorded, and how much was kept. */
+        get: operations["getRecording"];
+        /** @description Starts or stops recording the HTTP requests the sandbox makes over the connections Studio intercepts (a browser VM's HTTPS, proxy and Caddy rules, hosts with secrets), with their responses. A recording stops by itself after 15 minutes; starting it again restarts the 15 minutes. What it kept is in memory only and goes an hour after it stopped, or when it is cleared. */
+        put: operations["setRecording"];
+        post?: never;
+        /** @description Stops recording the sandbox's traffic and drops what was kept. */
+        delete: operations["clearRecording"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/recording/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The requests the sandbox's recording kept, newest first, with their responses: what the sandbox sent and got, with secret values masked. */
+        get: operations["listRecordedRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/resources": {
         parameters: {
             query?: never;
@@ -3147,6 +3183,19 @@ export interface components {
             ruleHost: string;
             ruleId: string;
         };
+        Body: {
+            /** @description Why the body isn't shown, such as binary content or an encoding Studio can't read */
+            omitted?: string;
+            /**
+             * Format: int64
+             * @description The body's length in bytes, as sent
+             */
+            size: number;
+            /** @description The body as text, decompressed, up to 64 KiB */
+            text?: string;
+            /** @description Text is only the start of the body */
+            truncated?: boolean;
+        };
         BranchResult: {
             branch: string;
             error?: string;
@@ -3946,6 +3995,42 @@ export interface components {
              */
             type: string;
         };
+        Exchange: {
+            /** @description The request headers Studio set, changed or removed on the way, such as a rule's headers or secrets in place of placeholders, by name */
+            changed?: string[] | null;
+            /**
+             * Format: int64
+             * @description The connection it was made on, in the connection log
+             */
+            connId: number;
+            /**
+             * Format: date-time
+             * @description When the response was complete; unset while it streams
+             */
+            ended?: string;
+            /** Format: int64 */
+            id: number;
+            /** @description The browser login Studio sent as Basic credentials */
+            login?: string;
+            method: string;
+            /** @description Why Studio answered the request itself instead of passing it on */
+            refused?: string;
+            requestBody: components["schemas"]["Body"];
+            requestHeaders: components["schemas"]["Header"][] | null;
+            responseBody: components["schemas"]["Body"];
+            responseHeaders: components["schemas"]["Header"][] | null;
+            /** @description The secrets whose values Studio sent in place of their placeholders */
+            secrets?: string[] | null;
+            /** Format: date-time */
+            started: string;
+            /**
+             * Format: int64
+             * @description The response's status; 0 until it comes
+             */
+            status: number;
+            /** @description As the sandbox asked for it */
+            url: string;
+        };
         Fact: {
             attribute?: string;
             authorTeammate?: string;
@@ -4371,6 +4456,10 @@ export interface components {
              * @enum {string}
              */
             to: "back" | "forward" | "reload";
+        };
+        Header: {
+            name: string;
+            value: string;
         };
         Health: {
             /** @enum {string} */
@@ -5255,6 +5344,24 @@ export interface components {
             /** @description A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources */
             templateId?: string;
         };
+        RecordingState: {
+            /**
+             * Format: int64
+             * @description How many requests it kept
+             */
+            count: number;
+            /**
+             * Format: date-time
+             * @description When what it kept goes, if it isn't cleared sooner
+             */
+            expires?: string;
+            recording: boolean;
+            /**
+             * Format: date-time
+             * @description When the recording stops by itself
+             */
+            until?: string;
+        };
         RejectedPayload: {
             /** @description The host that answered 401 */
             host: string;
@@ -5785,6 +5892,9 @@ export interface components {
         SetPrivateHostsInBody: {
             /** @description The whole list, which replaces the current one */
             hosts: components["schemas"]["PrivateHostInput"][] | null;
+        };
+        SetRecordingRequest: {
+            recording: boolean;
         };
         SetStealthInBody: {
             /** @description Run the teammate's browser in stealth mode */
@@ -11237,6 +11347,144 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getRecording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordingState"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setRecording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRecordingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordingState"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    clearRecording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listRecordedRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exchange"][] | null;
                 };
             };
             /** @description Error */

@@ -379,6 +379,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	resolvers := &gateway.Resolvers{Upstreams: dnsproxy.SystemUpstreams(), Log: log}
 	defer resolvers.Close()
 	conns := &gateway.ConnLog{}
+	records := &gateway.Recorder{} // recordings of intercepted traffic, in memory only
 	authority := &ca.Authority{Store: st, Sealer: vault}
 	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialPublic}
 	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log,
@@ -391,7 +392,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	integs = append(integs, secretCheck)
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
-		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
+		Resolvers: resolvers, Conns: conns, Records: records, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
 		Virtual: integs.Routes(), Dial: upstreamDial(),
 		PrivateHosts: st.PrivateHosts, HostPorts: st.HostPorts, Own: []string{addr, gatewayAddr, templateRegistryAddr},
 		Rejected: secretCheck.Rejected,
@@ -552,7 +553,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go agentMem.RunDreams(ctx) // nightly, after enough new facts, and interrupted runs
 
 	mux := http.NewServeMux()
-	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
+	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Records: records, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
 		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins, Reach: gw, HostGit: api.HostGitIdentity,
 		HostLogins: hostLogins(p.Data), ModelsClient: modelsClient()}
 	// Heartbeats give teammates with open tasks their check-ins, and run scheduled tasks at their

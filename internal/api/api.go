@@ -47,6 +47,7 @@ type Server struct {
 	Vault     *secrets.Vault
 	Bus       *events.Bus
 	Conns     *gateway.ConnLog
+	Records   *gateway.Recorder // recordings of intercepted traffic; nil answers 503
 	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
 	Auth      *webauth.Auth
 	Memory    *memory.Service

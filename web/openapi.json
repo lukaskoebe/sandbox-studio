@@ -429,6 +429,32 @@
         ],
         "type": "object"
       },
+      "Body": {
+        "additionalProperties": false,
+        "properties": {
+          "omitted": {
+            "description": "Why the body isn't shown, such as binary content or an encoding Studio can't read",
+            "type": "string"
+          },
+          "size": {
+            "description": "The body's length in bytes, as sent",
+            "format": "int64",
+            "type": "integer"
+          },
+          "text": {
+            "description": "The body as text, decompressed, up to 64 KiB",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "Text is only the start of the body",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "size"
+        ],
+        "type": "object"
+      },
       "BranchResult": {
         "additionalProperties": false,
         "properties": {
@@ -2664,6 +2690,108 @@
         },
         "type": "object"
       },
+      "Exchange": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "description": "The request headers Studio set, changed or removed on the way, such as a rule's headers or secrets in place of placeholders, by name",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "connId": {
+            "description": "The connection it was made on, in the connection log",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ended": {
+            "description": "When the response was complete; unset while it streams",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "login": {
+            "description": "The browser login Studio sent as Basic credentials",
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "refused": {
+            "description": "Why Studio answered the request itself instead of passing it on",
+            "type": "string"
+          },
+          "requestBody": {
+            "$ref": "#/components/schemas/Body"
+          },
+          "requestHeaders": {
+            "items": {
+              "$ref": "#/components/schemas/Header"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "responseBody": {
+            "$ref": "#/components/schemas/Body"
+          },
+          "responseHeaders": {
+            "items": {
+              "$ref": "#/components/schemas/Header"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "secrets": {
+            "description": "The secrets whose values Studio sent in place of their placeholders",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "started": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "The response's status; 0 until it comes",
+            "format": "int64",
+            "type": "integer"
+          },
+          "url": {
+            "description": "As the sandbox asked for it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "connId",
+          "started",
+          "method",
+          "url",
+          "requestHeaders",
+          "requestBody",
+          "status",
+          "responseHeaders",
+          "responseBody"
+        ],
+        "type": "object"
+      },
       "Fact": {
         "additionalProperties": false,
         "properties": {
@@ -3982,6 +4110,22 @@
         },
         "required": [
           "to"
+        ],
+        "type": "object"
+      },
+      "Header": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
         ],
         "type": "object"
       },
@@ -6734,6 +6878,34 @@
         },
         "type": "object"
       },
+      "RecordingState": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "description": "How many requests it kept",
+            "format": "int64",
+            "type": "integer"
+          },
+          "expires": {
+            "description": "When what it kept goes, if it isn't cleared sooner",
+            "format": "date-time",
+            "type": "string"
+          },
+          "recording": {
+            "type": "boolean"
+          },
+          "until": {
+            "description": "When the recording stops by itself",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recording",
+          "count"
+        ],
+        "type": "object"
+      },
       "RejectedPayload": {
         "additionalProperties": false,
         "properties": {
@@ -8206,6 +8378,18 @@
         },
         "required": [
           "hosts"
+        ],
+        "type": "object"
+      },
+      "SetRecordingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "recording": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "recording"
         ],
         "type": "object"
       },
@@ -17832,6 +18016,223 @@
         "summary": "Move a sandbox onto another template or the current base image",
         "tags": [
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/recording": {
+      "delete": {
+        "description": "Stops recording the sandbox's traffic and drops what was kept.",
+        "operationId": "clearRecording",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "get": {
+        "description": "Whether the sandbox's intercepted traffic is being recorded, and how much was kept.",
+        "operationId": "getRecording",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingState"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "put": {
+        "description": "Starts or stops recording the HTTP requests the sandbox makes over the connections Studio intercepts (a browser VM's HTTPS, proxy and Caddy rules, hosts with secrets), with their responses. A recording stops by itself after 15 minutes; starting it again restarts the 15 minutes. What it kept is in memory only and goes an hour after it stopped, or when it is cleared.",
+        "operationId": "setRecording",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecordingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingState"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/recording/requests": {
+      "get": {
+        "description": "The requests the sandbox's recording kept, newest first, with their responses: what the sandbox sent and got, with secret values masked.",
+        "operationId": "listRecordedRequests",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Exchange"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
         ]
       }
     },

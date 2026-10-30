@@ -559,3 +559,24 @@ environments. How guests trust the CA: [guest agent](guest-agent.md#ca-trust-and
 The gateway keeps the last 500 connections per sandbox, in memory only (`connlog.go`):
 host, port, verdict (`pending`, `open`, `allowed`, `denied`, `undecided`, `failed`), rule,
 bytes. The sandbox's Connections panel shows it (`GET …/sandboxes/{id}/connections`).
+
+### Recording intercepted traffic
+
+**Record intercepted traffic** in the Connections panel keeps the HTTP requests of the
+sandbox's intercepted connections (a browser VM's HTTPS, proxy and Caddy rules, hosts with
+secrets) with their responses, to see what a tool sends and gets (`record.go`). Connections
+the gateway splices can't be read and aren't recorded.
+
+- **What is kept.** Method, URL, headers and the first 64 KiB of each body, as the sandbox
+  sent and got them: placeholders rather than the values Studio put in, and the values of the
+  host's secrets masked anywhere, before a body is cut, so a cut can't leave part of one.
+  gzip and deflate bodies are decompressed for reading (the traffic itself isn't changed);
+  other encodings and binary bodies are shown by size. Each request names the headers Studio
+  set, changed or removed, the secrets it sent and the browser login, and why Studio refused
+  it, if it did. The newest 200 requests are kept.
+- **For how long.** The sandbox's own tokens, cookies and what is typed into a browser's pages
+  are in it, so a recording is short and in memory only: it stops by itself after 15 minutes
+  (starting it again restarts them), and what it kept goes an hour after it stopped, on
+  **Clear**, when the sandbox is deleted, or when Studio stops. Nothing is written to disk.
+- **API.** `GET`/`PUT {recording}`/`DELETE …/sandboxes/{id}/recording` read, start or stop,
+  and clear it; `GET …/recording/requests` lists what it kept, newest first.

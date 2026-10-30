@@ -59,6 +59,7 @@ type interception struct {
 	login      *secrets.BrowserLogin // sent as Basic credentials to a page asking for them
 	held       string                // a login of the host's the agent driving may not use
 	signIn     func(*BasicAsk)       // told of the pages asking for Basic credentials, and nil after one that didn't
+	record     recordTo              // where requests are recorded while the user records the sandbox's traffic
 
 	mu      sync.Mutex
 	problem string // the last refused request, for the connection log
@@ -146,11 +147,11 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
-func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, rejected func(names []string), auth *browserAuth) (sent, received int64, problem string) {
+func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, rejected func(names []string), auth *browserAuth, record recordTo) (sent, received int64, problem string) {
 	// Requests go to the rule's upstream, which is the host unless the rule names another. The
 	// secrets are bound to the upstream, since that is what receives them.
 	upstream, upPort := upstreamOf(rule.Config.Upstream, host, port)
-	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log, gate: gate, rejected: rejected}
+	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log, gate: gate, rejected: rejected, record: record}
 	var transport http.RoundTripper
 	if caddy == nil {
 		ic.bound, ic.unbound = boundTo(all, upstream)
@@ -239,6 +240,11 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 }
 
 func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	t := ic.tap(w, r)
+	if t != nil {
+		w = t
+		defer t.done()
+	}
 	// The policy approved host, and the requests go there. A Host header naming another site
 	// would otherwise reach it through a shared front end (domain fronting).
 	if name := hostOnly(r.Host); name != "" && name != ic.host {
@@ -267,6 +273,9 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := ic.rewrite(out, sent); err != nil {
 		ic.refuse(w, http.StatusForbidden, err.Error())
 		return
+	}
+	if t != nil {
+		t.rewritten(r, out, sent)
 	}
 	ic.proxy.ServeHTTP(w, out)
 }
@@ -543,6 +552,9 @@ func (ic *interception) refuse(w http.ResponseWriter, code int, msg string) {
 	ic.mu.Lock()
 	ic.problem = msg
 	ic.mu.Unlock()
+	if t, ok := w.(*tap); ok {
+		t.refused = msg
+	}
 	ic.log.Info("intercepted request failed", "host", ic.host, "status", code, "reason", msg)
 	writeRefusal(w, code, msg)
 }

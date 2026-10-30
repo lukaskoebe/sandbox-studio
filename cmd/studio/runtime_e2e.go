@@ -96,6 +96,7 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine,
 		gw.Rejected(sb, host, names)
 		return nil
 	}
+	e2e.Recorded = gw.Records.Add
 	e2e.SignIn = func(ctx context.Context, envID, teammateID, host string, realm *string, login string, refused bool) error {
 		sb, err := st.BrowserSandbox(ctx, envID, teammateID)
 		if err != nil {

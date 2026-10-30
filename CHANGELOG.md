@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A computer's intercepted traffic can be recorded.** **Record intercepted traffic** in the
+  Connections panel keeps the HTTP requests Studio handles for the computer (a browser's
+  pages, proxy and Caddy rules, hosts with secrets) with their headers and bodies, what Studio
+  changed and the secrets it sent, to see what a tool sends. Secret values are masked; the
+  recording stops by itself after 15 minutes and what it kept, in memory only, goes an hour
+  later or on **Clear**.
 - **A teammate's browser saves logins.** When you type or paste a password into a page while
   you drive, the browser offers to save it as one of the teammate's *browser logins*, with
   an optional username: a secret only that teammate's browser uses, which no sandbox sees.
