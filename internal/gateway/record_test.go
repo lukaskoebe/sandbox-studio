@@ -144,7 +144,9 @@ func TestRecordedBodies(t *testing.T) {
 	}
 	var gz bytes.Buffer
 	w := gzip.NewWriter(&gz)
-	w.Write([]byte("hello secret-value"))
+	if _, err := w.Write([]byte("hello secret-value")); err != nil {
+		t.Fatal(err)
+	}
 	w.Close()
 	if b := body(gz.Bytes(), "gzip"); b.Text != "hello ************" || b.Size != int64(gz.Len()) {
 		t.Errorf("gzip %+v", b)
