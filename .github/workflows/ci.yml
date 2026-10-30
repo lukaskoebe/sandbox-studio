@@ -79,7 +79,7 @@ jobs:
           selftest() {
             out=$("$1" -selftest -addr 127.0.0.1:7911 -studio "$RUNNER_TEMP/studio")
             echo "$out"
-            if echo "$out" | grep -q '"error"'; then exit 1; fi
+            if echo "$out" | grep -q '"error"'; then cat "$SANDBOX_STUDIO_HOME"/logs/studio.log || true; exit 1; fi
             echo "$out" | grep -q "\"notifications\": $2" || { echo "notifications: want $2"; exit 1; }
           }
           selftest cmd/studio-app/studio-app-ci false
