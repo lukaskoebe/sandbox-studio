@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.13.0 — 2026-10-31
 
 - **Disk resizes, rebases and forks copy much faster.** A guest's writes to msb exec, which
   carried the copy of its disks, run at about 5 MB/s, so a resize with tens of GB of Docker
