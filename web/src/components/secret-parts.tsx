@@ -35,6 +35,13 @@ export function useManagedSecrets(env: string) {
   )
 }
 
+/** The kinds a secret can have besides a plain value, such as an AWS access key. */
+export function useSecretKinds() {
+  return $api.useQuery("get", "/api/secret-kinds", undefined, {
+    staleTime: Infinity,
+  })
+}
+
 /** Whether a secret can be edited and deleted from a list. */
 export function editable(secret: Secret, managed: Map<string, string>) {
   return !managed.has(secret.id) && !secret.studioOnly
@@ -78,9 +85,18 @@ export function SecretName({
   secret: Secret
   managed: Map<string, string>
 }) {
+  const kinds = useSecretKinds()
+  const kind = secret.kind
+    ? (kinds.data?.find((k) => k.name === secret.kind)?.title ?? secret.kind)
+    : undefined
   return (
     <>
       <Ident>{secret.name}</Ident>
+      {kind && (
+        <Badge variant="secondary" className="ml-1.5 font-sans">
+          {kind}
+        </Badge>
+      )}
       {managed.has(secret.id) && (
         <Badge variant="secondary" className="ml-1.5 font-sans">
           Provider {managed.get(secret.id)}
@@ -105,8 +121,17 @@ export function SecretHosts({ secret }: { secret: Secret }) {
   )
 }
 
-/** The placeholder sandboxes see, cut to fit, with a copy button. */
+/**
+ * The placeholder sandboxes see, cut to fit, with a copy button. A secret with a kind has none:
+ * sandboxes get credentials made from it.
+ */
 export function SecretPlaceholder({ secret }: { secret: Secret }) {
+  if (secret.kind)
+    return (
+      <span className="text-xs text-muted-foreground">
+        Short-lived credentials
+      </span>
+    )
   return (
     <div className="flex min-w-0 items-center gap-1">
       <span className="block max-w-40 min-w-0 truncate text-muted-foreground">
@@ -172,7 +197,9 @@ export function DeleteSecret({ env, secret }: { env: string; secret: Secret }) {
           <AlertDialogDescription>
             {secret.browserOnly
               ? "The browser no longer fills it in or sends it to the sites that ask for it."
-              : "Requests that use its placeholder will fail until you add it again."}
+              : secret.kind
+                ? "Sandboxes get no more credentials made from it."
+                : "Requests that use its placeholder will fail until you add it again."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

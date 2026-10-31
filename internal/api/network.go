@@ -22,6 +22,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
+	"github.com/lukaskoebe/sandbox-studio/internal/credentials"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
@@ -62,6 +63,8 @@ type ApprovalView struct {
 	GitCredential *gitreview.GitCredentialPayload `json:"gitCredential,omitempty" doc:"git in a sandbox wants credentials for a host no forge covers"`
 	// SecretRejected is set for secret.rejected approvals.
 	SecretRejected *secretcheck.RejectedPayload `json:"secretRejected,omitempty" doc:"A host keeps refusing a secret's value"`
+	// CredentialIssue is set for credential.issue approvals.
+	CredentialIssue *credentials.IssuePayload `json:"credentialIssue,omitempty" doc:"A sandbox's tool asks for credentials made from a secret with a kind"`
 	// ChatPermission is set for chat.permission approvals.
 	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
 }
@@ -116,6 +119,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p secretcheck.RejectedPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.SecretRejected = &p
+		}
+	case credentials.Kind:
+		var p credentials.IssuePayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.CredentialIssue = &p
 		}
 	case chat.ApprovalKind:
 		var p chat.PermissionPayload
@@ -505,7 +513,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			Ports       []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope       string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
 			Note        string     `json:"note,omitempty" maxLength:"8000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments. For network requests allowed or denied with a rule: why, kept on the rule (at most 500 characters); empty gets a note of what was asked, by which sandbox and when"`
-			Remember    bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
+			Remember    bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on. For credential.issue: allow it always, for every sandbox of the teammate"`
 			Method      string     `json:"method,omitempty" doc:"For network requests allowed or denied with a rule: the request method the rule covers; empty covers any"`
 			PathPrefix  string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`
 			ExpiresAt   *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`

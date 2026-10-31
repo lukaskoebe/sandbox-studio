@@ -180,3 +180,82 @@ test("a secret a host keeps refusing asks to be updated", async ({
     await api.request.delete(`/api/environments/${env}/secrets/${created.id}`)
   }
 })
+
+test("an AWS access key gives a sandbox a profile, and its credentials are asked for", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const name = sandboxName("aws")
+  const id = await api.createSandbox(name)
+  const secret = `E2E_AWS_${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+
+  await page.goto(`/e/${env}/settings/secrets`)
+  await page.getByRole("button", { name: "Add secret" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Add secret" })
+  await dialog.getByLabel("Kind", { exact: true }).click()
+  await page.getByRole("option", { name: "AWS access key" }).click()
+  await expect(dialog.getByLabel("Hosts", { exact: true })).toHaveCount(0)
+  await dialog.getByLabel("Name", { exact: true }).fill(secret)
+  await dialog
+    .getByLabel("Access key ID", { exact: true })
+    .fill("AKIAE2EEXAMPLE00001")
+  await dialog
+    .getByLabel("Secret access key", { exact: true })
+    .fill("e2e-not-a-real-secret-access-key")
+  await dialog.getByRole("button", { name: "Add secret" }).click()
+  await expect(dialog).toBeHidden()
+
+  const secrets = await api.json<{ id: string; name: string; kind?: string }[]>(
+    "GET",
+    `/api/environments/${env}/secrets`
+  )
+  const created = secrets!.find((s) => s.name === secret)!
+  expect(created.kind).toBe("aws")
+  try {
+    await expect(
+      page.getByRole("row").filter({ hasText: secret })
+    ).toContainText("Short-lived credentials")
+
+    // No placeholder in the environment: a profile, which AWS_PROFILE picks.
+    await expect
+      .poll(async () => (await api.guest(id)).env.AWS_PROFILE)
+      .toBe(secret.toLowerCase())
+    const guest = await api.guest(id)
+    expect(guest.env[secret]).toBeUndefined()
+    expect(guest.homeFiles).toContain(".aws/config")
+
+    // The tool's helper asks; the user denies, so Studio asks AWS nothing.
+    await page.goto(`/e/${env}`)
+    const call = api.json<{ id: number }>(
+      "POST",
+      `/api/e2e/sandboxes/${id}/calls`,
+      {
+        method: "credential",
+        params: { secret, format: "process" },
+        wait: false,
+      }
+    )
+    const n = (await call)!.id
+    const card = approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: `asks for credentials from ${secret}` })
+    await expect(card.getByRole("button", { name: "Always" })).toBeVisible()
+    await card.getByRole("button", { name: "Deny" }).click()
+    await expect(card).toHaveCount(0)
+    await expect
+      .poll(
+        async () =>
+          (
+            await api.json<{ done: boolean; error?: string }>(
+              "GET",
+              `/api/e2e/sandboxes/${id}/calls/${n}`
+            )
+          )?.error ?? ""
+      )
+      .toContain("didn't let this sandbox have credentials")
+  } finally {
+    await api.request.delete(`/api/environments/${env}/secrets/${created.id}`)
+  }
+})

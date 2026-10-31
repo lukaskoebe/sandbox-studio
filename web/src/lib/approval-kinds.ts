@@ -140,6 +140,18 @@ const kinds: Record<string, ApprovalKind> = {
     area: "network",
     page: "/e/$env",
   },
+  "credential.issue": {
+    title: "Credentials",
+    summary: (a) => {
+      const c = a.credentialIssue
+      return c
+        ? `${c.teammateName || c.sandboxName} asks for credentials from ${c.name}`
+        : a.subject
+    },
+    icon: KeyIcon,
+    area: "network",
+    page: "/e/$env",
+  },
   "memory.share": {
     title: "Memory share",
     summary: (a) =>
@@ -285,6 +297,8 @@ export function approvalDecision(a: Approval): string {
     return a.status === "approved" ? "Took the wheel" : "Seen"
   if (a.kind === "git.credential")
     return a.status === "approved" ? "Adding a forge" : "Not now"
+  if (a.kind === "credential.issue")
+    return a.status === "approved" ? "Allowed" : "Denied"
   if (a.kind === "secret.rejected")
     return a.status === "approved" ? "Updating the secret" : "Not now"
   if (a.network?.tracker) return "Denied · tracker"

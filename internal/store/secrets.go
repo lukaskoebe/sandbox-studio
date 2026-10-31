@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,25 +30,34 @@ type Secret struct {
 	// BrowserOnly secrets are a teammate's browser logins: Studio fills them into pages of
 	// their hosts and the gateway sends them to those hosts as Basic credentials with
 	// Username. No sandbox sees them.
-	BrowserOnly bool      `json:"browserOnly"`
-	Username    string    `json:"username,omitempty" doc:"A browser login's username, sent with it as HTTP Basic credentials"`
-	AgentMayUse bool      `json:"agentMayUse" doc:"A browser login the teammate's agents fill, and send as Basic credentials, without asking the user"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	BrowserOnly bool   `json:"browserOnly"`
+	Username    string `json:"username,omitempty" doc:"A browser login's username, sent with it as HTTP Basic credentials"`
+	AgentMayUse bool   `json:"agentMayUse" doc:"A browser login the teammate's agents fill, and send as Basic credentials, without asking the user"`
+	// Kind names the credential recipe a secret is issued through (internal/credentials):
+	// sandboxes get short-lived credentials made from it, through their tools' own helpers,
+	// and no placeholder. Empty for a plain secret.
+	Kind string `json:"kind,omitempty" doc:"The credential kind, such as aws: sandboxes get short-lived credentials made from the secret instead of a placeholder. Empty for a plain secret."`
+	// Fields are a kind's fields other than the secret one, which is the sealed value.
+	Fields    map[string]string `json:"fields,omitempty" doc:"The kind's fields other than its secret one, such as an AWS access key ID"`
+	CreatedAt time.Time         `json:"createdAt"`
+	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
 // secretCols are the columns inserted; selects also read studio_only and the scope.
 const secretCols = "id, environment_id, name, value, hosts, placeholder, note, created_at, updated_at"
 
-const secretSelect = secretCols + ", studio_only, IFNULL(teammate_id, ''), IFNULL(sandbox_id, ''), browser_only, username, agent_may_use"
+const secretSelect = secretCols + ", studio_only, IFNULL(teammate_id, ''), IFNULL(sandbox_id, ''), browser_only, username, agent_may_use, kind, fields"
 
 func scanSecret(row interface{ Scan(...any) error }) (Secret, error) {
 	var s Secret
-	var hosts string
+	var hosts, fields string
 	var created, updated int64
-	err := row.Scan(&s.ID, &s.EnvironmentID, &s.Name, &s.Sealed, &hosts, &s.Placeholder, &s.Note, &created, &updated, &s.StudioOnly, &s.TeammateID, &s.SandboxID, &s.BrowserOnly, &s.Username, &s.AgentMayUse)
+	err := row.Scan(&s.ID, &s.EnvironmentID, &s.Name, &s.Sealed, &hosts, &s.Placeholder, &s.Note, &created, &updated, &s.StudioOnly, &s.TeammateID, &s.SandboxID, &s.BrowserOnly, &s.Username, &s.AgentMayUse, &s.Kind, &fields)
 	if hosts != "" {
 		s.Hosts = strings.Split(hosts, ",")
+	}
+	if err == nil && fields != "" && fields != "{}" {
+		err = json.Unmarshal([]byte(fields), &s.Fields)
 	}
 	s.CreatedAt, s.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return s, err
@@ -58,24 +68,41 @@ func scanSecret(row interface{ Scan(...any) error }) (Secret, error) {
 func (s *Store) CreateSecret(ctx context.Context, sec Secret) (Secret, error) {
 	t := now()
 	sec.CreatedAt, sec.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+", studio_only, teammate_id, sandbox_id, browser_only, username, agent_may_use) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	fields, err := fieldsJSON(sec.Fields)
+	if err != nil {
+		return sec, err
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+", studio_only, teammate_id, sandbox_id, browser_only, username, agent_may_use, kind, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sec.ID, sec.EnvironmentID, sec.Name, sec.Sealed, strings.Join(sec.Hosts, ","), sec.Placeholder, sec.Note, t, t,
-		sec.StudioOnly, nullable(sec.TeammateID), nullable(sec.SandboxID), sec.BrowserOnly, sec.Username, sec.AgentMayUse)
+		sec.StudioOnly, nullable(sec.TeammateID), nullable(sec.SandboxID), sec.BrowserOnly, sec.Username, sec.AgentMayUse, sec.Kind, fields)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sec, fmt.Errorf("a secret named %q: %w", sec.Name, ErrExists)
 	}
 	return sec, err
 }
 
-// UpdateSecret replaces the hosts, note and username of a secret. A nil Sealed keeps the stored
-// value. The name, scope and placeholder never change.
+// fieldsJSON is a kind's fields as stored.
+func fieldsJSON(fields map[string]string) (string, error) {
+	if len(fields) == 0 {
+		return "{}", nil
+	}
+	b, err := json.Marshal(fields)
+	return string(b), err
+}
+
+// UpdateSecret replaces the hosts, note, username and fields of a secret. A nil Sealed keeps the
+// stored value. The name, scope, kind and placeholder never change.
 func (s *Store) UpdateSecret(ctx context.Context, sec Secret) (Secret, error) {
 	var value any // an untyped nil binds as NULL, and COALESCE keeps the stored value then
 	if sec.Sealed != nil {
 		value = sec.Sealed
 	}
-	res, err := s.db.ExecContext(ctx, "UPDATE secrets SET value = COALESCE(?, value), hosts = ?, note = ?, username = ?, updated_at = ? WHERE environment_id = ? AND id = ?",
-		value, strings.Join(sec.Hosts, ","), sec.Note, sec.Username, now(), sec.EnvironmentID, sec.ID)
+	fields, err := fieldsJSON(sec.Fields)
+	if err != nil {
+		return sec, err
+	}
+	res, err := s.db.ExecContext(ctx, "UPDATE secrets SET value = COALESCE(?, value), hosts = ?, note = ?, username = ?, fields = ?, updated_at = ? WHERE environment_id = ? AND id = ?",
+		value, strings.Join(sec.Hosts, ","), sec.Note, sec.Username, fields, now(), sec.EnvironmentID, sec.ID)
 	if err != nil {
 		return sec, err
 	}

@@ -306,8 +306,27 @@ func (ic *interception) noteRejection(resp *http.Response) {
 	}
 }
 
+// sigV4Error is the refusal of an AWS Signature Version 4 request that names a placeholder: the
+// signature is made with the secret key, so a swapped value can't match it.
+const sigV4Error = "The request is signed with AWS Signature Version 4 and names a Sandbox Studio placeholder as its access key. " +
+	"AWS clients sign requests with the secret key, so Sandbox Studio can't swap a placeholder into them. " +
+	"Add the key in Sandbox Studio as a secret of the kind AWS access key instead: the sandbox's AWS CLI and SDKs then get session credentials through the profile Studio writes to ~/.aws/config."
+
+// signedWithPlaceholder reports whether r is signed with AWS Signature Version 4, in its
+// Authorization header or a presigned URL, with a placeholder as its access key.
+func signedWithPlaceholder(r *http.Request) bool {
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "AWS4-HMAC-SHA256 ") && strings.Contains(auth, "Credential="+placeholderPrefix) {
+		return true
+	}
+	cred := r.URL.Query().Get("X-Amz-Credential")
+	return strings.HasPrefix(cred, placeholderPrefix)
+}
+
 // rewrite swaps placeholders for values and sets the rule's headers.
 func (ic *interception) rewrite(r *http.Request, sent *sentSecrets) error {
+	if signedWithPlaceholder(r) {
+		return errors.New(sigV4Error)
+	}
 	for name, values := range r.Header {
 		for i, v := range values {
 			var err error

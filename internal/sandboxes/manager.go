@@ -82,6 +82,7 @@ type Manager struct {
 	kickOnce    sync.Once
 	kick        chan struct{} // see scheduleKick
 	harness     harnessConfigs
+	credentials harnessConfigs // the files and environment of credentials (internal/credentials)
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
 	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.
 	mutating sync.Map

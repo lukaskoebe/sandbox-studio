@@ -187,6 +187,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "credentialIssue": {
+            "$ref": "#/components/schemas/IssuePayload",
+            "description": "A sandbox's tool asks for credentials made from a secret with a kind"
+          },
           "environmentId": {
             "type": "string"
           },
@@ -1809,6 +1813,13 @@
             "description": "Makes it a browser login of teammateId: Studio fills it into pages of its hosts and sends it to them as HTTP Basic credentials, and no sandbox sees it",
             "type": "boolean"
           },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The kind's other fields, by name",
+            "type": "object"
+          },
           "hosts": {
             "description": "Host patterns the value may be sent to, e.g. api.openai.com or *.example.com",
             "items": {
@@ -1819,6 +1830,11 @@
               "array",
               "null"
             ]
+          },
+          "kind": {
+            "description": "A kind from listSecretKinds: sandboxes get short-lived credentials made from the secret instead of a placeholder. value is the kind's secret field.",
+            "maxLength": 32,
+            "type": "string"
           },
           "name": {
             "description": "Environment variable name sandboxes see, e.g. OPENAI_API_KEY. Unique per scope.",
@@ -2057,7 +2073,7 @@
             "description": "For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"
           },
           "remember": {
-            "description": "For browser.action: allow (or deny) the action on the origin from now on",
+            "description": "For browser.action: allow (or deny) the action on the origin from now on. For credential.issue: allow it always, for every sandbox of the teammate",
             "type": "boolean"
           },
           "review": {
@@ -3018,6 +3034,34 @@
         },
         "required": [
           "queued"
+        ],
+        "type": "object"
+      },
+      "Field": {
+        "additionalProperties": false,
+        "properties": {
+          "hint": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "title"
         ],
         "type": "object"
       },
@@ -4552,6 +4596,56 @@
         ],
         "type": "object"
       },
+      "IssuePayload": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "The secret's kind, such as aws",
+            "type": "string"
+          },
+          "kindTitle": {
+            "description": "The kind as the user reads it, such as AWS access key",
+            "type": "string"
+          },
+          "lifetime": {
+            "description": "How long each credential lasts, such as 1h0m0s",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's name",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "secretId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretId",
+          "name",
+          "kind",
+          "kindTitle",
+          "lifetime",
+          "sandboxId",
+          "sandboxName"
+        ],
+        "type": "object"
+      },
       "Item": {
         "additionalProperties": false,
         "properties": {
@@ -4618,6 +4712,51 @@
           "kind",
           "updatedAt",
           "rev"
+        ],
+        "type": "object"
+      },
+      "KindInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "lifetime": {
+            "description": "How long each credential lasts, such as 1h0m0s",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "description",
+          "fields",
+          "hosts",
+          "lifetime"
         ],
         "type": "object"
       },
@@ -8068,6 +8207,13 @@
           "environmentId": {
             "type": "string"
           },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The kind's fields other than its secret one, such as an AWS access key ID",
+            "type": "object"
+          },
           "hosts": {
             "items": {
               "type": "string"
@@ -8078,6 +8224,10 @@
             ]
           },
           "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "The credential kind, such as aws: sandboxes get short-lived credentials made from the secret instead of a placeholder. Empty for a plain secret.",
             "type": "string"
           },
           "name": {
@@ -9994,6 +10144,13 @@
           "agentMayUse": {
             "description": "Whether the teammate's agents use the browser login without asking; omit it to keep it",
             "type": "boolean"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "A secret with a kind's other fields, all of them; omit it to keep them",
+            "type": "object"
           },
           "hosts": {
             "description": "Host patterns the value may be sent to",
@@ -21688,6 +21845,43 @@
         },
         "tags": [
           "providers"
+        ]
+      }
+    },
+    "/api/secret-kinds": {
+      "get": {
+        "description": "The kinds a secret can have besides a plain value. Sandboxes get short-lived credentials made from a secret with a kind, through their tools' own helpers, instead of a placeholder.",
+        "operationId": "listSecretKinds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KindInfo"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "secrets"
         ]
       }
     },

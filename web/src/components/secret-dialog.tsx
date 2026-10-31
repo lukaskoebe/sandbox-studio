@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { useSecretKinds } from "@/components/secret-parts"
 import {
   $api,
   errorMessage,
@@ -49,6 +50,19 @@ function splitHosts(text: string): string[] {
 
 function unique(list: string[]): string[] {
   return [...new Set(list)]
+}
+
+/** A Go duration such as 1h0m0s as people say it: an hour, 15 minutes. */
+function duration(d: string) {
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:0s)?$/.exec(d)
+  if (!m) return d
+  const [, h, min] = m as (string | undefined)[]
+  const hours = Number(h ?? 0)
+  const minutes = Number(min ?? 0)
+  if (hours === 1 && minutes === 0) return "an hour"
+  if (minutes === 0) return `${hours} hours`
+  if (hours === 0) return `${minutes} minutes`
+  return d
 }
 
 /** What a scope means for the sandboxes that see the secret. */
@@ -133,6 +147,19 @@ function SecretForm({
       teammateList.map((p) => [`teammate:${p.id}`, `Teammate ${p.name}`])
     ),
   }
+  const kinds = useSecretKinds().data ?? []
+  // "" is a plain secret, swapped in for its placeholder; a kind's name is issued credentials.
+  const [kindName, setKindName] = useState(secret?.kind ?? "")
+  const kind = kinds.find((k) => k.name === kindName)
+  const [fields, setFields] = useState<Record<string, string>>(
+    secret?.fields ?? {}
+  )
+  const secretField = kind?.fields?.find((f) => f.secret)
+  const otherFields = kind?.fields?.filter((f) => !f.secret) ?? []
+  const kindLabels: Record<string, string> = {
+    "": "Value",
+    ...Object.fromEntries(kinds.map((k) => [k.name, k.title])),
+  }
   const [value, setValue] = useState("")
   const [showValue, setShowValue] = useState(false)
   const [hosts, setHosts] = useState<string[]>(secret?.hosts ?? [])
@@ -141,12 +168,20 @@ function SecretForm({
   const [serverError, setServerError] = useState<string>()
   const [saving, setSaving] = useState(false)
 
-  // A host still being typed counts as entered when saving.
-  const allHosts = unique([...hosts, ...splitHosts(draft)])
+  // A host still being typed counts as entered when saving. A kind's secret is for its hosts.
+  const allHosts = kind
+    ? (kind.hosts ?? [])
+    : unique([...hosts, ...splitHosts(draft)])
   const canSave =
     name.trim() !== "" &&
     allHosts.length > 0 &&
-    (secret !== undefined || value !== "")
+    (secret !== undefined || value !== "") &&
+    otherFields.every((f) => f.optional || (fields[f.name] ?? "").trim())
+  const kindFields = kind
+    ? Object.fromEntries(
+        otherFields.map((f) => [f.name, (fields[f.name] ?? "").trim()])
+      )
+    : undefined
 
   const addHosts = (words: string[]) =>
     setHosts((prev) => unique([...prev, ...words]))
@@ -193,6 +228,7 @@ function SecretForm({
               hosts: allHosts,
               note: note.trim(),
               value: value || undefined,
+              fields: kindFields,
             },
           })
         : await fetchClient.POST("/api/environments/{env}/secrets", {
@@ -209,6 +245,8 @@ function SecretForm({
                 ? scope.slice("teammate:".length)
                 : undefined,
               note: note.trim() || undefined,
+              kind: kind?.name,
+              fields: kindFields,
             },
           })
       if (!result.error) {
@@ -245,10 +283,46 @@ function SecretForm({
       <DialogHeader>
         <DialogTitle>{secret ? "Edit secret" : "Add secret"}</DialogTitle>
         <DialogDescription>
-          Sandboxes only see the placeholder. Studio sends the real value over
-          HTTPS to these hosts.
+          {kind
+            ? kind.description
+            : "Sandboxes only see the placeholder. Studio sends the real value over HTTPS to these hosts."}
         </DialogDescription>
       </DialogHeader>
+      {(kinds.length > 0 || secret?.kind) && (
+        <Field>
+          <FieldLabel htmlFor="secret-kind">Kind</FieldLabel>
+          {secret ? (
+            <Input
+              id="secret-kind"
+              value={kindLabels[kindName] ?? kindName}
+              readOnly
+            />
+          ) : (
+            <Select
+              value={kindName}
+              onValueChange={(v) => setKindName(v ?? "")}
+              items={kindLabels}
+            >
+              <SelectTrigger id="secret-kind" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Value</SelectItem>
+                {kinds.map((k) => (
+                  <SelectItem key={k.name} value={k.name}>
+                    {k.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <FieldDescription>
+            {kind
+              ? `Sandboxes get credentials made from it, for ${duration(kind.lifetime)} at a time, through their tools' own helpers, and no placeholder.`
+              : "Sandboxes get a placeholder that Studio swaps for the value. Pick a kind for keys that tools sign with, such as AWS's."}
+          </FieldDescription>
+        </Field>
+      )}
       <Field>
         <FieldLabel htmlFor="secret-name">Name</FieldLabel>
         {secret ? (
@@ -268,11 +342,32 @@ function SecretForm({
         <FieldDescription>
           {secret
             ? "The name can't change."
-            : "Letters, digits and _; e.g. OPENAI_API_KEY"}
+            : kind
+              ? "Letters, digits and _; e.g. AWS_PROD"
+              : "Letters, digits and _; e.g. OPENAI_API_KEY"}
         </FieldDescription>
       </Field>
+      {otherFields.map((f) => (
+        <Field key={f.name}>
+          <FieldLabel htmlFor={`secret-field-${f.name}`}>{f.title}</FieldLabel>
+          <Input
+            id={`secret-field-${f.name}`}
+            className="font-mono"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={f.optional ? "Optional" : undefined}
+            value={fields[f.name] ?? ""}
+            onChange={(e) =>
+              setFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+            }
+          />
+          {f.hint && <FieldDescription>{f.hint}</FieldDescription>}
+        </Field>
+      ))}
       <Field>
-        <FieldLabel htmlFor="secret-value">Value</FieldLabel>
+        <FieldLabel htmlFor="secret-value">
+          {secretField?.title ?? "Value"}
+        </FieldLabel>
         <div className="relative">
           <Input
             id="secret-value"
@@ -304,50 +399,52 @@ function SecretForm({
           Sealed on arrival and never shown again.
         </FieldDescription>
       </Field>
-      <Field>
-        <FieldLabel htmlFor="secret-hosts">Hosts</FieldLabel>
-        <div
-          className="flex min-h-7 flex-wrap items-center gap-1 rounded-md border border-input bg-input/20 px-1 py-0.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30"
-          onClick={() => hostInput.current?.focus()}
-        >
-          {hosts.map((host) => (
-            <Badge
-              key={host}
-              variant="secondary"
-              className="gap-0.5 pr-0.5 font-mono"
-            >
-              {host}
-              <button
-                type="button"
-                aria-label={`Remove ${host}`}
-                className="rounded-sm p-0.5 hover:bg-foreground/10"
-                onClick={() =>
-                  setHosts((prev) => prev.filter((h) => h !== host))
-                }
+      {!kind && (
+        <Field>
+          <FieldLabel htmlFor="secret-hosts">Hosts</FieldLabel>
+          <div
+            className="flex min-h-7 flex-wrap items-center gap-1 rounded-md border border-input bg-input/20 px-1 py-0.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30"
+            onClick={() => hostInput.current?.focus()}
+          >
+            {hosts.map((host) => (
+              <Badge
+                key={host}
+                variant="secondary"
+                className="gap-0.5 pr-0.5 font-mono"
               >
-                <XIcon className="size-2.5" />
-              </button>
-            </Badge>
-          ))}
-          <input
-            id="secret-hosts"
-            ref={hostInput}
-            value={draft}
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder={hosts.length ? undefined : "Add a host"}
-            className="h-6 min-w-32 flex-1 bg-transparent px-1 font-mono text-xs outline-none placeholder:text-muted-foreground"
-            onChange={(e) => onHostChange(e.target.value)}
-            onKeyDown={onHostKey}
-            onPaste={onHostPaste}
-            onBlur={confirmDraft}
-          />
-        </div>
-        <FieldDescription>
-          e.g. api.openai.com or *.example.com
-        </FieldDescription>
-      </Field>
+                {host}
+                <button
+                  type="button"
+                  aria-label={`Remove ${host}`}
+                  className="rounded-sm p-0.5 hover:bg-foreground/10"
+                  onClick={() =>
+                    setHosts((prev) => prev.filter((h) => h !== host))
+                  }
+                >
+                  <XIcon className="size-2.5" />
+                </button>
+              </Badge>
+            ))}
+            <input
+              id="secret-hosts"
+              ref={hostInput}
+              value={draft}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={hosts.length ? undefined : "Add a host"}
+              className="h-6 min-w-32 flex-1 bg-transparent px-1 font-mono text-xs outline-none placeholder:text-muted-foreground"
+              onChange={(e) => onHostChange(e.target.value)}
+              onKeyDown={onHostKey}
+              onPaste={onHostPaste}
+              onBlur={confirmDraft}
+            />
+          </div>
+          <FieldDescription>
+            e.g. api.openai.com or *.example.com
+          </FieldDescription>
+        </Field>
+      )}
       <Field>
         <FieldLabel htmlFor="secret-scope">Scope</FieldLabel>
         {secret ? (

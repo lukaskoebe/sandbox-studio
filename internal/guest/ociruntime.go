@@ -28,6 +28,7 @@ var containerEnv = []string{
 	"CURL_CA_BUNDLE=" + ContainerCADir + "/ca-bundle.crt",
 	"REQUESTS_CA_BUNDLE=" + ContainerCADir + "/ca-bundle.crt",
 	"GIT_SSL_CAINFO=" + ContainerCADir + "/ca-bundle.crt",
+	"AWS_CA_BUNDLE=" + ContainerCADir + "/ca-bundle.crt",
 	"NODE_EXTRA_CA_CERTS=" + ContainerCADir + "/ca.crt",
 }
 

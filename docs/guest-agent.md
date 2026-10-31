@@ -78,6 +78,7 @@ small or move their bytes to msb exec.
 | `claude-acp` | Studio's chat, for a Claude subscription | the chat's ACP agent: runs `claude -p` for its turns ([harnesses](harnesses.md#claude-subscription-chats)) |
 | `claude-permission` | Claude Code, from the chat's plugin | the permission prompt tool of that agent, which asks the shim |
 | `git-credential <action>` | git, as its credential helper | tells Studio about a host git has no credentials for and prints its hint; never answers with one ([git review](git-review.md#credential-hints)) |
+| `credential <secret> <format>` | a tool's credential helper, such as AWS's `credential_process` | prints short-lived credentials Studio issues from the secret ([network](network.md#credentials)) |
 | `oci-runtime` | Docker, as `runc` | CA trust for containers (below) |
 | `export-layer`, `workspace-export`, `workspace-import`, `home-export`, `home-import` | Studio via msb exec | template builds, fork, rebase, export, import |
 | `version` | | |

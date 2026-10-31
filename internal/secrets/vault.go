@@ -242,10 +242,14 @@ func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (sto
 	}
 	// The ID is the AAD of the sealed value, so it is chosen before the row is inserted.
 	id := store.NewID()
+	if sec.Kind != "" && (sec.StudioOnly || sec.BrowserOnly) {
+		return store.Secret{}, fmt.Errorf("%w: a credential kind is for sandboxes", ErrInvalid)
+	}
 	sec = store.Secret{
 		ID: id, EnvironmentID: sec.EnvironmentID, TeammateID: sec.TeammateID, SandboxID: sec.SandboxID,
 		Name: sec.Name, Sealed: v.Seal([]byte(value), []byte(id)), Hosts: hosts, Placeholder: newPlaceholder(), Note: sec.Note,
 		StudioOnly: sec.StudioOnly, BrowserOnly: sec.BrowserOnly, Username: sec.Username, AgentMayUse: sec.AgentMayUse && sec.BrowserOnly,
+		Kind: sec.Kind, Fields: sec.Fields,
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -274,7 +278,7 @@ func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hos
 	} else if hosts, err = normalizeHosts(hosts); err != nil {
 		return store.Secret{}, err
 	}
-	sec := store.Secret{ID: id, EnvironmentID: envID, Hosts: hosts, Note: note, Username: user}
+	sec := store.Secret{ID: id, EnvironmentID: envID, Hosts: hosts, Note: note, Username: user, Fields: cur.Fields}
 	if value != nil {
 		val, err := normalizeValue(*value)
 		if err != nil {
@@ -285,6 +289,23 @@ func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hos
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	out, err := v.st.UpdateSecret(ctx, sec)
+	delete(v.bindings, envID)
+	return out, err
+}
+
+// SetFields replaces the fields of a secret with a kind, other than its secret one.
+func (v *Vault) SetFields(ctx context.Context, envID, id string, fields map[string]string) (store.Secret, error) {
+	cur, err := v.st.SecretByID(ctx, envID, id)
+	if err != nil {
+		return store.Secret{}, err
+	}
+	if cur.Kind == "" {
+		return store.Secret{}, fmt.Errorf("%w: only a secret with a credential kind has fields", ErrInvalid)
+	}
+	cur.Sealed, cur.Fields = nil, fields
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	out, err := v.st.UpdateSecret(ctx, cur)
 	delete(v.bindings, envID)
 	return out, err
 }
@@ -328,6 +349,8 @@ func (v *Vault) Bindings(ctx context.Context, sb store.Sandbox) ([]Binding, erro
 	for i, u := range all {
 		list[i] = u.sec
 	}
+	// unsealed leaves out secrets with a kind: a sandbox gets credentials made from them,
+	// never their value or a placeholder (internal/credentials).
 	visible := map[string]bool{}
 	for _, sec := range store.VisibleSecrets(list, sb.ID, sb.TeammateID) {
 		visible[sec.ID] = true
@@ -369,8 +392,8 @@ func (v *Vault) BrowserLogins(ctx context.Context, envID, teammateID string) ([]
 	return out, nil
 }
 
-// unsealed returns the decrypted secrets of an environment, studio-only ones excluded,
-// from the cache if it holds them.
+// unsealed returns the decrypted secrets of an environment, studio-only ones and those with a
+// credential kind excluded, from the cache if it holds them.
 func (v *Vault) unsealed(ctx context.Context, envID string) ([]unsealed, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -383,7 +406,7 @@ func (v *Vault) unsealed(ctx context.Context, envID string) ([]unsealed, error) 
 	}
 	out := make([]unsealed, 0, len(list))
 	for _, s := range list {
-		if s.StudioOnly {
+		if s.StudioOnly || s.Kind != "" {
 			continue
 		}
 		value, err := v.Unseal(s.Sealed, []byte(s.ID))
@@ -398,12 +421,14 @@ func (v *Vault) unsealed(ctx context.Context, envID string) ([]unsealed, error) 
 }
 
 // Env maps the name of each secret sandbox sb sees to its placeholder. These are the
-// environment variables the sandbox gets.
+// environment variables the sandbox gets. Secrets with a credential kind have none: their names
+// are a namespace of their own, which shadows no plain secret.
 func (v *Vault) Env(ctx context.Context, sb store.Sandbox) (map[string]string, error) {
 	list, err := v.st.Secrets(ctx, sb.EnvironmentID)
 	if err != nil {
 		return nil, err
 	}
+	list = slices.DeleteFunc(list, func(s store.Secret) bool { return s.Kind != "" })
 	visible := store.VisibleSecrets(list, sb.ID, sb.TeammateID)
 	env := make(map[string]string, len(visible))
 	for _, s := range visible {
@@ -418,7 +443,7 @@ var namePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,63}$`)
 // Studio CA, so a secret must not shadow them.
 var reservedNames = []string{
 	"PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "PWD", "TMPDIR", "HOSTNAME", "IFS", "ENV", "BASH_ENV",
-	"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO",
+	"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO", "AWS_CA_BUNDLE",
 }
 
 // reservedPrefixes belong to the dynamic loaders and to Studio.

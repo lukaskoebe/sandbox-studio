@@ -2775,6 +2775,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/secret-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The kinds a secret can have besides a plain value. Sandboxes get short-lived credentials made from a secret with a kind, through their tools' own helpers, instead of a placeholder. */
+        get: operations["listSecretKinds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup": {
         parameters: {
             query?: never;
@@ -3100,6 +3117,8 @@ export interface components {
             chatPermission?: components["schemas"]["PermissionPayload"];
             /** Format: date-time */
             createdAt: string;
+            /** @description A sandbox's tool asks for credentials made from a secret with a kind */
+            credentialIssue?: components["schemas"]["IssuePayload"];
             environmentId: string;
             /** @description A teammate's review draft of a pull request, and what became of it */
             forgeReview?: components["schemas"]["ReviewDetail"];
@@ -3645,8 +3664,14 @@ export interface components {
             agentMayUse?: boolean;
             /** @description Makes it a browser login of teammateId: Studio fills it into pages of its hosts and sends it to them as HTTP Basic credentials, and no sandbox sees it */
             browserOnly?: boolean;
+            /** @description The kind's other fields, by name */
+            fields?: {
+                [key: string]: string;
+            };
             /** @description Host patterns the value may be sent to, e.g. api.openai.com or *.example.com */
             hosts: string[] | null;
+            /** @description A kind from listSecretKinds: sandboxes get short-lived credentials made from the secret instead of a placeholder. value is the kind's secret field. */
+            kind?: string;
             /** @description Environment variable name sandboxes see, e.g. OPENAI_API_KEY. Unique per scope. */
             name: string;
             note?: string;
@@ -3720,7 +3745,7 @@ export interface components {
             ports?: number[] | null;
             /** @description For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval */
             pullRequest?: components["schemas"]["PullRequestStruct"];
-            /** @description For browser.action: allow (or deny) the action on the origin from now on */
+            /** @description For browser.action: allow (or deny) the action on the origin from now on. For credential.issue: allow it always, for every sandbox of the teammate */
             remember?: boolean;
             /** @description For git.review approved with allow: the review as edited, which Studio posts. Omitted posts the draft as it is */
             review?: components["schemas"]["ReviewEditIn"];
@@ -4100,6 +4125,14 @@ export interface components {
             chat?: string;
             /** @description The chat was busy: the feedback goes out when its running turn ends */
             queued: boolean;
+        };
+        Field: {
+            hint?: string;
+            name: string;
+            optional?: boolean;
+            pattern?: string;
+            secret?: boolean;
+            title: string;
         };
         FileChange: {
             /**
@@ -4607,6 +4640,23 @@ export interface components {
             /** @description The release being installed */
             version: string;
         };
+        IssuePayload: {
+            /** @description The secret's kind, such as aws */
+            kind: string;
+            /** @description The kind as the user reads it, such as AWS access key */
+            kindTitle: string;
+            /** @description How long each credential lasts, such as 1h0m0s */
+            lifetime: string;
+            /** @description The secret's name */
+            name: string;
+            sandboxId: string;
+            sandboxName: string;
+            secretId: string;
+            /** Format: int64 */
+            startedAt?: number;
+            teammateId?: string;
+            teammateName?: string;
+        };
         Item: {
             approvalId?: string;
             chatId: string;
@@ -4628,6 +4678,15 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             user?: components["schemas"]["UserBody"];
+        };
+        KindInfo: {
+            description: string;
+            fields: components["schemas"]["Field"][] | null;
+            hosts: string[] | null;
+            /** @description How long each credential lasts, such as 1h0m0s */
+            lifetime: string;
+            name: string;
+            title: string;
         };
         Lineage: {
             checkpointRestoreSupported: boolean;
@@ -5784,8 +5843,14 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
+            /** @description The kind's fields other than its secret one, such as an AWS access key ID */
+            fields?: {
+                [key: string]: string;
+            };
             hosts: string[] | null;
             id: string;
+            /** @description The credential kind, such as aws: sandboxes get short-lived credentials made from the secret instead of a placeholder. Empty for a plain secret. */
+            kind?: string;
             name: string;
             note: string;
             placeholder: string;
@@ -6455,6 +6520,10 @@ export interface components {
         UpdateSecretInBody: {
             /** @description Whether the teammate's agents use the browser login without asking; omit it to keep it */
             agentMayUse?: boolean;
+            /** @description A secret with a kind's other fields, all of them; omit it to keep them */
+            fields?: {
+                [key: string]: string;
+            };
             /** @description Host patterns the value may be sent to */
             hosts: string[] | null;
             note?: string;
@@ -13625,6 +13694,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderKind"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listSecretKinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KindInfo"][] | null;
                 };
             };
             /** @description Error */

@@ -9,6 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/credentials"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -22,6 +23,13 @@ type secretPath struct {
 // come back out: responses are store.Secret, which has no value. A browser login's password,
 // which the user typed in their teammate's browser, is the one exception (getSecretValue).
 func (s *Server) registerSecrets(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "listSecretKinds", Method: http.MethodGet, Path: "/api/secret-kinds", Tags: []string{"secrets"},
+		Description: "The kinds a secret can have besides a plain value. Sandboxes get short-lived credentials made from a secret with a kind, through their tools' own helpers, instead of a placeholder.",
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body []credentials.KindInfo }, error) {
+		return &struct{ Body []credentials.KindInfo }{credentials.Kinds()}, nil
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "listSecrets", Method: http.MethodGet, Path: "/api/environments/{env}/secrets", Tags: []string{"secrets"},
 		Description: "The secrets of an environment, of every scope. A sandbox sees the name of each secret of its environment, its teammate and its own as an environment variable holding the placeholder; of secrets sharing a name the most specific wins.",
@@ -46,6 +54,9 @@ func (s *Server) registerSecrets(api huma.API) {
 			BrowserOnly bool   `json:"browserOnly,omitempty" doc:"Makes it a browser login of teammateId: Studio fills it into pages of its hosts and sends it to them as HTTP Basic credentials, and no sandbox sees it"`
 			Username    string `json:"username,omitempty" maxLength:"200" doc:"A browser login's username"`
 			AgentMayUse bool   `json:"agentMayUse,omitempty" doc:"Lets the teammate's agents use the browser login without asking"`
+			// A secret with a kind: sandboxes get credentials made from it.
+			Kind   string            `json:"kind,omitempty" maxLength:"32" doc:"A kind from listSecretKinds: sandboxes get short-lived credentials made from the secret instead of a placeholder. value is the kind's secret field."`
+			Fields map[string]string `json:"fields,omitempty" doc:"The kind's other fields, by name"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -62,8 +73,18 @@ func (s *Server) registerSecrets(api huma.API) {
 		if in.Body.BrowserOnly && in.Body.TeammateID == "" {
 			return nil, huma.Error422UnprocessableEntity("a browser login belongs to a teammate: set teammateId")
 		}
+		fields := map[string]string(nil)
+		if in.Body.Kind != "" {
+			var err error
+			if fields, err = credentials.CheckSecret(in.Body.Kind, in.Body.Fields); err != nil {
+				return nil, huma.Error422UnprocessableEntity(err.Error())
+			}
+		} else if len(in.Body.Fields) > 0 {
+			return nil, huma.Error422UnprocessableEntity("only a secret with a kind has fields")
+		}
 		sec, err := s.Vault.Create(ctx, store.Secret{EnvironmentID: in.Env, TeammateID: in.Body.TeammateID, SandboxID: in.Body.SandboxID,
-			Name: in.Body.Name, Hosts: in.Body.Hosts, Note: in.Body.Note, BrowserOnly: in.Body.BrowserOnly, Username: in.Body.Username, AgentMayUse: in.Body.AgentMayUse}, in.Body.Value)
+			Name: in.Body.Name, Hosts: in.Body.Hosts, Note: in.Body.Note, BrowserOnly: in.Body.BrowserOnly, Username: in.Body.Username, AgentMayUse: in.Body.AgentMayUse,
+			Kind: in.Body.Kind, Fields: fields}, in.Body.Value)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -82,6 +103,8 @@ func (s *Server) registerSecrets(api huma.API) {
 			Username *string `json:"username,omitempty" maxLength:"200" doc:"A browser login's username; omit it to keep the stored one"`
 			// AgentMayUse is a browser login's; omitted, it stays.
 			AgentMayUse *bool `json:"agentMayUse,omitempty" doc:"Whether the teammate's agents use the browser login without asking; omit it to keep it"`
+			// Fields are a secret with a kind's; omitted, they stay.
+			Fields map[string]string `json:"fields,omitempty" doc:"A secret with a kind's other fields, all of them; omit it to keep them"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -91,9 +114,27 @@ func (s *Server) registerSecrets(api huma.API) {
 		if err := s.checkUnmanaged(ctx, in.Env, in.ID); err != nil {
 			return nil, err
 		}
+		var fields map[string]string
+		if in.Body.Fields != nil {
+			cur, err := s.Store.SecretByID(ctx, in.Env, in.ID)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			if cur.Kind == "" {
+				return nil, huma.Error422UnprocessableEntity("only a secret with a kind has fields")
+			}
+			if fields, err = credentials.CheckSecret(cur.Kind, in.Body.Fields); err != nil {
+				return nil, huma.Error422UnprocessableEntity(err.Error())
+			}
+		}
 		sec, err := s.Vault.Update(ctx, in.Env, in.ID, in.Body.Value, in.Body.Hosts, in.Body.Note, in.Body.Username)
 		if err != nil {
 			return nil, apiError(err)
+		}
+		if fields != nil {
+			if sec, err = s.Vault.SetFields(ctx, in.Env, in.ID, fields); err != nil {
+				return nil, apiError(err)
+			}
 		}
 		if in.Body.AgentMayUse != nil && *in.Body.AgentMayUse != sec.AgentMayUse {
 			if !sec.BrowserOnly {

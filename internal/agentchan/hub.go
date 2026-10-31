@@ -568,11 +568,12 @@ func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadReques
 
 // WriteHomeFiles writes harness config files into the terminal user's home in the guest.
 func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error {
-	// An older guest would write a Keys file whole over the harness's own, so it gets none.
+	// An older guest would write a Keys file whole over the harness's own, and refuse a block
+	// with a Comment, so it gets neither.
 	if hello, _ := h.Connected(id); hello.Version != version.Version {
 		kept := files[:0:0]
 		for _, f := range files {
-			if !f.Keys {
+			if !f.Keys && f.Comment == "" {
 				kept = append(kept, f)
 			}
 		}

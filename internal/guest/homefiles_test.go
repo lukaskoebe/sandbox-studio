@@ -145,6 +145,39 @@ func TestHomeFilesManagedBlock(t *testing.T) {
 	}
 }
 
+// A block in a file without HTML comments has its markers in the file's comments; an empty
+// one removes the block and creates no file.
+func TestHomeFilesCommentedBlock(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".aws", "config")
+	ini := func(body string) string {
+		return "# " + agentproto.BlockBegin + "\n" + body + "# " + agentproto.BlockEnd + "\n"
+	}
+	empty := agentproto.HomeFile{Path: ".aws/config", Content: ini(""), Mode: 0o600, Block: true, Comment: "# "}
+	must(t, writeAsMe(home, empty))
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("an empty block wrote a file: %v", err)
+	}
+	must(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	must(t, os.WriteFile(path, []byte("[default]\nregion = eu-west-1\n"), 0o600))
+	f := agentproto.HomeFile{Path: ".aws/config", Content: ini("[profile prod]\ncredential_process = x\n"), Mode: 0o600, Block: true, Comment: "# "}
+	must(t, writeAsMe(home, f))
+	if b, _ := os.ReadFile(path); string(b) != f.Content+"\n[default]\nregion = eu-west-1\n" {
+		t.Fatalf("merged: %q", b)
+	}
+	must(t, writeAsMe(home, empty))
+	if b, _ := os.ReadFile(path); string(b) != "[default]\nregion = eu-west-1\n" {
+		t.Fatalf("removed: %q", b)
+	}
+	// Markers without the comment aren't this block's.
+	if err := writeAsMe(home, agentproto.HomeFile{Path: ".aws/config", Content: block("x"), Mode: 0o600, Block: true, Comment: "# "}); err == nil {
+		t.Error("took a block whose markers lack the comment")
+	}
+	if err := writeAsMe(home, agentproto.HomeFile{Path: ".aws/x", Content: "x", Mode: 0o600, Comment: "# "}); err == nil {
+		t.Error("took a comment without a block")
+	}
+}
+
 // Keys are merged into the harness's own JSON file: its other keys, nested ones included,
 // stay as they are.
 func TestHomeFilesKeys(t *testing.T) {

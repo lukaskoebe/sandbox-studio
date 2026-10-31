@@ -13,6 +13,8 @@ export type GuestState = {
   configs: number
   env: Record<string, string>
   ca: boolean
+  /** The home files Studio wrote, by path. */
+  homeFiles: string[]
   /** Its terminal sessions, as tmux would list them. */
   sessions: { name: string; title?: string }[]
   ports: number[]

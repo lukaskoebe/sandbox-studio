@@ -377,6 +377,18 @@ func TestInterceptReportsRejectedSecrets(t *testing.T) {
 	}
 }
 
+// A SigV4 signature can't survive a swapped key, so such a request says what to do instead.
+func TestInterceptRefusesSigV4Placeholders(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	before := h.requests()
+	resp, body := get(t, c, "https://example.com/", "Authorization",
+		"AWS4-HMAC-SHA256 Credential="+apiPlaceholder+"/20261030/us-east-1/sts/aws4_request, SignedHeaders=host;x-amz-date, Signature=00")
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(body, "AWS Signature Version 4") || h.requests() != before {
+		t.Errorf("%d %q", resp.StatusCode, body)
+	}
+}
+
 func TestInterceptRefusesMisplacedSecrets(t *testing.T) {
 	h := newInterceptHarness(t)
 	c := h.client(t, h.envCA)
@@ -392,6 +404,7 @@ func TestInterceptRefusesMisplacedSecrets(t *testing.T) {
 		{"overridden placeholder", "https://example.com/?k=" + foreignPlaceholder, "", 403, "secret API_KEY that this sandbox doesn't see in Sandbox Studio. Use $API_KEY instead, which this sandbox sees."},
 		{"another sandbox's placeholder", "https://example.com/", "Bearer " + elsewherePlaceholder, 403, "secret ELSEWHERE_KEY that this sandbox doesn't see in Sandbox Studio."},
 		{"another sandbox's placeholder under a caddy rule", "https://caddy.example/", elsewherePlaceholder, 403, "secret ELSEWHERE_KEY that this sandbox doesn't see"},
+		{"a presigned AWS URL with a placeholder key", "https://example.com/obj?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=" + apiPlaceholder + "%2F20261030%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=00", "", 403, "a secret of the kind AWS access key"},
 	} {
 		before := h.requests()
 		resp, body := get(t, c, tc.url, "X-Key", tc.header)

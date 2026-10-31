@@ -159,6 +159,19 @@ func main() {
 		if err := agentcall.RunGitCredential(ctx, agentcall.SocketCaller{}, action, os.Stdin, os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: git-credential: %v\n", err)
 		}
+	case "credential":
+		// A tool's credential helper, such as AWS's credential_process: see
+		// agentcall.RunCredential. Studio may wait for the user's approval.
+		if len(os.Args) != 4 {
+			fmt.Fprintln(os.Stderr, "usage: studio-agent credential <secret> <format>")
+			os.Exit(2)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := agentcall.RunCredential(ctx, agentcall.SocketCaller{}, os.Args[2], os.Args[3], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Sandbox Studio: %v\n", err)
+			os.Exit(1)
+		}
 	case "oci-runtime":
 		// Docker's runtime inside the sandbox: see guest.OCIRuntime.
 		if err := ociRuntime(os.Args[2:]); err != nil {
@@ -182,7 +195,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

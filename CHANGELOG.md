@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **AWS access keys work in sandboxes.** AWS's tools sign requests with the secret key, so
+  a placeholder can't stand in for it. A secret of the new kind **AWS access key** stays in
+  Studio, which gives sandboxes hour-long session credentials made from it instead, through
+  a profile in `~/.aws/config` that `AWS_PROFILE` picks when there is one, optionally for a
+  role to assume. The first time a sandbox asks, a **Credentials** card lets it have them
+  until it stops, or always for its teammate. A request signed with a placeholder key is
+  refused with a message saying so, and `AWS_CA_BUNDLE` points AWS's tools at the CA
+  bundle that trusts Studio.
+
 ## v0.12.0 — 2026-10-30
 
 - **A computer's intercepted traffic can be recorded.** **Record intercepted traffic** in the

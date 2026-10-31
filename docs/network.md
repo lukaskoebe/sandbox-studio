@@ -510,6 +510,43 @@ Only 401 counts. A 403 often means the credential works but lacks access to that
 resource, which a new value wouldn't fix. Connections the gateway doesn't intercept (no
 secret bound to the host, no proxy rule) are spliced, so their statuses are never seen.
 
+## Credentials
+
+A placeholder works only for a value sent as it is. A client that signs with the value (AWS
+SigV4) gets a signature the host refuses, so a secret with a **kind** works the other way:
+Studio keeps it and issues the sandbox short-lived credentials made from it, which the tool
+gets through its own helper interface. Design: [credentials](design/credentials.md).
+
+- A kind is a recipe (`internal/credentials/recipes/*.yaml`, embedded): the issuer, the
+  fields of the secret form, the hosts, the lifetime, and what the sandbox gets. Issuers are
+  code; there is one, `aws-sts`. `GET /api/secret-kinds` lists the kinds for the form.
+- A kind secret's one secret field is its sealed value; the others are its `fields`
+  (migration `057_credential_kinds.sql`). It has no placeholder, isn't in the sandbox's
+  environment or in the gateway's bindings, and can be neither studio-only nor a browser
+  login.
+- The recipe's files are managed blocks of the home (`HomeFile.Comment` puts `# ` before the
+  markers, for INI files), one entry per secret the sandbox sees, written when its config
+  is; with none, the block goes. Its env vars are set only when the sandbox sees exactly one
+  secret of the kind.
+- `studio-agent credential <secret> <format>` asks Studio over the call channel and prints
+  the recipe's answer of that format. The first request of a sandbox's run raises a
+  `credential.issue` approval and waits up to 100 seconds; **Allow until it stops** holds for
+  the run, **Always** (`remember`) for every sandbox of the teammate, or the sandbox if no
+  teammate owns it (`credential_grants`). Issued credentials are cached per sandbox and
+  secret until five minutes before they expire, and logged.
+- AWS: `~/.aws/config` gets a `[profile <name>]` with `credential_process`, and `AWS_PROFILE`
+  picks it when there is one. With a role ARN the issuer calls `AssumeRole` (session
+  `studio-<sandbox>`), otherwise `GetSessionToken`, on the region's STS endpoint or the
+  global one; SigV4 is signed in `awssts.go`. `AWS_CA_BUNDLE` points at the system bundle in
+  every sandbox and container, as AWS's tools don't read the system store otherwise.
+- A SigV4-signed request whose access key is a placeholder (in `Authorization` or a
+  presigned URL's `X-Amz-Credential`) is refused with a message saying to add the key as an
+  AWS secret.
+
+Not built yet: issued values don't join the gateway's bindings (masked in responses,
+refused on other hosts), and there is no virtual host for tools that can't run
+`studio-agent`, such as Docker containers in the sandbox.
+
 ## Caddy rules
 
 A `caddy` rule's config is the body of one site block, compiled by Caddy's Caddyfile adapter

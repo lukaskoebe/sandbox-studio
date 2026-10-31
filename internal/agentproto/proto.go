@@ -181,8 +181,14 @@ type HomeFile struct {
 	Content string `json:"content"`
 	Mode    uint32 `json:"mode"` // permission bits, at most 0o755
 	// Block marks Content as a managed block: it starts with BlockBegin and ends with
-	// BlockEnd, and replaces only the existing block of the file (or is prepended).
+	// BlockEnd, and replaces only the existing block of the file (or is prepended). A block
+	// with nothing between its markers removes the file's block, and writes no file where
+	// there is none.
 	Block bool `json:"block,omitempty"`
+	// Comment, with Block, comes before each marker, for a file whose syntax has no HTML
+	// comments: "# " for an INI or shell file. A guest older than the host would refuse
+	// such a block, so the host sends it only to a guest of its own version.
+	Comment string `json:"comment,omitempty"`
 	// Keys marks Content as a JSON object to merge into the file's JSON object: objects
 	// are merged key by key, any other value replaces the file's, and keys Content doesn't
 	// name are kept. It is for files the harness owns and Studio only sets a few keys in.
@@ -256,6 +262,10 @@ const (
 	// MethodGitCredential is git's credential helper in the sandbox asking about a host. It
 	// is no MCP tool, and Studio answers it with a hint, never a credential.
 	MethodGitCredential = "git_credential"
+	// MethodCredential is a tool's credential helper in the sandbox (`studio-agent
+	// credential`) asking for a short-lived credential made from a secret with a kind
+	// (docs/network.md#credentials). It is no MCP tool.
+	MethodCredential = "credential"
 
 	MethodTasksList        = "tasks_list"
 	MethodTaskCreate       = "task_create"

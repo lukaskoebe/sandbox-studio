@@ -551,6 +551,42 @@ func TestStudioOnlySecret(t *testing.T) {
 	}
 }
 
+// A secret with a kind reaches no sandbox as a value or a placeholder: credentials.Service
+// issues credentials made from it. Its fields are kept, and change on their own.
+func TestKindSecret(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	env := newEnv(t, st, "work")
+	v := newVault(t, st)
+	sec, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "AWS_PROD", Hosts: []string{"*.amazonaws.com"}, Kind: "aws",
+		Fields: map[string]string{"accessKeyId": "AKIAEXAMPLE"}}, "long-lived")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec.Kind != "aws" || sec.Fields["accessKeyId"] != "AKIAEXAMPLE" {
+		t.Fatalf("secret %+v", sec)
+	}
+	if b, err := v.Bindings(ctx, store.Sandbox{EnvironmentID: env}); err != nil || len(b) != 0 {
+		t.Fatalf("bindings %+v, %v; want none", b, err)
+	}
+	if e, err := v.Env(ctx, store.Sandbox{EnvironmentID: env}); err != nil || len(e) != 0 {
+		t.Fatalf("environment %v, %v; want none", e, err)
+	}
+	sec, err = v.Update(ctx, env, sec.ID, nil, []string{"*.amazonaws.com"}, "note", nil)
+	if err != nil || sec.Fields["accessKeyId"] != "AKIAEXAMPLE" {
+		t.Fatalf("an update lost the fields: %+v %v", sec.Fields, err)
+	}
+	if sec, err = v.SetFields(ctx, env, sec.ID, map[string]string{"accessKeyId": "AKIANEW"}); err != nil || sec.Fields["accessKeyId"] != "AKIANEW" || sec.Note != "note" {
+		t.Fatalf("set fields: %+v %v", sec, err)
+	}
+	if got, _ := v.Value(ctx, env, sec.ID); got != "long-lived" {
+		t.Errorf("value %q", got)
+	}
+	if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "AWS_X", Kind: "aws", StudioOnly: true}, "v"); err == nil {
+		t.Error("a studio-only secret took a kind")
+	}
+}
+
 // A browser login belongs to a teammate and carries a username; no sandbox of the teammate sees
 // it, in its environment or its requests, and only the teammate's browser logins list it.
 func TestBrowserLogin(t *testing.T) {

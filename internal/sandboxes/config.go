@@ -26,6 +26,10 @@ type harnessConfigs struct{ f atomic.Pointer[HarnessConfig] }
 // add its environment to new shells, so the harness also runs as configured in a plain terminal.
 func (m *Manager) SetHarnessConfig(f HarnessConfig) { m.harness.f.Store(&f) }
 
+// SetCredentialConfig makes Configure write the files and environment through which a public
+// sandbox's tools ask for credentials (credentials.Service.Config).
+func (m *Manager) SetCredentialConfig(f HarnessConfig) { m.credentials.f.Store(&f) }
+
 // Configure sends a sandbox's guest agent its configuration: the CA the gateway intercepts
 // TLS with, and the placeholders of the secrets the sandbox sees. With a HarnessConfig it also
 // writes the owner teammate's harness config. It runs whenever the agent connects (see
@@ -162,6 +166,17 @@ func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Conf
 			m.Log.Info("writing the harness config", "sandbox", sb.ID)
 		default:
 			maps.Copy(env, henv)
+		}
+	}
+	if f := m.credentials.f.Load(); f != nil && Public(sb) {
+		files, cenv, err := (*f)(ctx, sb)
+		switch {
+		case err != nil:
+			m.Log.Warn("no credential config for the sandbox", "sandbox", sb.ID, "err", err)
+		case len(files) > 0 && m.Hub.WriteHomeFiles(ctx, sb.ID, files) != nil:
+			m.Log.Info("writing the credential config", "sandbox", sb.ID)
+		default:
+			maps.Copy(env, cenv)
 		}
 	}
 	ts, err := m.TerminalSetting(ctx)

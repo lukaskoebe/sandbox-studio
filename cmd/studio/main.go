@@ -42,6 +42,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/cli"
+	"github.com/lukaskoebe/sandbox-studio/internal/credentials"
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
@@ -390,6 +391,8 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	engine.Browsers = brw                                              // a browser's requests are attributed to its page
 	secretCheck := &secretcheck.Service{Store: st, Bus: bus, Log: log} // settles secret.rejected approvals
 	integs = append(integs, secretCheck)
+	creds := &credentials.Service{Store: st, Secrets: vault, Bus: bus, Log: log} // settles credential.issue approvals
+	integs = append(integs, creds)
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Records: records, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
@@ -562,6 +565,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	apiServer.TaskRuns = beats
 	go beats.Run(ctx)
 	mgr.SetHarnessConfig(apiServer.HarnessConfig)
+	mgr.SetCredentialConfig(creds.Config)
 	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
 	registerControl(mux, st, engine, gw)

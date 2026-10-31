@@ -54,10 +54,14 @@ func checkHomeFiles(files []agentproto.HomeFile) error {
 		if f.Mode&^0o755 != 0 {
 			return fmt.Errorf("%s: mode %o is not allowed", f.Path, f.Mode)
 		}
-		if f.Block && (!strings.HasPrefix(f.Content, agentproto.BlockBegin) ||
-			!strings.HasSuffix(strings.TrimRight(f.Content, "\n"), agentproto.BlockEnd) ||
+		begin, end := markers(f)
+		if f.Block && (!strings.HasPrefix(f.Content, begin) ||
+			!strings.HasSuffix(strings.TrimRight(f.Content, "\n"), end) ||
 			strings.Count(f.Content, agentproto.BlockBegin) != 1 || strings.Count(f.Content, agentproto.BlockEnd) != 1) {
 			return fmt.Errorf("%s: a managed block must start and end with its markers", f.Path)
+		}
+		if f.Comment != "" && (!f.Block || len(f.Comment) > 8 || strings.ContainsAny(f.Comment, "\n\r")) {
+			return fmt.Errorf("%s: a comment is a short prefix of a managed block's markers", f.Path)
 		}
 		if f.Keys {
 			var keys map[string]any
@@ -124,7 +128,17 @@ func writeHomeFile(root, uid, gid int, f agentproto.HomeFile) error {
 		if err != nil {
 			return err
 		}
-		if content, err = mergeBlock(existing, f.Content); err != nil {
+		begin, end := markers(f)
+		if strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimRight(f.Content, "\n"), begin), end)) == "" {
+			// An empty block removes the file's block, if it has one.
+			if !strings.Contains(existing, begin) {
+				return nil
+			}
+			content, err = removeBlock(existing, begin, end)
+		} else {
+			content, err = mergeBlock(existing, f.Content, begin, end)
+		}
+		if err != nil {
 			return err
 		}
 		if len(content) > 2*agentproto.MaxHomeFileBytes {
@@ -196,29 +210,60 @@ func readExisting(dir int, base string, limit int) (string, error) {
 	return string(b), nil
 }
 
-// mergeBlock replaces the managed block of existing with block, or puts block first if
-// existing has none. Text outside the block is kept as it is.
-func mergeBlock(existing, block string) (string, error) {
+// markers are the lines a managed block of f starts and ends with.
+func markers(f agentproto.HomeFile) (begin, end string) {
+	return f.Comment + agentproto.BlockBegin, f.Comment + agentproto.BlockEnd
+}
+
+// mergeBlock replaces the managed block of existing, from the marker begin to end, with
+// block, or puts block first if existing has none. Text outside the block is kept as it is.
+func mergeBlock(existing, block, beginMarker, endMarker string) (string, error) {
 	block = strings.TrimRight(block, "\n") + "\n"
-	begin := strings.Index(existing, agentproto.BlockBegin)
+	begin, end, err := findBlock(existing, beginMarker, endMarker)
+	if err != nil {
+		return "", err
+	}
 	if begin < 0 {
-		if strings.Contains(existing, agentproto.BlockEnd) {
-			return "", errors.New("the file has an end marker without a begin marker")
-		}
 		if existing == "" {
 			return block, nil
 		}
 		return block + "\n" + existing, nil
 	}
-	end := strings.Index(existing[begin:], agentproto.BlockEnd)
-	if end < 0 {
-		return "", errors.New("the managed block in the file has no end marker")
+	return existing[:begin] + block + existing[end:], nil
+}
+
+// removeBlock removes the managed block of existing, and the blank line mergeBlock put after
+// it.
+func removeBlock(existing, beginMarker, endMarker string) (string, error) {
+	begin, end, err := findBlock(existing, beginMarker, endMarker)
+	if err != nil || begin < 0 {
+		return existing, err
 	}
-	end += begin + len(agentproto.BlockEnd)
+	if begin == 0 && strings.HasPrefix(existing[end:], "\n") {
+		end++
+	}
+	return existing[:begin] + existing[end:], nil
+}
+
+// findBlock returns where the managed block of existing starts and ends, its line end
+// included, or -1 when it has none.
+func findBlock(existing, beginMarker, endMarker string) (begin, end int, err error) {
+	begin = strings.Index(existing, beginMarker)
+	if begin < 0 {
+		if strings.Contains(existing, endMarker) {
+			return -1, -1, errors.New("the file has an end marker without a begin marker")
+		}
+		return -1, -1, nil
+	}
+	end = strings.Index(existing[begin:], endMarker)
+	if end < 0 {
+		return -1, -1, errors.New("the managed block in the file has no end marker")
+	}
+	end += begin + len(endMarker)
 	if end < len(existing) && existing[end] == '\n' {
 		end++
 	}
-	return existing[:begin] + block + existing[end:], nil
+	return begin, end, nil
 }
 
 // mergeKeys merges the JSON object keys into the JSON object existing (agentproto.HomeFile

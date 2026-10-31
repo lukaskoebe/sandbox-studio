@@ -21,6 +21,21 @@ Studio returns placeholders to sandboxes instead of secret values. For HTTPS req
 
 For intercepted HTTP responses, Studio attempts to mask exact matches for secret values in headers and bodies. This is a safeguard, not a guarantee: shortened, encoded, or otherwise transformed values may not match. Avoid pasting real values into instructions, commands, or project files. A service you call receives the credential, so bind each secret only to hosts that need it and use the narrowest host pattern that works.
 
+## AWS access keys
+
+Some clients don't send a credential as it is: AWS's CLI and SDKs sign every request with the secret key, so a placeholder can't stand in for it, and Studio refuses such a request with a message saying what to do. For these, choose a **Kind** when you add the secret. Studio keeps the key and gives the sandbox short-lived credentials made from it, which the tool asks for itself.
+
+For **AWS access key**, enter the access key ID and secret access key, and optionally:
+
+- **Role to assume:** a role ARN. Sandboxes then get that role's session credentials (`AssumeRole`); without one, session credentials of the key's own user (`GetSessionToken`).
+- **STS region:** the region whose STS endpoint to ask, for keys or roles that need a regional endpoint.
+
+The secret's name becomes an AWS profile, in lower case, in the sandbox's `~/.aws/config`; Studio adds it there without touching the rest of the file. When a sandbox sees one AWS secret, `AWS_PROFILE` selects it, so `aws` and the SDKs use it without further setup; with several, choose one with `--profile` or `AWS_PROFILE`.
+
+The first time a sandbox asks for credentials, Home shows a **Credentials** card: **Allow until it stops** lets that sandbox have them until it stops, **Always for** a teammate lets every sandbox of that teammate have them, and **Deny** refuses. The credentials last an hour and the tools renew them on their own; the sandbox never sees the access key itself.
+
+Kinds for other services that sign their requests will follow.
+
 ## Scopes
 
 A sandbox sees the secrets of its environment, of the teammate that owns it, and those scoped to the sandbox itself. When the same name is set at several scopes, the sandbox gets the most specific one, so each teammate can have its own `GITHUB_TOKEN`. A request that uses the placeholder of a secret the sandbox doesn't see is refused.
