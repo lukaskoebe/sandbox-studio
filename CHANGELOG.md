@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Disk resizes, rebases and forks copy much faster.** A guest's writes to msb exec, which
+  carried the copy of its disks, run at about 5 MB/s, so a resize with tens of GB of Docker
+  data took an hour or more. The old VM now sends its disks to Studio's gateway instead,
+  which hands them to the new VM: about 90 MB/s for data that doesn't compress, such as
+  Docker's images, so up to 18 times faster. Trees of many small files gain less, since
+  reading them is what takes the time.
+- A recording of intercepted traffic no longer shows a request now and then without its body.
 - **AWS access keys work in sandboxes.** AWS's tools sign requests with the secret key, so
   a placeholder can't stand in for it. A secret of the new kind **AWS access key** stays in
   Studio, which gives sandboxes hour-long session credentials made from it instead, through

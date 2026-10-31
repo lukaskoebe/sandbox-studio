@@ -80,7 +80,7 @@ small or move their bytes to msb exec.
 | `git-credential <action>` | git, as its credential helper | tells Studio about a host git has no credentials for and prints its hint; never answers with one ([git review](git-review.md#credential-hints)) |
 | `credential <secret> <format>` | a tool's credential helper, such as AWS's `credential_process` | prints short-lived credentials Studio issues from the secret ([network](network.md#credentials)) |
 | `oci-runtime` | Docker, as `runc` | CA trust for containers (below) |
-| `export-layer`, `workspace-export`, `workspace-import`, `home-export`, `home-import` | Studio via msb exec | template builds, fork, rebase, export, import |
+| `export-layer`, `workspace-export`, `workspace-import`, `home-export`, `home-import`, `docker-export`, `docker-import` | Studio via msb exec | template builds, fork, rebase, disk resize, export, import; for a copy between VMs the exports upload their archive to `transfer.studio.internal` ([rebase](rebase.md#workspace-and-home-copy)) |
 | `version` | | |
 
 `hook` and `mcp` reach the agent through `/run/studio-agent/call.sock`, which becomes a

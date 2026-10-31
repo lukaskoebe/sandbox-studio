@@ -313,6 +313,11 @@ exports. The persistent authenticated registry and pure image
 composition/cache identity and base preparation helper are implemented; the template
 builder, cache invocation, recovery jobs, API and UI are not wired.
 
+Copies between VMs no longer use exec stdout: on 2026-10-31 it ran at 4.9 MB/s, while TCP
+from the guest through a SOCKS5 proxy ran at 85 MB/s and more, so fork, rebase and disk
+resize upload their archives through the gateway
+([transfer speed](../spikes/transfer-speed/README.md), [rebase](rebase.md#workspace-and-home-copy)).
+
 The capture probe in `spikes/layer-export` runs **inside a disposable guest**. On Linux
 with msb 0.7.7, agentd retained descriptors to the hidden ext4 upper filesystem; their
 device identity matched the managed root. Reading through those descriptors worked.

@@ -42,9 +42,27 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
   A legacy target has none, so only the workspace is copied, as before. A sandbox with a
   home disk can't move to a legacy template: rebase is refused with a conflict, before
   anything changes, since its home would have nowhere to go.
-- All run as root through msb exec. The host joins them with an `io.Pipe`. Nothing is
-  staged on the host. The workspace and the home are copied at the same time, since they
-  are separate disks; the first to fail stops the other, and its error is the one reported.
+- All run as root through msb exec, one at a time per VM. Nothing is staged on the host.
+  The export doesn't write its archive to msb exec's stdout, which is slow from the guest,
+  but POSTs it to `https://transfer.studio.internal/<token>` through the gateway
+  (`sandboxes.Transfers`, `agentproto.TransferURLEnv`), trusting the environment's CA, which
+  Studio passes it. The token is random, used once, and only the source sandbox may send
+  it. The gateway hands the request body on to the import's stdin, which is fast, and
+  answers once the import has read it all. A guest that can't upload, failing before it sent
+  anything, exports over stdout as before. Measured on 2026-10-31 (msb 0.7.8, amd64, four
+  CPUs, [`spikes/transfer-speed`](../spikes/transfer-speed/README.md)):
+
+  | From the guest | MB/s |
+  |---|---:|
+  | msb exec stdout | 4.9 |
+  | TCP through a SOCKS5 proxy | 85–128 |
+  | `home-export --zstd` of 1 GB that doesn't compress, uploaded over TLS | 90 |
+  | the same over msb exec stdout | ≈ 5 |
+
+  Into the guest, msb exec stdin takes 98 MB/s and `home-import` 70–80 MB/s of files, so the
+  import keeps it. A tree of small files is limited by reading them cold instead:
+  `node_modules` (334 MB, 34,000 files, 68 MB as zstd tar) goes at 48 MB/s uploaded and 30
+  MB/s over stdout, where its compression hides most of the difference.
 - The workspace stream is limited to the target's workspace size, the home stream to the
   target's home disk (`homeMiB`, 4 GiB unless set), and Docker's to its Docker disk. A home
   that doesn't fit fails with a message that says to delete caches, or give the sandbox a

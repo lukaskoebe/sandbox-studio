@@ -393,10 +393,11 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	integs = append(integs, secretCheck)
 	creds := &credentials.Service{Store: st, Secrets: vault, Bus: bus, Log: log} // settles credential.issue approvals
 	integs = append(integs, creds)
+	transfers := &sandboxes.Transfers{} // archives source VMs upload when a copy moves their disks
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Records: records, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
-		Virtual: integs.Routes(), Dial: upstreamDial(),
+		Virtual: append(integs.Routes(), transfers.VirtualHost()), Dial: upstreamDial(),
 		PrivateHosts: st.PrivateHosts, HostPorts: st.HostPorts, Own: []string{addr, gatewayAddr, templateRegistryAddr},
 		Rejected: secretCheck.Rejected,
 	}
@@ -445,6 +446,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		Hub:       hub,
 		Egress:    sandboxEgress(gw),
 		CA:        authority,
+		Transfers: transfers,
 		Secrets:   vault,
 		Paths:     p,
 		Log:       log,

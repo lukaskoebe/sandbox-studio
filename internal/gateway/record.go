@@ -458,9 +458,11 @@ func (b *teeBody) Close() error {
 	return err
 }
 
+// record keeps the body as far as it was read. It holds the lock while it does, so that of the
+// response's end and the transport's close, the later capture is the one kept.
 func (b *teeBody) record() {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	body := b.t.ic.body(&b.c, "")
-	b.mu.Unlock()
 	b.t.ic.record.r.update(func() { b.t.x.ReqBody = body })
 }

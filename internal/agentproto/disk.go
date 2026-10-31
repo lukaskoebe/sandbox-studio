@@ -15,6 +15,13 @@ const (
 // DockerDir is where the Docker disk is mounted.
 const DockerDir = "/var/lib/docker"
 
+// With TransferURLEnv set, `studio-agent <tree>-export` POSTs its archive there instead of
+// writing it to stdout, trusting the CA certificate in TransferCAEnv.
+const (
+	TransferURLEnv = "STUDIO_TRANSFER_URL"
+	TransferCAEnv  = "STUDIO_TRANSFER_CA"
+)
+
 // Disk is one of the sandbox's disks, in bytes, as the terminal user sees it: Free leaves
 // out what only root may use.
 type Disk struct {

@@ -43,6 +43,9 @@ func (m *Manager) transfer() (transferRuntime, error) {
 	if !ok {
 		return nil, ErrTransferUnsupported
 	}
+	if up, ok := rt.(treeUploader); ok && m.Transfers != nil && m.CA != nil {
+		return uploadingRuntime{transferRuntime: rt, up: up, transfers: m.Transfers, ca: m.CA.CertPEM, log: m.Log}, nil
+	}
 	return rt, nil
 }
 

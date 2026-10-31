@@ -40,7 +40,8 @@ Per connection (`gateway.go`):
 3. A name under `lan.studio.internal` becomes the address it stands for
    (`192-168-178-20.lan.studio.internal` is `192.168.178.20`), so the policy and the log see
    the address. Other names under `*.studio.internal` are virtual hosts served by the gateway
-   itself, e.g. `git.studio.internal` for [git review](git-review.md), except
+   itself, e.g. `git.studio.internal` for [git review](git-review.md) and
+   `transfer.studio.internal` for the [copies between VMs](rebase.md#workspace-and-home-copy), except
    `host.studio.internal`, which goes on like any host.
 4. Ask the policy (below). Without a decision, the connection is held.
 5. Act:

@@ -68,6 +68,9 @@ type Manager struct {
 	// Studio release that brought it. A sandbox on another base is outdated; empty knows none.
 	BaseImage   string
 	BaseVersion string
+	// Transfers, if set, takes the archives source VMs upload to TransferHost when a fork, a
+	// rebase or a disk resize copies their disks; without it they go over msb exec.
+	Transfers *Transfers
 	// DisksEvery is how often WatchDisks asks the guests how full their disks are; 0 is a
 	// minute.
 	DisksEvery time.Duration

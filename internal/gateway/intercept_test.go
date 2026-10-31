@@ -225,6 +225,11 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 		Caddy:         sharedCaddy(),
 		Virtual: []VirtualHost{{Name: "echo.studio.internal", Serve: func(sb store.Sandbox) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					n, err := io.Copy(io.Discard, r.Body)
+					fmt.Fprintf(w, "received %d %v", n, err)
+					return
+				}
 				fmt.Fprintf(w, "virtual %s %s %s", sb.ID, sb.EnvironmentID, r.URL.Path)
 			})
 		}}},
@@ -836,6 +841,35 @@ func TestCaddyRule(t *testing.T) {
 		return intercepted && broken
 	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("sb1")) })
 }
+
+// An upload to a virtual host may take long (a copy between VMs sends its disks to
+// transfer.studio.internal): nothing times it out, and all of it arrives.
+func TestVirtualHostTakesALongUpload(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	const size = 256 << 20
+	body := io.MultiReader(io.LimitReader(zeroReader{}, size/2), slowReader{d: 2 * time.Second}, io.LimitReader(zeroReader{}, size/2))
+	start := time.Now()
+	resp, err := c.Post("https://echo.studio.internal/upload", "application/octet-stream", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	got, _ := io.ReadAll(resp.Body)
+	if string(got) != fmt.Sprintf("received %d <nil>", size) {
+		t.Fatalf("status %d: %q", resp.StatusCode, got)
+	}
+	t.Logf("%d MiB in %s", size>>20, time.Since(start).Round(time.Millisecond))
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) { clear(p); return len(p), nil }
+
+// slowReader pauses the body once, as a guest reading a cold disk does.
+type slowReader struct{ d time.Duration }
+
+func (s slowReader) Read([]byte) (int, error) { time.Sleep(s.d); return 0, io.EOF }
 
 func TestVirtualHosts(t *testing.T) {
 	h := newInterceptHarness(t)
