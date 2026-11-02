@@ -252,8 +252,10 @@ func (s *Service) Start(ctx context.Context, envID, providerID string) (View, er
 	a := &attempt{provider: p, state: StateStarting, cancel: cancel, done: make(chan struct{})}
 	s.attempts[providerID] = a
 	s.mu.Unlock()
+	// The view is taken before the run starts, which may move past starting at once.
+	v := a.view()
 	go s.run(runCtx, a)
-	return a.view(), nil
+	return v, nil
 }
 
 // Status returns the provider's sign-in as the dialog shows it: idle when none is running.
