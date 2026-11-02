@@ -71,7 +71,7 @@ type Kind struct {
 	// KeyOptional kinds work without a key too: a local model server usually takes none.
 	KeyOptional bool
 	Login       bool
-	Host   string
+	Host        string
 	// EnvVar is the variable the harness reads its credential from; the guest gets the
 	// placeholder of the provider's secret in it.
 	EnvVar string

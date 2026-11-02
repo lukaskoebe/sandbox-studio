@@ -153,9 +153,9 @@ func (s *Server) registerTeammates(api huma.API) {
 		Body struct {
 			APIKey    *string `json:"apiKey,omitempty" writeOnly:"true" doc:"A new key. Omit it to keep the stored one."`
 			RemoveKey bool    `json:"removeKey,omitempty" doc:"openai_compatible only: removes the stored key; the provider works without one"`
-			BaseURL *string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only"`
-			Model   *string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only"`
-			Images  *bool   `json:"images,omitempty" doc:"openai_compatible only"`
+			BaseURL   *string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only"`
+			Model     *string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only"`
+			Images    *bool   `json:"images,omitempty" doc:"openai_compatible only"`
 		}
 	}
 	huma.Register(api, huma.Operation{
