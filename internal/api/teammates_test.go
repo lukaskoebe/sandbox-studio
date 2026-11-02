@@ -141,6 +141,8 @@ func TestProviderValidation(t *testing.T) {
 		{"compatible over http", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"http://llm.example.com","model":"m"}`, http.StatusUnprocessableEntity},
 		{"compatible on loopback", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://127.0.0.1:8000","model":"m"}`, http.StatusUnprocessableEntity},
 		{"compatible on private ip", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://192.168.1.10","model":"m"}`, http.StatusUnprocessableEntity},
+		{"key across the local network", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"http://192.168.1.10:8000","model":"m"}`, http.StatusUnprocessableEntity},
+		{"local name over https", `{"name":"x","kind":"openai_compatible","baseUrl":"https://gpu.lan.studio.internal","model":"m"}`, http.StatusUnprocessableEntity},
 		{"compatible on localhost", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.localhost","model":"m"}`, http.StatusUnprocessableEntity},
 		{"compatible with credentials", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://u:p@llm.example.com","model":"m"}`, http.StatusUnprocessableEntity},
 		{"bad model", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.example.com","model":"a b"}`, http.StatusUnprocessableEntity},
@@ -480,5 +482,74 @@ func TestChatLaunchKnowsWhetherTheModelTakesImages(t *testing.T) {
 	}
 	if noImages(bob) {
 		t.Fatal("a compatible model that takes images is sent none")
+	}
+}
+
+func TestLocalProviders(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID
+
+	// A server on this computer takes an optional key and opens its port to the sandboxes.
+	local := createProvider(t, h, env, `{"name":"Local","kind":"openai_compatible","baseUrl":"http://localhost:4532/v1","model":"qwen3-coder"}`)
+	if local.State != "ready" || local.SecretID != "" || local.BaseURL != "http://localhost:4532/v1" {
+		t.Fatalf("keyless local provider: %+v", local)
+	}
+	if ports := decode[[]int](t, do(h, "GET", base+"/host-ports", "")); !slices.Equal(ports, []int{4532}) {
+		t.Fatalf("host ports %v; want 4532 opened", ports)
+	}
+	keyed := createProvider(t, h, env, `{"name":"Keyed","kind":"openai_compatible","apiKey":"k","baseUrl":"http://127.0.0.1:4532","model":"m"}`)
+	if keyed.SecretID == "" || !slices.Equal(keyed.Hosts, []string{"host.studio.internal"}) {
+		t.Fatalf("keyed local provider: %+v", keyed)
+	}
+	if ports := decode[[]int](t, do(h, "GET", base+"/host-ports", "")); !slices.Equal(ports, []int{4532}) {
+		t.Fatalf("host ports %v; want 4532 once", ports)
+	}
+
+	// The key comes off again, and a key-optional provider stays ready.
+	rec := do(h, "PUT", base+"/providers/"+keyed.ID, `{"removeKey":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("remove key: %d %s", rec.Code, rec.Body)
+	}
+	if p := decode[ProviderView](t, rec); p.SecretID != "" || p.State != "ready" {
+		t.Fatalf("removed key: %+v", p)
+	}
+	if rec := do(h, "PUT", base+"/providers/"+keyed.ID, `{"removeKey":true,"apiKey":"x"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("remove and add a key: %d %s", rec.Code, rec.Body)
+	}
+	openai := createProvider(t, h, env, `{"name":"openai","kind":"openai_api","apiKey":"k"}`)
+	if rec := do(h, "PUT", base+"/providers/"+openai.ID, `{"removeKey":true}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("remove a needed key: %d %s", rec.Code, rec.Body)
+	}
+
+	// A server on the local network is reached over http, without a key, through the local network list.
+	if rec := do(h, "POST", base+"/providers", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"http://192.168.1.20:8080/v1","model":"m"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("key across the network: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/private-hosts", `{"hosts":[{"host":"192.168.1.20"}]}`); rec.Code != http.StatusOK {
+		t.Fatalf("set private hosts: %d %s", rec.Code, rec.Body)
+	}
+	createProvider(t, h, env, `{"name":"NAS","kind":"openai_compatible","baseUrl":"http://192.168.1.20:8080/v1","model":"m"}`)
+	createProvider(t, h, env, `{"name":"GPU","kind":"openai_compatible","baseUrl":"http://gpu.home.arpa:8000","model":"m"}`)
+	list := decode[[]store.PrivateHost](t, do(h, "GET", base+"/private-hosts", ""))
+	want := []store.PrivateHost{{Host: "192.168.1.20", Ports: []int{80, 443, 8080}}, {Host: "gpu.home.arpa", Ports: []int{8000}}}
+	if len(list) != len(want) {
+		t.Fatalf("private hosts %+v; want %+v", list, want)
+	}
+	for i := range want {
+		if list[i].Host != want[i].Host || !slices.Equal(list[i].Ports, want[i].Ports) {
+			t.Fatalf("private hosts %+v; want %+v", list, want)
+		}
+	}
+
+	// Moving a keyed provider onto the local network takes its key off first.
+	if rec := do(h, "PUT", base+"/providers/"+local.ID, `{"apiKey":"k2"}`); rec.Code != http.StatusOK {
+		t.Fatalf("add key: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/providers/"+local.ID, `{"baseUrl":"http://192.168.1.21:8080"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("keyed provider to the local network: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/providers/"+local.ID, `{"baseUrl":"http://192.168.1.21:8080","removeKey":true}`); rec.Code != http.StatusOK {
+		t.Fatalf("move to the local network without the key: %d %s", rec.Code, rec.Body)
 	}
 }

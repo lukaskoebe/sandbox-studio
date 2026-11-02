@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -58,6 +59,7 @@ const (
 	// the sandbox's own API_KEY overrides, and a secret of another sandbox.
 	foreignPlaceholder   = "studio-gggggggggggggggggggggggggggggggg"
 	elsewherePlaceholder = "studio-hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"
+	localPlaceholder     = "studio-llllllllllllllllllllllllllllllll"
 )
 
 var testBindings = fakeSecrets{
@@ -67,6 +69,7 @@ var testBindings = fakeSecrets{
 	{Name: "OTHER_KEY", Placeholder: otherPlaceholder, Hosts: []string{"other.example"}, Value: []byte("other-secret-value")},
 	{Name: "HEADER_KEY", Placeholder: headerPlaceholder, Hosts: []string{"*.proxied.example", "proxied.example"}, Value: []byte(headerValue)},
 	{Name: "PLAIN_KEY", Placeholder: plainPlaceholder, Hosts: []string{"plain.example"}, Value: []byte("plain-secret-value")},
+	{Name: "LOCAL_KEY", Placeholder: localPlaceholder, Hosts: []string{"host.studio.internal"}, Value: []byte("local-secret-value")},
 	// The vault leaves the hosts of foreign secrets empty; these prove they are ignored.
 	{Name: "API_KEY", Placeholder: foreignPlaceholder, Hosts: []string{"example.com"}, Foreign: true},
 	{Name: "ELSEWHERE_KEY", Placeholder: elsewherePlaceholder, Hosts: []string{"example.com"}, Foreign: true},
@@ -82,6 +85,8 @@ type interceptHarness struct {
 	envID string
 	envCA *x509.CertPool // what sandboxes of the environment trust
 	upCA  *x509.CertPool // what the upstream servers' certificates chain to
+
+	echo http.Handler
 
 	mu       sync.Mutex
 	seen     []seen
@@ -157,6 +162,7 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 		sort.Strings(lines)
 		fmt.Fprintf(out, "%s %s?%s\n%s\n", r.Method, r.URL.EscapedPath(), r.URL.RawQuery, strings.Join(lines, "\n"))
 	})
+	h.echo = echo
 	tlsUp := httptest.NewUnstartedServer(echo)
 	tlsUp.EnableHTTP2 = true
 	tlsUp.TLS = &tls.Config{GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -177,17 +183,18 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 	t.Cleanup(plainUp.Close)
 
 	h.harness = &harness{policy: &fakePolicy{rules: map[string]store.Rule{
-		"example.com":        {ID: "r1", Action: store.ActionAllow},
-		"h1.example":         {ID: "r13", Action: store.ActionAllow},
-		"plain.example":      {ID: "r2", Action: store.ActionAllow},
-		"denied.example":     {ID: "r3", Action: store.ActionDeny},
-		"splice.example":     {ID: "r4", Action: store.ActionAllow},
-		"proxied.example":    {ID: "r5", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "Bearer {secret.HEADER_KEY}", "X-Static": "v1"}}},
-		"badref.example":     {ID: "r6", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "{secret.API_KEY}"}}},
-		"other.example":      {ID: "r7", Action: store.ActionAllow},
-		"short.example":      {ID: "r11", Action: store.ActionAllow},
-		"upgradable.example": {ID: "r12", Action: store.ActionProxy},
-		"caddy.example":      {ID: "r8", Action: store.ActionCaddy, Config: store.RuleConfig{Caddyfile: caddyRule}},
+		"example.com":          {ID: "r1", Action: store.ActionAllow},
+		"h1.example":           {ID: "r13", Action: store.ActionAllow},
+		"plain.example":        {ID: "r2", Action: store.ActionAllow},
+		"denied.example":       {ID: "r3", Action: store.ActionDeny},
+		"splice.example":       {ID: "r4", Action: store.ActionAllow},
+		"proxied.example":      {ID: "r5", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "Bearer {secret.HEADER_KEY}", "X-Static": "v1"}}},
+		"badref.example":       {ID: "r6", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "{secret.API_KEY}"}}},
+		"other.example":        {ID: "r7", Action: store.ActionAllow},
+		"host.studio.internal": {ID: "r14", Action: store.ActionAllow},
+		"short.example":        {ID: "r11", Action: store.ActionAllow},
+		"upgradable.example":   {ID: "r12", Action: store.ActionProxy},
+		"caddy.example":        {ID: "r8", Action: store.ActionCaddy, Config: store.RuleConfig{Caddyfile: caddyRule}},
 		"caddy-unbound.example": {ID: "r9", Action: store.ActionCaddy, Config: store.RuleConfig{
 			Caddyfile: "reverse_proxy https://example.com {\n  header_up X-Api-Key {secret.OTHER_KEY}\n}",
 		}},
@@ -379,6 +386,24 @@ func TestInterceptReportsRejectedSecrets(t *testing.T) {
 	want := []string{"sb1 example.com API_KEY,PATH_KEY", "sb1 proxied.example HEADER_KEY"}
 	if !slices.Equal(h.rejected, want) {
 		t.Errorf("rejected %q, want %q", h.rejected, want)
+	}
+}
+
+// A model server on this computer gets its key over plain HTTP: the gateway sends it there over
+// loopback, so it never leaves the machine.
+func TestInterceptSendsSecretsToThisComputerOverHTTP(t *testing.T) {
+	h := newInterceptHarness(t)
+	local := httptest.NewServer(h.echo) // on 127.0.0.1, where the gateway dials this computer
+	t.Cleanup(local.Close)
+	port, _ := strconv.Atoi(local.URL[strings.LastIndex(local.URL, ":")+1:])
+	h.gw.HostPorts = func(context.Context, string) ([]int, error) { return []int{port}, nil }
+	c := h.client(t, h.envCA)
+	resp, body := get(t, c, fmt.Sprintf("http://host.studio.internal:%d/v1/models", port), "Authorization", "Bearer "+localPlaceholder)
+	h.mu.Lock()
+	got := h.seen[len(h.seen)-1].Header.Get("Authorization")
+	h.mu.Unlock()
+	if resp.StatusCode != 200 || got != "Bearer local-secret-value" {
+		t.Fatalf("%d %q, upstream saw %q", resp.StatusCode, body, got)
 	}
 }
 

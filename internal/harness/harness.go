@@ -33,6 +33,10 @@ type Teammate struct {
 	GitEmail string
 }
 
+// NoKey is the key a harness sends to a provider that takes none, such as a local model server:
+// the harnesses want one to send.
+const NoKey = "no-key"
+
 // Provider is what an adapter needs to know about a teammate's provider. It has no field
 // for a credential on purpose: only the placeholder ever reaches the guest.
 type Provider struct {
@@ -41,7 +45,7 @@ type Provider struct {
 	Model       string // the provider's default model
 	Images      bool   // the model takes images (teammates.TakesImages)
 	EnvVar      string // where the harness reads its credential from
-	Placeholder string // the placeholder of the provider's secret
+	Placeholder string // the placeholder of the provider's secret, or NoKey
 }
 
 // Sandbox is what an adapter needs to know about the sandbox a session runs in.

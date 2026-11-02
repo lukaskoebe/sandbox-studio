@@ -11,6 +11,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // registerPrivateHosts adds the environment's local network list (the private hosts) and the
@@ -118,4 +119,49 @@ func privateHostsFrom(in []privateHostInput) ([]store.PrivateHost, error) {
 	}
 	slices.SortFunc(out, func(a, b store.PrivateHost) int { return strings.Compare(a.Host, b.Host) })
 	return out, nil
+}
+
+// openEndpoint opens the way to an OpenAI-compatible provider's server on this computer or the
+// local network, as the owner saving the provider asked: the port of this computer, or the
+// address or name with its port on the local network list. Every sandbox of the environment
+// may then reach it; the policy still decides each connection, so the first asks for approval
+// unless a rule allows it. A failure is logged: the provider is saved, and Ports and LAN can
+// open the way by hand.
+func (s *Server) openEndpoint(ctx context.Context, env string, e teammates.Endpoint) {
+	var err error
+	switch e.Where {
+	case teammates.WhereHost:
+		var ports []int
+		if ports, err = s.Store.HostPorts(ctx, env); err == nil && !slices.Contains(ports, e.Port) {
+			ports = append(ports, e.Port)
+			slices.Sort(ports)
+			err = s.Store.SetHostPorts(ctx, env, ports)
+		}
+	case teammates.WhereLAN:
+		var list []store.PrivateHost
+		if list, err = s.Store.PrivateHosts(ctx, env); err != nil {
+			break
+		}
+		i := slices.IndexFunc(list, func(h store.PrivateHost) bool { return h.Host == e.Host })
+		switch {
+		case i < 0:
+			list = append(list, store.PrivateHost{Host: e.Host, Ports: []int{e.Port}})
+		case len(list[i].Ports) == 0 && (e.Port == 80 || e.Port == 443), slices.Contains(list[i].Ports, e.Port):
+			return
+		case len(list[i].Ports) == 0:
+			list[i].Ports = []int{80, 443, e.Port} // empty means 80 and 443
+		default:
+			list[i].Ports = append(list[i].Ports, e.Port)
+		}
+		in := make([]privateHostInput, len(list))
+		for i, h := range list {
+			in[i] = privateHostInput{Host: h.Host, Ports: h.Ports}
+		}
+		if list, err = privateHostsFrom(in); err == nil {
+			err = s.Store.SetPrivateHosts(ctx, env, list)
+		}
+	}
+	if err != nil {
+		s.Log.Warn("opening the way to a provider's server", "environment", env, "host", e.Host, "port", e.Port, "err", err)
+	}
 }

@@ -8,6 +8,12 @@
   Messages off screen stood in at a fixed height and took their real one as they scrolled in,
   which only browsers with scroll anchoring absorb; elsewhere they now render in full.
 - The macOS menu bar shows the cube rather than a filled rounded square.
+- An OpenAI-compatible provider can run on this computer or the local network:
+  `http://localhost:11434/v1` or `http://192.168.1.20:8000/v1` is now a base URL, and its key is
+  optional. Saving it opens the port or adds the host to the local network list, so every
+  sandbox of the environment can reach it; each connection still asks for approval until a
+  rule allows it. A server on the local network takes no key, as plain http:// would carry it
+  across the network.
 
 ## v0.13.0 — 2026-10-31
 

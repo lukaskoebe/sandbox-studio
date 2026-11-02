@@ -10,15 +10,34 @@ its sandboxes when an agent session starts and when the sandbox's guest connects
 |---|---|---|
 | `anthropic_api` | claude, opencode | key bound to `api.anthropic.com`, guests see `ANTHROPIC_API_KEY` |
 | `openai_api` | codex, opencode | key bound to `api.openai.com`, guests see `OPENAI_API_KEY` |
-| `openai_compatible` | opencode, codex | key bound to the base URL's host, `OPENAI_API_KEY` |
+| `openai_compatible` | opencode, codex | optional key bound to the base URL's host, `OPENAI_API_KEY` |
 | `claude_subscription` | claude | the long-lived token of `claude setup-token`, a secret like an API key |
 | `chatgpt_subscription` | codex | the ChatGPT login `codex login` writes, kept by Studio ([subscription logins](#subscription-logins)) |
 
 - An API key is stored as an environment secret named `PROVIDER_<NAME>_KEY`. It is created,
   rotated and deleted only with its provider, in one transaction; the secrets API answers
   409 for it. Guests see only the placeholder, as with any secret.
-- `openai_compatible` takes an `https://` base URL on a public host (no credentials, query
-  or fragment, no private, loopback or link-local address) and the endpoint's single model.
+- `openai_compatible` takes a base URL (no credentials, query or fragment) and the
+  endpoint's single model. `teammates.ParseBaseURL` places the server:
+  - `https://` on a public name or address: a hosted service, reached like any public host.
+  - `http://` on `localhost` or a loopback address: this computer. Sandboxes get the URL with
+    `host.studio.internal` instead, and saving the provider opens its port
+    ([This computer](network.md#this-computer)).
+  - `http://` on a private (RFC 1918) or CGNAT address, or on a name outside the public
+    suffix list such as `gpu.home.arpa` or `llm.lan`: the local network. Sandboxes get an
+    address as its `lan.studio.internal` name, and saving adds the host with its port to the
+    [local network list](network.md#local-network).
+
+  Every sandbox of the environment can then reach the server, and the policy still decides
+  each connection: it asks for approval until a rule for the host allows it, and a security
+  level never does. `https://` on a private address or a local name, and `http://` on a public
+  name, are refused.
+- The key of an `openai_compatible` provider is optional: many local servers take none
+  (`teammates.Kind.KeyOptional`). Without one the harness is given `harness.NoKey`, since the
+  harnesses want a key to send. A server on the local network takes no key, as plain `http://`
+  would carry it across the network (422); this computer's may, as the gateway reaches it over
+  loopback and swaps the placeholder there. `PUT …/providers/{id}` with `removeKey` takes a
+  stored key off a key-optional provider.
 - `images` says whether an `openai_compatible` provider's model takes images. It is off until
   the user ticks **The model can see images**: many local models read text only. The models
   of the other kinds all take images, and those kinds refuse the field (422). Off, a chat's

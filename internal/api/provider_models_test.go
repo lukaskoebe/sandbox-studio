@@ -52,8 +52,15 @@ func TestListProviderModels(t *testing.T) {
 		t.Fatalf("another kind's key: %d %s, asked %v", rec.Code, rec.Body, asked)
 	}
 
+	// A server that takes no key lists without one.
+	asked = nil
+	if rec := do(h, "POST", path, `{"baseUrl":"https://llm.example.com/v1"}`); rec.Code != http.StatusOK || !slices.Equal(asked, []string{"GET https://llm.example.com/v1/models "}) {
+		t.Fatalf("keyless: %d %s, asked %v", rec.Code, rec.Body, asked)
+	}
+	asked = nil
+
 	for _, body := range []string{
-		`{"baseUrl":"https://llm.example.com/v1"}`,
+		`{"baseUrl":"http://192.168.1.20:8080/v1","apiKey":"k"}`,
 		`{"baseUrl":"http://llm.example.com/v1","apiKey":"k"}`,
 		`{"baseUrl":"https://127.0.0.1:8000","apiKey":"k"}`,
 		`{"baseUrl":"https://llm.localhost","apiKey":"k"}`,

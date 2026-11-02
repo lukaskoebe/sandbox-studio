@@ -129,10 +129,12 @@ export function ProvidersSettings({ env }: { env: string }) {
                         <div className="whitespace-normal">
                           {p.envVar && <Ident>{p.envVar}</Ident>}
                           <div className="text-muted-foreground">
-                            {p.secretName && (
+                            {p.secretName ? (
                               <>
                                 as <Ident>{p.secretName}</Ident>
                               </>
+                            ) : (
+                              p.kind === "openai_compatible" && "no key"
                             )}
                           </div>
                         </div>

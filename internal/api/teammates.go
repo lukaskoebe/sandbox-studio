@@ -39,7 +39,7 @@ func providerView(p store.Provider) ProviderView {
 	case k.Login && p.SecretID == "":
 		// A subscription has a login once its sign-in stored what it yields (docs/teammates.md).
 		v.State = teammates.StateLoginRequired
-	case k.APIKey && p.SecretID == "":
+	case k.APIKey && !k.KeyOptional && p.SecretID == "":
 		v.State = teammates.StateKeyRequired
 	}
 	return v
@@ -129,7 +129,7 @@ func (s *Server) registerTeammates(api huma.API) {
 			Name    string `json:"name" minLength:"1" maxLength:"64"`
 			Kind    string `json:"kind" enum:"anthropic_api,openai_api,openai_compatible,claude_subscription,chatgpt_subscription"`
 			APIKey  string `json:"apiKey,omitempty" writeOnly:"true" doc:"API-key kinds: the key. It is sealed in the vault on arrival and never returned."`
-			BaseURL string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only: the https:// base URL"`
+			BaseURL string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only: the base URL, https:// on a public host, or http:// on this computer or the local network (which Studio opens to sandboxes in Ports and LAN)"`
 			Model   string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only: the endpoint's single model"`
 			Images  bool   `json:"images,omitempty" doc:"openai_compatible only: the model takes images. Without it, prompts with images are refused and browser notes go as text."`
 		}
@@ -151,7 +151,8 @@ func (s *Server) registerTeammates(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Provider ID"`
 		Body struct {
-			APIKey  *string `json:"apiKey,omitempty" writeOnly:"true" doc:"A new key. Omit it to keep the stored one."`
+			APIKey    *string `json:"apiKey,omitempty" writeOnly:"true" doc:"A new key. Omit it to keep the stored one."`
+			RemoveKey bool    `json:"removeKey,omitempty" doc:"openai_compatible only: removes the stored key; the provider works without one"`
 			BaseURL *string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only"`
 			Model   *string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only"`
 			Images  *bool   `json:"images,omitempty" doc:"openai_compatible only"`
@@ -167,13 +168,26 @@ func (s *Server) registerTeammates(api huma.API) {
 		}
 		b := in.Body
 		var u store.ProviderUpdate
+		var opened *teammates.Endpoint
+		k, _ := teammates.LookupKind(p.Kind)
+		if b.RemoveKey && (!k.KeyOptional || b.APIKey != nil) {
+			return nil, huma.Error422UnprocessableEntity("only an OpenAI-compatible provider's key can be removed, and not while a new one is given")
+		}
 		if p.Kind == teammates.KindOpenAICompatible {
+			e, err := teammates.ParseBaseURL(p.BaseURL)
 			if b.BaseURL != nil {
-				baseURL, host, err := teammates.BaseURL(*b.BaseURL)
-				if err != nil {
-					return nil, apiError(err)
-				}
-				u.BaseURL, u.Hosts = &baseURL, []string{host}
+				e, err = teammates.ParseBaseURL(*b.BaseURL)
+			}
+			if err != nil {
+				return nil, apiError(err)
+			}
+			keyed := b.APIKey != nil || p.SecretID != "" && !b.RemoveKey
+			if !e.TakesKey() && keyed {
+				return nil, huma.Error422UnprocessableEntity(lanKeyRefused)
+			}
+			if b.BaseURL != nil {
+				u.BaseURL, u.Hosts = &e.URL, []string{e.Host}
+				opened = &e
 			}
 			if b.Model != nil {
 				if err := teammates.CheckModel(*b.Model); err != nil {
@@ -191,7 +205,6 @@ func (s *Server) registerTeammates(api huma.API) {
 		// the update is applied before it, so the key is bound to the host the update names.
 		addKey := false
 		if b.APIKey != nil {
-			k, _ := teammates.LookupKind(p.Kind)
 			switch {
 			case !k.APIKey:
 				return nil, huma.Error422UnprocessableEntity("subscription providers log in instead of taking an API key")
@@ -207,6 +220,15 @@ func (s *Server) registerTeammates(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
+		removed := b.RemoveKey && p.SecretID != ""
+		if removed {
+			if updated, err = s.Store.DetachProviderSecret(ctx, in.Env, in.ID); err != nil {
+				return nil, apiError(err)
+			}
+		}
+		if opened != nil {
+			s.openEndpoint(ctx, in.Env, *opened)
+		}
 		if addKey {
 			host, err := providerHost(updated)
 			if err != nil {
@@ -220,7 +242,7 @@ func (s *Server) registerTeammates(api huma.API) {
 				return nil, apiError(err)
 			}
 		}
-		if u.Sealed != nil || u.Hosts != nil || addKey {
+		if u.Sealed != nil || u.Hosts != nil || addKey || removed {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
 		}
@@ -526,11 +548,13 @@ func (s *Server) addProvider(ctx context.Context, env string, b newProvider) (Pr
 	}
 	p := store.Provider{ID: store.NewID(), EnvironmentID: env, Name: b.Name, Kind: b.Kind}
 	host := k.Host
+	var endpoint *teammates.Endpoint
 	if b.Kind == teammates.KindOpenAICompatible {
-		var err error
-		if p.BaseURL, host, err = teammates.BaseURL(b.BaseURL); err != nil {
+		e, err := teammates.ParseBaseURL(b.BaseURL)
+		if err != nil {
 			return ProviderView{}, apiError(err)
 		}
+		p.BaseURL, host, endpoint = e.URL, e.Host, &e
 		if b.Model == "" {
 			return ProviderView{}, huma.Error422UnprocessableEntity("OpenAI-compatible providers need a model")
 		}
@@ -545,8 +569,11 @@ func (s *Server) addProvider(ctx context.Context, env string, b newProvider) (Pr
 	}
 	var sec *store.Secret
 	switch {
-	case k.APIKey && b.APIKey == "":
+	case k.APIKey && b.APIKey == "" && !k.KeyOptional:
 		return ProviderView{}, huma.Error422UnprocessableEntity("this provider needs an API key")
+	case k.APIKey && b.APIKey == "":
+	case endpoint != nil && !endpoint.TakesKey():
+		return ProviderView{}, huma.Error422UnprocessableEntity(lanKeyRefused)
 	case k.APIKey:
 		prepared, err := s.Vault.Prepare(env, teammates.SecretName(b.Name, p.ID), b.APIKey, []string{host}, "Key of provider "+b.Name)
 		if err != nil {
@@ -559,6 +586,9 @@ func (s *Server) addProvider(ctx context.Context, env string, b newProvider) (Pr
 	created, err := s.Store.CreateProvider(ctx, p, sec)
 	if err != nil {
 		return ProviderView{}, apiError(err)
+	}
+	if endpoint != nil {
+		s.openEndpoint(ctx, env, *endpoint)
 	}
 	if sec != nil {
 		s.Vault.Changed(env)

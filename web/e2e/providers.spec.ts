@@ -77,10 +77,10 @@ test("an OpenAI-compatible endpoint suggests the models it lists", async ({
   await dialog.getByLabel("Kind").click()
   await page.getByRole("option", { name: "OpenAI-compatible endpoint" }).click()
   await dialog.getByLabel("Base URL").fill("https://llm.example.com/v1")
-  await expect(dialog.getByText(/The endpoint lists/)).toHaveCount(0)
-
-  // Studio asks the endpoint once there is a key; the e2e build's fake lists two models.
-  await dialog.getByLabel("API key", { exact: true }).fill("sk-e2e-fake")
+  // Studio asks without a key too, as many local servers take none; the e2e build's fake
+  // refuses that, and lists two models with one.
+  await expect(dialog.getByText(/Could not list the models/)).toBeVisible()
+  await dialog.getByLabel("API key (optional)").fill("sk-e2e-fake")
   await expect(dialog.getByText("The endpoint lists 2 models")).toBeVisible()
   await expect(dialog.locator("datalist#provider-models option")).toHaveCount(2)
   await expect(
@@ -95,6 +95,72 @@ test("an OpenAI-compatible endpoint suggests the models it lists", async ({
     dialog.getByRole("checkbox", { name: "The model can see images" })
   ).not.toBeChecked()
   await page.keyboard.press("Escape")
+})
+
+test("a server on this computer or the local network needs no key and opens the way to it", async ({
+  page,
+  api,
+  env,
+}) => {
+  const base = `/api/environments/${env}`
+  const ports = (await api.json<number[]>("GET", `${base}/host-ports`)) ?? []
+  const hosts =
+    (await api.json<unknown[]>("GET", `${base}/private-hosts`)) ?? []
+  try {
+    await page.goto(`/e/${env}/settings/providers`)
+    await page.getByRole("button", { name: "Add provider" }).first().click()
+    const dialog = page.getByRole("dialog", { name: "Add provider" })
+    await dialog.getByLabel("Name", { exact: true }).fill("Ollama")
+    await dialog.getByLabel("Kind").click()
+    await page
+      .getByRole("option", { name: "OpenAI-compatible endpoint" })
+      .click()
+    await dialog.getByLabel("Base URL").fill("http://localhost:4532/v1")
+    await expect(dialog.getByText(/A server on this computer/)).toBeVisible()
+    await expect(dialog.getByLabel("API key (optional)")).toHaveValue("")
+    await dialog.getByLabel("Model", { exact: true }).fill("qwen3-coder")
+    await dialog.getByRole("button", { name: "Add provider" }).click()
+    await expect(dialog).toBeHidden()
+
+    const providers =
+      (await api.json<{ id: string; name: string; state: string }[]>(
+        "GET",
+        `${base}/providers`
+      )) ?? []
+    const ollama = providers.find((p) => p.name === "Ollama")
+    expect(ollama?.state).toBe("ready")
+    await expect(
+      page.getByRole("row").filter({ hasText: "Ollama" }).getByText("no key")
+    ).toBeVisible()
+    expect(await api.json<number[]>("GET", `${base}/host-ports`)).toContain(
+      4532
+    )
+
+    // On the local network it takes no key, and the host joins the local network list.
+    await page
+      .getByRole("row")
+      .filter({ hasText: "Ollama" })
+      .getByRole("button", { name: "Edit provider" })
+      .click()
+    const edit = page.getByRole("dialog", { name: "Edit provider" })
+    await edit.getByLabel("Base URL").fill("http://192.168.1.20:8000/v1")
+    await expect(edit.getByText(/A server on the local network/)).toBeVisible()
+    await expect(edit.getByText(/No key: a server on the local/)).toBeVisible()
+    await expect(edit.getByLabel(/API key/)).toHaveCount(0)
+    await edit.getByRole("button", { name: "Save" }).click()
+    await expect(edit).toBeHidden()
+    expect(
+      await api.json<{ host: string; ports: number[] }[]>(
+        "GET",
+        `${base}/private-hosts`
+      )
+    ).toContainEqual({ host: "192.168.1.20", ports: [8000] })
+
+    if (ollama) await api.json("DELETE", `${base}/providers/${ollama.id}`)
+  } finally {
+    await api.json("PUT", `${base}/host-ports`, { ports })
+    await api.json("PUT", `${base}/private-hosts`, { hosts })
+  }
 })
 
 test("logins on this computer become providers without copying a sign-in", async ({

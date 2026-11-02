@@ -142,21 +142,34 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s can't run %s", prov.Name, p.Harness))
 	}
 	// The key must reach the provider's host through the gateway, which swaps the
-	// placeholder only on hosts the secret is bound to.
+	// placeholder only on hosts the secret is bound to. A keyless provider's harness gets
+	// harness.NoKey instead, as the harnesses want a key to send.
 	host, err := providerHost(prov)
 	if err != nil {
 		return sessionPlan{}, apiError(err)
 	}
-	if prov.SecretID == "" || prov.Placeholder == "" || !slices.Contains(prov.Hosts, host) {
+	placeholder := prov.Placeholder
+	if k, _ := teammates.LookupKind(prov.Kind); k.KeyOptional && prov.SecretID == "" {
+		placeholder = harness.NoKey
+	} else if prov.SecretID == "" || prov.Placeholder == "" || !slices.Contains(prov.Hosts, host) {
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("the key of provider %s is not bound to %s", prov.Name, host))
+	}
+	// Sandboxes reach this computer and the local network by names of their own.
+	baseURL := prov.BaseURL
+	if prov.Kind == teammates.KindOpenAICompatible {
+		e, err := teammates.ParseBaseURL(prov.BaseURL)
+		if err != nil {
+			return sessionPlan{}, apiError(err)
+		}
+		baseURL = e.Guest
 	}
 
 	rewrites, err := s.gitRewrites(ctx, sb.EnvironmentID)
 	if err != nil {
 		return sessionPlan{}, apiError(err)
 	}
-	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, Images: teammates.TakesImages(prov.Kind, prov.Images),
-		EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
+	hp := harness.Provider{Kind: prov.Kind, BaseURL: baseURL, Model: prov.Model, Images: teammates.TakesImages(prov.Kind, prov.Images),
+		EnvVar: view.EnvVar, Placeholder: placeholder}
 	files, err := harness.Files(h,
 		s.harnessTeammate(ctx, p),
 		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites, Others: s.otherSandboxes(ctx, sb)}, hp)

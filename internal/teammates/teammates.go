@@ -7,13 +7,18 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/net/publicsuffix"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 )
 
@@ -63,7 +68,9 @@ type Kind struct {
 	// openai_compatible). Login kinds keep what a subscription login yields in the vault, and
 	// Host is where the harness sends it.
 	APIKey bool
-	Login  bool
+	// KeyOptional kinds work without a key too: a local model server usually takes none.
+	KeyOptional bool
+	Login       bool
 	Host   string
 	// EnvVar is the variable the harness reads its credential from; the guest gets the
 	// placeholder of the provider's secret in it.
@@ -73,7 +80,7 @@ type Kind struct {
 var kinds = []Kind{
 	{Kind: KindAnthropicAPI, Harnesses: []string{HarnessClaude, HarnessOpenCode}, APIKey: true, Host: "api.anthropic.com", EnvVar: "ANTHROPIC_API_KEY"},
 	{Kind: KindOpenAIAPI, Harnesses: []string{HarnessCodex, HarnessOpenCode}, APIKey: true, Host: "api.openai.com", EnvVar: "OPENAI_API_KEY"},
-	{Kind: KindOpenAICompatible, Harnesses: []string{HarnessOpenCode, HarnessCodex}, APIKey: true, EnvVar: "OPENAI_API_KEY"},
+	{Kind: KindOpenAICompatible, Harnesses: []string{HarnessOpenCode, HarnessCodex}, APIKey: true, KeyOptional: true, EnvVar: "OPENAI_API_KEY"},
 	{Kind: KindClaudeSubscription, Harnesses: []string{HarnessClaude}, Login: true, Host: "api.anthropic.com", EnvVar: "CLAUDE_CODE_OAUTH_TOKEN"},
 	// verify (S8): the host the ChatGPT login's requests go to; the refresh token never leaves Studio.
 	{Kind: KindChatGPTSubscription, Harnesses: []string{HarnessCodex}, Login: true, Host: "chatgpt.com"},
@@ -349,33 +356,114 @@ func SecretName(name, fallback string) string {
 	return "PROVIDER_" + s + "_KEY"
 }
 
-// BaseURL validates the base URL of an OpenAI-compatible provider and returns it
-// normalized, with the host its key is bound to. The URL must be HTTPS and name a public
-// host; the gateway refuses private, loopback and link-local upstreams regardless.
-func BaseURL(raw string) (string, string, error) {
+// Where an OpenAI-compatible provider's server is.
+const (
+	WherePublic = ""     // an https:// host on the internet
+	WhereHost   = "host" // this computer: http://localhost, 127.0.0.1 or [::1]
+	WhereLAN    = "lan"  // the local network: http:// to a private IPv4 address or a local name
+)
+
+// Endpoint is the validated base URL of an OpenAI-compatible provider.
+type Endpoint struct {
+	URL   string // normalized, as Studio itself calls it
+	Where string // WherePublic, WhereHost or WhereLAN
+	// Host is the host as sandboxes reach it, which the policy decides and a key is bound to:
+	// dnsproxy.HostName for this computer, else the URL's host.
+	Host string
+	Port int // the URL's port, or its scheme's
+	// Guest is the URL as sandboxes use it: this computer is host.studio.internal to them and
+	// a private address a name under lan.studio.internal, as microsandbox refuses those.
+	Guest string
+}
+
+// TakesKey reports whether a key may go with the endpoint's requests: over HTTPS, or to this
+// computer, where it never leaves the machine. A server on the local network is reached over
+// plain HTTP, which would carry its key across the network.
+func (e Endpoint) TakesKey() bool { return e.Where != WhereLAN }
+
+// ParseBaseURL validates the base URL of an OpenAI-compatible provider. It is an https:// URL
+// on a public host, or an http:// URL on this computer or the local network.
+func ParseBaseURL(raw string) (Endpoint, error) {
 	if len(raw) > MaxBaseURLLen {
-		return "", "", fmt.Errorf("%w: the base URL is longer than %d characters", ErrInvalid, MaxBaseURLLen)
+		return Endpoint{}, fmt.Errorf("%w: the base URL is longer than %d characters", ErrInvalid, MaxBaseURLLen)
 	}
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.Opaque != "" {
-		return "", "", fmt.Errorf("%w: the base URL must be an https:// URL", ErrInvalid)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.Opaque != "" {
+		return Endpoint{}, fmt.Errorf("%w: the base URL must be an https:// URL, or http:// to this computer or the local network", ErrInvalid)
 	}
 	if u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
-		return "", "", fmt.Errorf("%w: the base URL must not contain credentials, a query or a fragment", ErrInvalid)
+		return Endpoint{}, fmt.Errorf("%w: the base URL must not contain credentials, a query or a fragment", ErrInvalid)
 	}
-	host, err := policy.ValidPattern(u.Hostname())
-	if err != nil || strings.HasPrefix(host, "*") {
-		return "", "", fmt.Errorf("%w: the base URL has an invalid host", ErrInvalid)
+	port := 443
+	if u.Scheme == "http" {
+		port = 80
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		if !ip.IsGlobalUnicast() || ip.IsPrivate() {
-			return "", "", fmt.Errorf("%w: the base URL must name a public host", ErrInvalid)
+	if p := u.Port(); p != "" {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 1 || n > 65535 {
+			return Endpoint{}, fmt.Errorf("%w: the base URL has an invalid port", ErrInvalid)
 		}
-	} else if host == "localhost" || strings.HasSuffix(host, ".localhost") || !strings.Contains(host, ".") {
-		return "", "", fmt.Errorf("%w: the base URL must name a public host", ErrInvalid)
+		port = n
 	}
 	u.Host = strings.ToLower(u.Host)
 	u.Path = strings.TrimRight(u.Path, "/")
 	u.RawPath = ""
-	return u.String(), host, nil
+	e := Endpoint{Port: port}
+	name := strings.ToLower(u.Hostname())
+	ip := net.ParseIP(name)
+	switch {
+	case name == "localhost" || ip != nil && ip.IsLoopback():
+		if u.Scheme != "http" {
+			return Endpoint{}, fmt.Errorf("%w: a server on this computer is reached over http://", ErrInvalid)
+		}
+		e.Where, e.Host = WhereHost, dnsproxy.HostName
+	case ip != nil:
+		ip4 := ip.To4()
+		switch {
+		case ip4 != nil && (ip4.IsPrivate() || cgnat.Contains(ip4)):
+			if u.Scheme != "http" {
+				return Endpoint{}, fmt.Errorf("%w: a server on the local network is reached over http://", ErrInvalid)
+			}
+			e.Where, e.Host = WhereLAN, ip4.String()
+		case u.Scheme == "https" && ip.IsGlobalUnicast() && !ip.IsPrivate():
+			e.Host = name
+		default:
+			return Endpoint{}, fmt.Errorf("%w: the base URL must name a public host over https://, or this computer or a private IPv4 address over http://", ErrInvalid)
+		}
+	default:
+		host, err := policy.ValidPattern(name)
+		if err != nil || strings.HasPrefix(host, "*") || !strings.Contains(host, ".") || strings.HasSuffix(host, ".localhost") ||
+			host == dnsproxy.VirtualDomain || strings.HasSuffix(host, "."+dnsproxy.VirtualDomain) {
+			return Endpoint{}, fmt.Errorf("%w: the base URL has an invalid host", ErrInvalid)
+		}
+		e.Host = host
+		_, icann := publicsuffix.PublicSuffix(host)
+		// home.arpa is the special-use domain of home networks (RFC 8375), under ICANN's arpa.
+		icann = icann && host != "home.arpa" && !strings.HasSuffix(host, ".home.arpa")
+		switch {
+		case u.Scheme == "http" && icann:
+			return Endpoint{}, fmt.Errorf("%w: %s is a public host, which is reached over https://", ErrInvalid, host)
+		case u.Scheme == "http":
+			e.Where = WhereLAN
+		}
+	}
+	e.URL = u.String()
+	g := *u
+	switch {
+	case e.Where == WhereHost:
+		g.Host = net.JoinHostPort(dnsproxy.HostName, strconv.Itoa(port))
+	case e.Where == WhereLAN && ip != nil:
+		g.Host = net.JoinHostPort(dnsproxy.LANName(netip.MustParseAddr(e.Host)), strconv.Itoa(port))
+	}
+	e.Guest = g.String()
+	return e, nil
+}
+
+// cgnat is carrier-grade NAT, which VPNs such as Tailscale use for their private addresses.
+var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0).To4(), Mask: net.CIDRMask(10, 32)}
+
+// BaseURL is ParseBaseURL's normalized URL and the host a key is bound to.
+func BaseURL(raw string) (string, string, error) {
+	e, err := ParseBaseURL(raw)
+	return e.URL, e.Host, err
 }

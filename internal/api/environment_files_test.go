@@ -96,8 +96,13 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 		if p.Name == "Anthropic" {
 			newAnthropic = p
 		}
-		if p.State != "key_required" || p.SecretID != "" {
-			t.Fatalf("imported provider has a key or is ready: %+v", p)
+		// Keys stay behind; a compatible provider's key is optional, so it's ready without one.
+		want := "key_required"
+		if p.Kind == "openai_compatible" {
+			want = "ready"
+		}
+		if p.State != want || p.SecretID != "" {
+			t.Fatalf("imported provider has a key, or the wrong state: %+v", p)
 		}
 	}
 	local2 := providers[0]

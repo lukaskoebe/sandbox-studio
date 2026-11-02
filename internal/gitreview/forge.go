@@ -195,9 +195,13 @@ func CheckForge(name, kind, baseURL, username string) (ForgeURL, error) {
 }
 
 func publicBase(raw string) (string, string, error) {
-	base, host, err := teammates.BaseURL(raw)
+	e, err := teammates.ParseBaseURL(raw)
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, strings.TrimPrefix(err.Error(), teammates.ErrInvalid.Error()+": "))
+	}
+	base, host := e.URL, e.Host
+	if e.Where != teammates.WherePublic {
+		return "", "", fmt.Errorf("%w: the base URL must be an https:// URL on a public host", ErrInvalid)
 	}
 	if dnsproxy.IsVirtual(host) {
 		return "", "", fmt.Errorf("%w: the base URL must name a public host", ErrInvalid)

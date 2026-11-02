@@ -1655,7 +1655,7 @@
             "writeOnly": true
           },
           "baseUrl": {
-            "description": "openai_compatible only: the https:// base URL",
+            "description": "openai_compatible only: the base URL, https:// on a public host, or http:// on this computer or the local network (which Studio opens to sandboxes in Ports and LAN)",
             "maxLength": 2048,
             "type": "string"
           },
@@ -5133,7 +5133,7 @@
             "writeOnly": true
           },
           "baseUrl": {
-            "description": "The endpoint's https:// base URL",
+            "description": "The endpoint's base URL: https:// on a public host, or http:// on this computer or the local network",
             "maxLength": 2048,
             "type": "string"
           },
@@ -10134,6 +10134,10 @@
             "description": "openai_compatible only",
             "maxLength": 128,
             "type": "string"
+          },
+          "removeKey": {
+            "description": "openai_compatible only: removes the stored key; the provider works without one",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -15489,7 +15493,7 @@
     },
     "/api/environments/{env}/providers/models": {
       "post": {
-        "description": "Studio requests GET \u003cbaseUrl\u003e/models with the key as a bearer token, over public addresses only, and returns the ids. The forms suggest them for the model field.",
+        "description": "Studio requests GET \u003cbaseUrl\u003e/models, with the key as a bearer token when there is one, and returns the ids. A public base URL is dialed on public addresses only. The forms suggest them for the model field.",
         "operationId": "listProviderModels",
         "parameters": [
           {

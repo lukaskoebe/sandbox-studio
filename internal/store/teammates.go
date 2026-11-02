@@ -130,6 +130,36 @@ func (s *Store) AttachProviderSecret(ctx context.Context, envID, id string, sec 
 	return s.Provider(ctx, envID, id)
 }
 
+// DetachProviderSecret removes a provider's key: the provider keeps working without one, as
+// a local model server does.
+func (s *Store) DetachProviderSecret(ctx context.Context, envID, id string) (Provider, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Provider{}, err
+	}
+	defer tx.Rollback()
+	var secretID string
+	err = tx.QueryRowContext(ctx, "SELECT IFNULL(secret_id, '') FROM providers WHERE environment_id = ? AND id = ?", envID, id).Scan(&secretID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Provider{}, ErrNotFound
+	}
+	if err != nil {
+		return Provider{}, err
+	}
+	if secretID != "" {
+		if _, err := tx.ExecContext(ctx, "UPDATE providers SET secret_id = NULL, updated_at = ? WHERE environment_id = ? AND id = ?", now(), envID, id); err != nil {
+			return Provider{}, err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, secretID); err != nil {
+			return Provider{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Provider{}, err
+	}
+	return s.Provider(ctx, envID, id)
+}
+
 // ProviderUpdate changes a provider. Nil fields keep their values.
 type ProviderUpdate struct {
 	BaseURL *string

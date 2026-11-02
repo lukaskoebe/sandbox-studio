@@ -406,7 +406,7 @@ func (ic *interception) substitute(s, where string, escape func(string) string, 
 		if !strings.Contains(s, b.Placeholder) {
 			continue
 		}
-		if !ic.tls {
+		if !ic.keepsSecrets() {
 			return "", plaintextError(b.Name, ic.host)
 		}
 		v := string(b.Value)
@@ -537,7 +537,7 @@ func (ic *interception) expand(header, tmpl string, sent *sentSecrets) (string, 
 	v := secretRef.ReplaceAllStringFunc(tmpl, func(ref string) string {
 		name := secretRef.FindStringSubmatch(ref)[1]
 		if b, ok := named(ic.bound, name); ok {
-			if ic.tls {
+			if ic.keepsSecrets() {
 				sent.add(name)
 				return string(b.Value)
 			}
@@ -561,6 +561,11 @@ func named(list []secrets.Binding, name string) (secrets.Binding, bool) {
 	}
 	return secrets.Binding{}, false
 }
+
+// keepsSecrets reports whether a secret may go into the connection's requests: over HTTPS, or
+// to this computer, whose plain HTTP the gateway sends over loopback (a local model server's
+// key never leaves the machine).
+func (ic *interception) keepsSecrets() bool { return ic.tls || isHost(ic.host) }
 
 func plaintextError(name, host string) error {
 	return fmt.Errorf("Sandbox Studio only sends the secret %s over HTTPS. Use https://%s.", name, host)

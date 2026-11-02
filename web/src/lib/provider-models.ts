@@ -4,7 +4,8 @@ import { errorMessage, fetchClient } from "@/lib/api/client"
 /**
  * The models an OpenAI-compatible endpoint lists, for suggesting them in a model field. Studio
  * asks the endpoint, so the key never reaches it from the browser. It asks once the base URL
- * and a key (typed, or the saved provider's) are set and have stayed the same for a moment.
+ * looks whole and has stayed the same for a moment, with the key typed or the saved provider's
+ * when there is one: many local servers take none.
  * The request is sent directly: a query cache would keep a typed key.
  */
 export function useProviderModels({
@@ -25,8 +26,7 @@ export function useProviderModels({
     error?: string
   }>()
   const url = baseUrl.trim()
-  const ready =
-    /^https:\/\/[^/]+\.[^/]+/.test(url) && (!!apiKey || !!providerId)
+  const ready = endpointPlace(url) !== undefined
   const ask = ready ? JSON.stringify([url, apiKey ?? "", providerId ?? ""]) : ""
 
   useEffect(() => {
@@ -69,4 +69,30 @@ export function useProviderModels({
     error: current?.error,
     loading: !!ask && !current,
   }
+}
+
+/** Where an OpenAI-compatible base URL's server is, as Studio reaches it. */
+export type EndpointPlace = "public" | "computer" | "network"
+
+/**
+ * Where the server of url is, or undefined while the URL isn't whole yet. Studio decides for
+ * real; this only picks the hints: https:// is a public host, http:// on localhost this
+ * computer, and any other http:// the local network.
+ */
+export function endpointPlace(url: string): EndpointPlace | undefined {
+  let u: URL
+  try {
+    u = new URL(url.trim())
+  } catch {
+    return undefined
+  }
+  const host = u.hostname
+  const whole =
+    host.includes(".") || host === "localhost" || host.startsWith("[")
+  if (!whole) return undefined
+  if (u.protocol === "https:") return "public"
+  if (u.protocol !== "http:") return undefined
+  if (host === "localhost" || host === "[::1]" || host.startsWith("127."))
+    return "computer"
+  return "network"
 }

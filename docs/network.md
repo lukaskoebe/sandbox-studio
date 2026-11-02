@@ -387,7 +387,11 @@ environment's host ports (Settings → Ports and LAN → This computer; `store.H
 - The policy decides each connection: a rule for `host.studio.internal`, or an approval. A
   security level never allows it (`publicHost` is false for it), nor the AI reviewer.
   Approvals, rules, imports and reviewers never open ports; an environment file doesn't carry
-  them.
+  them. Saving an OpenAI-compatible provider whose base URL is on `localhost` opens its port,
+  as the owner asked for it ([teammates](teammates.md#providers)).
+- Secrets are swapped into plain `http://` requests to `host.studio.internal`: the gateway
+  reaches it over loopback, so the value never crosses a network. Any other host gets
+  placeholders only over TLS.
 
 ## Local network
 

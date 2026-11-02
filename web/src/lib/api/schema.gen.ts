@@ -1278,7 +1278,7 @@ export interface paths {
         put?: never;
         /**
          * The models an OpenAI-compatible endpoint lists
-         * @description Studio requests GET <baseUrl>/models with the key as a bearer token, over public addresses only, and returns the ids. The forms suggest them for the model field.
+         * @description Studio requests GET <baseUrl>/models, with the key as a bearer token when there is one, and returns the ids. A public base URL is dialed on public addresses only. The forms suggest them for the model field.
          */
         post: operations["listProviderModels"];
         delete?: never;
@@ -3601,7 +3601,7 @@ export interface components {
         CreateProviderInBody: {
             /** @description API-key kinds: the key. It is sealed in the vault on arrival and never returned. */
             apiKey?: string;
-            /** @description openai_compatible only: the https:// base URL */
+            /** @description openai_compatible only: the base URL, https:// on a public host, or http:// on this computer or the local network (which Studio opens to sandboxes in Ports and LAN) */
             baseUrl?: string;
             /** @description openai_compatible only: the model takes images. Without it, prompts with images are refused and browser notes go as text. */
             images?: boolean;
@@ -4806,7 +4806,7 @@ export interface components {
         ListModelsInBody: {
             /** @description The key to list with. It is only sent to the base URL and never stored or returned. */
             apiKey?: string;
-            /** @description The endpoint's https:// base URL */
+            /** @description The endpoint's base URL: https:// on a public host, or http:// on this computer or the local network */
             baseUrl: string;
             /** @description A saved OpenAI-compatible provider whose stored key lists, when no key is given. Its base URL must be the one given. */
             providerId?: string;
@@ -6516,6 +6516,8 @@ export interface components {
             images?: boolean;
             /** @description openai_compatible only */
             model?: string;
+            /** @description openai_compatible only: removes the stored key; the provider works without one */
+            removeKey?: boolean;
         };
         UpdateSecretInBody: {
             /** @description Whether the teammate's agents use the browser login without asking; omit it to keep it */
