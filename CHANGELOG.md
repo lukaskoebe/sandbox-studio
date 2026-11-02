@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.14.0 — 2026-11-02
 
 - A chat, a new chat and a teammate's home keep what was typed but not sent: leaving and
   coming back, or reloading the tab, finds the draft again.
