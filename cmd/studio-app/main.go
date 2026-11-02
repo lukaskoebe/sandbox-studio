@@ -57,6 +57,12 @@ func (n *optionalNotifier) ServiceStartup(ctx context.Context, options applicati
 //go:embed icon.png
 var icon []byte
 
+// trayIcon is the macOS menu bar's template image: only its alpha counts there, so it is the
+// cube alone on a transparent ground (tray.svg), where icon would be a filled square.
+//
+//go:embed tray.png
+var trayIcon []byte
+
 // version is set by the release build, as studio's is.
 var version = "dev"
 
@@ -222,7 +228,7 @@ func main() {
 		}
 		tray := app.SystemTray.New()
 		if goruntime.GOOS == "darwin" {
-			tray.SetTemplateIcon(icon)
+			tray.SetTemplateIcon(trayIcon)
 		} else {
 			tray.SetIcon(icon)
 		}

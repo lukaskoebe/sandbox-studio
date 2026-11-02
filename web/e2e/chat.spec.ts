@@ -184,6 +184,46 @@ test("a reply in a long chat keeps the chat at its end", async ({
   await expect(messages.getByText("First request")).not.toBeInViewport()
 })
 
+test("a chat keeps what was typed but not sent while the user is elsewhere", async ({
+  page,
+  api,
+  env,
+}) => {
+  const teammate = await addTeammate(
+    api,
+    env,
+    `Drafty ${Math.random().toString(36).slice(2, 6)}`
+  )
+  const id = await api.createSandbox(sandboxName("draft"), teammate)
+  await api.guestReady(id)
+  const chats = await Promise.all(
+    [0, 1].map(
+      async () =>
+        (await api.json<{ id: string }>(
+          "POST",
+          `/api/environments/${env}/sandboxes/${id}/chats`
+        ))!
+    )
+  )
+  const box = page.getByRole("main").getByRole("textbox", { name: "Message" })
+
+  await page.goto(`/e/${env}/chats/${chats[0].id}`)
+  await box.fill("Half a thought")
+  // Each chat has its own draft.
+  await page.goto(`/e/${env}/chats/${chats[1].id}`)
+  await expect(box).toHaveValue("")
+  await page.goBack()
+  await expect(box).toHaveValue("Half a thought")
+  // It outlives a reload of the tab, and a sent message clears it.
+  await page.reload()
+  await expect(box).toHaveValue("Half a thought")
+  await box.press("Enter")
+  await expect(box).toHaveValue("")
+  await page.reload()
+  await expect(page.getByRole("main")).toContainText("Half a thought")
+  await expect(box).toHaveValue("")
+})
+
 // The teammate's home is quiet until a thread has something this browser hasn't seen: then its
 // card says New, until it is opened.
 test("a long chat opens on its last turns and loads the earlier ones", async ({

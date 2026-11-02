@@ -883,6 +883,7 @@ function NewThread({
         onSend={send}
         error={problem}
         placeholder={placeholder}
+        draft={`teammate:${teammate.id}`}
         attachments={mode === "message"}
         mentionsIn={
           mode === "message" && computer

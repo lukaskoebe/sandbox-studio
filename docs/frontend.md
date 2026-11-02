@@ -188,6 +188,13 @@ says so, and one already decided shows the outcome without the buttons. The chat
 the list doesn't know keeps a resizable side panel for its changes and files
 (`components/side-panel.tsx`), its width in local storage (`studio.panel.chat`).
 
+A composer keeps what was typed but not sent under its `draft` key (a chat, a new chat's
+sandbox, a teammate's home), so leaving and coming back finds it again: the text, mentions and
+files in memory (`lib/drafts.ts`), the text and mentions also in session storage for a reload.
+A thread's messages skip rendering off screen (`content-visibility: auto`) only in browsers
+with scroll anchoring: the stand-in height becomes the real one as a message scrolls in above
+the reading place, and without anchoring, as in Safari and the macOS app, the thread jumped.
+
 Links from when a sandbox had a dashboard or a workspace (`/e/$env/sandboxes/$id` and `/work`,
 with `?terminal=`, `?session=`, `?chat=` or `?panel=`) land on the screen with the matching
 tab, on the teammate's page for a teammate's computer.

@@ -36,6 +36,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { components } from "@/lib/api/schema.gen"
 import { maxAttachmentBytes, readBase64 } from "@/lib/chats"
+import { loadDraft, saveDraft } from "@/lib/drafts"
 import {
   activeQuery,
   keptMentions,
@@ -72,6 +73,7 @@ export function Composer({
   attachments: canAttach = true,
   insert,
   mentionsIn,
+  draft,
   className,
 }: {
   /**
@@ -96,15 +98,20 @@ export function Composer({
   insert?: { id: string; text: string }
   /** The sandbox whose workspace files @ mentions. */
   mentionsIn?: { env: string; sandbox: string }
+  /**
+   * Where the unsent text, files and mentions are kept while the composer is away, such as
+   * a chat's ID: navigating back brings them back.
+   */
+  draft?: string
   className?: string
 }) {
-  const [text, setText] = useState("")
+  const [text, setText] = useState(() => loadDraft(draft).text)
   const [inserted, setInserted] = useState<string>()
   if (insert && insert.id !== inserted) {
     setInserted(insert.id)
     setText((t) => (t.trim() ? `${t}\n\n${insert.text}` : insert.text))
   }
-  const [files, setFiles] = useState<File[]>([])
+  const [files, setFiles] = useState<File[]>(() => loadDraft(draft).files)
   const [problem, setProblem] = useState<string>()
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -115,7 +122,21 @@ export function Composer({
   const size = files.reduce((n, f) => n + f.size, 0)
 
   // Mentions: what the picker added, kept while the text still has them.
-  const [mentions, setMentions] = useState<Mention[]>([])
+  const [mentions, setMentions] = useState<Mention[]>(
+    () => loadDraft(draft).mentions
+  )
+  // Another draft key, as when one composer moves to another chat, swaps the drafts.
+  const [draftKey, setDraftKey] = useState(draft)
+  if (draft !== draftKey) {
+    const d = loadDraft(draft)
+    setDraftKey(draft)
+    setText(d.text)
+    setFiles(d.files)
+    setMentions(d.mentions)
+  }
+  useEffect(() => {
+    saveDraft(draftKey, { text, files, mentions })
+  }, [draftKey, text, files, mentions])
   const [caret, setCaret] = useState(0)
   // The @ that Esc closed the picker at, so it stays closed until another.
   const [dismissed, setDismissed] = useState<number>()
@@ -203,13 +224,13 @@ export function Composer({
     if (sending || disabled) return
     if (!text.trim() && files.length === 0) return
     setSending(true)
-    const draft = { text, files, mentions }
+    const sentDraft = { text, files, mentions }
     // The message leaves the box at once, and comes back if it didn't go, ahead of anything
     // typed meanwhile.
     const restore = () => {
-      setText((t) => (t.trim() ? `${draft.text}\n\n${t}` : draft.text))
-      setFiles((f) => [...draft.files, ...f])
-      setMentions((m) => [...draft.mentions, ...m])
+      setText((t) => (t.trim() ? `${sentDraft.text}\n\n${t}` : sentDraft.text))
+      setFiles((f) => [...sentDraft.files, ...f])
+      setMentions((m) => [...sentDraft.mentions, ...m])
     }
     try {
       const attachments = await Promise.all(

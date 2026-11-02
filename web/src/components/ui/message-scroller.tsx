@@ -66,12 +66,15 @@ function MessageScrollerItem({
   scrollAnchor = false,
   ...props
 }: React.ComponentProps<typeof MessageScrollerPrimitive.Item>) {
+  // An item skips rendering off screen only where the browser anchors scrolling: the 10rem it
+  // stands in with turns into its real height as it scrolls in, above the reading place when
+  // scrolling up, and without anchoring (Safari, the macOS app) the thread jumps each time.
   return (
     <MessageScrollerPrimitive.Item
       data-slot="message-scroller-item"
       scrollAnchor={scrollAnchor}
       className={cn(
-        "min-w-0 shrink-0 [contain-intrinsic-size:auto_10rem] [content-visibility:auto]",
+        "min-w-0 shrink-0 supports-[overflow-anchor:auto]:[contain-intrinsic-size:auto_10rem] supports-[overflow-anchor:auto]:[content-visibility:auto]",
         className
       )}
       {...props}

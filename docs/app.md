@@ -18,7 +18,8 @@ server is still the product, and the app is a window and a tray around it.
 - **It loads Studio's own address**, not an embedded copy of the UI, so cookies, the event
   stream and `*.localhost` previews behave as in a browser. It opens a fresh one-time link
   from `studio login-url` on every start, as WebKitGTK keeps no cookies across restarts.
-- **The tray** has Open Studio, Open in browser (a fresh login link in the system browser),
+- **The tray** (on macOS a template image, `tray.png` from `tray.svg`, the cube alone so the
+  menu bar can tint it) has Open Studio, Open in browser (a fresh login link in the system browser),
   Close the app and Quit Studio (`studio quit`, then the app). Closing the window hides it on
   macOS and Windows, where the tray or the Dock brings it back; on Linux, whose desktops may
   show no tray, it quits the app.

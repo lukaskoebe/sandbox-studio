@@ -550,6 +550,7 @@ function ChatComposer({
         autoFocus
         insert={insert}
         mentionsIn={{ env, sandbox: chat.sandboxId }}
+        draft={`chat:${chat.id}`}
         placeholder={
           chat.state === "running"
             ? `Steer ${teammateName}: this goes into the current turn, with Alt+Enter after it`

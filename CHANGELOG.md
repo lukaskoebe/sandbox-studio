@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- A chat, a new chat and a teammate's home keep what was typed but not sent: leaving and
+  coming back, or reloading the tab, finds the draft again.
+- Scrolling up through a long chat no longer jumps up and down in Safari and the macOS app.
+  Messages off screen stood in at a fixed height and took their real one as they scrolled in,
+  which only browsers with scroll anchoring absorb; elsewhere they now render in full.
+- The macOS menu bar shows the cube rather than a filled rounded square.
+
 ## v0.13.0 — 2026-10-31
 
 - **Disk resizes, rebases and forks copy much faster.** A guest's writes to msb exec, which

@@ -177,6 +177,7 @@ function NewChatPage() {
               autoFocus
               error={error}
               mentionsIn={{ env, sandbox: sandbox.id }}
+              draft={`new-chat:${sandbox.id}`}
             />
           </>
         )}
