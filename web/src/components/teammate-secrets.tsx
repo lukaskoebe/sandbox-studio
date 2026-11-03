@@ -4,6 +4,7 @@ import { KeyIcon, PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  stickyEndOnCard,
   Table,
   TableBody,
   TableCell,
@@ -90,7 +91,7 @@ export function TeammateSecrets({
                 <TableHead>Name</TableHead>
                 <TableHead>Scope</TableHead>
                 <TableHead>Hosts</TableHead>
-                <TableHead className="sticky right-0 bg-card">
+                <TableHead className={stickyEndOnCard}>
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
@@ -116,7 +117,7 @@ export function TeammateSecrets({
                   <TableCell className="whitespace-normal">
                     <SecretHosts secret={row.secret} />
                   </TableCell>
-                  <TableCell className="sticky right-0 bg-card">
+                  <TableCell className={stickyEndOnCard}>
                     {row.inherited ? null : editable(row.secret, managed) ? (
                       <div className="flex justify-end gap-0.5">
                         <Button

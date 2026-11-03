@@ -19,7 +19,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn("[&_tr]:border-b [&_tr]:hover:bg-transparent", className)}
       {...props}
     />
   )
@@ -53,7 +53,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "h-(--wb-row) border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "group/row h-(--wb-row) border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
         className
       )}
       {...props}
@@ -100,7 +100,19 @@ function TableCaption({
   )
 }
 
+/**
+ * A column that stays at the right edge while the table scrolls sideways. Its cells are opaque,
+ * so they take the row's hover tint as an opaque color of their own. onCard is for a table on a
+ * card rather than on the page.
+ */
+const stickyEnd =
+  "sticky right-0 bg-background transition-colors group-hover/row:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))] [thead_&]:group-hover/row:bg-background"
+const stickyEndOnCard =
+  "sticky right-0 bg-card transition-colors group-hover/row:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] [thead_&]:group-hover/row:bg-card"
+
 export {
+  stickyEnd,
+  stickyEndOnCard,
   Table,
   TableHeader,
   TableBody,

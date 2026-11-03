@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import {
+  stickyEnd,
   Table,
   TableBody,
   TableCell,
@@ -42,7 +43,7 @@ import {
 import { SectionHeader } from "@/components/section-header"
 import { $api, type Secret } from "@/lib/api/client"
 import { groupByScope, scopeValue, type SecretGroup } from "@/lib/secrets"
-import { formatAge } from "@/lib/utils"
+import { cn, formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings/secrets")({
   // edit opens the dialog of the secret with that ID, as a secret.rejected card does.
@@ -241,7 +242,7 @@ function ScopeSection({
               <TableHead className="w-[22%]">Hosts</TableHead>
               <TableHead>{logins ? "Username" : "Placeholder"}</TableHead>
               <TableHead className="w-24">Updated</TableHead>
-              <TableHead className="sticky right-0 w-24 bg-background">
+              <TableHead className={cn(stickyEnd, "w-24")}>
                 <span className="sr-only">Actions</span>
               </TableHead>
             </TableRow>
@@ -290,7 +291,7 @@ function ScopeSection({
                 <TableCell className="text-muted-foreground">
                   {formatAge(s.updatedAt)}
                 </TableCell>
-                <TableCell className="sticky right-0 bg-background">
+                <TableCell className={stickyEnd}>
                   {logins ? (
                     <div className="flex justify-end">
                       <DeleteSecret env={env} secret={s} />

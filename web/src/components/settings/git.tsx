@@ -36,6 +36,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import {
+  stickyEnd,
   Table,
   TableBody,
   TableCell,
@@ -43,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 import { Ident } from "@/components/ident"
 import {
   APIFields,
@@ -138,7 +140,7 @@ export function GitSettings({
                     <TableHead>Name</TableHead>
                     <TableHead>Forge</TableHead>
                     <TableHead>Remote URL</TableHead>
-                    <TableHead className="sticky right-0 bg-background">
+                    <TableHead className={stickyEnd}>
                       <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
@@ -383,9 +385,13 @@ function ForgeRow({
           </div>
         )}
       </TableCell>
-      <TableCell className="align-top">
+      {/* Takes the width left and truncates, so the table fits rather than scrolls. */}
+      <TableCell className="w-full max-w-0 min-w-40 align-top">
         <div className="flex items-center gap-1">
-          <span className="block max-w-80 truncate font-mono text-muted-foreground">
+          <span
+            className="block min-w-0 truncate font-mono text-muted-foreground"
+            title={remote}
+          >
             {remote}
           </span>
           <Button
@@ -399,7 +405,7 @@ function ForgeRow({
           </Button>
         </div>
       </TableCell>
-      <TableCell className="sticky right-0 bg-background align-top">
+      <TableCell className={cn(stickyEnd, "align-top")}>
         <div className="flex justify-end gap-0.5">
           {forge.kind === "ssh" ? (
             <Button

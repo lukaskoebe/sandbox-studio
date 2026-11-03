@@ -14,6 +14,8 @@
 - A review of a push or pull request with thousands of changed lines opens, scrolls and takes
   typing without lag: the diff renders in chunks, each only while it is near the view, and the
   note and comments no longer render the whole diff again with every key.
+- Tables no longer tint only part of a row on hover, and their headers don't tint at all; the
+  git forges table also fits a long remote URL without scrolling sideways.
 - An agent that asked for the browser back is told it has it as soon as the user allows it,
   rather than at times that the user hasn't answered yet.
 
