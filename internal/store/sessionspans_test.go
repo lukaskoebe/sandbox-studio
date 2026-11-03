@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -82,5 +84,40 @@ func TestSessionSpansFollowWhatIsLive(t *testing.T) {
 	}
 	if len(left) != 2 {
 		t.Errorf("after pruning = %+v, want main and other's", left)
+	}
+}
+
+// Watchers that sync the same sandbox at once open each session once.
+func TestSessionSpansSyncedAtOnceOpenOnce(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "studio.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, err := s.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Unix(1_800_000_000, 0)
+	scope := SpanScope{EnvironmentID: env.ID, SandboxID: "sb", Kind: SpanTerminal}
+	live := []SessionSpan{{Key: "main@1", Label: "main"}, {Key: "dev@2", Label: "dev"}}
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := s.SyncSessionSpans(ctx, scope, live, at); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	spans, err := s.SessionSpans(ctx, env.ID, at.Add(-time.Hour), at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spans) != 2 {
+		t.Fatalf("%d spans: %+v", len(spans), spans)
 	}
 }

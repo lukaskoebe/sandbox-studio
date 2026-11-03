@@ -84,6 +84,10 @@ type SpanScope struct {
 // OpenedAt, or at if that is unset or later. A span that stays open keeps its row, though its
 // label follows live's. It reports whether a span opened or closed.
 func (s *Store) SyncSessionSpans(ctx context.Context, scope SpanScope, live []SessionSpan, at time.Time) (bool, error) {
+	// Watchers sync the same sandbox at once (a tab listing its terminals while the watcher
+	// passes): one at a time, each reading what the last one wrote.
+	s.spansMu.Lock()
+	defer s.spansMu.Unlock()
 	where, args := "environment_id = ? AND kind = ? AND closed_at IS NULL", []any{scope.EnvironmentID, scope.Kind}
 	if scope.SandboxID != "" {
 		where += " AND sandbox_id = ?"
@@ -132,7 +136,7 @@ func (s *Store) SyncSessionSpans(ctx context.Context, scope SpanScope, live []Se
 		if opened.IsZero() || opened.After(at) {
 			opened = at
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO session_spans ("+spanCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+		if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO session_spans ("+spanCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
 			NewID(), scope.EnvironmentID, sp.SandboxID, scope.Kind, sp.Key, sp.Parent, cutLabel(sp.Label), sp.ChatID,
 			sp.TeammateID, sp.Harness, opened.Unix()); err != nil {
 			return false, err

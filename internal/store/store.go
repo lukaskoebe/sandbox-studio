@@ -40,6 +40,7 @@ type Store struct {
 	db                  *sql.DB
 	buildWorkerLockPath string
 	buildWorkerMu       sync.Mutex
+	spansMu             sync.Mutex // serializes SyncSessionSpans
 }
 
 // Open opens (and migrates) the database at path. Use ":memory:" in tests.

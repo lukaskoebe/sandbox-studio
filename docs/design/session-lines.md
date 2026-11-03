@@ -43,6 +43,10 @@ Terminals, browser sessions and previews are only ever live, so Studio records t
 Each pass hands the store what is live for one sandbox and kind (`SyncSessionSpans`): spans
 that are no longer live close at that time, new ones open at the time the guest gives them
 (a terminal's creation, a program's start), and a span that stays open takes its newest label.
+Several callers sync the same sandbox (the watcher, a tab listing its terminals, the agent's
+terminal tools), so syncs run one at a time and a session has at most one open span, which a
+unique index keeps (migration 059, which also removed the copies that concurrent syncs had
+recorded before).
 Once every environment's sandboxes were listed, spans of sandboxes the pass no longer saw close
 too (`CloseSessionSpansExcept`), so a deleted or stopped sandbox doesn't keep sessions open.
 Closed spans are kept for 14 days. Sandbox IDs carry no foreign key, so the history outlives a

@@ -856,3 +856,59 @@ func TestMigrateHomeSize(t *testing.T) {
 		t.Fatalf("plain: %+v, %v", sb, err)
 	}
 }
+
+// Sessions that watchers recorded several times at once keep one copy each; a copy opened
+// later while one was open closes as it opened, and open sessions are unique from then on.
+func TestMigrateSessionSpansUnique(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 58); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`,
+		`INSERT INTO session_spans (id, environment_id, sandbox_id, kind, key, opened_at, closed_at) VALUES
+			('a1', 'env', 'sb', 'terminal', 'main@1', 100, NULL),
+			('a2', 'env', 'sb', 'terminal', 'main@1', 100, NULL),
+			('a3', 'env', 'sb', 'terminal', 'main@1', 100, NULL),
+			('b1', 'env', 'sb', 'terminal', 'dev@2', 200, 300),
+			('b2', 'env', 'sb', 'terminal', 'dev@2', 200, 300),
+			('c1', 'env', 'sb', 'preview', '8080', 100, NULL),
+			('c2', 'env', 'sb', 'preview', '8080', 150, NULL),
+			('d1', 'env', 'other', 'terminal', 'main@1', 100, NULL)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.QueryContext(ctx, "SELECT id, coalesce(closed_at, 0) FROM session_spans ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	got := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var closed int64
+		if err := rows.Scan(&id, &closed); err != nil {
+			t.Fatal(err)
+		}
+		got[id] = closed
+	}
+	want := map[string]int64{"a1": 0, "b1": 300, "c1": 0, "c2": 150, "d1": 0}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("spans %v, want %v", got, want)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO session_spans (id, environment_id, sandbox_id, kind, key, opened_at) VALUES ('a4', 'env', 'sb', 'terminal', 'main@1', 400)`); err == nil {
+		t.Error("a second open copy was accepted")
+	}
+}
