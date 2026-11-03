@@ -82,6 +82,18 @@ func homeImport(src io.Reader) error {
 	return guest.ImportHome(guest.Home, bufio.NewReaderSize(src, 1<<20))
 }
 
+func toolsExport(dst, warn io.Writer, zstd bool) error {
+	w := bufio.NewWriterSize(dst, 1<<20)
+	if err := guest.ExportTools(guest.MiseDir, w, warn, compression(zstd)); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
+func toolsImport(src io.Reader) error {
+	return guest.ImportTools(guest.MiseDir, bufio.NewReaderSize(src, 1<<20), os.Stderr)
+}
+
 func dockerExport(dst, warn io.Writer, zstd bool) error {
 	w := bufio.NewWriterSize(dst, 1<<20)
 	if err := guest.ExportDocker(agentproto.DockerDir, w, warn, compression(zstd)); err != nil {

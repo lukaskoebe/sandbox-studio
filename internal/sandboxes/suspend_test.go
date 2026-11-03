@@ -180,7 +180,7 @@ func TestSuspendedSandboxRefusesForkRebaseAndCheckpoint(t *testing.T) {
 	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy"); !errors.Is(err, ErrLifecycleState) {
 		t.Fatalf("Fork err = %v", err)
 	}
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID); !errors.Is(err, ErrLifecycleState) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrLifecycleState) {
 		t.Fatalf("Rebase err = %v", err)
 	}
 	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "cp"); !errors.Is(err, ErrCheckpointState) {

@@ -226,7 +226,7 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	}
 
 	start = time.Now()
-	rebased, err := mgr.Rebase(ctx, env.ID, src.ID, tplB)
+	rebased, err := mgr.Rebase(ctx, env.ID, src.ID, tplB, false)
 	if err != nil {
 		return fmt.Errorf("rebase running: %w", err)
 	}
@@ -251,7 +251,7 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	}
 
 	start = time.Now()
-	rebased, err = mgr.Rebase(ctx, env.ID, fork.ID, tplB)
+	rebased, err = mgr.Rebase(ctx, env.ID, fork.ID, tplB, false)
 	if err != nil {
 		return fmt.Errorf("rebase stopped: %w", err)
 	}

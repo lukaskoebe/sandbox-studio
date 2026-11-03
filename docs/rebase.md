@@ -73,7 +73,8 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
 
 ## Rebase
 
-`POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}`, or
+`POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}` (and
+`"keepTools": true` to [keep the mise tools](#keeping-tools)), or
 without a template ID onto the current base image, which is what new sandboxes get. A rebase
 onto the base keeps the sandbox's resources; one from a template sandbox drops the template's
 tools. The rebase dialog offers the base first, then the ready templates, and picks the
@@ -94,7 +95,7 @@ request did before it ran in the background.
 2. It writes a durable rebase record with generations `n` and `n+1`.
 3. It stops the source gracefully and starts it again in transfer mode.
 4. It creates generation `n+1` from the new template in transfer mode and copies the
-   workspace and the home.
+   workspace and the home, and with `keepTools` the tools (below).
 5. It stops the source. A sandbox that was running is booted; a stopped one is stopped.
 6. One catalog update switches generation, template, resources and the base it records.
 7. Studio removes the old VM and ends the record.
@@ -113,12 +114,36 @@ removed and the source stays stopped, after it the source is removed. Lifecycle 
 that sandbox are refused until this succeeds.
 
 Docker images, containers and volumes are lost, and so is what was installed outside
-`/workspace` and `/home/agent`: apt packages, `/etc` changes and tools from `mise use -g`
-(in `/opt/mise`). Tmux sessions end. Checkpoints stay with
+`/workspace` and `/home/agent`: apt packages, `/etc` changes and, unless the rebase keeps
+them, the tools `mise use` installed (in `/opt/mise`). Tmux sessions end. Checkpoints stay with
 their generation. The catalog's switch to the new generation records a `rebase` event in the
 sandbox's history, see [lineage](sandboxes.md#lineage). With a home disk on the new generation, harness sessions and logins
 survive, and a chat resumes its agent session in the new generation
 ([chat mode](design/chat-mode.md)).
+
+### Keeping tools
+
+`mise use -g` pins a tool in `/opt/mise/config/config.toml` and installs it in
+`/opt/mise/installs`, on the root disk, which the new template replaces; a project's
+`mise use` pins it in the workspace, but its install is there too. With `{"keepTools": true}`
+(the rebase dialog's **Keep the tools installed with mise use**, ticked by default) the copy
+also runs `studio-agent tools-export` in the source and `tools-import` in the target, both as
+root (`internal/guest/tools.go`):
+
+- The export holds `installs`, `plugins` and `config` of `/opt/mise`; shims and caches stay
+  behind. It is capped at 32 GiB (`ErrToolsTooLarge`).
+- The import extracts it beside the target's `/opt/mise` and moves in each toolchain version,
+  version alias and plugin the target lacks. One the template has stays the template's.
+- The source's global pins (`config.toml` over `conf.d/*.toml`) that the target's global
+  config doesn't pin go to `/opt/mise/config/conf.d/studio-kept-tools.toml`, so they stay on
+  the PATH while the new template's pins win; the next rebase carries that file along as
+  part of the global config. Other settings of the old config are not kept. A config that
+  doesn't parse keeps the toolchains without their pins, with a warning.
+- `mise reshim` runs as the agent user last.
+
+Toolchains are copied as they were built, for the old template's system libraries; one that
+links against a library the new base lacks needs `mise install` again. A disk resize, which
+keeps the template, doesn't copy tools.
 
 ## Disk resize
 

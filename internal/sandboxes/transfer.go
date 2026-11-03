@@ -21,6 +21,8 @@ var (
 	ErrWorkspaceTooLarge = errors.New("workspace does not fit the target disk")
 	// ErrHomeTooLarge means the copied home directory does not fit the target's home disk.
 	ErrHomeTooLarge = errors.New("home directory /home/agent does not fit the home disk; delete caches in it, or give it a bigger home disk, and try again")
+	// ErrToolsTooLarge means the toolchains a rebase would keep are more than toolsLimit.
+	ErrToolsTooLarge = errors.New("the tools in /opt/mise are too large to keep; uninstall the versions you no longer use with mise uninstall, or rebase without keeping tools")
 	// ErrTemplateWithoutHome means a sandbox with a home disk can't move to a template built
 	// before the home directory existed: that template has no home disk to copy into.
 	ErrTemplateWithoutHome = errors.New("this template was built before the home directory existed, so it cannot keep this sandbox's home; rebuild the template")
@@ -61,6 +63,15 @@ func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM
 		return nil
 	}
 	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: int64(homeMiB) << 20, err: ErrHomeTooLarge})
+}
+
+// toolsLimit caps the toolchains a rebase that keeps tools copies. They land on the target's
+// root disk, which has no size of its own to check against.
+const toolsLimit = 32 << 30
+
+// copyTools merges the toolchains and global mise config of src into dst's.
+func copyTools(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM) error {
+	return copyTree(ctx, rt, src, dst, runtime.TreeTools, &limitWriter{left: toolsLimit, err: ErrToolsTooLarge})
 }
 
 // copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The

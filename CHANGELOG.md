@@ -19,6 +19,9 @@
   GitLab forge, subgroup projects included. A posted review becomes an approval, a discussion
   for each line comment and a note with the summary; GitLab has no "request changes" verdict,
   so that is a note starting with **Changes requested.**
+- Rebasing a sandbox can keep the tools installed with `mise use`: the dialog's "Keep the tools
+  installed with mise use", ticked by default, copies the toolchains the new template lacks and
+  keeps their pins, while the template's own versions stay the default.
 - Settings → General has an "Update now" button when an update is available, which installs it
   without waiting for the next check, and "Restart now" while an installed update waits for
   sandboxes to go idle.

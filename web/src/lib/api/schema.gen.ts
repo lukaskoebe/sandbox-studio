@@ -1898,7 +1898,7 @@ export interface paths {
         put?: never;
         /**
          * Move a sandbox onto another template or the current base image
-         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. Software installed outside /workspace and the home, such as apt packages, is lost. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
+         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. Software installed outside /workspace and the home, such as apt packages, is lost, and so are the tools mise use installed unless keepTools is set. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
          */
         post: operations["rebaseSandbox"];
         delete?: never;
@@ -5480,6 +5480,8 @@ export interface components {
             text: string;
         };
         RebaseInBody: {
+            /** @description Also keep the toolchains in /opt/mise, what mise use installed: versions the new template lacks are copied, and the global pins it doesn't have are kept in /opt/mise/config/conf.d/studio-kept-tools.toml */
+            keepTools?: boolean;
             /** @description A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources */
             templateId?: string;
         };

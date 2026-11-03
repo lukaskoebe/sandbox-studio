@@ -20,15 +20,17 @@ import (
 )
 
 // transferFake adds transfer mode and tree copies to fakeSandboxRuntime. A workspace, a
-// home and Docker's data are a byte string per VM name. Workspace copies record
-// export:<vm> and import:<vm>, home copies export-home:<vm> and import-home:<vm>, and
-// Docker copies export-docker:<vm> and import-docker:<vm>.
+// home, Docker's data and the tools are a byte string per VM name. Workspace copies record
+// export:<vm> and import:<vm>, home copies export-home:<vm> and import-home:<vm>, Docker
+// copies export-docker:<vm> and import-docker:<vm>, and tools export-tools:<vm> and
+// import-tools:<vm>.
 type transferFake struct {
 	*fakeSandboxRuntime
 	mu         sync.Mutex
 	workspaces map[string][]byte
 	homes      map[string][]byte
 	dockers    map[string][]byte
+	tools      map[string][]byte
 	specs      map[string]runtime.Spec
 	labels     map[string]map[string]string
 	booted     map[string]bool
@@ -38,7 +40,7 @@ type transferFake struct {
 }
 
 func newTransferFake(f *checkpointFixture) *transferFake {
-	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, dockers: map[string][]byte{}, specs: map[string]runtime.Spec{},
+	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, dockers: map[string][]byte{}, tools: map[string][]byte{}, specs: map[string]runtime.Spec{},
 		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}, busy: map[string]bool{}}
 	f.manager.Runtime = tf
 	f.manager.Templates = perTemplateResolver{}
@@ -87,6 +89,8 @@ func (f *transferFake) trees(tree runtime.Tree) (map[string][]byte, string) {
 		return f.homes, "-home"
 	case runtime.TreeDocker:
 		return f.dockers, "-docker"
+	case runtime.TreeTools:
+		return f.tools, "-tools"
 	}
 	return f.workspaces, ""
 }
@@ -204,7 +208,12 @@ var rebaseResources = resources.Resources{CPUs: 2, MemoryMiB: 1024, MaxMemoryMiB
 // rebaseNow rebases sandbox id and waits for the outcome, as the API's wait=true does: the
 // error of a refused request or of the background rebase, else the view after it.
 func rebaseNow(f *checkpointFixture, id, templateID string) (View, error) {
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, id, templateID); err != nil {
+	return rebaseKeeping(f, id, templateID, false)
+}
+
+// rebaseKeeping is rebaseNow, keeping the tools in /opt/mise with keepTools.
+func rebaseKeeping(f *checkpointFixture, id, templateID string, keepTools bool) (View, error) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, id, templateID, keepTools); err != nil {
 		return View{}, err
 	}
 	if err := f.manager.Wait(f.ctx, id); err != nil {
@@ -237,7 +246,7 @@ func TestRebaseAnswersAtOnceAndPublishesItsSteps(t *testing.T) {
 	blocking := &blockingTransfer{transferFake: tf, release: make(chan struct{})}
 	f.manager.Runtime = blocking
 
-	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +335,7 @@ func TestRebaseOfStoppedSandboxHasNoBootStep(t *testing.T) {
 	f := newCheckpointFixture(t)
 	newTransferFake(f)
 	template := rebaseTemplate(t, f, rebaseResources)
-	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -536,7 +545,7 @@ func TestRebaseRecoveryRollsBackOrFinishes(t *testing.T) {
 func TestRebaseRequiresTemplateInSameEnvironment(t *testing.T) {
 	f := newCheckpointFixture(t)
 	newTransferFake(f)
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, "missing"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, "missing", false); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("missing template: err = %v", err)
 	}
 	if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {
@@ -553,7 +562,7 @@ func TestRebaseAndForkAreSerialized(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID); !errors.Is(err, ErrBusy) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrBusy) {
 		t.Fatalf("Rebase err = %v, want ErrBusy", err)
 	}
 	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy"); !errors.Is(err, ErrBusy) {
@@ -770,5 +779,51 @@ func TestNewSandboxesRecordTheirBase(t *testing.T) {
 	// msb's catalog may name a Docker Hub image in full.
 	if f.manager.BaseOutdated("docker.io/library/sandbox-studio-base:dev") || !f.manager.BaseOutdated("sandbox-studio-base:v0.6.1") || f.manager.BaseOutdated("") {
 		t.Fatal("BaseOutdated compares the wrong references")
+	}
+}
+
+// A rebase copies the tools in /opt/mise only when asked to keep them, after the workspace
+// and the home; the guest merges them into the new template's (guest.ImportTools).
+func TestRebaseKeepsToolsWhenAsked(t *testing.T) {
+	for _, keep := range []bool{false, true} {
+		f := newCheckpointFixture(t)
+		tf := newTransferFake(f)
+		template := rebaseTemplate(t, f, rebaseResources)
+		source := VMName(f.sandbox)
+		tf.setStatus(source, runtime.StatusRunning)
+		tf.setWorkspace(source, "files")
+		tf.mu.Lock()
+		tf.tools[source] = []byte("node 20")
+		tf.mu.Unlock()
+
+		view, err := rebaseKeeping(f, f.sandbox.ID, template.ID, keep)
+		if err != nil {
+			t.Fatal(err)
+		}
+		target := VMName(view.Sandbox)
+		tf.mu.Lock()
+		got := string(tf.tools[target])
+		tf.mu.Unlock()
+		if keep && (got != "node 20" || tf.countCall("export-tools:"+source) != 1 || tf.countCall("import-tools:"+target) != 1) {
+			t.Fatalf("kept tools %q, calls %v", got, tf.calls)
+		}
+		if !keep && (got != "" || tf.countCall("export-tools:"+source) != 0) {
+			t.Fatalf("tools copied without asking: %q, calls %v", got, tf.calls)
+		}
+	}
+
+	// A failed tools copy fails the rebase, which leaves the sandbox as it was.
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.setWorkspace(source, "files")
+	tf.fail("export-tools:"+source, ErrToolsTooLarge)
+	if _, err := rebaseKeeping(f, f.sandbox.ID, template.ID, true); !errors.Is(err, ErrToolsTooLarge) {
+		t.Fatalf("err = %v", err)
+	}
+	if view, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID); err != nil || view.TemplateID != "" || view.Status != runtime.StatusRunning {
+		t.Fatalf("after the failed rebase: %+v %v", view, err)
 	}
 }

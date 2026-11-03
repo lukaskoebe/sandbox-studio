@@ -54,6 +54,14 @@ func homeImport(io.Reader) error {
 	return errors.New("studio-agent home-import only runs inside Linux sandboxes")
 }
 
+func toolsExport(io.Writer, io.Writer, bool) error {
+	return errors.New("studio-agent tools-export only runs inside Linux sandboxes")
+}
+
+func toolsImport(io.Reader) error {
+	return errors.New("studio-agent tools-import only runs inside Linux sandboxes")
+}
+
 func dockerExport(io.Writer, io.Writer, bool) error {
 	return errors.New("studio-agent docker-export only runs inside Linux sandboxes")
 }

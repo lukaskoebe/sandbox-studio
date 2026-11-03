@@ -15,15 +15,19 @@ const HomePath = "/home/agent"
 // Tree is a directory that fork, rebase and export copy between VMs.
 type Tree string
 
-// The copied trees: the workspace, the agent user's home, and Docker's data, which only a
-// disk resize copies.
+// The copied trees: the workspace, the agent user's home, Docker's data, which only a disk
+// resize copies, and the toolchains in /opt/mise, which a rebase that keeps tools merges into
+// the new template's.
 const (
 	TreeWorkspace Tree = "workspace"
 	TreeHome      Tree = "home"
 	TreeDocker    Tree = "docker"
+	TreeTools     Tree = "tools"
 )
 
-func (t Tree) known() bool { return t == TreeWorkspace || t == TreeHome || t == TreeDocker }
+func (t Tree) known() bool {
+	return t == TreeWorkspace || t == TreeHome || t == TreeDocker || t == TreeTools
+}
 
 // ExportTree streams the archive of a tree of a running VM to w, compressed with zstd when
 // fast is set and with gzip otherwise. It runs `studio-agent <tree>-export` as root. The

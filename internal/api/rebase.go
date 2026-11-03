@@ -24,6 +24,7 @@ func (s *Server) registerTransfers(api huma.API) {
 		Wait bool   `query:"wait" doc:"Answer once the rebase has ended, with the rebased sandbox or why it failed, instead of at once"`
 		Body struct {
 			TemplateID string `json:"templateId,omitempty" doc:"A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources"`
+			KeepTools  bool   `json:"keepTools,omitempty" doc:"Also keep the toolchains in /opt/mise, what mise use installed: versions the new template lacks are copied, and the global pins it doesn't have are kept in /opt/mise/config/conf.d/studio-kept-tools.toml"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -31,7 +32,7 @@ func (s *Server) registerTransfers(api huma.API) {
 		Path: "/api/environments/{env}/sandboxes/{id}/rebase", Tags: []string{"sandboxes"},
 		Summary: "Move a sandbox onto another template or the current base image",
 		Description: "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. " +
-			"Software installed outside /workspace and the home, such as apt packages, is lost. " +
+			"Software installed outside /workspace and the home, such as apt packages, is lost, and so are the tools mise use installed unless keepTools is set. " +
 			"Docker images, containers and volumes are lost. Tmux sessions end. " +
 			"A running sandbox is stopped for the copy and started again; a stopped one stays stopped. " +
 			"It returns at once in state creating, with the steps in progress; the copy runs in the background. " +
@@ -40,7 +41,7 @@ func (s *Server) registerTransfers(api huma.API) {
 	}, func(ctx context.Context, in *rebaseIn) (*sandboxOut, error) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), transferTimeout)
 		defer cancel()
-		view, err := s.Sandboxes.Rebase(ctx, in.Env, in.ID, in.Body.TemplateID)
+		view, err := s.Sandboxes.Rebase(ctx, in.Env, in.ID, in.Body.TemplateID, in.Body.KeepTools)
 		if err != nil || !in.Wait {
 			return &sandboxOut{view}, apiError(err)
 		}

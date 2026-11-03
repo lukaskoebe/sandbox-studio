@@ -18,7 +18,8 @@ import (
 // when the target has a home disk, as the default image does: a
 // sandbox with one can't move to a legacy template, which has none. Docker state and tmux
 // sessions end. The sandbox keeps its identity and egress, and its checkpoints stay with
-// their generations.
+// their generations. With keepTools the toolchains and global mise config in /opt/mise,
+// what `mise use` installed, are merged into the template's (docs/sandboxes.md).
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
 //
@@ -26,8 +27,8 @@ import (
 // rebase runs in the background, holding the sandbox, and publishes its steps as a fork
 // does; Wait returns its outcome. A failed rebase leaves the sandbox on its old template,
 // and its view keeps the step that failed until the next rebase, ClearProgress or a delete.
-func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
-	return m.startRebase(ctx, envID, id, OperationRebase, func(sb store.Sandbox) (store.RebaseOperation, error) {
+func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keepTools bool) (View, error) {
+	return m.startRebase(ctx, envID, id, OperationRebase, keepTools, func(sb store.Sandbox) (store.RebaseOperation, error) {
 		resolved := resources.Resources{
 			CPUs: int64(sb.CPUs), MemoryMiB: int64(sb.MemoryMiB), MaxMemoryMiB: int64(sb.MaxMemoryMiB),
 			WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB), HomeMiB: int64(sb.HomeMiB),
@@ -59,8 +60,8 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 }
 
 // startRebase runs a rebase or a disk resize, operation, of a running or stopped sandbox:
-// plan says where it goes, and the rest is the same.
-func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, plan func(store.Sandbox) (store.RebaseOperation, error)) (View, error) {
+// plan says where it goes, and the rest is the same. keepTools also copies /opt/mise.
+func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, keepTools bool, plan func(store.Sandbox) (store.RebaseOperation, error)) (View, error) {
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -122,14 +123,14 @@ func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, 
 		timeout = diskResizeTimeout
 	}
 	m.background(sb, timeout, unlock, func(ctx context.Context) error {
-		return m.rebase(ctx, rt, sb, req, image, wasRunning)
+		return m.rebase(ctx, rt, sb, req, image, wasRunning, keepTools)
 	})
 	return m.acceptedView(ctx, sb), nil
 }
 
 // rebase runs a rebase that Rebase accepted: it records it durably, builds and fills the
 // new generation and switches the catalog to it, or rolls back.
-func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning bool) error {
+func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning, keepTools bool) error {
 	op, err := m.Store.BeginRebase(ctx, req)
 	if err != nil {
 		return err
@@ -138,7 +139,7 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 		return m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, op.Kind == store.RebaseDisks); err != nil {
+	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, op.Kind == store.RebaseDisks, keepTools); err != nil {
 		return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
@@ -175,8 +176,9 @@ func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 	return sb
 }
 
-// rebaseInto builds and fills target, copying Docker's data too when docker is set.
-func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning, docker bool) error {
+// rebaseInto builds and fills target, copying Docker's data too when docker is set and the
+// toolchains in /opt/mise when tools is.
+func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning, docker, tools bool) error {
 	if wasRunning {
 		if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
 			return err
@@ -203,6 +205,11 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 	m.advance(sb.ID, StepCopy)
 	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, target.HomeMiB); err != nil {
 		return err
+	}
+	if tools {
+		if err := copyTools(ctx, rt, ownedVM(sb), ownedVM(target)); err != nil {
+			return err
+		}
 	}
 	if docker {
 		limit := &limitWriter{left: int64(target.DockerMiB) << 20, err: ErrDockerTooLarge}

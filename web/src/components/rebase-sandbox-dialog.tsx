@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
 import { formatMiB } from "@/components/sandbox-details"
 import { TemplateResources } from "@/components/template-resources"
@@ -75,10 +76,10 @@ export function RebaseSandboxDialog({
           sandbox={sandbox}
           pending={pending}
           failure={rebase.isError ? errorMessage(rebase.error) : undefined}
-          onSubmit={(templateId) =>
+          onSubmit={(templateId, keepTools) =>
             rebase.mutate({
               params: { path: { env, id: sandbox.id } },
-              body: { templateId },
+              body: { templateId, keepTools },
             })
           }
           onCancel={() => handleOpenChange(false)}
@@ -101,11 +102,15 @@ function RebaseForm({
   pending: boolean
   /** Why the last rebase failed. It stays visible until the dialog closes. */
   failure?: string
-  /** The template to rebase onto, or "" for the current base image. */
-  onSubmit: (templateId: string) => void
+  /**
+   * The template to rebase onto, or "" for the current base image, and whether to keep the
+   * tools in /opt/mise.
+   */
+  onSubmit: (templateId: string, keepTools: boolean) => void
   onCancel: () => void
 }) {
   const [picked, setPicked] = useState<string>()
+  const [keepTools, setKeepTools] = useState(true)
   const templates = $api.useQuery("get", "/api/environments/{env}/templates", {
     params: { path: { env } },
   })
@@ -132,7 +137,7 @@ function RebaseForm({
       onSubmit={(event) => {
         event.preventDefault()
         if (!ready || pending || choice === undefined) return
-        onSubmit(choice)
+        onSubmit(choice, keepTools)
       }}
     >
       <DialogHeader>
@@ -228,6 +233,11 @@ function RebaseForm({
               sessions
             </li>
             <li>chats and checkpoints</li>
+            {keepTools && (
+              <li>
+                tools from <span className="font-mono">mise use</span>
+              </li>
+            )}
           </ul>
         </div>
         <div className="grid content-start gap-1">
@@ -237,13 +247,33 @@ function RebaseForm({
           <ul className="grid gap-0.5">
             <li>Docker images and volumes</li>
             <li>
-              apt packages, tools from{" "}
-              <span className="font-mono">mise use -g</span>
+              apt packages
+              {!keepTools && (
+                <>
+                  , tools from <span className="font-mono">mise use</span>
+                </>
+              )}
             </li>
             <li>running terminals</li>
           </ul>
         </div>
       </section>
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={keepTools}
+          onCheckedChange={setKeepTools}
+          disabled={pending}
+          className="mt-0.5"
+        />
+        <span>
+          Keep the tools installed with{" "}
+          <span className="font-mono">mise use</span>
+          <span className="block text-muted-foreground">
+            Copies the versions the new template lacks; for a tool both have,
+            the template&apos;s version stays the default.
+          </span>
+        </span>
+      </label>
       <p className="text-muted-foreground">
         {sandbox.status === "running"
           ? "It restarts after the copy."

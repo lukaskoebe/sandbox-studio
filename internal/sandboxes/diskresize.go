@@ -34,7 +34,7 @@ type DiskSizes struct {
 // records a disks event. It answers at once with the sandbox in state creating; Wait returns
 // the outcome, and a failed resize leaves the sandbox as it was.
 func (m *Manager) ResizeDisks(ctx context.Context, envID, id string, sizes DiskSizes) (View, error) {
-	return m.startRebase(ctx, envID, id, OperationDisks, func(sb store.Sandbox) (store.RebaseOperation, error) {
+	return m.startRebase(ctx, envID, id, OperationDisks, false, func(sb store.Sandbox) (store.RebaseOperation, error) {
 		if sizes.HomeMiB != 0 && sb.HomeMiB == 0 {
 			return store.RebaseOperation{}, ErrNoHomeDisk
 		}

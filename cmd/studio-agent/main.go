@@ -65,6 +65,18 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: home-import: %v\n", err)
 			os.Exit(1)
 		}
+	case "tools-export":
+		// The same for the toolchains and global config in /opt/mise, which a rebase that
+		// keeps tools copies.
+		if err := export(toolsExport); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: tools-export: %v\n", err)
+			os.Exit(1)
+		}
+	case "tools-import":
+		if err := toolsImport(os.Stdin); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: tools-import: %v\n", err)
+			os.Exit(1)
+		}
 	case "docker-export":
 		// The same for Docker's data, which a disk resize copies with Docker stopped.
 		if err := export(dockerExport); err != nil {
@@ -194,7 +206,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|tools-export|tools-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

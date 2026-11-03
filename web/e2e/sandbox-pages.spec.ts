@@ -258,6 +258,16 @@ test("a computer on an older base says so and rebases onto the current one", asy
   await expect(dialog.getByText("Keeps its resources: 2 CPU")).toBeVisible()
   const lost = dialog.getByRole("region", { name: "What the rebase changes" })
   await expect(lost).toContainText("Docker images and volumes")
+  // The tools mise use installed are kept unless the user unticks it.
+  const keepTools = dialog.getByRole("checkbox", {
+    name: /Keep the tools installed with mise use/,
+  })
+  await expect(keepTools).toBeChecked()
+  await expect(lost).toContainText(
+    "chats and checkpointstools from mise useLost"
+  )
+  await keepTools.click()
+  await expect(lost).toContainText("apt packages, tools from mise use")
   await expect(dialog.getByRole("button", { name: "Rebase" })).toBeEnabled()
   await page.keyboard.press("Escape")
   await expect(dialog).toBeHidden()
