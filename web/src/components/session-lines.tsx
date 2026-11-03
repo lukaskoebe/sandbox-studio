@@ -7,6 +7,7 @@ import {
   buildBranches,
   buildMarks,
   packLanes,
+  sessionsOf,
   type Block,
   type Branch,
   type BranchKind,
@@ -126,6 +127,8 @@ type Row = {
   marks: Mark[]
   born?: number
   last?: number
+  /** Its sessions, a group's previews each counted. */
+  sessions: number
   open: number
 }
 
@@ -201,7 +204,8 @@ export function SessionLines({
         marks: ms,
         born: born.get(s.id),
         last: times.length ? Math.max(...times) : undefined,
-        open: bs.filter((b) => b.end === undefined).length,
+        sessions: bs.flatMap(sessionsOf).length,
+        open: bs.flatMap(sessionsOf).filter((b) => b.end === undefined).length,
       }
     }
     const shown = (r: Row) =>
@@ -396,7 +400,7 @@ const SandboxRow = memo(function SandboxLine({
 }) {
   const s = row.sandbox
   const fork = row.depth > 0
-  const closed = row.branches.length - row.open
+  const closed = row.sessions - row.open
   const status = waiting
     ? "⏸ waiting on you"
     : working
@@ -640,12 +644,12 @@ function FoldedTrack({ row, width, x, right, since, now }: TrackProps) {
       width={width}
       height={FOLDED}
       role="img"
-      aria-label={`${row.sandbox.name}, folded: ${row.branches.length} sessions`}
+      aria-label={`${row.sandbox.name}, folded: ${row.sessions} sessions`}
       className="block"
     >
       <Grid since={since} now={now} x={x} />
       <MainLine row={row} x={x} right={right} y={y} />
-      {row.branches.map((b) => (
+      {row.branches.flatMap(sessionsOf).map((b) => (
         <circle
           key={b.id}
           cx={x(b.start)}
@@ -670,7 +674,9 @@ function branchLabel(b: Branch) {
     case "browser":
       return `browser · ${b.who ? `${b.who}'s session` : "session"} · ${b.title}`
     case "preview":
-      return `preview ${b.title}`
+      return b.group
+        ? `${b.title} · ${[...new Set(b.group.map((p) => p.title))].join(" ")}`
+        : `preview ${b.title}`
   }
 }
 
@@ -809,6 +815,7 @@ function BranchPath({
           search: {
             tab: b.link.tab,
             ...(b.link.term ? { term: b.link.term } : {}),
+            ...(b.link.port ? { port: b.link.port } : {}),
           },
         }
   return (
@@ -817,7 +824,16 @@ function BranchPath({
       aria-label={`${branchLabel(b)}, ${when}`}
       className="group/branch outline-none"
     >
-      <title>{`${branchLabel(b)}\n${when}`}</title>
+      <title>
+        {[
+          `${branchLabel(b)}`,
+          when,
+          ...(b.group ?? []).map(
+            (p) =>
+              `${p.title}  ${clock(p.start)}–${p.end === undefined ? "now" : clock(p.end)}`
+          ),
+        ].join("\n")}
+      </title>
       <path
         d={`${leave} ${back}`}
         fill="none"
@@ -863,6 +879,28 @@ function BranchPath({
           </g>
         )
       })}
+      {/* Where each preview of a group opened, and a ring where it closed. */}
+      {b.group?.flatMap((p) => [
+        p.start >= since && (
+          <circle
+            key={`${p.id}:open`}
+            cx={Math.max(x0 + (before ? 0 : CURVE), x(p.start))}
+            cy={y}
+            r={2.5}
+            fill={color}
+          />
+        ),
+        p.end !== undefined && b.end === undefined && (
+          <circle
+            key={`${p.id}:close`}
+            cx={x(p.end)}
+            cy={y}
+            r={2.5}
+            fill="var(--card)"
+            stroke={color}
+          />
+        ),
+      ])}
       {b.end !== undefined && (
         <circle
           cx={x1}

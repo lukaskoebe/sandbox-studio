@@ -30,10 +30,17 @@ export type Branch = {
   /** The user's own session, such as a shell they opened. */
   yours: boolean
   blocks: Block[]
+  /** A group's previews, which opened around the same time (groupPreviews). */
+  group?: Branch[]
   /** What a click opens. */
   link:
     | { to: "chat"; teammateId: string; chatId: string }
-    | { to: "screen"; tab: "terminal" | "browser" | "preview"; term?: string }
+    | {
+        to: "screen"
+        tab: "terminal" | "browser" | "preview"
+        term?: string
+        port?: number
+      }
 }
 
 /** A lineage event on the sandbox's own line. */
@@ -210,14 +217,76 @@ export function buildBranches(
           title: s.label || `:${s.key}`,
           yours: false,
           blocks: [],
-          link: { to: "screen", tab: "preview" },
+          link: {
+            to: "screen",
+            tab: "preview",
+            port: Number(s.key) || undefined,
+          },
         })
         break
     }
   }
-  for (const list of out.values()) list.sort((a, b) => a.start - b.start)
+  for (const [sandbox, list] of out) {
+    list.sort((a, b) => a.start - b.start)
+    out.set(sandbox, groupPreviews(list))
+  }
   return out
 }
+
+/** Previews that open within this long of each other's span may go on one branch. */
+export const previewGap = 10 * 60 * 1000
+/** How many previews at once make a group. */
+export const previewGroup = 3
+
+/**
+ * Previews come in crowds (a dev server, its HMR socket, a database console), each its own
+ * branch down to the outermost lane. Previews whose spans overlap or follow within previewGap go
+ * on one branch when they are previewGroup or more, its label naming the ports and a click
+ * opening the newest one still open. Branches stay sorted by start.
+ */
+export function groupPreviews(branches: Branch[]): Branch[] {
+  const out: Branch[] = []
+  let crowd: Branch[] = []
+  let end = -Infinity
+  const flush = () => {
+    if (crowd.length >= previewGroup) {
+      // Ports that opened together, in a pass, go in order.
+      crowd.sort(
+        (a, b) =>
+          a.start - b.start ||
+          a.title.localeCompare(b.title, undefined, { numeric: true })
+      )
+      const open = crowd.filter((b) => b.end === undefined)
+      const newest = (open.length ? open : crowd).at(-1)!
+      out.push({
+        id: `previews:${crowd[0].id}`,
+        kind: "preview",
+        start: crowd[0].start,
+        end: open.length ? undefined : Math.max(...crowd.map((b) => b.end!)),
+        title: `${crowd.length} previews`,
+        yours: false,
+        blocks: [],
+        group: crowd,
+        link: newest.link,
+      })
+    } else out.push(...crowd)
+    crowd = []
+  }
+  for (const b of branches) {
+    if (b.kind !== "preview") {
+      out.push(b)
+      continue
+    }
+    if (crowd.length && b.start - end > previewGap) flush()
+    crowd.push(b)
+    end = Math.max(end, b.end ?? Infinity)
+  }
+  flush()
+  return out.sort((a, b) => a.start - b.start)
+}
+
+/** A branch's sessions: a group's previews, or the branch itself. */
+export const sessionsOf = (b: Branch) => b.group ?? [b]
 
 /** The marks of each sandbox's line, and when a fork's line began. */
 export function buildMarks(

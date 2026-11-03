@@ -9,6 +9,8 @@ export type ScreenTab = (typeof screenTabs)[number]
 export type ScreenSearch = {
   tab?: ScreenTab
   term?: string
+  /** The port the Preview tab shows. */
+  port?: number
   review?: string
   fold?: boolean
   /** The screen takes the page, and the conversation is a strip beside it. */
@@ -29,6 +31,7 @@ const text = (value: unknown) =>
 export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   const term = text(s.term) ?? text(s.terminal) ?? text(s.session)
   const review = text(s.review)
+  const port = Number(s.port)
   const panel = text(s.panel)
   const file = text(s.file)
   const files = file ? undefined : text(s.files)
@@ -44,6 +47,7 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   return {
     ...(tab ? { tab } : {}),
     ...(term ? { term } : {}),
+    ...(Number.isInteger(port) && port > 0 && port < 65536 ? { port } : {}),
     ...(review ? { review } : {}),
     ...(files ? { files } : {}),
     ...(file ? { file } : {}),

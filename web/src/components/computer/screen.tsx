@@ -21,7 +21,7 @@ import { ChangesView } from "@/components/computer/changes"
 import { ComputerMenu } from "@/components/computer/computer-menu"
 import { Terminals } from "@/components/computer/terminals"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
-import { PreviewPanel } from "@/components/chat/preview-panel"
+import { PreviewPanel, PreviewsOff } from "@/components/chat/preview-panel"
 import { isGitApproval } from "@/components/git-review"
 import { MergeBanner } from "@/components/merge-fork"
 import { lostVM, useSandboxLifecycle } from "@/components/sandbox-lifecycle"
@@ -116,7 +116,11 @@ export function ComputerScreen({
   chatComputer?: Sandbox
 }) {
   const p = phase(sb)
-  const previews = usePreviewSetting().enabled
+  const previewSetting = usePreviewSetting()
+  const previews = previewSetting.enabled
+  // A link to the Preview tab, such as a preview on Home, shows it while previews are off too,
+  // to say so (PreviewsOff).
+  const previewTab = previews || search.tab === "preview"
   const pending = usePendingApprovals()
   const reviews = (pending.data ?? []).filter(
     (a) => a.sandboxId === sb.id && isGitApproval(a)
@@ -129,7 +133,7 @@ export function ComputerScreen({
   const tabs: ScreenTab[] = [
     "terminal",
     ...(owner ? (["browser"] as const) : []),
-    ...(previews ? (["preview"] as const) : []),
+    ...(previewTab ? (["preview"] as const) : []),
     "changes",
   ]
   const on = p === "ready"
@@ -371,11 +375,23 @@ export function ComputerScreen({
               )}
               {tab === "preview" && (
                 <div className="flex min-h-0 flex-1 flex-col p-3">
-                  <PreviewPanel
-                    env={env}
-                    sandboxId={sb.id}
-                    reloadKey={thread?.turns.filter((t) => t.endedAt).length}
-                  />
+                  {previews ? (
+                    <PreviewPanel
+                      env={env}
+                      sandboxId={sb.id}
+                      reloadKey={thread?.turns.filter((t) => t.endedAt).length}
+                      port={search.port}
+                      onPort={(port) => onChange({ port })}
+                    />
+                  ) : (
+                    previewSetting.loaded && (
+                      <PreviewsOff
+                        env={env}
+                        sandboxId={sb.id}
+                        port={search.port}
+                      />
+                    )
+                  )}
                 </div>
               )}
               {tab === "changes" && (

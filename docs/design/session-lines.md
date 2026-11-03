@@ -8,7 +8,10 @@ in that window branches off its line when it opens and rejoins it when it closes
 - **terminals** below, one block per program that ran in them. A terminal the user opened, with
   no harness and no chat behind it, is drawn as the user's;
 - **browser sessions** below, with a block for each stretch the user drove;
-- **previews** (ports that listened) as dotted branches below.
+- **previews** (ports that listened) as dotted branches below. Three or more previews whose
+  spans overlap or follow within 10 minutes, such as a dev server's ports, share one branch
+  named after the count and the ports, with a dot where each opened and a ring where one
+  closed while the others stayed open (`groupPreviews`).
 
 On the line itself, checkpoints are hollow squares, merges filled squares and forks diamonds;
 restores and moves to a new template are dots. A fork starts its own line, under its source and
@@ -16,7 +19,10 @@ marked ↳, at the time it was forked. The line is solid while the sandbox runs,
 its last activity once it stopped. A sandbox with nothing open folds into a single line with a
 dot where each session opened, and any sandbox can be folded or unfolded; sandboxes that are
 stopped and had nothing in the window are only counted. A branch links to what it draws: a chat
-to its thread, a terminal, the browser or a preview to that tab of the sandbox's screen.
+to its thread, a terminal, the browser or a preview to that tab of the sandbox's screen, a
+preview on its port (`?tab=preview&port=`) and a group of previews on the newest one still
+open. While previews are off the Preview tab still opens from there, saying so, listing the
+ports and offering to turn previews on.
 
 The page is `web/src/components/session-lines.tsx`; turning the data into branches, marks and
 lanes is `web/src/lib/session-lines.ts`.

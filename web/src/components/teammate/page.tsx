@@ -117,6 +117,7 @@ export function TeammatePage({
         ...(rest.computer && rest.computer !== computer?.id
           ? {
               term: undefined,
+              port: undefined,
               review: undefined,
               files: undefined,
               file: undefined,

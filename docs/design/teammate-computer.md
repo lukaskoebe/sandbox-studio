@@ -51,7 +51,7 @@ redirects to the teammate's page with `computer=`, and the old workspace address
 | Sandbox ⋯ menu, details pill, Checkpoint button, status bar | The computer menu (⋯): name, template, size and uptime; CPU and memory meters; Checkpoint now; History and checkpoints; Fork; Merge into …; Rebase; Resources; Connections; Export; Another computer; Suspend or Resume; Delete. Ports are a chip on Preview; the ID and generation are in History. |
 | Workspace tab strip (chat, terminal and review tabs) | Chats are threads. Terminal sessions sit behind a `main ▾` chip on the Terminal tab (new shell, close); a thread's Continue in the terminal opens the teammate's harness in one. Reviews are on Changes. |
 | Side panels Browser / Connections / Files | Browser is a tab. Files and changes are on Changes, under any waiting push. Connections opens from ⋯ as a side sheet. |
-| Previews dropdown | The Preview tab: the framed app with a port chip, Open in a new tab, Open fresh. Hidden while previews are off. |
+| Previews dropdown | The Preview tab: the framed app with a port chip, Open in a new tab, Open fresh. Hidden while previews are off, unless a link asks for it (`?tab=preview`), when it says previews are off and offers to turn them on. |
 | Chat page `/chats/$chat` | Redirects a teammate's chat to `?thread=`. Its header actions (open in terminal, delete) move to the thread header's ⋯. |
 | Merge banner | Above the display, on the screen of the fork. |
 | Sidebar tree: teammate → sandbox → sessions, New chat, All chats | Home; Teammates (avatar, name, one status word or waiting count); Your computers (plain sandboxes with a status dot); footer Settings, version, theme. New chat becomes the composer; All chats stays reachable from Home. |

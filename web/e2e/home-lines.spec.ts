@@ -79,4 +79,41 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   await expect(page).toHaveURL(
     new RegExp(`/teammates/${teammate}\\?thread=${chat.id}`)
   )
+
+  // A crowd of previews goes on one branch, which opens the Preview tab on one of its ports,
+  // saying that previews are off and turning them on there.
+  const previews = await api.json<{ enabled: boolean }>(
+    "GET",
+    "/api/system/previews"
+  )
+  await api.json("PUT", "/api/system/previews", { enabled: false })
+  try {
+    await api.json("PUT", `/api/e2e/sandboxes/${id}/ports`, {
+      ports: [5173, 3000, 8080, 5432],
+    })
+    await page.goto(`/e/${env}`)
+    const crowd = lines.getByRole("link", {
+      name: /^4 previews · :5173 :3000 :5432 :8080, /,
+    })
+    await expect(crowd).toBeVisible({ timeout: 30_000 })
+    await expect(
+      lines.getByRole("link", { name: /^preview :3000, / })
+    ).toHaveCount(0)
+    await crowd.locator("text").last().click()
+    await expect(page).toHaveURL(/tab=preview&port=(3000|8080|5432)/)
+    const off = page.getByText("Previews are off")
+    await expect(off).toBeVisible()
+    await expect(
+      page.getByText(/^Port (3000|8080|5432) can't open here/)
+    ).toBeVisible()
+    await page.getByRole("button", { name: "Turn on previews" }).click()
+    await expect(off).toHaveCount(0)
+    await expect(page.getByRole("combobox", { name: "Port" })).toHaveText(
+      /Port (3000|8080|5432)/
+    )
+  } finally {
+    await api.json("PUT", "/api/system/previews", {
+      enabled: previews!.enabled,
+    })
+  }
 })

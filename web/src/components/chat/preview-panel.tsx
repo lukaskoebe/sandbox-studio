@@ -5,9 +5,11 @@ import {
   ArrowSquareOutIcon,
   BroadcastIcon,
 } from "@phosphor-icons/react"
+import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
+import { usePreviewSetting } from "@/lib/preview-setting"
 import {
   onStudioMachine,
   freshPreviewHint,
@@ -38,11 +41,16 @@ export function PreviewPanel({
   env,
   sandboxId,
   reloadKey,
+  port: asked,
+  onPort,
 }: {
   env: string
   sandboxId: string
   /** Changes when the app may have changed, e.g. when a request ends. */
   reloadKey: unknown
+  /** The port to show, such as the one a link named; picking another calls onPort. */
+  port?: number
+  onPort?: (port: number) => void
 }) {
   const ports = $api.useQuery(
     "get",
@@ -51,7 +59,9 @@ export function PreviewPanel({
     { refetchInterval: 5000 }
   )
   const list = ports.data ?? []
-  const [picked, setPicked] = useState<number>()
+  const [own, setOwn] = useState<number>()
+  const picked = onPort ? asked : (own ?? asked)
+  const setPicked = onPort ?? setOwn
   // The first port until one is picked, and again if the picked one goes away.
   const port = list.some((p) => p.port === picked) ? picked : list.at(0)?.port
   // Each reload counts up; a fresh one also clears the preview's storage as it loads.
@@ -140,6 +150,66 @@ export function PreviewPanel({
           </p>
         ))}
     </div>
+  )
+}
+
+/**
+ * The Preview tab while previews are off, reached from a link such as a preview on Home: it says
+ * so and offers to turn them on, rather than showing another tab. The ports are listed, as the
+ * setting promises.
+ */
+export function PreviewsOff({
+  env,
+  sandboxId,
+  port,
+}: {
+  env: string
+  sandboxId: string
+  port?: number
+}) {
+  const previews = usePreviewSetting()
+  const ports = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/ports",
+    { params: { path: { env, id: sandboxId } } },
+    { refetchInterval: 5000 }
+  )
+  const list = (ports.data ?? []).map((p) => p.port)
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <BroadcastIcon />
+        </EmptyMedia>
+        <EmptyTitle>Previews are off</EmptyTitle>
+        <EmptyDescription>
+          {port ? `Port ${port} can't open here` : "Ports can't open here"}{" "}
+          while previews of sandbox ports are off in{" "}
+          <Link
+            to="/e/$env/settings/general"
+            params={{ env }}
+            className="underline underline-offset-4"
+          >
+            Settings › General
+          </Link>
+          .{" "}
+          {list.length
+            ? `The sandbox listens on ${list.map((p) => `:${p}`).join(", ")}.`
+            : port && ports.data
+              ? "The sandbox doesn't listen on any port now."
+              : ""}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button
+          size="sm"
+          disabled={!previews.loaded || previews.pending}
+          onClick={() => previews.setEnabled(true)}
+        >
+          Turn on previews
+        </Button>
+      </EmptyContent>
+    </Empty>
   )
 }
 

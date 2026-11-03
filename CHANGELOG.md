@@ -5,8 +5,12 @@
 - Home draws each sandbox as a line over the last 2, 8 or 24 hours, with every session branching
   off as it opens and rejoining as it closes: chats above it with their turns, terminals below
   with the programs that ran in them, browser sessions with the stretches you drove, and
-  previews dotted. Forks start their own line, checkpoints and merges sit on it, and a branch
-  opens its thread or tab. It replaces the list of chats working now.
+  previews dotted, three or more that open together on one branch. Forks start their own line,
+  checkpoints and merges sit on it, and a branch opens its thread or tab. It replaces the list
+  of chats working now.
+- A link to a sandbox's Preview tab while previews are off opens the tab anyway, saying that
+  previews are off, listing the ports and offering to turn them on, where before it showed the
+  terminal instead.
 - An approved push that the forge refuses now says so: the web shows the forge's reason as the
   approval closes, and the push's review offers "Push again" once the cause is fixed. A token
   that can read but not write is named as such, both then and when testing the forge with a
