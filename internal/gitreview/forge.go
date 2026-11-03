@@ -393,6 +393,11 @@ func (f *Forgejo) call(ctx context.Context, token, method, path string, in, out 
 // callJSON sends one API request with the given Authorization and decodes the JSON
 // answer into out. Errors carry the forge's message, never the token.
 func callJSON(ctx context.Context, client *http.Client, auth, token, method, url string, headers map[string]string, in, out any) (http.Header, error) {
+	return callJSONMax(ctx, client, auth, token, method, url, headers, in, out, 1<<20)
+}
+
+// callJSONMax is callJSON for answers of up to max bytes.
+func callJSONMax(ctx context.Context, client *http.Client, auth, token, method, url string, headers map[string]string, in, out any, max int64) (http.Header, error) {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -418,7 +423,7 @@ func callJSON(ctx context.Context, client *http.Client, auth, token, method, url
 		return nil, errors.New(mask(err.Error(), token))
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, max))
 	if err != nil {
 		return nil, err
 	}

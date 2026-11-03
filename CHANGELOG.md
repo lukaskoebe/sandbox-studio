@@ -14,6 +14,11 @@
 - A review of a push or pull request with thousands of changed lines opens, scrolls and takes
   typing without lag: the diff renders in chunks, each only while it is near the view, and the
   note and comments no longer render the whole diff again with every key.
+- Teammates can review GitLab merge requests as they review GitHub and Forgejo pull requests:
+  `git_pull_request_list`, `git_pull_request_read` and `git_pull_request_review` work on a
+  GitLab forge, subgroup projects included. A posted review becomes an approval, a discussion
+  for each line comment and a note with the summary; GitLab has no "request changes" verdict,
+  so that is a note starting with **Changes requested.**
 - Settings → General has an "Update now" button when an update is available, which installs it
   without waiting for the next check, and "Restart now" while an installed update waits for
   sandboxes to go idle.

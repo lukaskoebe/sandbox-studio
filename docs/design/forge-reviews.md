@@ -123,7 +123,9 @@ draft ("1 new commit since Ada read it"). Later (2026-10-28): `git_repositories`
 `git_pull_request_list`, so a teammate finds the pull requests to review itself instead of
 being handed one, and the read shows the reviews' line comments. Not yet: teammate accounts
 (so until then a verdict on the user's own pull request posts as a comment that starts with
-it), review requests as tasks, and GitLab.
+it), review requests as tasks. GitLab (phase 5) came on 2026-11-03: its merge requests are
+read, listed and reviewed with the same tools, posted as an approval, a discussion per line
+comment and a note, with "request changes" as a note that says so.
 
 ## Open questions
 

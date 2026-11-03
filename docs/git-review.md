@@ -409,9 +409,9 @@ an agent at once, in the sandbox's chat or terminal it works in.
 
 ## Pull request reviews
 
-An agent can review any pull request on a forge with an API (Forgejo, Gitea, Codeberg or
-GitHub, also an SSH forge with that API; GitLab is refused for now), whoever opened it, in any repository the forge's token
-reaches. It finds them with `git_repositories` and `git_pull_request_list`, reads with
+An agent can review any pull request on a forge with an API (Forgejo, Gitea, Codeberg, GitHub
+or GitLab, whose merge requests the tools take as pull requests numbered by their `!iid`; also
+an SSH forge with that API), whoever opened it, in any repository the forge's token reaches. It finds them with `git_repositories` and `git_pull_request_list`, reads with
 `git_pull_request_read` and git, and drafts the review with `git_pull_request_review`.
 Nothing reaches the forge until the user posts the draft, as the forge's token's account.
 A comment on someone else's pull request is a review with the verdict `comment`.
@@ -428,7 +428,8 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   token; the user adds one to it in Settings → Git forges".
 - **Listing pull requests.** `git_pull_request_list(repository, forge?, state?, limit?)`
   asks the forge for the repository's pull requests (`GET /repos/{o}/{r}/pulls`, sorted by
-  the latest update), `open` by default or `closed` or `all`, 30 by default and at most
+  the latest update; GitLab's `GET /projects/:id/merge_requests?order_by=updated_at`, where
+  `closed` takes in the merged ones as on the other forges), `open` by default or `closed` or `all`, 30 by default and at most
   100: number, title, author, state, draft, merged, base and head branches, requested
   reviewers, labels, last update and URL.
 
@@ -437,8 +438,13 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   counts (up to 50), the reviews so far, their comments on lines (up to 50, `{author, path,
   line, side}`: GitHub's `…/pulls/{n}/comments`, Forgejo's `…/reviews/{id}/comments` of each
   review that has some) and the conversation's comments, from the forge with the forge's
-  token. The diff is left out: `git fetch origin pull/<n>/head` works through the virtual
-  remote, since fetches go to the forge as they are. `forge` is needed only when the
+  token. On GitLab the commits are the newest 50 (`…/merge_requests/:iid/commits`, listed
+  oldest first), the files come from `…/diffs` (`…/changes` before GitLab 15.7), the reviews
+  are the approvals and requested changes its system notes record plus `…/approvals`, and
+  the line comments and conversation are the diff notes and the other notes of `…/notes`.
+  The diff is left out: `git fetch origin pull/<n>/head` (on GitLab
+  `merge-requests/<n>/head`) works through the virtual remote, since fetches go to the forge
+  as they are. `forge` is needed only when the
   environment has more than one forge with an API.
 - **Drafting.** `git_pull_request_review(repository, number, verdict, summary, comments,
   forge?)` takes a verdict (`comment`, `approve`, `request_changes`), a summary (needed
@@ -462,8 +468,15 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   body posts the edited review (without it, the draft as it is): Forgejo's
   `POST /repos/{o}/{r}/pulls/{n}/reviews` with `APPROVED`, `REQUEST_CHANGES` or `COMMENT`
   and `new_position`/`old_position`, GitHub's with `APPROVE`, `REQUEST_CHANGES` or `COMMENT`
-  and `line` with side `RIGHT`/`LEFT`, both pinned to the reviewed head with `commit_id`. The
-  approval's payload is updated to what was posted. A forge refuses a verdict from the pull
+  and `line` with side `RIGHT`/`LEFT`, both pinned to the reviewed head with `commit_id`.
+  GitLab has no review object, so Studio approves first (`POST …/approve` with the reviewed
+  head as `sha`; GitLab refuses it once newer commits arrived, and then nothing is posted; one the
+  token's user already gave stands),
+  then opens a discussion per line comment (`POST …/discussions` with a text position on the
+  diff version of the reviewed head: `new_line` for an added line, `old_line` for a removed
+  one, both for a kept one), then posts the summary as a note, whose link the review keeps.
+  Its REST API has no request-changes verdict: that note starts with **Changes requested.**
+  The approval's payload is updated to what was posted. A forge refuses a verdict from the pull
   request's own author, so when the token's account opened it the review posts as a comment
   that starts with **Approved.** or **Changes requested.**, and the review says so.
 - **Attribution.** "End with “Review by Ada (agent)”" appends that line (or "Review by an
@@ -479,8 +492,8 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   discarded it; nothing was posted." and the note.
 - **Not yet:** accounts of their own for teammates (so a review posts as the teammate, and
   a verdict on the user's own pull request isn't turned into a comment), Studio noticing
-  review requests for a teammate, and GitLab merge requests
-  ([forge-reviews.md](design/forge-reviews.md)).
+  review requests for a teammate, and GitLab's request-changes verdict and batched draft
+  notes (one notification for a whole review) ([forge-reviews.md](design/forge-reviews.md)).
 
 ## Integration interface
 

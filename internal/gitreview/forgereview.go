@@ -107,9 +107,6 @@ func (s *Service) reviewForge(ctx context.Context, envID, name string) (store.Fo
 			return f, nil, integrations.ToolError("no forge of this environment has an API for pull requests: %s", strings.Join(without, "; "))
 		}
 	}
-	if f.Kind == KindGitLab {
-		return f, nil, integrations.ToolError("Studio can't review GitLab merge requests yet")
-	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {
 		return f, nil, integrations.ToolError("%s has no API to read pull requests with", f.Name)

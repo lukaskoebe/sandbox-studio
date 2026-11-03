@@ -44,7 +44,7 @@ var pullRequestRef = map[string]any{
 var GitRepositoriesTool = Tool{agentproto.MethodGitRepositories,
 	"The git forges of this environment and the repositories Studio's token for each reaches, recently active first. " +
 		"Clone one through the git remote with `git clone <remote><path>.git`; the pull request tools work on the forges " +
-		"marked pullRequests (Forgejo, Gitea and GitHub).",
+		"marked pullRequests (Forgejo, Gitea, GitHub and GitLab, whose merge requests they take as pull requests).",
 	obj(nil, map[string]any{
 		"forge": str("Only this forge", "maxLength", 32),
 		"query": str("Only repositories whose path or description contains this", "maxLength", 100),
@@ -52,7 +52,7 @@ var GitRepositoriesTool = Tool{agentproto.MethodGitRepositories,
 
 // GitPullRequestListTool lists a repository's pull requests, anyone's.
 var GitPullRequestListTool = Tool{agentproto.MethodGitPullRequestList,
-	"The pull requests of a repository on a Forgejo, Gitea or GitHub forge, whoever opened them, most recently updated first: " +
+	"The pull requests of a repository on a Forgejo, Gitea, GitHub or GitLab forge (merge requests), whoever opened them, most recently updated first: " +
 		"number, title, author, branches, draft, requested reviewers and labels. Read one with git_pull_request_read.",
 	obj([]string{"repository"}, map[string]any{
 		"forge":      pullRequestRef["forge"],
@@ -63,9 +63,10 @@ var GitPullRequestListTool = Tool{agentproto.MethodGitPullRequestList,
 
 // GitPullRequestReadTool reads a pull request through Studio, which holds the forge's token.
 var GitPullRequestReadTool = Tool{agentproto.MethodGitPullRequestRead,
-	"A pull request on a Forgejo, Gitea or GitHub forge, whoever opened it: its title, description, author, branches and commits, " +
-		"the changed files with their line counts, and the reviews, their line comments and the conversation's comments so far. " +
-		"Diffs are left out: read the code with git, as `git fetch origin pull/<number>/head` fetches the pull request's head " +
+	"A pull request on a Forgejo, Gitea, GitHub or GitLab forge (a merge request, numbered by its !iid), whoever opened it: " +
+		"its title, description, author, branches and commits, the changed files with their line counts, and the reviews, their " +
+		"line comments and the conversation's comments so far. Diffs are left out: read the code with git, as " +
+		"`git fetch origin pull/<number>/head` (on GitLab `git fetch origin merge-requests/<number>/head`) fetches its head " +
 		"through the git remote.",
 	obj([]string{"repository", "number"}, pullRequestRef)}
 

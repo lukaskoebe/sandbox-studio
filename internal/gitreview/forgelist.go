@@ -185,7 +185,7 @@ func (s *Service) toolRepositories(ctx context.Context, sb store.Sandbox, params
 	for _, f := range forges {
 		api, withAPI := apiForge(f)
 		v := forgeView{Name: f.Name, Kind: f.Kind, Remote: "https://" + Host + "/" + f.Name + "/",
-			Reviews: withAPI && (api.Kind == KindForgejo || api.Kind == KindGitHub)}
+			Reviews: withAPI && hasAPI(api.Kind)}
 		if withAPI && f.Kind == KindSSH {
 			v.API = api.Kind
 		}

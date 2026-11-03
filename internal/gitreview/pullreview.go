@@ -14,7 +14,7 @@ import (
 
 // Reviewer is what a forge needs for teammates to review its pull requests
 // (docs/git-review.md#pull-request-reviews): Forgejo, Gitea and GitHub, whose REST APIs share
-// the shapes used here. GitLab's merge requests have no review object and come later.
+// the shapes used here, and GitLab's merge requests (gitlabreview.go).
 type Reviewer interface {
 	// ReadPullRequest returns a pull request with its commits, files, reviews and comments.
 	ReadPullRequest(ctx context.Context, token, owner, repo string, number int) (PullRequestInfo, error)
@@ -393,10 +393,15 @@ func (g *GitHub) PostReview(ctx context.Context, token, owner, repo string, numb
 // number in the old file.
 type diffLines struct {
 	new, old map[string]map[int]bool
+	// kept maps a kept line's number in the new file to its number in the old one, per new
+	// path; GitLab places a comment on a kept line by both.
+	kept map[string]map[int]int
+	// oldPath is each new path's path in the old file, for renames.
+	oldPath map[string]string
 }
 
 func parseDiffLines(diff string) diffLines {
-	d := diffLines{new: map[string]map[int]bool{}, old: map[string]map[int]bool{}}
+	d := diffLines{new: map[string]map[int]bool{}, old: map[string]map[int]bool{}, kept: map[string]map[int]int{}, oldPath: map[string]string{}}
 	var oldPath, newPath string
 	var oldLine, newLine int
 	add := func(m map[string]map[int]bool, path string, n int) {
@@ -435,6 +440,7 @@ func parseDiffLines(diff string) diffLines {
 				n, _ = strconv.Atoi(strings.Split(strings.TrimPrefix(fields[2], "+"), ",")[0])
 			}
 			oldLine, newLine, inHunk = o, n, true
+			d.oldPath[newPath] = oldPath
 			continue
 		}
 		if !inHunk {
@@ -449,6 +455,10 @@ func parseDiffLines(diff string) diffLines {
 			oldLine++
 		case strings.HasPrefix(line, " "):
 			add(d.new, newPath, newLine)
+			if d.kept[newPath] == nil {
+				d.kept[newPath] = map[int]int{}
+			}
+			d.kept[newPath][newLine] = oldLine
 			oldLine++
 			newLine++
 		}
