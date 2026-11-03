@@ -1,6 +1,6 @@
 import { useId, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   ArrowSquareOutIcon,
@@ -86,17 +86,73 @@ function useInvalidateApprovals() {
   }
 }
 
+/**
+ * Tells how an approved push went upstream: the approval closes either way, so a failure would
+ * otherwise go unseen. A failure stays until it's dismissed and links to the review, which can
+ * push again.
+ */
+function usePushOutcome() {
+  const navigate = useNavigate()
+  return (a: Approval) => {
+    const p = a.git?.push
+    if (!p || a.git?.pullRequest) return
+    const branch = p.ref.replace(/^refs\/heads\//, "")
+    const where = `${p.owner}/${p.repo}`
+    if (p.state === "pushed") {
+      toast.success(`Pushed ${branch} to ${where}`)
+    } else if (p.state === "failed") {
+      toast.error(`The push of ${branch} to ${where} failed`, {
+        id: `push-failed-${a.id}`,
+        description: p.result,
+        duration: Infinity,
+        closeButton: true,
+        action: {
+          label: "Open",
+          onClick: () =>
+            navigate({
+              to: "/e/$env/git/reviews/$id",
+              params: { env: a.environmentId, id: a.id },
+            }),
+        },
+      })
+    }
+  }
+}
+
 function useDecideGit() {
   const invalidate = useInvalidateApprovals()
+  const outcome = usePushOutcome()
   return $api.useMutation(
     "post",
     "/api/environments/{env}/approvals/{id}/decide",
     {
       onSettled: invalidate,
+      onSuccess: (a, vars) => {
+        if (vars.body.action === "allow") outcome(a)
+      },
       onError: (err) => {
         if (errorStatus(err) === 409) return
         toast.error("Could not decide", { description: errorMessage(err) })
       },
+    }
+  )
+}
+
+/** Pushes an approved push that failed upstream again. */
+function usePushAgain() {
+  const invalidate = useInvalidateApprovals()
+  const outcome = usePushOutcome()
+  return $api.useMutation(
+    "post",
+    "/api/environments/{env}/approvals/{id}/push-again",
+    {
+      onSettled: invalidate,
+      onSuccess: (a) => {
+        if (a.git?.push.state === "pushed") toast.dismiss(`push-failed-${a.id}`)
+        outcome(a)
+      },
+      onError: (err) =>
+        toast.error("Could not push again", { description: errorMessage(err) }),
     }
   )
 }
@@ -214,6 +270,7 @@ function PushReview({ approval }: { approval: Approval }) {
   const [prTitle, setPRTitle] = useState(proposal?.title ?? "")
   const decide = useDecideGit()
   const openLater = useOpenPullRequest()
+  const pushAgain = usePushAgain()
   const feedback = useSendFeedback()
   if (!git) return null
   const pending = approval.status === "pending"
@@ -383,6 +440,39 @@ function PushReview({ approval }: { approval: Approval }) {
           The branch has an open pull request; the push updates it.
           <PullRequestLink url={rv.openPullRequest}>Open it</PullRequestLink>
         </p>
+      )}
+
+      {!pending && git.push.state === "failed" && !git.pullRequest && (
+        <div
+          role="alert"
+          className="grid gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-xs"
+        >
+          <p className="flex items-center gap-1.5 font-medium text-destructive">
+            <WarningIcon className="size-3.5 shrink-0" />
+            The push was approved, but it didn&rsquo;t go upstream.
+          </p>
+          {git.push.result && (
+            <p className="break-words text-muted-foreground">
+              {git.push.result}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">
+              The commit is still staged. Once the cause is fixed, for example
+              the forge&rsquo;s token in Settings → Git, push it again.
+            </span>
+            <Button
+              variant="outline"
+              size="xs"
+              className="ml-auto"
+              disabled={pushAgain.isPending}
+              onClick={() => pushAgain.mutate({ ...params })}
+            >
+              {pushAgain.isPending && <Spinner className="size-3" />}
+              Push again
+            </Button>
+          </div>
+        </div>
       )}
 
       {!pending && canOpenLater(git) && (

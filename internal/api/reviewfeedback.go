@@ -135,6 +135,31 @@ func btoi(b bool) int {
 	return 0
 }
 
+func (s *Server) registerPushAgain(api huma.API) {
+	type againIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID of a git push"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "pushAgain", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/push-again", Tags: []string{"git"},
+		Summary: "Push an approved push that failed again",
+		Description: "Retries the upstream push of an approved push that failed, for example after its forge's token was given write access. " +
+			"The push's state and result say how it went; a failure records the new reason. 409 when the push didn't fail.",
+	}, func(ctx context.Context, in *againIn) (*struct{ Body ApprovalView }, error) {
+		if s.Git == nil {
+			return nil, huma.Error503ServiceUnavailable("git review is not available")
+		}
+		if _, err := s.Git.PushAgain(ctx, in.Env, in.ID); err != nil {
+			return nil, apiError(err)
+		}
+		a, err := s.Store.Approval(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
+	})
+}
+
 func (s *Server) registerOpenPullRequest(api huma.API) {
 	type openIn struct {
 		Env  string `path:"env" doc:"Environment ID"`

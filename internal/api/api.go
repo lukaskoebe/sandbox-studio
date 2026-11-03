@@ -99,6 +99,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerReviewFeedback(api)
 	s.registerReviewHead(api)
 	s.registerOpenPullRequest(api)
+	s.registerPushAgain(api)
 	s.registerTransfers(api)
 	s.registerMerges(api)
 	s.registerExports(api, mux)
@@ -403,7 +404,8 @@ func apiError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, sandboxes.ErrCheckpointName), errors.Is(err, sandboxes.ErrCheckpointSchedule), errors.Is(err, sandboxes.ErrTerminalTitle):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, gitreview.ErrNoPullRequest), errors.Is(err, gitreview.ErrPullRequestSet), errors.Is(err, gitreview.ErrNotPushed):
+	case errors.Is(err, gitreview.ErrNoPullRequest), errors.Is(err, gitreview.ErrPullRequestSet), errors.Is(err, gitreview.ErrNotPushed),
+		errors.Is(err, gitreview.ErrNotFailed):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, gitreview.ErrNotReview), errors.Is(err, integrations.ErrAction),
 		errors.Is(err, sandboxes.ErrNotAgentTerminal):

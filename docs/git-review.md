@@ -75,7 +75,10 @@ an API for pull requests.
   pushes, since tokens expire.
 - "Test" asks the API whose token it is (`GET /api/v1/user`, GitHub `GET /user` with the
   token's expiry, amber under 14 days) and, given a repository, lists its branches over git.
-  Kinds without an API need the repository, except `local`.
+  Kinds without an API need the repository, except `local`. With a repository, a token forge also asks
+  for the refs as a push would (the `git-receive-pack` advertisement), without pushing: a
+  forge refuses that to a token that can only read, and the test then says so in amber
+  (`pushRefused`).
 - Deleting a forge also deletes its staging repos.
 
 ## Remote mapping
@@ -311,7 +314,16 @@ it, so a client that doesn't know about rewrites can't approve one by accident.
   upstream branch is still at the reviewed old commit (or already at the new one). The push
   names that old commit, so the forge updates the branch only from it: a lease, which keeps
   a forced push from dropping commits that reached the forge after the review. The
-  push state becomes `pushed` or `failed` with the forge's message.
+  push state becomes `pushed` or `failed` with the forge's message. The push runs inside the
+  decision, so the web tells how it went as the approval closes: "Pushed main to owner/repo",
+  or an error that stays until it's closed, with the reason and a link to the review. A 403
+  from the forge, which go-git words only as "authorization failed", is explained as a
+  credential that may only read; a 401 as one that expired or was revoked.
+- **Push again:** `POST /api/environments/{env}/approvals/{id}/push-again` retries a `failed`
+  push once its cause is fixed (a token given write access, a forge that was down); the
+  commit stays staged. Its state and result say how it went, and a new failure replaces the
+  reason. Pushed, its pull request waits for a `git.pr` approval. 409 for a push that didn't
+  fail. The review of a failed push shows the reason and a "Push again" button.
 - **Reject** (optionally with a note) or **ignore:** the push becomes `rejected`.
 - A rejected or failed push is delivered to the sandbox on its next fetch of that
   repository: that fetch fails once with the reason and note, and the next one works.

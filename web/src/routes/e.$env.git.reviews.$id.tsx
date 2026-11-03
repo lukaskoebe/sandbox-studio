@@ -116,8 +116,9 @@ function GitReviewPage() {
                   role="status"
                   className="rounded-md border border-dashed px-3 py-2.5 font-medium"
                 >
-                  {decided[a.status] ?? `This is ${a.status}.`} Nothing is left
-                  to decide; the outcome is below.
+                  {a.git?.push.state === "failed" && !a.git.pullRequest
+                    ? "This was approved, but the push failed; why is below."
+                    : `${decided[a.status] ?? `This is ${a.status}.`} Nothing is left to decide; the outcome is below.`}
                 </p>
               )}
               <GitReview key={a.id} approval={a} />

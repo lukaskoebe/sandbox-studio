@@ -146,6 +146,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/approvals/{id}/push-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push an approved push that failed again
+         * @description Retries the upstream push of an approved push that failed, for example after its forge's token was given write access. The push's state and result say how it went; a failure records the new reason. 409 when the push didn't fail.
+         */
+        post: operations["pushAgain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/approvals/{id}/revert": {
         parameters: {
             query?: never;
@@ -4375,6 +4395,8 @@ export interface components {
             expiresAt?: string;
             message?: string;
             ok: boolean;
+            /** @description Why the forge would refuse Studio's pushes to the repository tested, when it says so without a push: a token that can only read */
+            pushRefused?: string;
             /** @description The repository tested */
             repo?: string;
             /** @description The user the token belongs to */
@@ -7017,6 +7039,40 @@ export interface operations {
                 "application/json": components["schemas"]["OpenInBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    pushAgain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID of a git push */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

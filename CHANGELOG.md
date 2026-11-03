@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- An approved push that the forge refuses now says so: the web shows the forge's reason as the
+  approval closes, and the push's review offers "Push again" once the cause is fixed. A token
+  that can read but not write is named as such, both then and when testing the forge with a
+  repository, rather than as "authorization failed".
 - An agent that asked for the browser back is told it has it as soon as the user allows it,
   rather than at times that the user hasn't answered yet.
 

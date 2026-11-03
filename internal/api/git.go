@@ -124,7 +124,10 @@ type ForgeTest struct {
 	ExpiresAt *time.Time `json:"expiresAt,omitempty" doc:"When the token expires, if the forge says (GitHub)"`
 	Repo      string     `json:"repo,omitempty" doc:"The repository tested"`
 	Branches  int        `json:"branches,omitempty" doc:"How many branches it has"`
-	Message   string     `json:"message,omitempty"`
+	// PushRefused is set when the forge reads with the credential but says up front that it
+	// won't take pushes, as a forge does for a read-only token.
+	PushRefused string `json:"pushRefused,omitempty" doc:"Why the forge would refuse Studio's pushes to the repository tested, when it says so without a push: a token that can only read"`
+	Message     string `json:"message,omitempty"`
 }
 
 // ForgeToken replaces a forge's token.
@@ -277,7 +280,7 @@ func (s *Server) registerForges(api huma.API) {
 		if err != nil {
 			return &struct{ Body ForgeTest }{ForgeTest{Message: strings.TrimPrefix(fmt.Sprint(err), gitreview.ErrInvalid.Error()+": ")}}, nil
 		}
-		res := ForgeTest{OK: true, User: c.User, Repo: c.Repo, Branches: c.Branches}
+		res := ForgeTest{OK: true, User: c.User, Repo: c.Repo, Branches: c.Branches, PushRefused: c.PushRefused}
 		if !c.Expires.IsZero() {
 			res.ExpiresAt = &c.Expires
 		}

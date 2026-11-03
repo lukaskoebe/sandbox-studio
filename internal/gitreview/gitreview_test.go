@@ -55,6 +55,8 @@ type fakeForge struct {
 	pulls  []PullRequest
 	merges []mergeRequest // GitLab merge requests
 	repos  int            // repositories the user's list has besides owner/repo
+	// readOnly refuses pushes with 403, as a forge does for a token that can only read.
+	readOnly bool
 }
 
 // repoPage is page (from 1) of the fake's repository list, size entries long: owner/repo,
@@ -134,6 +136,13 @@ func (f *fakeForge) serve(w http.ResponseWriter, r *http.Request) {
 	prefix, rest, _ := strings.Cut(r.URL.Path, ".git/")
 	if prefix != "/owner/repo" && prefix != "/group/sub/proj" && prefix != "/solo" {
 		http.NotFound(w, r)
+		return
+	}
+	f.mu.Lock()
+	readOnly := f.readOnly
+	f.mu.Unlock()
+	if readOnly && (rest == "git-receive-pack" || r.URL.Query().Get("service") == "git-receive-pack") {
+		http.Error(w, "Write access to repository not granted.", http.StatusForbidden)
 		return
 	}
 	tr := server.NewServer(server.MapLoader{"file:///repo": f.repo.Storer})
@@ -648,6 +657,62 @@ func TestPushIsStagedAndApprovalPushesUpstream(t *testing.T) {
 		t.Fatalf("fetch: %v", err)
 	}
 	h.assertTokenHidden(t, g)
+}
+
+func TestFailedPushSaysWhyAndCanBePushedAgain(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	repo := g.clone(t)
+	before := h.forge.head(t, "main")
+	c1 := commitFile(t, repo, "main.go", "package main\n", "Add main")
+	if err := push(repo, "refs/heads/main:refs/heads/main", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	a := h.approvals(t, KindPush, store.StatusPending)[0]
+	h.forge.mu.Lock()
+	h.forge.readOnly = true
+	h.forge.mu.Unlock()
+
+	// The forge tells a read-only token apart before anything is pushed.
+	c, err := h.svc.TestForge(h.ctx, h.f, "owner/repo")
+	if err != nil || !strings.Contains(c.PushRefused, "write access") {
+		t.Fatalf("test of a read-only token = %+v, %v", c, err)
+	}
+
+	h.decide(t, a, integrations.Allow, "")
+	p, err := h.st.GitPushByApproval(h.ctx, h.env.ID, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.State != store.PushFailed || !strings.Contains(p.Result, "write access") || !strings.Contains(p.Result, "Write access to repository not granted") {
+		t.Fatalf("push = %+v", p)
+	}
+	if strings.Contains(p.Result, forgeToken) {
+		t.Fatal("the reason shows the token")
+	}
+	if h.forge.head(t, "main") != before {
+		t.Fatal("a refused push moved the branch")
+	}
+	if p, err = h.svc.PushAgain(h.ctx, h.env.ID, a.ID); err != nil || p.State != store.PushFailed {
+		t.Fatalf("push again while still read-only = %+v, %v", p, err)
+	}
+
+	h.forge.mu.Lock()
+	h.forge.readOnly = false
+	h.forge.mu.Unlock()
+	if c, err := h.svc.TestForge(h.ctx, h.f, "owner/repo"); err != nil || c.PushRefused != "" {
+		t.Fatalf("test of a token that writes = %+v, %v", c, err)
+	}
+	p, err = h.svc.PushAgain(h.ctx, h.env.ID, a.ID)
+	if err != nil || p.State != store.PushPushed || !strings.Contains(p.Result, "pushed") {
+		t.Fatalf("push again = %+v, %v", p, err)
+	}
+	if h.forge.head(t, "main") != c1 {
+		t.Fatal("pushing again did not update the forge")
+	}
+	if _, err := h.svc.PushAgain(h.ctx, h.env.ID, a.ID); !errors.Is(err, ErrNotFailed) {
+		t.Fatalf("push again after it went up: %v", err)
+	}
 }
 
 func TestApprovedBranchPushProposesAPullRequest(t *testing.T) {

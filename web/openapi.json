@@ -3792,6 +3792,10 @@
           "ok": {
             "type": "boolean"
           },
+          "pushRefused": {
+            "description": "Why the forge would refuse Studio's pushes to the repository tested, when it says so without a push: a token that can only read",
+            "type": "string"
+          },
           "repo": {
             "description": "The repository tested",
             "type": "string"
@@ -11163,6 +11167,60 @@
           }
         },
         "summary": "Open a pushed branch's pull request",
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/approvals/{id}/push-again": {
+      "post": {
+        "description": "Retries the upstream push of an approved push that failed, for example after its forge's token was given write access. The push's state and result say how it went; a failure records the new reason. 409 when the push didn't fail.",
+        "operationId": "pushAgain",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Approval ID of a git push",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Approval ID of a git push",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Push an approved push that failed again",
         "tags": [
           "git"
         ]

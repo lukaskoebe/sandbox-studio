@@ -151,9 +151,66 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, er
 	// repository, so the next push to it fetches again however recently the mirror did.
 	s.fetches.forget(mirrorKey(t))
 	if err != nil {
-		return "", errors.New(mask(err.Error(), token))
+		return "", errors.New(mask(pushRefusal(err, t.path()).Error(), token))
 	}
 	return result, nil
+}
+
+// pushRefusal says what a forge's refusal of a push means for its credential. A forge answers
+// 403 to a token that can read the repository but not write to it, which go-git words only as
+// "authorization failed".
+func pushRefusal(err error, path string) error {
+	switch {
+	case errors.Is(err, transport.ErrAuthorizationFailed):
+		return fmt.Errorf("the forge refused to let Studio's credential push to %s (%v): it may only grant read access; give it write access to the repository's contents, then push again", path, err)
+	case errors.Is(err, transport.ErrAuthenticationRequired):
+		return fmt.Errorf("the forge did not accept Studio's credential for %s (%v): it may have expired or been revoked; replace it, then push again", path, err)
+	case errors.Is(err, transport.ErrRepositoryNotFound):
+		return fmt.Errorf("the forge has no repository %s, or Studio's credential can't see it (%v)", path, err)
+	}
+	return err
+}
+
+// ErrNotFailed is the refusal to push again a push that didn't fail upstream.
+var ErrNotFailed = errors.New("only an approved push that failed upstream can be pushed again")
+
+// PushAgain retries the upstream push of an approved push that failed, once its cause is
+// fixed: a credential that may now write, a forge that was down. approvalID is the push's
+// git.push approval. A retry that fails again records the new reason. Pushed, its pull request
+// waits for a git.pr approval as when the push was approved without a choice.
+func (s *Service) PushAgain(ctx context.Context, envID, approvalID string) (store.GitPush, error) {
+	s.httpClient()
+	a, err := s.Store.Approval(ctx, envID, approvalID)
+	if err != nil {
+		return store.GitPush{}, err
+	}
+	if a.Kind != KindPush {
+		return store.GitPush{}, ErrNotReview
+	}
+	p, err := s.Store.GitPushByApproval(ctx, envID, approvalID)
+	if err != nil {
+		return p, err
+	}
+	if p.State != store.PushFailed {
+		return p, ErrNotFailed
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+	defer cancel()
+	defer s.publish(envID, approvalID)
+	result, err := s.pushApproved(ctx, p)
+	if err != nil {
+		s.Log.Info("git remote: push again failed", "push", p.ID, "err", err)
+		if err := s.Store.SettleGitPush(ctx, envID, p.ID, store.PushFailed, store.PushFailed, err.Error(), p.Note); err != nil {
+			return p, err
+		}
+		return s.Store.GitPush(ctx, envID, p.ID)
+	}
+	// A concurrent retry that pushed first leaves nothing to settle.
+	if err := s.Store.SettleGitPush(ctx, envID, p.ID, store.PushFailed, store.PushPushed, result, p.Note); err != nil {
+		return p, err
+	}
+	s.pullRequestAfterPush(ctx, p, a, nil)
+	return s.Store.GitPush(ctx, envID, p.ID)
 }
 
 // defaultBranch is the repository's default branch, or "" when the forge has no API or
@@ -468,14 +525,44 @@ func (s *Service) TestForge(ctx context.Context, f store.Forge, repo string) (Ch
 		return c, err
 	}
 	c.Repo, c.Branches = t.path(), n
+	c.PushRefused = s.pushRefused(ctx, t)
 	return c, nil
 }
 
 // Check is the outcome of testing a forge.
 type Check struct {
 	Account
-	Repo     string // the repository tested, if any
-	Branches int    // the branches it has
+	Repo        string // the repository tested, if any
+	Branches    int    // the branches it has
+	PushRefused string // why the forge would refuse Studio's pushes to it, if it says so up front
+}
+
+// pushRefused asks the forge for the repository's refs as a push would, without pushing, and
+// says why it refuses if it does: a token that can read but not write is refused here. Other
+// errors are left to the push; the test already showed the forge answers. Only token forges
+// are asked: over SSH it would take a second signature, which an agent may want confirmed,
+// and a local folder has no credential to refuse.
+func (s *Service) pushRefused(ctx context.Context, t target) string {
+	if t.forge.Kind == KindSSH || t.forge.Kind == KindLocal {
+		return ""
+	}
+	token, err := s.token(ctx, t.forge)
+	if err != nil {
+		return ""
+	}
+	rm, err := s.remote(t, token)
+	if err != nil {
+		return ""
+	}
+	sess, err := rm.tr.NewReceivePackSession(rm.ep, rm.auth)
+	if err == nil {
+		defer sess.Close()
+		_, err = sess.AdvertisedReferencesContext(ctx)
+	}
+	if errors.Is(err, transport.ErrAuthorizationFailed) || errors.Is(err, transport.ErrAuthenticationRequired) {
+		return mask(pushRefusal(err, t.path()).Error(), token)
+	}
+	return ""
 }
 
 // branches counts a repository's branches, reading its advertisement with Studio's

@@ -185,6 +185,9 @@ func encode(st storer.EncodedObjectStorer, o interface {
 	return st.SetEncodedObject(eo)
 }
 
+// ReadOnlyToken is a forge token the upstream lets read repositories but not push to them.
+const ReadOnlyToken = "e2e-read-only-token"
+
 // ServeHTTP answers git smart HTTP for https://<host>/<path>.git/{info/refs,git-upload-pack,
 // git-receive-pack}.
 func (u *Upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -220,6 +223,12 @@ func (u *Upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// A token that can read but not write is refused for pushes, as GitHub refuses one.
+	if _, pass, _ := r.BasicAuth(); pass == ReadOnlyToken &&
+		(rest == "git-receive-pack" || r.URL.Query().Get("service") == "git-receive-pack") {
+		http.Error(w, "Write access to repository not granted.", http.StatusForbidden)
 		return
 	}
 	srv := server.NewServer(server.MapLoader{"file:///repo": repo.Storer})

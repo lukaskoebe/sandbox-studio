@@ -579,6 +579,11 @@ function TestForm({ env, forge }: { env: string; forge: Forge }) {
               </>
             )}{" "}
             {res.expiresAt && expiry(res.expiresAt)}
+            {res.pushRefused && (
+              <span className="mt-1.5 block text-amber-600 dark:text-amber-400">
+                Pushes would be refused: {res.pushRefused}
+              </span>
+            )}
           </p>
         ) : (
           <FieldError>{res.message}</FieldError>

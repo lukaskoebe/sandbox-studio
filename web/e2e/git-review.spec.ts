@@ -12,18 +12,23 @@ import {
  * A forge of kind https on a host of its own, and its upstream repository: a bare repository
  * the e2e build's fake forge serves. Returns the sandbox's URL for it on Studio's git remote.
  */
-async function forgeWithRepo(api: Api, env: string) {
+async function forgeWithRepo(api: Api, env: string, token = "e2e-forge-token") {
   const suffix = Math.random().toString(36).slice(2, 8)
   const name = `up-${suffix}`
   const host = `forge-${suffix}.example.com`
   const initial = await api.createUpstream(`${host}/team/app`)
-  await api.json("POST", `/api/environments/${env}/forges`, {
-    name,
-    kind: "https",
-    baseUrl: `https://${host}`,
-    token: "e2e-forge-token",
-  })
+  const forge = await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/forges`,
+    {
+      name,
+      kind: "https",
+      baseUrl: `https://${host}`,
+      token,
+    }
+  )
   return {
+    id: forge.id,
     repo: `${host}/team/app`,
     url: `https://git.studio.internal/${name}/team/app.git`,
     initial: initial.find((b) => b.name === "main")!,
@@ -88,6 +93,74 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
   await expect(
     page.getByRole("button", { name: "Approve and push" })
   ).toHaveCount(0)
+})
+
+test("a push the forge refuses says why, and goes up when pushed again with a token that writes", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  // The e2e upstream lets this token read but refuses it for pushes.
+  const forge = await forgeWithRepo(api, env, "e2e-read-only-token")
+  const tested = await api.json<{ ok: boolean; pushRefused?: string }>(
+    "POST",
+    `/api/environments/${env}/forges/${forge.id}/test`,
+    { repo: "team/app" }
+  )
+  expect(tested.ok).toBe(true)
+  expect(tested.pushRefused).toContain("write access")
+
+  const id = await api.createSandbox(sandboxName("refused"))
+  await api.guestReady(id)
+  const pushed = await api.push(id, {
+    url: forge.url,
+    file: "hello.txt",
+    content: "hello\n",
+    message: "Add a greeting",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+  await card.getByRole("button", { name: "Review" }).click()
+  const sheet = page.getByRole("dialog")
+  await sheet.getByRole("button", { name: "Approve and push" }).click()
+  await expect(sheet).toBeHidden()
+
+  // The approval is gone, but a toast says the push failed and why, and stays.
+  const toast = page
+    .getByRole("listitem")
+    .filter({ hasText: "The push of main to team/app failed" })
+  await expect(toast).toBeVisible()
+  await expect(toast).toContainText("write access")
+  expect(await api.upstream(forge.repo)).toEqual([forge.initial])
+  await toast.getByRole("button", { name: "Open" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/git/reviews/`))
+  await expect(page.getByRole("status")).toContainText(
+    "This was approved, but the push failed"
+  )
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "didn’t go upstream" })
+  await expect(alert).toContainText("Write access to repository not granted.")
+
+  // With a token that can write, pushing again puts the commit upstream.
+  await api.json("PUT", `/api/environments/${env}/forges/${forge.id}/token`, {
+    token: "e2e-forge-token",
+  })
+  await alert.getByRole("button", { name: "Push again" }).click()
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "Pushed main to team/app" })
+  ).toBeVisible()
+  await expect(alert).toBeHidden()
+  await expect
+    .poll(async () =>
+      (await api.upstream(forge.repo)).find((b) => b.name === "main")
+    )
+    .toEqual({ name: "main", sha: pushed.commit, subject: "Add a greeting" })
 })
 
 test("a rewritten branch is reviewed with what it drops and takes a force-push", async ({
