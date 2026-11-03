@@ -115,6 +115,8 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 	h := &interceptHarness{envID: env.ID, envCA: caPool(t, authority, env.ID), upCA: caPool(t, authority, upEnv.ID)}
 
 	echo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read the body as a real API does: one answered unread may never be sent in full.
+		_, _ = io.Copy(io.Discard, r.Body)
 		h.mu.Lock()
 		h.seen = append(h.seen, seen{Host: r.Host, Path: r.URL.EscapedPath(), Query: r.URL.RawQuery, Proto: r.Proto, Header: r.Header.Clone()})
 		h.mu.Unlock()
