@@ -28,7 +28,7 @@ async function forgeWithRepo(api: Api, env: string, token = "e2e-forge-token") {
     }
   )
   return {
-    id: forge.id,
+    id: forge!.id,
     repo: `${host}/team/app`,
     url: `https://git.studio.internal/${name}/team/app.git`,
     initial: initial.find((b) => b.name === "main")!,
@@ -108,8 +108,8 @@ test("a push the forge refuses says why, and goes up when pushed again with a to
     `/api/environments/${env}/forges/${forge.id}/test`,
     { repo: "team/app" }
   )
-  expect(tested.ok).toBe(true)
-  expect(tested.pushRefused).toContain("write access")
+  expect(tested!.ok).toBe(true)
+  expect(tested!.pushRefused).toContain("write access")
 
   const id = await api.createSandbox(sandboxName("refused"))
   await api.guestReady(id)
