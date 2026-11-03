@@ -14,16 +14,24 @@ server is still the product, and the app is a window and a tray around it.
 - **It never serves anything.** It asks `GET /api/auth/status` whether a Studio answers on
   `-addr` (default `127.0.0.1:7878`), and starts `studio -no-browser` in the background when
   none does: detached, logging to `logs/studio.log` in the data directory, outside the app's
-  process group, so Studio keeps running when the app quits.
+  process group, so Studio keeps running when the app quits. A start while that Studio is
+  still starting, as when the app is opened again at once, waits up to a minute for it to
+  answer rather than failing on the data directory it holds.
 - **It loads Studio's own address**, not an embedded copy of the UI, so cookies, the event
   stream and `*.localhost` previews behave as in a browser. It opens a fresh one-time link
   from `studio login-url` on every start, as WebKitGTK keeps no cookies across restarts.
+  The window's own page ("Starting Studio…", or why Studio didn't start) is a `data:` URL,
+  not Wails' HTML option, which the window applies after its URL: a Studio that answered
+  before the window was made would stay covered by it. macOS ending the page's web process
+  opens Studio again.
 - **The tray** (on macOS a template image, `tray.png` from `tray.svg`, the cube alone so the
   menu bar can tint it) has Open Studio, Open in browser (a fresh login link in the system browser),
   Close the app and Quit Studio (`studio quit`, then the app). Closing the window hides it on
   macOS and Windows, where the tray or the Dock brings it back; on Linux, whose desktops may
   show no tray, it quits the app.
-- **One app per user**: a second start brings the open window to the front.
+- **One app per user**: a second start brings the open window to the front, and opens
+  Studio in it again when it isn't there: Studio didn't start, or on Linux the window was
+  closed.
 
 The process logic (state, start, login links, quit) is `internal/launcher`, shared with the
 Windows tray launcher `studiow.exe`.

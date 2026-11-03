@@ -272,7 +272,13 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	// while it runs, opens the running one instead of migrating and serving the same data.
 	release, err := store.TryLock(filepath.Join(p.Data, "studio.lock"))
 	if errors.Is(err, store.ErrLocked) {
-		return openRunning(ctx, addr, p.Data, open, logPath, log)
+		return openRunning(ctx, addr, p.Data, open, logPath, log, func() bool {
+			release, err := store.TryLock(filepath.Join(p.Data, "studio.lock"))
+			if err == nil {
+				_ = release()
+			}
+			return errors.Is(err, store.ErrLocked)
+		})
 	}
 	if err != nil {
 		return err
@@ -614,10 +620,28 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	return nil
 }
 
+// startingWait is how long a second start waits for the Studio holding the data directory
+// to answer: it may be starting still, as when the app is opened again right after it
+// started one, and migrations may take a while.
+const startingWait = time.Minute
+
 // openRunning is a start while another Studio holds the data directory: it opens that Studio
-// in the browser with a fresh login link and exits.
-func openRunning(ctx context.Context, addr, data string, open bool, logPath string, log *slog.Logger) error {
+// in the browser with a fresh login link and exits. While nothing answers on addr yet and
+// the other one still holds the data (held), it waits for it to start.
+func openRunning(ctx context.Context, addr, data string, open bool, logPath string, log *slog.Logger, held func() bool) error {
 	link, err := requestLoginURL(ctx, addr)
+	if err != nil && starting(err) && held() {
+		log.Info("another Studio is starting with this data; waiting for it", "url", "http://"+addr, "data", data)
+		deadline := time.Now().Add(startingWait)
+		for err != nil && starting(err) && time.Now().Before(deadline) && held() {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(500 * time.Millisecond):
+			}
+			link, err = requestLoginURL(ctx, addr)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("Studio is already running with the data in %s, but not on %s (start this one with that Studio's -addr): %w", data, addr, err)
 	}
@@ -629,6 +653,13 @@ func openRunning(ctx context.Context, addr, data string, open bool, logPath stri
 	log.Info("open Studio with this one-time login link", "url", link)
 	printLoginBanner(link, logPath)
 	return nil
+}
+
+// starting says whether a login link failed as it does while a Studio starts: nothing
+// listens on its address yet, or its authentication key isn't written yet.
+func starting(err error) bool {
+	var op *net.OpError
+	return (errors.As(err, &op) && op.Op == "dial") || errors.Is(err, store.ErrNotFound)
 }
 
 func openLogin(link string, log *slog.Logger) {

@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -100,7 +101,8 @@ func main() {
 		},
 		Poll: 500 * time.Millisecond,
 	}
-	notify := false // whether the system shows the page's notifications, see appLink
+	notify := false        // whether the system shows the page's notifications, see appLink
+	var opened atomic.Bool // the window has Studio's page, rather than the app's own
 	l.Open = func(link string) error {
 		link, err := appLink(link, notify)
 		if err != nil {
@@ -110,7 +112,24 @@ func main() {
 			win.SetURL(link)
 			win.Show().Focus()
 		})
+		opened.Store(true)
 		return nil
+	}
+	// openStudio opens Studio in the window, once at a time; the window says why if it can't.
+	var opening atomic.Bool
+	openStudio := func() {
+		if !opening.CompareAndSwap(false, true) {
+			return
+		}
+		defer opening.Store(false)
+		ctx, cancel := context.WithTimeout(context.Background(), launcher.StartWait)
+		defer cancel()
+		if err := l.OpenStudio(ctx); err != nil {
+			log.Printf("open Studio: %v", err)
+			application.InvokeAsync(func() {
+				win.SetURL(page("Studio didn't start", err.Error()+"\n\nRun studio in a terminal to see why, or studio doctor."))
+			})
+		}
 	}
 	b := &bridge{
 		base: base,
@@ -143,10 +162,14 @@ func main() {
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "dev.sandbox-studio.app",
-			// A second start shows the window that is already open.
+			// A second start shows the window that is already open, and tries Studio again
+			// where it didn't start.
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
 				if win != nil {
 					win.Show().Focus()
+					if !opened.Load() {
+						go openStudio()
+					}
 				}
 			},
 		},
@@ -174,9 +197,18 @@ func main() {
 		Title:  "Sandbox Studio",
 		Width:  1280,
 		Height: 840,
-		HTML:   page("Starting Studio…", ""),
+		// The app's own page is a URL rather than the HTML option: the window loads that
+		// after its URL, so a Studio that answered before the window was made would be
+		// covered by "Starting Studio…" for good. Of URLs, the newest wins.
+		URL:    page("Starting Studio…", ""),
 		Hidden: *test,
 		JS:     js,
+	})
+	// macOS ends a web view's page when memory runs short, leaving the window blank: it
+	// opens Studio again.
+	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {
+		log.Print("the window's page ended; opening Studio again")
+		go openStudio()
 	})
 
 	// Studio may take a while to start; the window says so meanwhile, and why if it can't.
@@ -192,14 +224,7 @@ func main() {
 					log.Printf("notifications: %v", err)
 				}
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), launcher.StartWait)
-			defer cancel()
-			if err := l.OpenStudio(ctx); err != nil {
-				log.Printf("open Studio: %v", err)
-				application.InvokeAsync(func() {
-					win.SetHTML(page("Studio didn't start", err.Error()+"\n\nRun studio in a terminal to see why, or studio doctor."))
-				})
-			}
+			openStudio()
 		}()
 	})
 
@@ -225,6 +250,10 @@ func main() {
 				win.Hide()
 				e.Cancel()
 			})
+		} else {
+			// Should the app outlive its window, a second start makes the window again: with a
+			// fresh login link, as the one it had was used.
+			win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { opened.Store(false) })
 		}
 		tray := app.SystemTray.New()
 		if goruntime.GOOS == "darwin" {
@@ -316,8 +345,12 @@ func appLink(link string, notify bool) (string, error) {
 	return u.String(), nil
 }
 
-// page is the window's own page while Studio starts, or when it can't.
+// page is the window's own page while Studio starts, or when it can't, as a data URL.
 func page(title, detail string) string {
+	return "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(pageHTML(title, detail)))
+}
+
+func pageHTML(title, detail string) string {
 	return `<!doctype html><meta charset="utf-8"><title>Sandbox Studio</title>
 <style>
 :root{color-scheme:light dark;font:14px/1.5 system-ui,sans-serif}

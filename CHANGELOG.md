@@ -14,6 +14,10 @@
 - A review of a push or pull request with thousands of changed lines opens, scrolls and takes
   typing without lag: the diff renders in chunks, each only while it is near the view, and the
   note and comments no longer render the whole diff again with every key.
+- The Studio app opened again while Studio runs in the background loads it reliably: its
+  "Starting Studio…" page can no longer cover Studio, a second start while Studio is still
+  starting waits for it instead of reporting that it didn't start, and a second start of an
+  app whose window is gone or shows an error opens Studio afresh.
 - Teammates can review GitLab merge requests as they review GitHub and Forgejo pull requests:
   `git_pull_request_list`, `git_pull_request_read` and `git_pull_request_review` work on a
   GitLab forge, subgroup projects included. A posted review becomes an approval, a discussion
