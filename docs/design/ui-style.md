@@ -204,7 +204,8 @@ primitives above and keeps the e2e selectors it had.
   (working, stopped, no computer); a computer shows its name in mono and its status dot or
   waiting count. Settings and the theme toggle sit in the footer.
 - **Done: Home.** A narrow `ColumnPage`: the setup card and notices, what needs you as approval
-  cards, what is working now, and what happened lately (decisions and chats started).
+  cards, each sandbox's line with its sessions branching off (`docs/design/session-lines.md`),
+  and what happened lately (decisions and chats started).
 - **Done: computers.** A teammate's computer is the screen beside the conversation on the
   teammate's page; a computer without a teammate is the same screen at full width. The bezel
   holds the name, power and ⋯, and the tabs are Terminal, Browser, Preview and Changes

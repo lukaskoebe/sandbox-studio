@@ -465,6 +465,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	brw.Runner, brw.VMs, brw.Conns = hub, mgr, conns
 	go brw.Run(ctx)
 	go brw.FollowOwners(ctx, bus, sandboxStopped(mgr))
+	go brw.RecordSessions(ctx, bus)
 	go mgr.FollowEnvironments(ctx, bus)
 	go mgr.RunCheckpointSchedules(ctx)
 	go mgr.WatchTerminals(ctx)

@@ -231,6 +231,7 @@ func (m *Manager) sessions(ctx context.Context, envID, id string) ([]Terminal, e
 	now := time.Now()
 	out := describeTerminals(list, now)
 	m.noteTerminals(envID, id, out, now)
+	m.recordTerminals(ctx, envID, id, out, now)
 	return out, nil
 }
 
@@ -278,22 +279,34 @@ func (m *Manager) EnvironmentTerminals(ctx context.Context, envID string) ([]San
 	return out, nil
 }
 
-// WatchTerminals asks the guests of running sandboxes what their terminals run every
-// terminalsEvery while a UI tab is open, and publishes events.TopicTerminals on a change.
+// terminalsUnwatched is how many ticks the watcher skips while no UI tab is open: it still
+// looks now and then, so Home's lines show what opened and closed meanwhile.
+const terminalsUnwatched = 6
+
+// WatchTerminals asks the guests of running sandboxes what their terminals run and which
+// ports listen every terminalsEvery while a UI tab is open, and every terminalsUnwatched
+// ticks otherwise. It publishes events.TopicTerminals on a change, and records the
+// sessions' spans for Home.
 func (m *Manager) WatchTerminals(ctx context.Context) {
 	if m.Bus == nil {
 		return
 	}
 	tick := time.NewTicker(terminalsEvery)
 	defer tick.Stop()
+	var n int
+	var pruned time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
 		}
-		if m.Bus.Watched() {
+		if n++; m.Bus.Watched() || n%terminalsUnwatched == 0 {
 			m.watchTerminals(ctx)
+		}
+		if now := time.Now(); now.Sub(pruned) > time.Hour {
+			m.pruneSpans(ctx, now)
+			pruned = now
 		}
 	}
 }
@@ -308,10 +321,12 @@ func (m *Manager) watchTerminals(ctx context.Context) {
 		connected[id] = true
 	}
 	watched := map[string]bool{}
+	complete := true // whether watched has every running sandbox
 	var wg sync.WaitGroup
 	for _, env := range envs {
 		recs, err := m.Store.Sandboxes(ctx, env.ID)
 		if err != nil {
+			complete = false
 			continue
 		}
 		for _, rec := range recs {
@@ -325,10 +340,14 @@ func (m *Manager) watchTerminals(ctx context.Context) {
 				ctx, cancel := context.WithTimeout(ctx, terminalsAsk)
 				defer cancel()
 				_, _ = m.sessions(ctx, env.ID, rec.ID)
+				m.recordPorts(ctx, env.ID, rec.ID, time.Now())
 			}()
 		}
 	}
 	wg.Wait()
+	if complete {
+		m.closeSpansExcept(ctx, watched, time.Now())
+	}
 	m.terminals.mu.Lock()
 	var gone []string
 	for id := range m.terminals.last {

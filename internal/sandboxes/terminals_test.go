@@ -1,11 +1,13 @@
 package sandboxes
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 func TestDescribeTerminals(t *testing.T) {
@@ -104,5 +106,45 @@ func TestNoteTerminalsPublishesChanges(t *testing.T) {
 	m.forgetTerminals("sb")
 	if n := count(); n != 1 {
 		t.Fatalf("the guest left: %d events", n)
+	}
+}
+
+func TestTerminalsAreRecordedAsSpans(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, err := s.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{Store: s}
+	at := time.Unix(1_800_000_000, 0)
+	main := Terminal{Session: agentproto.Session{Name: "main", Created: at.Add(-time.Hour).Unix(), Foreground: []string{"go", "test", "./..."}, Started: at.Add(-time.Minute).Unix()}, Label: "go test ./...", Program: "go test ./...", State: TerminalBusy}
+	agent := Terminal{Session: agentproto.Session{Name: "chat-c1", Chat: "c1", Created: at.Unix()}, Label: "claude", Program: "claude", State: TerminalIdle}
+	m.recordTerminals(ctx, env.ID, "sb", []Terminal{main, agent}, at)
+	main.Foreground, main.Started, main.State, main.Program, main.Label = nil, 0, TerminalIdle, "", "webshop"
+	m.recordTerminals(ctx, env.ID, "sb", []Terminal{main}, at.Add(time.Minute))
+	m.closeSpansExcept(ctx, map[string]bool{}, at.Add(2*time.Minute))
+	spans, err := s.SessionSpans(ctx, env.ID, at.Add(-2*time.Hour), at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]store.SessionSpan{}
+	for _, sp := range spans {
+		got[sp.Kind+" "+sp.Label] = sp
+	}
+	run, ok := got["run go test ./..."]
+	if !ok || run.Parent != terminalKey(Terminal{Session: agentproto.Session{Name: "main", Created: at.Add(-time.Hour).Unix()}}) ||
+		!run.OpenedAt.Equal(at.Add(-time.Minute)) || run.ClosedAt == nil || !run.ClosedAt.Equal(at.Add(time.Minute)) {
+		t.Errorf("run = %+v, want go test from a minute before to a minute after", run)
+	}
+	if c, ok := got["terminal claude"]; !ok || c.ChatID != "c1" || c.Harness != "claude" || !c.ClosedAt.Equal(at.Add(time.Minute)) {
+		t.Errorf("chat terminal = %+v", c)
+	}
+	if w, ok := got["terminal webshop"]; !ok || !w.OpenedAt.Equal(at.Add(-time.Hour)) || !w.ClosedAt.Equal(at.Add(2*time.Minute)) {
+		t.Errorf("main = %+v, want open an hour before until its sandbox stopped", w)
 	}
 }

@@ -21,6 +21,9 @@ const (
 	TopicBrowser = "browser"
 	// TopicTerminals: what runs in a sandbox's terminals changed; SandboxID names it.
 	TopicTerminals = "terminals"
+	// TopicSessions: a session of a sandbox (a terminal, a program in it, a browser session,
+	// the user's turn in one, a port) opened or closed, so Home's lines are stale.
+	TopicSessions = "sessions"
 )
 
 // Event is one change notification.

@@ -100,6 +100,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerReviewHead(api)
 	s.registerOpenPullRequest(api)
 	s.registerPushAgain(api)
+	s.registerSessionLines(api)
 	s.registerTransfers(api)
 	s.registerMerges(api)
 	s.registerExports(api, mux)

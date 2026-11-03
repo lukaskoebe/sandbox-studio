@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 
 /** The API queries each change topic makes stale. */
 const stale: Record<string, string[]> = {
+  sessions: ["/api/environments/{env}/sessions"],
   approvals: [
     "/api/approvals",
     "/api/environments/{env}/approvals",
@@ -23,11 +24,13 @@ const stale: Record<string, string[]> = {
   ],
   chats: [
     "/api/environments/{env}/chats",
+    "/api/environments/{env}/sessions",
     "/api/environments/{env}/sandboxes/{id}/chats",
     "/api/environments/{env}/teammates/{id}/timeline",
   ],
   sandboxes: [
     "/api/environments/{env}/sandboxes",
+    "/api/environments/{env}/sessions",
     "/api/environments/{env}/sandboxes/{id}",
     "/api/environments/{env}/sandboxes/{id}/checkpoints",
     "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule",

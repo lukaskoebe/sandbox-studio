@@ -44,7 +44,7 @@ to an environment.
 
 | Route | Page |
 |---|---|
-| `/e/$env` | Home, one narrow column: what needs you (the approvals waiting, decided on the spot), the chats working now, and earlier: decisions and chats started, each linking to its page or thread, with All chats and All activity. The setup card shows until the setup is complete or dismissed, and an environment with neither a teammate nor a sandbox offers to make the first |
+| `/e/$env` | Home, one narrow column: what needs you (the approvals waiting, decided on the spot), each sandbox as a line its sessions branch off as they open and rejoin as they close (chats, terminals, browser sessions and previews; `docs/design/session-lines.md`), and earlier: decisions and chats started, each linking to its page or thread, with All chats and All activity. The setup card shows until the setup is complete or dismissed, and an environment with neither a teammate nor a sandbox offers to make the first |
 | `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome, or at `?step=`; it works on the environment last opened, or the first. The teammate's Edit and the sandbox's Open sandbox add `?from=setup`, and those pages then link back to their step |
 | `/e/$env/sandboxes/$id` | a computer without a teammate: its screen at full width (below). `?tab=` (`terminal`, `preview`, `changes`), `?term=` and `?review=` pick what it shows. A teammate's computer redirects to the teammate's page with `?computer=` |
 | `/e/$env/sandboxes/$id/work` | the old workspace: redirects to the screen, on the tab its `?terminal=`, `?session=`, `?review=` or `?panel=` named |

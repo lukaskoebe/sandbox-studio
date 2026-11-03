@@ -145,6 +145,13 @@
   --st-waiting-fg: oklch(0.5 0.11 80);
   --st-failed: oklch(0.58 0.21 27);
   --st-stopped: oklch(0.7 0.01 255);
+  /* Home's sandbox lines (components/session-lines.tsx); chats, browsers and forks take
+     their areas' accents. */
+  --line-main: oklch(0.55 0.08 205);
+  --line-terminal: oklch(0.55 0.03 230);
+  --line-you: oklch(0.58 0.11 210);
+  --line-preview: oklch(0.62 0.01 255);
+  --line-grid: oklch(0.5 0 0 / 7%);
   /* Terminal colors for a dark terminal in both themes. */
   --term-prompt: oklch(0.78 0.15 150);
   --term-path: oklch(0.76 0.11 240);
@@ -239,6 +246,11 @@
   --st-waiting-fg: oklch(0.84 0.14 88);
   --st-failed: oklch(0.7 0.18 25);
   --st-stopped: oklch(0.55 0.01 255);
+  --line-main: oklch(0.6 0.08 205);
+  --line-terminal: oklch(0.6 0.03 230);
+  --line-you: oklch(0.8 0.1 205);
+  --line-preview: oklch(0.58 0.01 255);
+  --line-grid: oklch(1 0 0 / 5%);
   --wb-term-bg: #15171b;
   --wb-grid: rgb(225 231 234 / 3%);
   --glass: radial-gradient(130% 100% at 25% 0%, #242c30 0%, #121719 65%);

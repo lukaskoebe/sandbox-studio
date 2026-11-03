@@ -2201,6 +2201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What the environment's sandboxes had open over the last hours, for Home: chat turns, terminals and the programs in them, browser sessions and the user's turns in them, ports listening, and lineage events. Terminals and ports are seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days. */
+        get: operations["sessionLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates": {
         parameters: {
             query?: never;
@@ -3424,6 +3441,26 @@ export interface components {
         ChatTerminal: {
             /** @description The tmux session's name; attach to it like any agent session */
             session: string;
+        };
+        ChatTurnSpan: {
+            chatId: string;
+            /**
+             * Format: date-time
+             * @description Unset while the turn runs
+             */
+            endedAt?: string;
+            /** @enum {string} */
+            origin: "chat" | "terminal";
+            sandboxId: string;
+            /** @description The chat was opened by a heartbeat or a scheduled task, not by the user */
+            scheduled?: boolean;
+            /** Format: date-time */
+            startedAt: string;
+            /** @description The chat's state now */
+            state: string;
+            stopReason?: string;
+            teammateId: string;
+            title: string;
         };
         Checkpoint: {
             /** @description Taken by the sandbox's checkpoint schedule, which deletes it again; renaming it keeps it */
@@ -5825,6 +5862,31 @@ export interface components {
             alias: string;
             sandboxId: string;
         };
+        SandboxEvent: {
+            checkpointId?: string;
+            checkpointName?: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            /** @description For a rebase, the template it moved from */
+            fromTemplateId?: string;
+            /**
+             * Format: int64
+             * @description The sandbox's generation after the event
+             */
+            generation: number;
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete" | "merge" | "disks";
+            /** @description The sandbox's name at the time */
+            name: string;
+            /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from. For a merge, the fork merged */
+            otherSandboxId?: string;
+            sandboxId: string;
+            /** @description The template of the generation; empty for none */
+            templateId?: string;
+        };
         SandboxImport: {
             buildJobId?: string;
             /** Format: date-time */
@@ -5925,6 +5987,46 @@ export interface components {
             title?: string;
             /** Format: int64 */
             windows: number;
+        };
+        SessionLines: {
+            /** @description The sandboxes' lineage events in the window: creates, forks, checkpoints, merges and the like */
+            events: components["schemas"]["SandboxEvent"][] | null;
+            /** Format: date-time */
+            since: string;
+            /** @description The terminals, programs, browser sessions, takeovers and ports open at some time in the window, oldest first */
+            spans: components["schemas"]["SessionSpan"][] | null;
+            /** @description The chat turns that ran at some time in the window, oldest first, at most 2000 */
+            turns: components["schemas"]["ChatTurnSpan"][] | null;
+            /**
+             * Format: date-time
+             * @description Now, as the server read it
+             */
+            until: string;
+        };
+        SessionSpan: {
+            /** @description The chat a terminal continues, or whose turn opened a browser session */
+            chatId?: string;
+            /**
+             * Format: date-time
+             * @description Unset while it is open
+             */
+            closedAt?: string;
+            /** @description The agent harness running in a terminal */
+            harness?: string;
+            id: string;
+            /** @description What the session is within its sandbox and kind: a terminal's name and creation time, a browser session's ID or a port */
+            key: string;
+            /** @enum {string} */
+            kind: "terminal" | "run" | "browser" | "drive" | "preview";
+            /** @description What it shows: a terminal's name, a program's command line, a page's URL */
+            label?: string;
+            /** Format: date-time */
+            openedAt: string;
+            /** @description The key of the terminal a run is in, or of the browser session the user drove */
+            parent?: string;
+            sandboxId: string;
+            /** @description Whose browser a browser session is in */
+            teammateId?: string;
         };
         SessionView: {
             gitRemote?: string;
@@ -12233,6 +12335,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Environment"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    sessionLines: {
+        parameters: {
+            query?: {
+                /** @description How far back the window starts */
+                hours?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionLines"];
                 };
             };
             /** @description Error */

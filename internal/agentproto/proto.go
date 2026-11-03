@@ -117,6 +117,9 @@ func (s Session) InHostClock(now int64) Session {
 		return s
 	}
 	d := now - s.Clock
+	if s.Created > 0 {
+		s.Created += d
+	}
 	if s.Activity > 0 {
 		s.Activity += d
 	}

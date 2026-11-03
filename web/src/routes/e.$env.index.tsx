@@ -18,13 +18,12 @@ import {
 } from "@/components/approval-stack"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { Ident } from "@/components/ident"
+import { SessionLines } from "@/components/session-lines"
 import { SetupCard } from "@/components/setup-card"
 import { ColumnPage } from "@/components/column-page"
-import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Approval, type Sandbox } from "@/lib/api/client"
-import type { Chat } from "@/lib/chats"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { useNotificationPermission } from "@/lib/notifications"
 import { usePreviewSetting } from "@/lib/preview-setting"
@@ -34,7 +33,6 @@ import {
   approvalKind,
   approvalSource,
 } from "@/lib/approval-kinds"
-import { cn, formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/")({ component: Home })
 
@@ -85,9 +83,10 @@ function Home() {
       ) : (
         <>
           <NeedsYou env={env} approvals={waiting} />
-          <WorkingNow
+          <SessionLines
             env={env}
-            chats={running}
+            sandboxes={sandboxes.data ?? []}
+            chats={chats.data ?? []}
             waiting={new Set(waiting.map((a) => a.sandboxId))}
           />
         </>
@@ -406,82 +405,6 @@ function NeedsYou({ env, approvals }: { env: string; approvals: Approval[] }) {
         />
       )}
       {sheet}
-    </section>
-  )
-}
-
-/** The running chats: who is on what, in which sandbox, and whether it waits on you. */
-function WorkingNow({
-  env,
-  chats,
-  waiting,
-}: {
-  env: string
-  chats: Chat[]
-  waiting: ReadonlySet<string | undefined>
-}) {
-  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
-    params: { path: { env } },
-  })
-  const sandboxes = $api.useQuery("get", "/api/environments/{env}/sandboxes", {
-    params: { path: { env } },
-  })
-  const people = new Map((teammates.data ?? []).map((t) => [t.id, t]))
-  const names = new Map((sandboxes.data ?? []).map((s) => [s.id, s.name]))
-  return (
-    <section
-      aria-labelledby="working-now"
-      className="grid min-w-0 content-start gap-2.5"
-    >
-      <Label id="working-now">Working now</Label>
-      {chats.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No chat is running.</p>
-      ) : (
-        <ul className="overflow-hidden rounded-(--radius) border bg-card">
-          {chats.map((c) => {
-            const who = people.get(c.teammateId)
-            const blocked = waiting.has(c.sandboxId)
-            return (
-              <li key={c.id} className="border-b last:border-b-0">
-                <Link
-                  to="/e/$env/teammates/$id"
-                  params={{ env, id: c.teammateId }}
-                  search={{ thread: c.id }}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40"
-                >
-                  <TeammateAvatar
-                    name={who?.name ?? "?"}
-                    avatar={who?.avatar}
-                    className="size-6 rounded-full text-meta"
-                  />
-                  <span className="grid min-w-0 flex-1">
-                    <span className="truncate text-title font-medium">
-                      {c.title || "New chat"}
-                    </span>
-                    <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                      {who && <span className="truncate">{who.name}</span>}
-                      {who && <span aria-hidden>·</span>}
-                      <Ident>{names.get(c.sandboxId) ?? c.sandboxId}</Ident>
-                      {blocked && <span aria-hidden>·</span>}
-                      {blocked && <span>waiting on you</span>}
-                    </span>
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 text-xs",
-                      blocked
-                        ? "text-(--st-waiting-fg)"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {blocked ? "waiting" : formatAge(c.updatedAt)}
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      )}
     </section>
   )
 }
