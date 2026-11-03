@@ -181,6 +181,56 @@ func (c *Checker) CheckIfDue(ctx context.Context) (State, error) {
 	return v, nil
 }
 
+// ErrUpToDate is Update now when GitHub has no newer release.
+var ErrUpToDate = errors.New("Studio is up to date")
+
+// InstallNow is the user's Update now: it checks GitHub right away, whatever the mode, and
+// installs a newer release, as the "install" mode does but without its pause after a failed
+// install. Studio still restarts into it only once idle, unless restart is set. An install
+// under way isn't started again; restart then ends its wait.
+func (c *Checker) InstallNow(ctx context.Context, restart bool) (State, error) {
+	if c.Installer == nil {
+		if c.CannotInstall != "" {
+			return State{}, cannotInstallError(c.CannotInstall)
+		}
+		return State{}, ErrCannotInstall
+	}
+	if c.Installer.Installing() {
+		if restart {
+			c.Installer.Hurry()
+		}
+		return c.State(ctx)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s, err := c.load(ctx)
+	if err != nil {
+		return c.view(s), err
+	}
+	now := c.now()
+	rel, err := c.fetch(ctx)
+	s.CheckedAt = &now
+	if err != nil {
+		s.Error = err.Error()
+	} else {
+		s.Latest, s.URL, s.Assets, s.Error = rel.Tag, rel.URL, rel.Assets, ""
+	}
+	if serr := c.save(ctx, s); serr != nil {
+		return c.view(s), serr
+	}
+	if err != nil {
+		return c.view(s), fmt.Errorf("check for a release: %w", err)
+	}
+	if !Newer(s.Latest, c.Current) {
+		return c.view(s), ErrUpToDate
+	}
+	if c.Log != nil {
+		c.Log.Info("installing a Studio update the user asked for", "current", c.Current, "latest", s.Latest, "restart", restart)
+	}
+	c.Installer.StartNow(Release{Tag: s.Latest, URL: s.URL, Assets: s.Assets}, restart)
+	return c.view(s), nil
+}
+
 // Run checks when due, now and then every hour, until ctx ends.
 func (c *Checker) Run(ctx context.Context) {
 	t := time.NewTicker(time.Hour)

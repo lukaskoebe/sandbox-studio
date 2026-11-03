@@ -3066,6 +3066,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/updates/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update now: check for a newer release and install it, whatever the update mode. Studio restarts into it once no chat, template build or sign-in is running, or right away with restart; with an install under way, restart ends its wait */
+        post: operations["installUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/template-spec/vocabulary": {
         parameters: {
             query?: never;
@@ -4698,6 +4715,10 @@ export interface components {
             phase: "downloading" | "waiting" | "restarting" | "installed" | "failed";
             /** @description The release being installed */
             version: string;
+        };
+        InstallUpdateRequest: {
+            /** @description Restart into the release without waiting for running chats, template builds and sign-ins, which are cut off */
+            restart?: boolean;
         };
         IssuePayload: {
             /** @description The secret's kind, such as aws */
@@ -14494,6 +14515,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateModeInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateState"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    installUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallUpdateRequest"];
             };
         };
         responses: {

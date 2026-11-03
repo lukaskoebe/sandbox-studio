@@ -500,6 +500,14 @@ function UpdatesSection() {
         description: errorMessage(err),
       }),
   })
+  const install = $api.useMutation("post", "/api/system/updates/install", {
+    onSuccess: (data) =>
+      queryClient.setQueryData(["get", "/api/system/updates"], data),
+    onError: (err) =>
+      toast.error("Could not update Studio", {
+        description: errorMessage(err),
+      }),
+  })
   const st = state.data
   const modes = st?.canInstall
     ? updateModes
@@ -551,7 +559,7 @@ function UpdatesSection() {
         <p className="text-destructive">Last check failed: {st.error}</p>
       )}
       {st?.available && !installing(st) && (
-        <p className="flex items-center gap-2">
+        <p className="flex flex-wrap items-center gap-2">
           <Badge>Update available</Badge>
           {st.url ? (
             <a
@@ -565,9 +573,25 @@ function UpdatesSection() {
           ) : (
             st.latest
           )}
+          {st.canInstall && (
+            <Button
+              size="sm"
+              disabled={install.isPending}
+              onClick={() => install.mutate({ body: {} })}
+            >
+              {install.isPending ? <Spinner /> : <ArrowCircleUpIcon />}
+              Update now
+            </Button>
+          )}
         </p>
       )}
-      {st?.install && <InstallLine install={st.install} />}
+      {st?.install && (
+        <InstallLine
+          install={st.install}
+          onRestart={() => install.mutate({ body: { restart: true } })}
+          restarting={install.isPending}
+        />
+      )}
     </SettingRow>
   )
 }
@@ -579,8 +603,19 @@ function installing(st: UpdateState | undefined) {
   )
 }
 
-/** The automatic install under way, or how the last one ended. */
-function InstallLine({ install }: { install: InstallProgress }) {
+/**
+ * The install under way, or how the last one ended. One that waits for running chats can
+ * restart right away instead.
+ */
+function InstallLine({
+  install,
+  onRestart,
+  restarting,
+}: {
+  install: InstallProgress
+  onRestart: () => void
+  restarting: boolean
+}) {
   const v = <span className="font-mono">{install.version}</span>
   switch (install.phase) {
     case "downloading":
@@ -591,9 +626,18 @@ function InstallLine({ install }: { install: InstallProgress }) {
       )
     case "waiting":
       return (
-        <p className="flex items-center gap-2 text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
           <Spinner /> {v} is ready. It installs once Studio is idle
           {install.detail ? `; now ${install.detail}` : ""}.
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={restarting}
+            title="Restart into the update now; running chats, template builds and sign-ins are cut off"
+            onClick={onRestart}
+          >
+            Restart now
+          </Button>
         </p>
       )
     case "restarting":

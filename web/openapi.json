@@ -4654,6 +4654,16 @@
         ],
         "type": "object"
       },
+      "InstallUpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "restart": {
+            "description": "Restart into the release without waiting for running chats, template builds and sign-ins, which are cut off",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "IssuePayload": {
         "additionalProperties": false,
         "properties": {
@@ -22928,6 +22938,47 @@
           }
         },
         "summary": "Set the update mode: off, tell (check daily; the default) or install (also install a newer release when Studio is idle). A mode that checks checks right away",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/updates/install": {
+      "post": {
+        "operationId": "installUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateState"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update now: check for a newer release and install it, whatever the update mode. Studio restarts into it once no chat, template build or sign-in is running, or right away with restart; with an install under way, restart ends its wait",
         "tags": [
           "system"
         ]

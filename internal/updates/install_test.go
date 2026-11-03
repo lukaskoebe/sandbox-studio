@@ -587,3 +587,88 @@ func TestInstallReplacesTheAppBundle(t *testing.T) {
 		})
 	}
 }
+
+// Update now with restart doesn't wait for idle, and Hurry ends the wait of an install that
+// waits: either way Studio restarts into the release while it is busy.
+func TestUpdateNowRestartsWithoutWaiting(t *testing.T) {
+	r := newRelease(t, "v1.1.0")
+	f := newInstall(t, r)
+	f.in.Idle = func(context.Context) (bool, string, error) { return false, "a chat is running", nil }
+	f.in.Start(Release{Tag: "v1.1.0", Assets: r.assets()})
+	f.wait(t, PhaseWaiting)
+	f.in.Hurry()
+	select {
+	case <-f.restarts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no restart after Hurry: %+v", f.in.Progress())
+	}
+
+	f = newInstall(t, r)
+	idle := 0
+	f.in.Idle = func(context.Context) (bool, string, error) { idle++; return false, "a chat is running", nil }
+	f.in.StartNow(Release{Tag: "v1.1.0", Assets: r.assets()}, true)
+	select {
+	case <-f.restarts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no restart: %+v", f.in.Progress())
+	}
+	if idle != 0 {
+		t.Errorf("asked whether Studio is idle %d times", idle)
+	}
+}
+
+// A failed install waits a day before the automatic install tries again; Update now tries
+// right away.
+func TestUpdateNowRetriesAFailedInstall(t *testing.T) {
+	r := newRelease(t, "v1.1.0")
+	f := newInstall(t, r)
+	f.in.SetProgress(&InstallProgress{Version: "v1.1.0", Phase: PhaseFailed, At: time.Now().UTC(), Error: "it broke"})
+	f.in.Start(Release{Tag: "v1.1.0", Assets: r.assets()})
+	if p := f.in.Progress(); p.Phase != PhaseFailed {
+		t.Fatalf("the automatic install tried again: %+v", p)
+	}
+	f.in.StartNow(Release{Tag: "v1.1.0", Assets: r.assets()}, false)
+	select {
+	case <-f.restarts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no restart: %+v", f.in.Progress())
+	}
+}
+
+// Update now checks GitHub whatever the mode and installs a newer release; with none it says
+// Studio is up to date, and without an installer that it can't install.
+func TestInstallNowChecksAndInstalls(t *testing.T) {
+	r := newRelease(t, "v1.1.0")
+	f := newInstall(t, r)
+	tag := "v1.0.0"
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		assets, _ := json.Marshal(r.assets())
+		var list []map[string]any
+		_ = json.Unmarshal(assets, &list)
+		for _, a := range list {
+			a["browser_download_url"] = a["url"]
+		}
+		body, _ := json.Marshal(map[string]any{"tag_name": tag, "html_url": "https://github.com/x", "assets": list})
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(gh.Close)
+	ctx := context.Background()
+	c := &Checker{Settings: memSettings{settingKey: []byte(`{"mode":"off"}`)}, Client: gh.Client(), URL: gh.URL, Current: "v1.0.0"}
+	if _, err := c.InstallNow(ctx, false); !errors.Is(err, ErrCannotInstall) {
+		t.Fatalf("without an installer: %v", err)
+	}
+	c.Installer = f.in
+	if _, err := c.InstallNow(ctx, false); !errors.Is(err, ErrUpToDate) {
+		t.Fatalf("up to date: %v", err)
+	}
+	tag = "v1.1.0"
+	st, err := c.InstallNow(ctx, false)
+	if err != nil || st.Latest != "v1.1.0" || st.Install == nil || st.Mode != ModeOff {
+		t.Fatalf("%+v %v", st, err)
+	}
+	select {
+	case <-f.restarts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no restart: %+v", f.in.Progress())
+	}
+}

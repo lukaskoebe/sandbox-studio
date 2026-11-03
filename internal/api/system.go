@@ -173,6 +173,27 @@ func (s *Server) registerSystem(api huma.API) {
 		}
 		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "installUpdate", Method: http.MethodPost, Path: "/api/system/updates/install", Tags: []string{"system"},
+		Summary: "Update now: check for a newer release and install it, whatever the update mode. Studio restarts into it once no chat, template build or sign-in is running, or right away with restart; with an install under way, restart ends its wait",
+	}, func(ctx context.Context, in *struct {
+		Body struct {
+			Restart bool `json:"restart,omitempty" doc:"Restart into the release without waiting for running chats, template builds and sign-ins, which are cut off"`
+		}
+	}) (*struct{ Body UpdateState }, error) {
+		if s.System.Updates == nil {
+			return nil, huma.Error503ServiceUnavailable("the update check is not available")
+		}
+		st, err := s.System.Updates.InstallNow(ctx, in.Body.Restart)
+		switch {
+		case errors.Is(err, updates.ErrCannotInstall), errors.Is(err, updates.ErrUpToDate):
+			return nil, huma.Error409Conflict(err.Error())
+		case err != nil && st.Error != "":
+			return nil, huma.Error502BadGateway(err.Error())
+		}
+		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
+	})
 	s.registerPreviewSetting(api)
 
 	huma.Register(api, huma.Operation{

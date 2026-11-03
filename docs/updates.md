@@ -21,7 +21,13 @@ A new binary that doesn't run because the system can't find its loader (ENOENT) 
 
 ## Installing
 
-`Installer` (`install.go`) runs in the background once a check finds a newer release:
+`Installer` (`install.go`) runs in the background once a check finds a newer release in the
+`install` mode, or when the user clicks **Update now** beside a newer release in Settings
+(`POST /api/system/updates/install`, `Checker.InstallNow`). Update now works in every mode: it
+asks GitHub right away, answers 409 if Studio is up to date or can't install, and tries a
+release again at once although its install failed less than a day ago, which the `install`
+mode waits out. While an install waits for idle, **Restart now** (`{"restart": true}`) ends the
+wait (`Installer.Hurry`), cutting off what runs.
 
 1. **Download.** Only a release that isn't a pre-release and is newer than the running one.
    The archive for this OS and architecture (`sandbox-studio_<tag>_<os>_<arch>.tar.gz`, `.zip`
@@ -35,7 +41,7 @@ A new binary that doesn't run because the system can't find its loader (ENOENT) 
    then unpacked next to the running one (the directory must be writable) and must answer
    `studio version` with the tag.
 3. **Wait for idle.** No chat turn, template build or sign-in may be running; Studio checks
-   again every two minutes and the UI says what it waits for.
+   again every two minutes and the UI says what it waits for, until the user restarts now.
 4. **Back up** the database with `VACUUM INTO` to `<data>/updates/<tag>/studio-<old>.db`.
 5. **Swap.** The running binary moves to `studio.old` (`studio.old.exe`) and the new one takes
    its name. Renaming first works on Windows too, where a running executable can't be

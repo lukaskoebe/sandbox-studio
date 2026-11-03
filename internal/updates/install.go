@@ -88,6 +88,9 @@ type Installer struct {
 	mu       sync.Mutex
 	progress *InstallProgress
 	cancel   context.CancelFunc
+	// hurry ends the install's wait for idle: closed by Hurry, or at the start of an install
+	// the user asked to restart right away.
+	hurry chan struct{}
 }
 
 // Progress returns the install under way, or the last one's outcome.
@@ -110,22 +113,59 @@ func (in *Installer) SetProgress(p *InstallProgress) {
 
 // Start installs the release in the background unless an install is under way, the release
 // is installed, or its install failed less than a day ago.
-func (in *Installer) Start(rel Release) {
+func (in *Installer) Start(rel Release) { in.start(rel, false, false) }
+
+// StartNow is Start for the user's Update now: a release whose install failed is tried again
+// right away, and with restart, Studio restarts into it without waiting for idle.
+func (in *Installer) StartNow(rel Release, restart bool) { in.start(rel, true, restart) }
+
+// Hurry ends the wait for idle of an install under way: it restarts into the release even
+// though a chat, a template build or a sign-in is running.
+func (in *Installer) Hurry() {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if in.hurry == nil {
+		return
+	}
+	select {
+	case <-in.hurry:
+	default:
+		close(in.hurry)
+	}
+}
+
+// Installing reports whether an install is under way.
+func (in *Installer) Installing() bool {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	return in.progress.underWay()
+}
+
+func (p *InstallProgress) underWay() bool {
+	return p != nil && (p.Phase == PhaseDownloading || p.Phase == PhaseWaiting || p.Phase == PhaseRestarting)
+}
+
+func (in *Installer) start(rel Release, retry, restart bool) {
 	in.mu.Lock()
 	defer in.mu.Unlock()
 	if p := in.progress; p != nil && p.Version == rel.Tag {
 		switch p.Phase {
-		case PhaseDownloading, PhaseWaiting, PhaseRestarting, PhaseInstalled:
+		case PhaseInstalled:
 			return
 		case PhaseFailed:
-			if time.Since(p.At) < retryFailed {
+			if !retry && time.Since(p.At) < retryFailed {
 				return
 			}
 		}
 	}
-	if p := in.progress; p != nil && (p.Phase == PhaseDownloading || p.Phase == PhaseWaiting || p.Phase == PhaseRestarting) {
+	if in.progress.underWay() {
 		return
 	}
+	in.hurry = make(chan struct{})
+	if restart {
+		close(in.hurry)
+	}
+	hurry := in.hurry
 	base := in.Context
 	if base == nil {
 		base = context.Background()
@@ -135,7 +175,7 @@ func (in *Installer) Start(rel Release) {
 	in.progress = &InstallProgress{Version: rel.Tag, Phase: PhaseDownloading, At: time.Now().UTC()}
 	go func() {
 		defer cancel()
-		if err := in.install(ctx, rel); err != nil {
+		if err := in.install(ctx, rel, hurry); err != nil {
 			if ctx.Err() != nil && base.Err() == nil {
 				err = errors.New("cancelled")
 			}
@@ -178,7 +218,7 @@ func (in *Installer) client() *http.Client {
 }
 
 // install runs one install up to the restart.
-func (in *Installer) install(ctx context.Context, rel Release) error {
+func (in *Installer) install(ctx context.Context, rel Release, hurry <-chan struct{}) error {
 	if v, ok := parse(rel.Tag); !ok || v.pre != "" {
 		return fmt.Errorf("%s is not a release version", rel.Tag)
 	}
@@ -291,7 +331,7 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 		return err
 	}
 
-	if err := in.waitIdle(ctx); err != nil {
+	if err := in.waitIdle(ctx, hurry); err != nil {
 		return err
 	}
 	in.set(func(p *InstallProgress) { p.Phase, p.Detail = PhaseRestarting, "" })
@@ -332,13 +372,19 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 	return nil
 }
 
-// waitIdle waits until nothing would be cut off by a restart.
-func (in *Installer) waitIdle(ctx context.Context) error {
+// waitIdle waits until nothing would be cut off by a restart, or until hurry closes.
+func (in *Installer) waitIdle(ctx context.Context, hurry <-chan struct{}) error {
 	poll := in.IdlePoll
 	if poll <= 0 {
 		poll = 2 * time.Minute
 	}
 	for {
+		select {
+		case <-hurry:
+			in.log().Info("restarting into the Studio update without waiting for idle")
+			return nil
+		default:
+		}
 		idle, busy, err := in.Idle(ctx)
 		if err != nil {
 			return fmt.Errorf("check whether Studio is busy: %w", err)
@@ -350,6 +396,7 @@ func (in *Installer) waitIdle(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-hurry:
 		case <-time.After(poll):
 		}
 	}
