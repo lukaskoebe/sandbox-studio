@@ -17,6 +17,7 @@ import (
 	goruntime "runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -390,8 +391,8 @@ func (p *ptyStream) exit() {
 
 const prompt = "agent@sandbox:/workspace$ "
 
-// servePTY runs a line-based fake shell: it echoes input, and answers echo, printf, printenv
-// and exit. Secret placeholders from the last config are its environment, as with the real
+// servePTY runs a line-based fake shell: it echoes input, and answers echo, printf, printenv,
+// sleep and exit. Secret placeholders from the last config are its environment, as with the real
 // agent's profile hook.
 func (g *Guest) servePTY(st net.Conn, br *bufio.Reader, name string) error {
 	if name == "" {
@@ -465,6 +466,12 @@ func (g *Guest) shell(line string) (out string, exit bool) {
 		// The escapes a terminal test needs, such as an OSC 52 copy: printf '\e]52;;aGk=\a'.
 		arg := strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "printf")), "'\"")
 		return strings.NewReplacer(`\e`, "\x1b", `\a`, "\a", `\n`, "\r\n").Replace(arg), false
+	case "sleep":
+		// Output with no input just before it: sleep 3; printf '\e]52;;aGk=\a'.
+		_, then, _ := strings.Cut(line, ";")
+		secs, _ := strconv.Atoi(strings.TrimSuffix(fields[1], ";"))
+		time.Sleep(time.Duration(secs) * time.Second)
+		return g.shell(then)
 	case "printenv":
 		if len(fields) > 1 {
 			if v, ok := env[fields[1]]; ok {

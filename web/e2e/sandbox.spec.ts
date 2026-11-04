@@ -70,7 +70,7 @@ test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy an
     "copied from tmux"
   )
   // A program acting on its own, long after any input, can't write the clipboard.
-  await term.run(`(sleep 3; printf '\\e]52;;bGF0ZXI=\\a') &`)
+  await term.run(`sleep 3; printf '\\e]52;;bGF0ZXI=\\a'`)
   await expect(page.getByText(/tried to copy to your clipboard/)).toBeVisible({
     timeout: 15_000,
   })
