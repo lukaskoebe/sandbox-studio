@@ -99,18 +99,19 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
       })
     }
 
-    // Locked asks for every host, so the npm registry, on the curated list, gets a card.
+    // Locked asks for every host, so the npm registry, on the curated list, is held. On the
+    // computer's own screen a held connection shows as a count, not as a floating card.
     expect((await level("locked")).ok()).toBe(true)
     await term.run(
       `c=$(curl -sS -o /dev/null --max-time 600 -w '%{http_code}' https://registry.npmjs.org/); echo "npm=$c"`
     )
-    const card = page
-      .getByRole("region", { name: "Approvals" })
-      .getByTestId("approval-card")
-      .filter({ hasText: "registry.npmjs.org" })
-    await expect(card).toBeVisible({ timeout: 2 * 60_000 })
-    await card.getByRole("button", { name: "Allow" }).click()
-    await expect(card).toBeHidden()
+    const waiting = page.getByRole("button", { name: /\d+ requests? waiting/ })
+    await expect(waiting).toBeVisible({ timeout: 2 * 60_000 })
+    await waiting.click()
+    const popover = page.getByTestId("waiting-popover")
+    await expect(popover).toContainText("registry.npmjs.org")
+    await popover.getByRole("button", { name: "Allow all" }).click()
+    await expect(waiting).toBeHidden()
     expect(await term.result("npm", 2 * 60_000)).toBe("200")
 
     // A Vite server, installed from the registry the rule now allows.

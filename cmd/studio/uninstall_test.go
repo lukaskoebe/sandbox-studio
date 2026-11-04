@@ -267,6 +267,7 @@ func TestUninstallKeepsTheProgramWhenAnEntryFails(t *testing.T) {
 func TestUninstallWontRemoveTheWrongDirectory(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows reads this for the home directory
 	touch(t, filepath.Join(home, "studio.db"))
 	touch(t, filepath.Join(home, "plain", "photo.jpg"))
 	for _, dir := range []string{"/", home, filepath.Dir(home), filepath.Join(home, "plain")} {

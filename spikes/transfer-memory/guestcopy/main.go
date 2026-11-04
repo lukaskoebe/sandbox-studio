@@ -1,3 +1,5 @@
+//go:build linux
+
 // Command guestcopy runs in the spike's VM: it copies a tree with the guest's export and
 // import, as a rebase's two VMs do, through a pipe within one process.
 package main

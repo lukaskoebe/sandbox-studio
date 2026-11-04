@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.16.0 — 2026-11-04
 
 - `docker pull` from Docker Hub or Quay no longer stops on a card. Their downloads also come from
   `production.cloudfront.docker.com` and `cdn01.quay.io` to `cdn03.quay.io`, which the curated list
