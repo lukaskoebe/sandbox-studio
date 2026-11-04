@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +35,23 @@ func installGuestAgent(dir, arch string) error { return agentbin.Install(dir, ar
 func ensureRuntime(ctx context.Context) (*runtime.Upgrade, error) { return runtime.Ensure(ctx) }
 
 func newRuntime(opts runtime.Options, _ *slog.Logger) studioRuntime { return runtime.New(opts) }
+
+// msbVMs is vmHost on the real microsandbox.
+type msbVMs struct{ rt *runtime.Runtime }
+
+func hostVMs() vmHost { return msbVMs{runtime.New(runtime.Options{})} }
+
+func (m msbVMs) names(ctx context.Context) ([]string, error) {
+	statuses, err := m.rt.Statuses(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	return slices.Sorted(maps.Keys(statuses)), nil
+}
+
+func (m msbVMs) stop(ctx context.Context, name string) error   { return m.rt.Stop(ctx, name) }
+func (m msbVMs) remove(ctx context.Context, name string) error { return m.rt.Remove(ctx, name) }
+func (m msbVMs) removeCheckpoints(ctx context.Context) error   { return runtime.RemoveCheckpoints(ctx) }
 
 func hostProbes() doctor.Probes {
 	p := doctor.HostProbes()

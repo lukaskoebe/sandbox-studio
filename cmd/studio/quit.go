@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -26,27 +27,44 @@ func runQuit(ctx context.Context, w io.Writer, addr string) int {
 		fmt.Fprintln(w, err)
 		return 1
 	}
-	lock := filepath.Join(p.Data, "studio.lock")
-	if release, err := store.TryLock(lock); err == nil {
-		_ = release()
+	if !holdsData(p) {
 		fmt.Fprintln(w, "Studio isn't running.")
 		return 0
 	}
-	if err := requestQuit(ctx, addr); err != nil {
+	if err := stopStudio(ctx, p, addr); err != nil {
 		fmt.Fprintln(w, err)
 		return 1
 	}
-	deadline := time.Now().Add(quitWait)
-	for time.Now().Before(deadline) {
-		if release, err := store.TryLock(lock); err == nil {
-			_ = release()
-			fmt.Fprintln(w, "Studio stopped. Sandboxes keep running.")
-			return 0
+	fmt.Fprintln(w, "Studio stopped. Sandboxes keep running.")
+	return 0
+}
+
+// holdsData reports whether a Studio holds the data directory.
+func holdsData(p paths.Paths) bool {
+	lock := filepath.Join(p.Data, "studio.lock")
+	if _, err := os.Stat(lock); err != nil {
+		return false // no Studio ever ran here, as on a first install
+	}
+	release, err := store.TryLock(lock)
+	if err != nil {
+		return true
+	}
+	_ = release()
+	return false
+}
+
+// stopStudio asks the running Studio to shut down and waits until it released its data directory.
+func stopStudio(ctx context.Context, p paths.Paths, addr string) error {
+	if err := requestQuit(ctx, addr); err != nil {
+		return err
+	}
+	for deadline := time.Now().Add(quitWait); time.Now().Before(deadline); {
+		if !holdsData(p) {
+			return nil
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	fmt.Fprintf(w, "Studio is still shutting down after %s.\n", quitWait)
-	return 1
+	return fmt.Errorf("Studio is still shutting down after %s", quitWait)
 }
 
 // requestQuit sends POST /api/auth/quit with the control credential.

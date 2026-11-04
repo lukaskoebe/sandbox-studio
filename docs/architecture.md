@@ -171,7 +171,7 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   starts as the tray launcher does (`internal/launcher`, shared by both). `studio app` starts
   it, or opens the browser without it or a display. See [the Studio app](app.md).
 - Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),
-  `quit`, `app`, `doctor`, `version`, `autostart enable|disable|status`, `restore-msb-db`, and the sandbox commands of
+  `quit`, `restart`, `uninstall`, `app`, `doctor`, `version`, `autostart enable|disable|status`, `restore-msb-db`, and the sandbox commands of
   `internal/cli` (`ls`, `show`, `start`, `stop`, `suspend`, `resume`, `create`, `fork`, `rm`,
   `shell`, `ask`, `approvals`, `approve`, `deny`, `checkpoints`, `checkpoint`, `restore`,
   `envs`, `completion`; see [command line](cli.md)). The guest binary is `studio-agent` (see

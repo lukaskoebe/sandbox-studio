@@ -64,6 +64,8 @@ Studio listens on loopback, so other computers on your network cannot open its U
 
 Studio is square by default, with titles, buttons and labels in mono. For a soft, rounded look in sans, set **Style** to **Quiet** under **Settings → General**. Each browser keeps its own style, as it does light or dark, which you pick at the bottom of the sidebar.
 
+To stop Studio, run `studio quit` or use **Shut down** under **Settings → General**; sandboxes keep running. Installing a new version restarts a running Studio by itself. To remove Studio and everything it created, run `studio uninstall`, which lists what goes and asks you to confirm.
+
 To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default.
 
 Studio checks GitHub for a newer release once a day and shows it under **Settings → General → Updates** and in the sidebar. Set **Updates** to **Off** to stop the check, or to **Install automatically** to have Studio install releases itself: it downloads the release, verifies it against `checksums.txt` and its GitHub build attestation, and restarts into it once no chat, template build or sign-in is running. If the new version doesn't start, the old one and its database come back. Studio can install itself only where it may write to the folder its binary is in, as with `install.sh`.

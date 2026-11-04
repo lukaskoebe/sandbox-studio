@@ -268,3 +268,26 @@ test("the terminal shell is bash until zsh is picked, for every browser", async 
     "true"
   )
 })
+
+test("Shut down asks first, then says Studio has stopped", async ({
+  page,
+  env,
+}) => {
+  // The route is the Go tests'; here it would stop the Studio all the tests share.
+  let asked = 0
+  await page.route("**/api/system/shutdown", async (route) => {
+    asked++
+    await route.fulfill({ status: 202 })
+  })
+  await page.goto(`/e/${env}/settings/general`)
+  await page.getByRole("button", { name: "Shut down Studio" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  await expect(dialog).toBeHidden()
+  expect(asked).toBe(0)
+
+  await page.getByRole("button", { name: "Shut down Studio" }).click()
+  await dialog.getByRole("button", { name: "Shut down" }).click()
+  await expect(page.getByText("Studio has stopped")).toBeVisible()
+  expect(asked).toBe(1)
+})

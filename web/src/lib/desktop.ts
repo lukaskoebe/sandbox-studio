@@ -52,6 +52,11 @@ function post(kind: "open" | "notify", payload: string) {
   handler()?.postMessage(`studio:${kind} ${payload}`)
 }
 
+/** Closes the app, after Studio shut down from the page. */
+export function quitApp() {
+  handler()?.postMessage("studio:quit")
+}
+
 /** Opens an http(s) address in the system browser; the app opens nothing else. */
 export function openExternal(url: string) {
   post("open", new URL(url, window.location.href).href)

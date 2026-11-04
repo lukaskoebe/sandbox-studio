@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	msb "github.com/superradcompany/microsandbox/sdk/go"
@@ -378,6 +379,24 @@ func checkEgress(configJSON string, egress Egress) error {
 		return errors.New("the sandbox lost its gateway proxy")
 	}
 	return nil
+}
+
+// RemoveCheckpoints removes every checkpoint of Studio's and leaves other snapshots alone, for
+// an uninstall that keeps microsandbox.
+func RemoveCheckpoints(ctx context.Context) error {
+	indexed, err := msb.Snapshot.List(ctx)
+	if err != nil {
+		return err
+	}
+	var failed []error
+	for _, handle := range indexed {
+		if group := handle.Group(); group != nil && strings.HasPrefix(*group, "sbx-") {
+			if err := handle.Remove(ctx, true); err != nil && !msb.IsKind(err, msb.ErrSnapshotNotFound) {
+				failed = append(failed, err)
+			}
+		}
+	}
+	return errors.Join(failed...)
 }
 
 func checkpointGroup(sandboxID string) string {

@@ -34,6 +34,18 @@ func TestBridgeTakesStudiosMessagesOnly(t *testing.T) {
 	}
 }
 
+func TestOnlyStudioClosesTheAppFromThePage(t *testing.T) {
+	quit := 0
+	b := &bridge{base: "http://127.0.0.1:7878", quit: func() { quit++ }}
+	_ = b.handle("studio:quit", "https://evil.example")
+	if quit != 0 {
+		t.Fatal("another origin closed the app")
+	}
+	if err := b.handle("studio:quit", "http://127.0.0.1:7878"); err != nil || quit != 1 {
+		t.Fatalf("quit %d, err %v", quit, err)
+	}
+}
+
 func TestAppLinkKeepsTheLoginFragment(t *testing.T) {
 	got, err := appLink("http://127.0.0.1:7878/#studio-login=abc", true)
 	if err != nil || got != "http://127.0.0.1:7878/?studio-app=notify#studio-login=abc" {

@@ -50,7 +50,8 @@ The installer verifies the release's checksums and installs `studio` to `~/.loca
 without sudo. On Windows, or to install by hand, download an archive from
 [Releases](https://github.com/lukaskoebe/sandbox-studio/releases). See
 [Getting started](https://lukaskoebe.github.io/sandbox-studio/getting-started/) for
-platform notes and the guided setup.
+platform notes and the guided setup. The installer restarts a Studio that is running, and
+`studio uninstall` removes Studio again.
 
 ## Security model
 

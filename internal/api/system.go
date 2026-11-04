@@ -26,6 +26,8 @@ type System struct {
 	// SSH is SSH access, and SSHSandboxes the sandboxes its config names.
 	SSH          *sshconfig.Service
 	SSHSandboxes func(context.Context) ([]store.Sandbox, error)
+	// Shutdown shuts Studio down, as Ctrl-C does.
+	Shutdown func()
 }
 
 // The API's names for the system types, so that the generated schemas say what they are.
@@ -195,6 +197,17 @@ func (s *Server) registerSystem(api huma.API) {
 		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
 	})
 	s.registerPreviewSetting(api)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "shutdown", Method: http.MethodPost, Path: "/api/system/shutdown", Tags: []string{"system"}, DefaultStatus: http.StatusAccepted,
+		Summary: "Shut Studio down, as `studio quit` does. Sandboxes keep running.",
+	}, func(context.Context, *struct{}) (*struct{}, error) {
+		if s.System.Shutdown == nil {
+			return nil, huma.Error503ServiceUnavailable("Studio can't shut down from here")
+		}
+		go s.System.Shutdown()
+		return nil, nil
+	})
 
 	huma.Register(api, huma.Operation{
 		OperationID: "getTerminalSetting", Method: http.MethodGet, Path: "/api/system/terminal", Tags: []string{"system"},

@@ -14,6 +14,7 @@ const (
 	msgOpen     = "studio:open "     // + an http(s) URL for the system browser
 	msgNotify   = "studio:notify "   // + a notice as JSON
 	msgSelfTest = "studio:selftest " // + the self-test's JSON
+	msgQuit     = "studio:quit"      // Studio shut down from the page, so the app goes too
 )
 
 // notice is a notification the page asks the system to show.
@@ -29,6 +30,7 @@ type bridge struct {
 	base     string
 	open     func(url string) error
 	notify   func(notice) error
+	quit     func()
 	selfTest func(map[string]any) // set in a self-test
 	opened   string               // what the page asked to open, in a self-test
 }
@@ -57,6 +59,9 @@ func (b *bridge) handle(msg, origin string) error {
 			n.ID = n.Title
 		}
 		return b.notify(n)
+	case msg == msgQuit:
+		b.quit()
+		return nil
 	case strings.HasPrefix(msg, msgSelfTest) && b.selfTest != nil:
 		var out map[string]any
 		if err := json.Unmarshal([]byte(strings.TrimPrefix(msg, msgSelfTest)), &out); err != nil {

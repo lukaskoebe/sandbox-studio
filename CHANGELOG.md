@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `studio uninstall` removes Studio and all it created: its programs, the start at login entry,
+  the SSH Include line, the data directory, its sandboxes, and microsandbox unless that has
+  sandboxes of its own. It lists what goes and asks you to type `uninstall`. `-keep-data` keeps
+  the data and sandboxes for installing again.
+- Installing a new version restarts a running Studio, so it no longer has to be stopped by hand.
+  `studio restart` does the same, and Settings > General has **Shut down** for desktops without a
+  tray. Sandboxes keep running.
 - A request for changes on GitLab now sets GitLab's own reviewer state, as its "Request changes"
   button does, besides the note that says so. GitLab publishes the user's pending draft comments
   with it, so Studio refuses while there are any. Tested against a fake of the API, not a real

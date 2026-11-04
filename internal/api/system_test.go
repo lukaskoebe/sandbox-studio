@@ -10,6 +10,7 @@ import (
 	goruntime "runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
@@ -65,6 +66,23 @@ func TestSystemSettings(t *testing.T) {
 }
 
 // SSH access adds Studio's config to the user's, and names a host per sandbox.
+func TestShutdown(t *testing.T) {
+	h, s := newTestServer(t)
+	if rec := do(h, "POST", "http://localhost:7878/api/system/shutdown", ""); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("without a Shutdown func: %d %s", rec.Code, rec.Body)
+	}
+	stopped := make(chan struct{})
+	s.System.Shutdown = func() { close(stopped) }
+	if rec := do(h, "POST", "http://localhost:7878/api/system/shutdown", ""); rec.Code != http.StatusAccepted {
+		t.Fatalf("shutdown: %d %s", rec.Code, rec.Body)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown was not called")
+	}
+}
+
 func TestSSHAccess(t *testing.T) {
 	h, s := newTestServer(t)
 	dir := t.TempDir()

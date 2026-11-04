@@ -10,6 +10,7 @@ import {
   ListChecksIcon,
   PaletteIcon,
   PowerIcon,
+  StopCircleIcon,
   TerminalIcon,
   TerminalWindowIcon,
   UploadSimpleIcon,
@@ -28,6 +29,7 @@ import { SettingsLink } from "@/components/settings/link"
 import { SettingsPage } from "@/components/settings/page"
 import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
+import { quitApp } from "@/lib/desktop"
 import { useSSHAccess } from "@/components/ssh-dialog"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
 import {
@@ -65,6 +67,7 @@ export function GeneralSettings({ env }: { env: string }) {
         <PreviewsSection />
         <TerminalShellSection />
         <SetupSection env={env} />
+        <ShutdownSection />
       </SettingsGroup>
       <SettingsGroup label="This environment">
         <EnvironmentFilesSection env={env} />
@@ -396,6 +399,73 @@ function PreviewsSection() {
         />
       }
     />
+  )
+}
+
+/** Stops Studio itself, for desktops without a tray to do it from. */
+function ShutdownSection() {
+  const [asking, setAsking] = useState(false)
+  const [stopped, setStopped] = useState(false)
+  const shutdown = $api.useMutation("post", "/api/system/shutdown", {
+    onSuccess: () => {
+      setAsking(false)
+      setStopped(true)
+      quitApp()
+    },
+    onError: (err) =>
+      toast.error("Could not shut Studio down", {
+        description: errorMessage(err),
+      }),
+  })
+  if (stopped) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-6 text-center">
+        <div className="max-w-sm space-y-2">
+          <h1 className="font-heading text-base font-medium">
+            Studio has stopped
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            The sandboxes keep running. To start it again, run{" "}
+            <Ident>studio</Ident> or <Ident>studio app</Ident>.
+          </p>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <SettingRow
+      icon={StopCircleIcon}
+      title="Shut down"
+      description="Stops Studio on this computer. The sandboxes keep running, and their agents reconnect when it starts again."
+      control={
+        <Button size="sm" variant="outline" onClick={() => setAsking(true)}>
+          Shut down Studio
+        </Button>
+      }
+    >
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Shut down Studio?</DialogTitle>
+            <DialogDescription>
+              This page and every other one stop working until you start it
+              again with <Ident>studio</Ident>. The sandboxes keep running.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAsking(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={shutdown.isPending}
+              onClick={() => shutdown.mutate({})}
+            >
+              Shut down
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </SettingRow>
   )
 }
 

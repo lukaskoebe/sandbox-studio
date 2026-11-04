@@ -24,15 +24,23 @@ import (
 
 // Path returns msb's catalog: $MSB_HOME/db/msb.db, or ~/.microsandbox/db/msb.db.
 func Path() (string, error) {
-	home := os.Getenv("MSB_HOME")
-	if home == "" {
-		h, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		home = filepath.Join(h, ".microsandbox")
+	home, err := Home()
+	if err != nil {
+		return "", err
 	}
 	return filepath.Join(home, "db", "msb.db"), nil
+}
+
+// Home is microsandbox's home directory: MSB_HOME, or ~/.microsandbox.
+func Home() (string, error) {
+	if home := os.Getenv("MSB_HOME"); home != "" {
+		return home, nil
+	}
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(h, ".microsandbox"), nil
 }
 
 // Damaged is a catalog that fails SQLite's integrity check or can't be read as a database.

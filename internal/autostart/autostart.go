@@ -194,6 +194,17 @@ func (s *Service) Disable() (Status, error) {
 	return s.Status()
 }
 
+// StartCommand is the command that starts the entry now, for the user uid, or nil without one.
+func (s *Service) StartCommand(uid int) []string {
+	switch s.GOOS {
+	case "linux":
+		return []string{"systemctl", "--user", "start", unitName}
+	case "darwin":
+		return []string{"launchctl", "kickstart", fmt.Sprintf("gui/%d/%s", uid, agentName)}
+	}
+	return nil
+}
+
 // checkExe refuses binaries that won't exist at the next login, such as `go run` builds.
 func (s *Service) checkExe() error {
 	if !isAbs(s.GOOS, s.Exe) {

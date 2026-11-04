@@ -47,6 +47,7 @@ the webview has a message handler, `window.webkit.messageHandlers.external` (Web
 | `studio:open <url>` | opens an http(s) address in the system browser |
 | `studio:notify {"id","title","body"}` | shows a system notification; clicking it shows the window |
 | `studio:selftest <json>` | the self-test's result (below) |
+| `studio:quit` | closes the app, after Settings > General shut Studio down |
 
 The app takes them only from Studio's own origin (`OriginInfo.Origin`), as
 `OriginInfo.IsMainFrame` was false for the main frame. The webview opens no new windows, so

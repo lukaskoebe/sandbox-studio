@@ -22875,6 +22875,30 @@
         ]
       }
     },
+    "/api/system/shutdown": {
+      "post": {
+        "operationId": "shutdown",
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Shut Studio down, as `studio quit` does. Sandboxes keep running.",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/system/ssh": {
       "get": {
         "operationId": "getSSHAccess",

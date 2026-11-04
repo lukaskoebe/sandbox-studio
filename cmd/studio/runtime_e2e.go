@@ -30,6 +30,16 @@ var fakeRuntime *e2e.Runtime
 
 func installGuestAgent(string, string) error { return nil }
 
+// noVMs is vmHost for the e2e build, which has no microsandbox.
+type noVMs struct{}
+
+func hostVMs() vmHost { return noVMs{} }
+
+func (noVMs) names(context.Context) ([]string, error) { return nil, nil }
+func (noVMs) stop(context.Context, string) error      { return nil }
+func (noVMs) remove(context.Context, string) error    { return nil }
+func (noVMs) removeCheckpoints(context.Context) error { return nil }
+
 // disksEvery has the fake guests' disks, which the tests set, show within a second.
 const disksEvery = time.Second
 

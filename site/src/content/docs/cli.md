@@ -57,6 +57,8 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 | `studio tui` | Opens the [terminal UI](../tui/). |
 | `studio app` | Opens Studio in [a window of its own](../getting-started/#studio-in-a-window-of-its-own), starting Studio if it isn't running. Without the app or a display it opens the browser. |
 | `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. |
+| `studio restart` | Stops the running Studio and starts this binary in its place. The installer runs it. Sandboxes keep running. |
+| `studio uninstall [-keep-data] [-keep-microsandbox] [-yes]` | Removes Studio, its data and its sandboxes, and microsandbox unless that has sandboxes of its own. It lists what goes and asks you to type `uninstall`. `-keep-data` keeps the data and sandboxes for installing again. |
 | `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |
 | `studio ssh enable`, `disable`, `status` | Lets any SSH client reach the sandboxes as `<name>.studio`, or stops doing so. See [Connect over SSH](../sandboxes/#connect-over-ssh). Studio's SSH config runs `studio ssh-proxy`, which needs Studio running; you don't run it yourself. |
 | `studio restore-msb-db [-replace] [file]` | Rebuilds microsandbox's database from one Studio moved aside as damaged. Quit Studio and stop any sandbox VM still running first. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm). |

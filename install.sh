@@ -166,6 +166,13 @@ check_path() {
 }
 
 # check_prerequisites reports what `studio doctor` will check in detail later.
+# restart_running has a running Studio take up the new binary, which it otherwise keeps running
+# the old one until it stops. Sandboxes keep running.
+restart_running() {
+	say ""
+	"$dir/studio" restart || warn "Studio didn't restart. Stop it with \`$dir/studio quit\` and start it again."
+}
+
 check_prerequisites() {
 	say ""
 	say "Prerequisites:"
@@ -232,6 +239,7 @@ main() {
 	verify_attestation
 	install_binary
 	check_path
+	restart_running
 
 	problems=0
 	check_prerequisites

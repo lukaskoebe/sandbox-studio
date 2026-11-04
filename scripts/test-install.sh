@@ -27,7 +27,8 @@ sha256() {
 for platform in linux_amd64 linux_arm64 darwin_arm64; do
 	name="sandbox-studio_${version}_$platform"
 	mkdir -p "$tmp/build/$name"
-	printf '#!/bin/sh\necho "studio %s"\n' "$version" >"$tmp/build/$name/studio"
+	# Only ever this fake runs, so no test stops a Studio that is really running.
+	printf '#!/bin/sh\n[ "${1:-}" != restart ] || echo restarted >>"$STUDIO_TEST_CALLS"\necho "studio %s"\n' "$version" >"$tmp/build/$name/studio"
 	chmod 755 "$tmp/build/$name/studio"
 	app="$tmp/build/$name/studio-app"
 	if [ "$platform" = darwin_arm64 ]; then
@@ -49,7 +50,9 @@ fail() {
 
 # run_install DIR runs install.sh into DIR and leaves its output in $tmp/out.
 run_install() {
-	SANDBOX_STUDIO_DOWNLOAD_BASE="file://$tmp/release" \
+	HOME="$tmp/home" \
+		STUDIO_TEST_CALLS="$tmp/calls" \
+		SANDBOX_STUDIO_DOWNLOAD_BASE="file://$tmp/release" \
 		SANDBOX_STUDIO_VERSION=$version \
 		SANDBOX_STUDIO_INSTALL_DIR="$1" \
 		sh "$root/install.sh" >"$tmp/out" 2>&1
@@ -67,6 +70,7 @@ run_install "$tmp/good" || {
 }
 [ "$("$tmp/good/studio")" = "studio $version" ] || fail "installed studio does not run"
 grep -q 'Checksum OK' "$tmp/out" || fail "no checksum confirmation in the output"
+[ "$(cat "$tmp/calls")" = restarted ] || fail "the installer didn't restart Studio with the new binary"
 if [ "$(uname -s)" = Darwin ]; then
 	[ "$("$tmp/good/Sandbox Studio.app/Contents/MacOS/studio-app")" = "studio-app $version" ] || fail "the app bundle was not installed next to studio"
 	[ ! -e "$tmp/good/studio-app" ] || fail "the earlier bare app was left next to the bundle"
@@ -84,6 +88,7 @@ if run_install "$tmp/mismatch"; then
 fi
 grep -q 'checksum mismatch' "$tmp/out" || fail "no mismatch error in the output: $(cat "$tmp/out")"
 [ ! -e "$tmp/mismatch/studio" ] || fail "a binary was installed despite a checksum mismatch"
+[ "$(cat "$tmp/calls")" = restarted ] || fail "a failed install restarted Studio"
 echo "ok: checksum mismatch fails"
 
 # A checksums.txt without an entry for the archive fails too.

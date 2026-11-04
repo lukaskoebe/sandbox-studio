@@ -134,6 +134,7 @@ func main() {
 	b := &bridge{
 		base: base,
 		open: func(url string) error { return app.Browser.OpenURL(url) },
+		quit: func() { app.Quit() },
 		notify: func(n notice) error {
 			if !notifier.on.Load() {
 				return errors.New("the system takes no notifications from the app")
