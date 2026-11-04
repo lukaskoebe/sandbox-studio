@@ -135,16 +135,31 @@ function applyControlKey(data: string): string | null {
 const isMac =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
 
+/** How long after the user's own input a program in the terminal may write the clipboard. */
+const clipboardWriteWindowMs = 2000
+
 /**
  * The terminal's side of OSC 52. tmux copies a mouse selection with an empty clipboard name
- * ("52;;…"), which xterm treats as the clipboard, so every name copies. Reads are refused: a
- * program in the sandbox must not read the host's clipboard.
+ * ("52;;…"), which xterm treats as the clipboard, so every name copies. A write goes through
+ * only right after the user's input, as a selection or a yank is: a program acting alone must
+ * not replace what the user is about to paste. Reads are refused: a program in the sandbox must
+ * not read the host's clipboard.
  */
-function terminalClipboard(onCopied: () => void): IClipboardProvider {
+function terminalClipboard(
+  sinceInput: () => number,
+  onCopied: () => void
+): IClipboardProvider {
   return {
     readText: () => "",
     writeText(_selection, text) {
       if (!text) return undefined
+      if (sinceInput() > clipboardWriteWindowMs) {
+        toast("A program in the terminal tried to copy to your clipboard", {
+          id: "terminal-clipboard-refused",
+          description: "Only right after you type or click in the terminal.",
+        })
+        return undefined
+      }
       // Best effort: a denied browser clipboard write must not surface as a terminal error.
       return copyText(text).then(onCopied, () => undefined)
     },
@@ -330,7 +345,32 @@ export function Terminal({
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon())
-    term.loadAddon(new ClipboardAddon(undefined, terminalClipboard(showCopied)))
+    // From the page's own events, not xterm's onData, which also carries the terminal's answers
+    // to a program's queries, so a program could make them to look like input.
+    let lastInput = -Infinity
+    let pressed = false
+    const markInput = (e: Event) => {
+      if (e.isTrusted) lastInput = performance.now()
+    }
+    const markPress = (e: Event) => {
+      pressed = true
+      markInput(e)
+    }
+    // A selection can end outside the terminal.
+    const markRelease = (e: Event) => {
+      if (pressed) markInput(e)
+      pressed = false
+    }
+    el.addEventListener("keydown", markInput, true)
+    el.addEventListener("input", markInput, true)
+    el.addEventListener("pointerdown", markPress, true)
+    window.addEventListener("pointerup", markRelease, true)
+    term.loadAddon(
+      new ClipboardAddon(
+        undefined,
+        terminalClipboard(() => performance.now() - lastInput, showCopied)
+      )
+    )
     // Ctrl+Shift+C copies xterm's selection, as in desktop terminals; Ctrl+C stays the
     // interrupt. On a Mac, ⌘C copies through the browser's copy event, which xterm handles.
     term.attachCustomKeyEventHandler((e) => {
@@ -507,6 +547,10 @@ export function Terminal({
       clearTimeout(retry)
       observer.disconnect()
       document.removeEventListener("paste", markTerminalPaste, true)
+      el.removeEventListener("keydown", markInput, true)
+      el.removeEventListener("input", markInput, true)
+      el.removeEventListener("pointerdown", markPress, true)
+      window.removeEventListener("pointerup", markRelease, true)
       el.removeEventListener("dragover", dragOver)
       el.removeEventListener("drop", drop)
       el.removeEventListener("mousedown", keepRightButton, true)

@@ -69,6 +69,14 @@ test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy an
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     "copied from tmux"
   )
+  // A program acting on its own, long after any input, can't write the clipboard.
+  await term.run(`(sleep 3; printf '\\e]52;;bGF0ZXI=\\a') &`)
+  await expect(page.getByText(/tried to copy to your clipboard/)).toBeVisible({
+    timeout: 15_000,
+  })
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "copied from tmux"
+  )
   // A program in the sandbox can't read the clipboard: the answer comes back empty.
   await page.evaluate(() => navigator.clipboard.writeText("host secret"))
   await term.run(`printf '\\e]52;c;?\\a'`)

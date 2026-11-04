@@ -19,8 +19,9 @@ binary embeds (`//go:embed`) and serves at `/`.
   lineage status updates at the next change or reload. Each new entry in a teammate's browser
   action log publishes on the `browser` topic, so the activity shows a step as it lands.
 - Terminals: xterm.js, attached to tmux in the guest (mouse on). A drag selects in tmux, which
-  copies with OSC 52; the terminal writes any OSC 52 clipboard to the browser's and refuses
-  reads. Right-click opens Studio's Copy/Paste menu and never reaches tmux.
+  copies with OSC 52; the terminal writes an OSC 52 clipboard to the browser's only within 2 s
+  of the user's own key or pointer press in that terminal, says so with a toast otherwise, and
+  refuses reads. A program can still write while the user types in the same terminal. Right-click opens Studio's Copy/Paste menu and never reaches tmux.
 - Editors: CodeMirror (YAML specs, Caddyfiles). Code Studio only shows (Files, diffs) is
   highlighted by Lezer's parsers without an editor (`src/lib/highlight.ts`): each language's
   parser is its own chunk, loaded when a file of it first shows, and the tokens take the
