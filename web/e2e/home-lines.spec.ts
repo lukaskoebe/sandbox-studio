@@ -55,8 +55,10 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     "DELETE",
     `/api/environments/${env}/sandboxes/${id}/terminals/dev`
   )
+  // Other tests' sandboxes have a terminal named main too.
+  const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(
-    lines.getByRole("link", { name: /^main · workspace · you, / })
+    own.getByRole("link", { name: /^main · workspace · you, / })
   ).toBeVisible({ timeout: 30_000 })
   await expect(
     lines.getByRole("link", { name: /^dev · pnpm dev · you, .+–\d/ })
