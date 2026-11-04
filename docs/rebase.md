@@ -43,9 +43,10 @@ resumed.
   its root `/home/agent` to a target that has a home disk. The toolchains that those
   templates kept there are left out: the target template has them in `/opt/mise`.
 - Which copies happen follows the target template. A target with a home disk gets the home.
-  A legacy target has none, so only the workspace is copied, as before. A sandbox with a
-  home disk can't move to a legacy template: rebase is refused with a conflict, before
-  anything changes, since its home would have nowhere to go.
+  A legacy target has none, so no sandbox can move to one: rebase is refused with a conflict,
+  before anything changes, since the home would have nowhere to go. That goes for a sandbox of
+  a legacy template too. It stays as it is, and the base image or a rebuilt template takes it,
+  home included.
 - All run as root through msb exec, one at a time per VM. Nothing is staged on the host.
   The export doesn't write its archive to msb exec's stdout, which is slow from the guest,
   but POSTs it to `https://transfer.studio.internal/<token>` through the gateway

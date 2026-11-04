@@ -43,13 +43,14 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keep
 			resolved.DockerMiB = max(resolved.DockerMiB, int64(sb.DockerMiB))
 			resolved.HomeMiB = max(resolved.HomeMiB, int64(sb.HomeMiB))
 		}
-		// The home disk moves with the sandbox only onto a template that has one. A sandbox with
-		// a home disk is refused rather than losing its home.
+		// The home moves with the sandbox only onto a template with a home disk. Any other target
+		// is refused: a sandbox with a home disk would lose it, and one without would lose what its
+		// root disk keeps in /home/agent, which the rebase's dialog lists as kept.
 		targetHome, err := m.homeFor(ctx, envID, templateID, resolved.Home())
 		if err != nil {
 			return store.RebaseOperation{}, err
 		}
-		if sb.HomeMiB > 0 && targetHome == 0 {
+		if targetHome == 0 {
 			return store.RebaseOperation{}, ErrTemplateWithoutHome
 		}
 		return store.RebaseOperation{

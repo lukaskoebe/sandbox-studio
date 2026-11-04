@@ -122,7 +122,7 @@ func TestRebaseLegacySandboxOntoCurrentTemplateCopiesRootHome(t *testing.T) {
 	}
 }
 
-func TestRebaseLegacySandboxOntoLegacyTemplateKeepsItsShape(t *testing.T) {
+func TestRebaseLegacySandboxOntoLegacyTemplateIsRefused(t *testing.T) {
 	f := newCheckpointFixture(t)
 	source, _ := createFromTemplate(t, f, legacyTemplate(t, f, rebaseResources), "legacy-box")
 	tf := newTransferFake(f)
@@ -131,13 +131,11 @@ func TestRebaseLegacySandboxOntoLegacyTemplateKeepsItsShape(t *testing.T) {
 	tf.setHome(VMName(source.Sandbox), "root home")
 	other := legacyTemplate(t, f, resources.Resources{CPUs: 1, MemoryMiB: 1024, MaxMemoryMiB: 1024, WorkspaceMiB: 4096, DockerMiB: 2048})
 
-	view, err := rebaseNow(f, source.ID, other.ID)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := rebaseNow(f, source.ID, other.ID); !errors.Is(err, ErrTemplateWithoutHome) {
+		t.Fatalf("Rebase error = %v, want ErrTemplateWithoutHome", err)
 	}
-	target := VMName(view.Sandbox)
-	if tf.specs[target].HomeMiB != 0 || tf.workspace(target) != "files" || tf.home(target) != "" {
-		t.Fatalf("rebased home disk = %d, workspace %q, home %q", tf.specs[target].HomeMiB, tf.workspace(target), tf.home(target))
+	if tf.workspace(VMName(source.Sandbox)) != "files" {
+		t.Fatalf("workspace after the refusal = %q", tf.workspace(VMName(source.Sandbox)))
 	}
 }
 

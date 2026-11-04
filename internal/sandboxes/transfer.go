@@ -24,8 +24,8 @@ var (
 	ErrHomeTooLarge = errors.New("home directory /home/agent does not fit the home disk; delete caches in it, or give it a bigger home disk, and try again")
 	// ErrToolsTooLarge means the toolchains a rebase would keep are more than toolsLimit.
 	ErrToolsTooLarge = errors.New("the tools in /opt/mise are too large to keep; uninstall the versions you no longer use with mise uninstall, or rebase without keeping tools")
-	// ErrTemplateWithoutHome means a sandbox with a home disk can't move to a template built
-	// before the home directory existed: that template has no home disk to copy into.
+	// ErrTemplateWithoutHome means a sandbox can't move to a template built before the home
+	// directory existed: that template has no home disk to copy into.
 	ErrTemplateWithoutHome = errors.New("this template was built before the home directory existed, so it cannot keep this sandbox's home; rebuild the template")
 )
 
