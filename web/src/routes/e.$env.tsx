@@ -8,6 +8,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar"
 import { oldSettingsSection, settingsPaths } from "@/components/settings/link"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { WindowBar } from "@/components/window-bar"
 import { $api } from "@/lib/api/client"
 import { rememberEnvironment } from "@/lib/environment"
 import { setupOnFirstLoad } from "@/lib/setup"
@@ -49,7 +50,10 @@ function EnvironmentLayout() {
         className="h-svh min-w-0 overflow-hidden"
         style={viewportHeight ? { height: viewportHeight } : undefined}
       >
-        <Outlet />
+        <WindowBar />
+        <div className="relative flex min-h-0 w-full flex-1 flex-col">
+          <Outlet />
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

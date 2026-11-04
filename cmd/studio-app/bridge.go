@@ -15,6 +15,7 @@ const (
 	msgNotify   = "studio:notify "   // + a notice as JSON
 	msgSelfTest = "studio:selftest " // + the self-test's JSON
 	msgQuit     = "studio:quit"      // Studio shut down from the page, so the app goes too
+	msgWindow   = "studio:window "   // + minimise, maximise or close, a frameless window's buttons
 )
 
 // notice is a notification the page asks the system to show.
@@ -31,11 +32,22 @@ type bridge struct {
 	open     func(url string) error
 	notify   func(notice) error
 	quit     func()
+	window   func(action string)
 	selfTest func(map[string]any) // set in a self-test
 	opened   string               // what the page asked to open, in a self-test
 }
 
 func (b *bridge) handle(msg, origin string) error {
+	// What a window's buttons do comes from any page: the app's own has no origin, and each
+	// page can do as much with Wails' own messages, which reach no bridge.
+	if action, ok := strings.CutPrefix(msg, msgWindow); ok {
+		switch action {
+		case "minimise", "maximise", "close":
+			b.window(action)
+			return nil
+		}
+		return fmt.Errorf("the page asked the window to %q", action)
+	}
 	if !sameOrigin(origin, b.base) {
 		return fmt.Errorf("ignored a message from %q", origin)
 	}

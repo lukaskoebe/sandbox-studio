@@ -101,10 +101,11 @@ func main() {
 		},
 		Poll: 500 * time.Millisecond,
 	}
+	frame := windowFrame(goruntime.GOOS, os.Getenv("SANDBOX_STUDIO_TITLEBAR"))
 	notify := false        // whether the system shows the page's notifications, see appLink
 	var opened atomic.Bool // the window has Studio's page, rather than the app's own
 	l.Open = func(link string) error {
-		link, err := appLink(link, notify)
+		link, err := appLink(link, notify, frame)
 		if err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func main() {
 		if err := l.OpenStudio(ctx); err != nil {
 			log.Printf("open Studio: %v", err)
 			application.InvokeAsync(func() {
-				win.SetURL(page("Studio didn't start", err.Error()+"\n\nRun studio in a terminal to see why, or studio doctor."))
+				win.SetURL(page(frame, "Studio didn't start", err.Error()+"\n\nRun studio in a terminal to see why, or studio doctor."))
 			})
 		}
 	}
@@ -135,6 +136,16 @@ func main() {
 		base: base,
 		open: func(url string) error { return app.Browser.OpenURL(url) },
 		quit: func() { app.Quit() },
+		window: func(action string) {
+			switch action {
+			case "minimise":
+				win.Minimise()
+			case "maximise":
+				win.ToggleMaximise()
+			case "close":
+				win.Close()
+			}
+		},
 		notify: func(n notice) error {
 			if !notifier.on.Load() {
 				return errors.New("the system takes no notifications from the app")
@@ -193,18 +204,23 @@ func main() {
 	if *test {
 		js = fmt.Sprintf(selfTestJS, msgSelfTest)
 	}
-	win = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:   "studio",
-		Title:  "Sandbox Studio",
-		Width:  1280,
-		Height: 840,
+	window := application.WebviewWindowOptions{
+		Name:      "studio",
+		Title:     "Sandbox Studio",
+		Width:     1280,
+		Height:    840,
+		Frameless: frame == frameless,
 		// The app's own page is a URL rather than the HTML option: the window loads that
 		// after its URL, so a Studio that answered before the window was made would be
 		// covered by "Starting Studio…" for good. Of URLs, the newest wins.
-		URL:    page("Starting Studio…", ""),
+		URL:    page(frame, "Starting Studio…", ""),
 		Hidden: *test,
 		JS:     js,
-	})
+	}
+	if frame == inset {
+		window.Mac = application.MacWindow{TitleBar: application.MacTitleBarHidden, InvisibleTitleBarHeight: insetHeight}
+	}
+	win = app.Window.NewWithOptions(window)
 	// macOS ends a web view's page when memory runs short, leaving the window blank: it
 	// opens Studio again.
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {
@@ -214,6 +230,15 @@ func main() {
 
 	// Studio may take a while to start; the window says so meanwhile, and why if it can't.
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		// Wails sets no title on a frameless window on Linux, and the desktop's task switcher
+		// would call it studio-app; for that one call the window has a frame.
+		if frame == frameless {
+			application.InvokeAsync(func() {
+				win.SetFrameless(false)
+				win.SetTitle(window.Title)
+				win.SetFrameless(true)
+			})
+		}
 		go func() {
 			// macOS shows notifications only for an app the user allowed, and a bare binary
 			// may get none; then the page keeps its own. The self-test asks no one: the
@@ -332,7 +357,7 @@ func studioBinary(given string) (string, error) {
 // appLink tells Studio's page that it runs in the app, and what the app does for it, in the
 // studio-app query parameter of a login link: "notify" when the system shows its
 // notifications, else "1". The page keeps it for the session and drops it from the address.
-func appLink(link string, notify bool) (string, error) {
+func appLink(link string, notify bool, frame string) (string, error) {
 	u, err := url.Parse(link)
 	if err != nil {
 		return "", err
@@ -342,16 +367,64 @@ func appLink(link string, notify bool) (string, error) {
 	if notify {
 		q.Set("studio-app", "notify")
 	}
+	if frame != "" {
+		q.Set("studio-window", frame)
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
 
 // page is the window's own page while Studio starts, or when it can't, as a data URL.
-func page(title, detail string) string {
-	return "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(pageHTML(title, detail)))
+func page(frame, title, detail string) string {
+	return "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(pageHTML(frame, title, detail)))
 }
 
-func pageHTML(title, detail string) string {
+// How the window is framed, which the page is told in the login link: the page draws what the
+// system doesn't.
+const (
+	frameless   = "frameless" // no frame; the page moves and resizes the window and has its buttons
+	inset       = "inset"     // the system's buttons over the page, which keeps room for them
+	insetHeight = 28          // of that room at the window's top, which moves it
+)
+
+// windowFrame is how the window is framed: without the system's title bar on Linux and macOS,
+// unless SANDBOX_STUDIO_TITLEBAR=system asks for it.
+func windowFrame(goos, titlebar string) string {
+	if titlebar == "system" {
+		return ""
+	}
+	switch goos {
+	case "linux":
+		return frameless
+	case "darwin":
+		return inset
+	}
+	return ""
+}
+
+// windowBarHTML is a frameless window's bar on the app's own page, as Studio's page isn't there
+// to draw one (web/src/components/window-bar.tsx).
+const windowBarHTML = `<style>
+#bar{position:fixed;inset:0 0 auto 0;height:28px;display:flex;justify-content:flex-end}
+#bar button{all:unset;width:36px;text-align:center;font-size:13px;opacity:.7}
+#bar button:hover{opacity:1;background:color-mix(in srgb,CanvasText 12%,Canvas)}
+</style>
+<div id="bar"><button data-a="minimise" aria-label="Minimise">&#8211;</button><button data-a="maximise" aria-label="Maximise">&#9633;</button><button data-a="close" aria-label="Close">&#215;</button></div>
+<script>
+const post = (m) => window.webkit?.messageHandlers?.external?.postMessage(m)
+const bar = document.getElementById("bar")
+let armed = false
+bar.onmousedown = (e) => { armed = e.target === bar && e.button === 0 && e.detail === 1 }
+bar.onmousemove = bar.onmouseleave = (e) => { if (armed && e.buttons & 1) post("wails:drag"); armed = false }
+bar.ondblclick = (e) => { if (e.target === bar) post("` + msgWindow + `maximise") }
+bar.onclick = (e) => { if (e.target.dataset.a) post("` + msgWindow + `" + e.target.dataset.a) }
+</script>`
+
+func pageHTML(frame, title, detail string) string {
+	bar := ""
+	if frame == frameless {
+		bar = windowBarHTML
+	}
 	return `<!doctype html><meta charset="utf-8"><title>Sandbox Studio</title>
 <style>
 :root{color-scheme:light dark;font:14px/1.5 system-ui,sans-serif}
@@ -360,7 +433,7 @@ main{max-width:32rem;padding:2rem}
 h1{font-size:1rem;font-weight:600;margin:0 0 .5rem}
 p{white-space:pre-wrap;margin:0;opacity:.75;font-size:12px}
 </style>
-<main><h1>` + html.EscapeString(title) + `</h1><p>` + html.EscapeString(detail) + `</p></main>`
+<main><h1>` + html.EscapeString(title) + `</h1><p>` + html.EscapeString(detail) + `</p></main>` + bar
 }
 
 // selfTestJS reports what the page sees: the address it ended on, whether the API takes its
@@ -371,7 +444,7 @@ const selfTestJS = `(async () => {
   const post = (m) => (window.webkit?.messageHandlers?.external ?? window.chrome?.webview)?.postMessage(m)
   // The page trades a login link's token for its cookie after it loads.
   await new Promise((r) => setTimeout(r, 3000))
-  const out = { href: location.href, userAgent: navigator.userAgent, app: sessionStorage.getItem("studio.app") }
+  const out = { href: location.href, userAgent: navigator.userAgent, app: sessionStorage.getItem("studio.app"), window: sessionStorage.getItem("studio.window") }
   try {
     const r = await fetch("/api/environments", { credentials: "include" })
     out.session = r.status

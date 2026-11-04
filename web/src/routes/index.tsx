@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
+import { WindowBar } from "@/components/window-bar"
 import { $api } from "@/lib/api/client"
 import { lastEnvironment } from "@/lib/environment"
 
@@ -14,8 +15,11 @@ export const Route = createFileRoute("/")({
       throw redirect({ to: "/e/$env", params: { env: env.id }, replace: true })
   },
   component: () => (
-    <main className="p-6 text-sm text-muted-foreground">
-      No environments yet.
-    </main>
+    <>
+      <WindowBar />
+      <main className="p-6 text-sm text-muted-foreground">
+        No environments yet.
+      </main>
+    </>
   ),
 })

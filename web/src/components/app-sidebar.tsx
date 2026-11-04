@@ -27,6 +27,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { SettingsLink } from "@/components/settings/link"
+import { appWindow } from "@/lib/desktop"
+import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   DropdownMenu,
@@ -121,7 +123,13 @@ export function AppSidebar({ env }: { env: string }) {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="h-(--wb-header) justify-center border-b border-sidebar-border px-2 py-0">
+      <SidebarHeader
+        className={cn(
+          "h-(--wb-header) justify-center border-b border-sidebar-border px-2 py-0",
+          // The window's buttons sit above it on macOS.
+          appWindow === "inset" && "mt-7"
+        )}
+      >
         <EnvironmentSwitcher env={env} />
       </SidebarHeader>
       <SidebarContent className="gap-0">

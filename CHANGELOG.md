@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The Studio app's window has no system title bar on Linux and macOS, and the height it took goes
+  to the page. On Linux a slim bar at the top of the main column moves the window (double click
+  maximises) and has its minimise, maximise and close buttons, and the window resizes from its
+  edges. On macOS the system's window buttons sit over the top of the sidebar.
+  `SANDBOX_STUDIO_TITLEBAR=system` brings the system's title bar back.
 - Rebase and disk resize work in every state with a VM. They were refused for anything but
   **running** and **stopped**, though a sandbox whose VM reports another state can look like
   either: a crashed one shows as failed, and one that is draining as stopped. The copy starts the

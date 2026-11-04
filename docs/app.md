@@ -48,9 +48,11 @@ the webview has a message handler, `window.webkit.messageHandlers.external` (Web
 | `studio:notify {"id","title","body"}` | shows a system notification; clicking it shows the window |
 | `studio:selftest <json>` | the self-test's result (below) |
 | `studio:quit` | closes the app, after Settings > General shut Studio down |
+| `studio:window minimise\|maximise\|close` | what a frameless window's buttons do; from any page |
 
-The app takes them only from Studio's own origin (`OriginInfo.Origin`), as
-`OriginInfo.IsMainFrame` was false for the main frame. The webview opens no new windows, so
+The app takes them only from Studio's own origin (`OriginInfo.Origin`, as
+`OriginInfo.IsMainFrame` was false for the main frame), except the window's buttons: its own page
+has no origin, and any page can do as much with Wails' messages. The webview opens no new windows, so
 the page sends `window.open`, links with a target and links to other origins (OAuth sign-ins,
 previews) through `studio:open`, and keeps links within Studio in the window.
 
@@ -58,6 +60,27 @@ The app says what it does for the page in the login link, `?studio-app=notify` w
 system shows notifications (macOS shows them only for an app the user allowed) or
 `?studio-app=1`. The page keeps it in `sessionStorage` and drops it from the address. Without
 `notify` the page keeps the browser's notifications.
+
+## The window's title bar
+
+The app says how its window is framed in the same link, as `studio-window`, and the page draws
+what the system doesn't ([`window-bar.tsx`](../web/src/components/window-bar.tsx)).
+`SANDBOX_STUDIO_TITLEBAR=system` keeps the system's title bar on any of them.
+
+- **Linux, `frameless`:** the window has no decorations. A 28px bar at the top of the main column
+  moves it (`wails:drag`, sent when the pointer moves after a press, so a double click can
+  maximise), and has the window's buttons (`studio:window`). Strips 4px wide along the window's
+  sides resize it (`wails:resize:<edge>-resize`), except when it is maximised. Wails takes the
+  `wails:` messages itself, before the bridge. The window manager's shortcuts still work. The
+  app's own page has the same bar in plain HTML, since Studio's page isn't there to draw it.
+- **macOS, `inset`:** `MacTitleBarHidden`, with the system's buttons over the page. The sidebar
+  starts 28px down and the main column has an empty 28px bar; `InvisibleTitleBarHeight` moves the
+  window from that height.
+- **Windows:** the system's title bar.
+
+An older Studio ignores the parameter, so a new app on it has no bar: the window manager's
+shortcuts and the tray still work. Nor does WebKit's own page when Studio stops answering and the
+window is reloaded have one.
 
 ## `studio app`
 
@@ -101,7 +124,7 @@ bare `studio-app` that an earlier release left there.
 prints, as JSON, the address the page ended on, whether the API took its session, whether a
 `*.localhost` name reaches Studio, what the app was asked to open for `window.open` (it
 records that instead of opening it) and the `studio-app` value the page kept. Run it against
-an e2e Studio with its own `SANDBOX_STUDIO_HOME`.
+an e2e Studio with its own `SANDBOX_STUDIO_HOME`. It reports the `studio-window` value too.
 
 ## Not done yet
 

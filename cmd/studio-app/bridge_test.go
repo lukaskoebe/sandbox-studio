@@ -47,11 +47,50 @@ func TestOnlyStudioClosesTheAppFromThePage(t *testing.T) {
 }
 
 func TestAppLinkKeepsTheLoginFragment(t *testing.T) {
-	got, err := appLink("http://127.0.0.1:7878/#studio-login=abc", true)
+	got, err := appLink("http://127.0.0.1:7878/#studio-login=abc", true, "")
 	if err != nil || got != "http://127.0.0.1:7878/?studio-app=notify#studio-login=abc" {
 		t.Fatalf("appLink = %q, %v", got, err)
 	}
-	if got, _ := appLink("http://127.0.0.1:7878/#studio-login=abc", false); got != "http://127.0.0.1:7878/?studio-app=1#studio-login=abc" {
+	if got, _ := appLink("http://127.0.0.1:7878/#studio-login=abc", false, ""); got != "http://127.0.0.1:7878/?studio-app=1#studio-login=abc" {
 		t.Fatalf("without notifications: %q", got)
+	}
+}
+
+func TestAppLinkSaysHowTheWindowIsFramed(t *testing.T) {
+	got, err := appLink("http://127.0.0.1:7878/#studio-login=abc", false, frameless)
+	if err != nil || got != "http://127.0.0.1:7878/?studio-app=1&studio-window=frameless#studio-login=abc" {
+		t.Fatalf("appLink = %q, %v", got, err)
+	}
+}
+
+func TestWindowFrame(t *testing.T) {
+	for _, c := range []struct{ goos, titlebar, want string }{
+		{"linux", "", frameless},
+		{"darwin", "", inset},
+		{"windows", "", ""},
+		{"linux", "system", ""},
+		{"darwin", "system", ""},
+	} {
+		if got := windowFrame(c.goos, c.titlebar); got != c.want {
+			t.Errorf("windowFrame(%q, %q) = %q, want %q", c.goos, c.titlebar, got, c.want)
+		}
+	}
+}
+
+// The window's buttons work from any page, as the app's own page has no origin; the bridge
+// takes nothing else from those.
+func TestWindowButtonsWorkFromAnyPage(t *testing.T) {
+	var actions []string
+	b := &bridge{base: "http://127.0.0.1:7878", window: func(a string) { actions = append(actions, a) }}
+	for _, m := range []string{"studio:window minimise", "studio:window maximise", "studio:window close"} {
+		if err := b.handle(m, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.handle("studio:window explode", ""); err == nil {
+		t.Fatal("an unknown action was taken")
+	}
+	if strings.Join(actions, " ") != "minimise maximise close" {
+		t.Fatalf("actions %v", actions)
 	}
 }

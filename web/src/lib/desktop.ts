@@ -21,22 +21,21 @@ function handler(): Poster | undefined {
 }
 
 /**
- * What the app said it does for the page, from the studio-app parameter of the login link it
- * opened: "notify" when the system shows the page's notifications. It is kept for the
- * session, as the page moves on without it.
+ * What the app said about itself in a parameter of the login link it opened. It is kept for
+ * the session, as the page moves on without it.
  */
-function appFeatures(): string {
+function fromApp(param: string, key: string): string {
   if (typeof window === "undefined") return ""
   const url = new URL(window.location.href)
-  const given = url.searchParams.get("studio-app")
+  const given = url.searchParams.get(param)
   try {
     if (given !== null) {
-      sessionStorage.setItem("studio.app", given)
-      url.searchParams.delete("studio-app")
+      sessionStorage.setItem(key, given)
+      url.searchParams.delete(param)
       history.replaceState(history.state, "", url.href)
       return given
     }
-    return sessionStorage.getItem("studio.app") ?? ""
+    return sessionStorage.getItem(key) ?? ""
   } catch {
     return given ?? ""
   }
@@ -46,10 +45,39 @@ function appFeatures(): string {
 export const inApp = handler() !== undefined
 
 /** Whether the app shows notifications through the system; else the page keeps its own. */
-export const appNotifies = inApp && appFeatures() === "notify"
+export const appNotifies =
+  inApp && fromApp("studio-app", "studio.app") === "notify"
 
-function post(kind: "open" | "notify", payload: string) {
+/**
+ * How the app's window is framed, when the page draws part of it: "frameless" for no frame at
+ * all (Linux), "inset" for the system's window buttons over the page (macOS).
+ */
+export const appWindow = inApp ? fromApp("studio-window", "studio.window") : ""
+
+function post(kind: "open" | "notify" | "window", payload: string) {
   handler()?.postMessage(`studio:${kind} ${payload}`)
+}
+
+export type WindowAction = "minimise" | "maximise" | "close"
+
+/** Does what a frameless window's buttons do. */
+export function windowAction(action: WindowAction) {
+  post("window", action)
+}
+
+/**
+ * Starts moving the window with the pointer. Wails takes these two messages itself; its
+ * runtime isn't served on Studio's address, so the page sends them as that would.
+ */
+export function windowDrag() {
+  handler()?.postMessage("wails:drag")
+}
+
+export type WindowEdge = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw"
+
+/** Starts resizing the window from an edge or a corner with the pointer. */
+export function windowResize(edge: WindowEdge) {
+  handler()?.postMessage(`wails:resize:${edge}-resize`)
 }
 
 /** Closes the app, after Studio shut down from the page. */
