@@ -127,7 +127,13 @@ Connections are matched without request rules, so a connection is never decided 
 
 Paths are matched after cleaning (dot segments and doubled slashes resolved). An allow covers
 only a path that is already clean: `/repos/../x` isn't covered by `/repos/*`, since the upstream
-might read it as `/x`. A deny matches the cleaned path, so it can't be walked around.
+might read it as `/x`. A deny matches the cleaned path, so it can't be walked around. A backslash
+counts as a slash, and the whole path is matched, however little of it an approval shows.
+
+A connection a rule's host and ports name goes through only if Studio can read its requests. One
+whose first bytes aren't HTTP or TLS within the gateway's wait, such as SSH or a method Studio
+doesn't know, is closed and shows its reason in Connections: otherwise it would pass a deny rule
+just by not looking like web traffic. Give the rule `ports` to leave a host's other ports alone.
 
 A browser request's approval offers the request's first directory as a rule, such as `GET
 /repos/*` (see [approvals](approvals.md#network-approval-cards)).

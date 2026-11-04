@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Request rules can't be slipped past. A connection to a host with a request rule used to go through
+  unchecked if its first bytes didn't look like web traffic, such as a leading line break, an unusual
+  method or a late TLS hello. It is now refused, and Connections says why. Rules now match the whole
+  path rather than its first 1024 bytes, and a backslash counts as a slash.
 - An approval holds for what its card shows. Browser: an Allow for typing "Alice" no longer lets a
   retry type "Mallory", and an approved key doesn't press another, as the key is now on the card. A
   retry with other arguments replaces the card. A credential isn't filled into a field that changed

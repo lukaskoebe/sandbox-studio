@@ -265,13 +265,18 @@ func (g *Gateway) handle(c net.Conn) {
 	}
 	web := proto == "tls" || proto == "http"
 	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy || browserTLS
-	// A request-level rule for an allowed host needs the requests, so the connection is terminated.
-	checked := rule.Action == store.ActionAllow && web && g.Policy.Terminates(context.Background(), policy.Request{
+	// A request-level rule for an allowed host needs the requests, so the connection is
+	// terminated. One whose requests can't be read, as its first bytes aren't HTTP or TLS, can't
+	// be checked and doesn't go through: it would pass the rule by not looking like web traffic.
+	checked := rule.Action == store.ActionAllow && g.Policy.Terminates(context.Background(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port, Browser: sb.Kind == store.SandboxKindBrowser,
 	})
 	if bound, _ := boundTo(all, host); handled || checked || len(bound) > 0 && web {
 		if !web {
 			problem = rule.Action + " rules only handle HTTP and TLS connections"
+			if checked {
+				problem = "request rules name this host, and they only handle HTTP and TLS connections"
+			}
 			return
 		}
 		if proto == "tls" && g.CA == nil {

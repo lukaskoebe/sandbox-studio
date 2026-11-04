@@ -97,7 +97,7 @@ func (g *Gateway) ruleRequest(r *http.Request, decider store.Sandbox, host strin
 // Sec-Fetch headers and page scripts can't, so they tell a top-level navigation from a
 // subresource; the Referer is shown, never trusted. The query is left out: it can carry tokens.
 func requestInfo(r *http.Request, host string) *policy.HTTPRequest {
-	info := &policy.HTTPRequest{Method: clip(r.Method, 16), Path: clip(r.URL.Path, 1024)}
+	info := &policy.HTTPRequest{Method: clip(r.Method, 16), Path: clip(r.URL.Path, 1024), FullPath: r.URL.Path}
 	if r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Dest") == "document" {
 		info.Navigation, info.Site = true, policy.Site(host)
 	}

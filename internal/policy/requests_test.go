@@ -29,6 +29,8 @@ func TestRequestRulesDecideTheRequestsTheyNameOnly(t *testing.T) {
 		{"deny matches the cleaned path", "DELETE", "/repos/../repos/a", "no-delete"},
 		{"a walk out of an allow is not covered", "GET", "/public/../private", "all"},
 		{"a prefix needs its slash", "GET", "/publicity", "all"},
+		{"a backslash doesn't walk around a deny", "DELETE", `/repos\a`, "no-delete"},
+		{"a backslash doesn't walk out of an allow", "GET", `/public/..\private`, "all"},
 	}
 	for _, c := range cases {
 		var req *HTTPRequest
@@ -38,6 +40,26 @@ func TestRequestRulesDecideTheRequestsTheyNameOnly(t *testing.T) {
 		r, ok := matchRule(rules, "", "", "api.example.com", 443, req)
 		if !ok || r.ID != c.want {
 			t.Errorf("%s: %s %s got %q (%v), want %q", c.name, c.method, c.path, r.ID, ok, c.want)
+		}
+	}
+}
+
+// Rules match the path that goes upstream, however little of it is shown.
+func TestRequestRulesMatchTheFullPath(t *testing.T) {
+	rules := []store.Rule{
+		{ID: "all", Host: "api.example.com", Action: store.ActionAllow},
+		{ID: "no-secret", Host: "api.example.com", PathPrefix: "/secret/*", Action: store.ActionDeny},
+		{ID: "public", Host: "api.example.com", Method: "GET", PathPrefix: "/public/*", Action: store.ActionAllow},
+	}
+	long := strings.Repeat("a", 1100)
+	for name, full := range map[string]string{
+		"out of an allow": "/public/" + long + "/../../../admin",
+		"around a deny":   "/" + long + "/../secret/x",
+	} {
+		r, ok := matchRule(rules, "", "", "api.example.com", 443, &HTTPRequest{Method: "GET", Path: full[:1024], FullPath: full})
+		want := map[string]string{"out of an allow": "all", "around a deny": "no-secret"}[name]
+		if !ok || r.ID != want {
+			t.Errorf("%s: got %q (%v), want %q", name, r.ID, ok, want)
 		}
 	}
 }

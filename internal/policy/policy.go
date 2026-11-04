@@ -99,8 +99,10 @@ type Request struct {
 // describe the request and never decide it: Chromium's Sec-Fetch headers tell a top-level
 // navigation from a subresource, and the Referer is only shown.
 type HTTPRequest struct {
-	Method     string `json:"method,omitempty"`
-	Path       string `json:"path,omitempty" doc:"The request path, without the query"`
+	Method string `json:"method,omitempty"`
+	Path   string `json:"path,omitempty" doc:"The request path, without the query"`
+	// FullPath is the path that goes upstream, which rules match; Path may be clipped for showing.
+	FullPath   string `json:"-"`
 	Navigation bool   `json:"navigation,omitempty" doc:"A top-level navigation: the page moves to another site"`
 	Site       string `json:"site,omitempty" doc:"The top-level site the request belongs to: the navigation's own, or the browser's page"`
 	Initiator  string `json:"initiator,omitempty" doc:"Origin of the Referer header, as the browser sent it; shown, never trusted"`

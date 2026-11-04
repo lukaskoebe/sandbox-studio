@@ -1,7 +1,9 @@
 package gateway
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -55,5 +57,46 @@ func TestRequestRulesCheckTheRequests(t *testing.T) {
 	}
 	if n := h.requests(); n != before {
 		t.Fatalf("a refused browser request reached the upstream (%d -> %d)", before, n)
+	}
+}
+
+// A connection whose requests can't be read doesn't get past a request rule by not looking like
+// web traffic: it never reaches the upstream. Other hosts' connections go on as before.
+func TestRequestRulesRefuseWhatTheyCantRead(t *testing.T) {
+	for name, first := range map[string]string{
+		"a leading line break": "\r\nGET /secret HTTP/1.1\r\nHost: github.com\r\n\r\n",
+		"an unusual method":    "PROPFIND /secret HTTP/1.1\r\nHost: github.com\r\n\r\n",
+		"not web at all":       "SSH-2.0-client\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t, "")
+			h.policy.mu.Lock()
+			h.policy.terminates = map[string]bool{"github.com": true}
+			h.policy.mu.Unlock()
+			c, err := h.dial(t, Password([]byte("key"), "sb1"), "192.0.2.7:443")
+			if err == nil {
+				defer c.Close()
+				_, _ = c.Write([]byte(first))
+				if _, err := io.ReadAll(c); err != nil {
+					t.Logf("read: %v", err)
+				}
+			}
+			if got := h.lastDial(); got != "" {
+				t.Fatalf("reached the upstream at %s", got)
+			}
+		})
+	}
+
+	h := newHarness(t, "")
+	c, err := h.dial(t, Password([]byte("key"), "sb1"), "192.0.2.7:22")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if _, err := c.Write([]byte("SSH-2.0-client\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	if line, err := bufio.NewReader(c).ReadString('\n'); err != nil || line != "SSH-2.0-client\r\n" {
+		t.Fatalf("another host's connection: %q, %v", line, err)
 	}
 }

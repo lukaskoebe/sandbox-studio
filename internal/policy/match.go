@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"cmp"
 	"errors"
 	"net"
 	"path"
@@ -80,19 +81,21 @@ func requestFits(r store.Rule, req *HTTPRequest) bool {
 	if r.PathPrefix == "" {
 		return true
 	}
-	clean := cleanPath(req.Path)
-	if r.Action == store.ActionAllow && clean != req.Path {
+	p := cmp.Or(req.FullPath, req.Path)
+	clean := cleanPath(p)
+	if r.Action == store.ActionAllow && clean != p {
 		return false
 	}
 	return strings.HasPrefix(clean, strings.TrimSuffix(r.PathPrefix, "*"))
 }
 
 // cleanPath resolves a request path the way the upstream is likely to: dot segments and doubled
-// slashes go, and a trailing slash stays.
+// slashes go, some servers read a backslash as a slash, and a trailing slash stays.
 func cleanPath(p string) string {
 	if p == "" {
 		return "/"
 	}
+	p = strings.ReplaceAll(p, "\\", "/")
 	c := path.Clean(p)
 	if strings.HasSuffix(p, "/") && c != "/" {
 		c += "/"
