@@ -48,10 +48,7 @@ export function WaitingChip({
   const words = anyHeld
     ? `${waiting.length} ${waiting.length === 1 ? "request" : "requests"} waiting`
     : `${waiting.length} gave up waiting`
-  const choice = {
-    scope: waiting.at(0)?.teammate?.approvalScope ?? "environment",
-    lifetime: "always",
-  } as const
+  const choice = { scope: "sandbox", lifetime: "always" } as const
   return (
     <>
       {waiting.length > 0 && (
@@ -112,6 +109,9 @@ export function WaitingChip({
                 )
               })}
             </ul>
+            <p className="text-caption text-muted-foreground">
+              Each host gets a lasting rule for this sandbox.
+            </p>
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               <Button
                 size="xs"
