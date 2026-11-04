@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- Allow once on a browser's card answers the request it showed and other reads. Any other write held
+  behind that card asks for itself, so a page can't send a `POST` you never saw on the answer to a
+  `GET`.
+- An agent copying a browser download into its workspace asks you every time, and no rule can allow
+  it. The download folder also holds what you saved while driving the browser, and Studio can't tell
+  those files apart.
+- A program in a terminal can write your clipboard only within 2 s of your own key or pointer press
+  in that terminal, which still covers a tmux selection or a yank. A refused write says so.
+- The waiting chip's Allow all and Deny all make rules for that sandbox, not for the whole
+  environment, and the popover says so.
+- A scheduled run claims its time just before its chat starts. A crash loses that run and can't run
+  it twice, and a task paused or edited in the meantime doesn't run.
+- An update also waits for a fork, rebase, resize, export, restore or import, and checks again after
+  its backup. A terminal agent doesn't hold it up.
+- A rebase onto a template without a home disk is refused for every sandbox, including one that has
+  no home disk either. A sandbox from before home disks stays as it is.
+- Accepting a fork merge takes no checkpoint for now: restoring one isn't available, so it only used
+  disk and could fail the merge. It comes back with copy-on-write snapshots.
+- `install.sh` stops before putting an older release over a newer one, which may not open the newer
+  one's data. `SANDBOX_STUDIO_ALLOW_DOWNGRADE=1` allows it.
+
 ## v0.16.0 — 2026-11-04
 
 - `docker pull` from Docker Hub or Quay no longer stops on a card. Their downloads also come from
