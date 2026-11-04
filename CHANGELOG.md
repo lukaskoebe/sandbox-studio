@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rebase and disk resize work in every state with a VM. They were refused for anything but
+  **running** and **stopped**, though a sandbox whose VM reports another state can look like
+  either: a crashed one shows as failed, and one that is draining as stopped. The copy starts the
+  VM by itself, and a sandbox that wasn't running stays stopped afterwards.
 - `studio uninstall` removes Studio and all it created: its programs, the start at login entry,
   the SSH Include line, the data directory, its sandboxes, and microsandbox unless that has
   sandboxes of its own. It lists what goes and asks you to type `uninstall`. `-keep-data` keeps

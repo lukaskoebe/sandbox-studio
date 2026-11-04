@@ -26,6 +26,16 @@ export function phaseOf(status: string, agent: boolean): Phase {
   }
 }
 
+/**
+ * Whether a sandbox can be rebased or get new disk sizes: the copy stops the VM and starts it
+ * for itself, so it takes any state in which there is a VM.
+ */
+export function canCopyDisks(sb: Sandbox) {
+  return (
+    sb.status !== "absent" && sb.status !== "creating" && sb.status !== "failed"
+  )
+}
+
 export function phase(sb: Sandbox): Phase {
   return phaseOf(sb.status, !!sb.agent)
 }

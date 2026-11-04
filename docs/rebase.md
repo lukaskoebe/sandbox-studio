@@ -5,7 +5,11 @@ a home disk ([sandboxes](sandboxes.md#storage-and-mounts)); a disk resize moves 
 as well. None uses msb restore or msb fork.
 Restore drops Studio's DNS and proxy egress
 ([#1736](https://github.com/superradcompany/microsandbox/issues/1736)).
-Both need a running or stopped sandbox; a suspended one is refused until it is resumed.
+A rebase and a disk resize take a sandbox in any state with a VM: the copy stops the VM and
+starts it for itself, as both trees must be read from a running guest. One that was running
+restarts on the new generation, and any other stays stopped, a suspended one losing what it had
+in memory. A fork needs a running or stopped sandbox; a suspended one is refused until it is
+resumed.
 
 ## Workspace and home copy
 

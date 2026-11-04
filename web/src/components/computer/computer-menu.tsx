@@ -23,6 +23,7 @@ import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { MergeForkDialog } from "@/components/merge-fork"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { ResizeDisksDialog } from "@/components/resize-disks-dialog"
+import { canCopyDisks } from "@/components/status-badge"
 import {
   ResizeSandboxDialog,
   sandboxSize,
@@ -91,6 +92,7 @@ export function ComputerMenu({
   const { path, suspend, resume, phase: p } = useSandboxLifecycle(env, sb)
   const building = sb.status === "creating" || sb.status === "failed"
   const available = sb.status === "running" || sb.status === "stopped"
+  const copies = canCopyDisks(sb)
   const running = sb.status === "running"
   const usage = $api.useQuery(
     "get",
@@ -181,7 +183,7 @@ export function ComputerMenu({
               <Button
                 size="sm"
                 className="mt-1 justify-self-start"
-                disabled={!available}
+                disabled={!copies}
                 onClick={() => {
                   setMenuOpen(false)
                   setDialog("rebase")
@@ -267,11 +269,11 @@ export function ComputerMenu({
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!available}
+                  disabled={!copies}
                   title={
-                    available
+                    copies
                       ? "Give the workspace, Docker and home disks other sizes"
-                      : "Only a running or stopped computer's disks can be resized"
+                      : "This computer has no VM to copy its disks from"
                   }
                   onClick={() => setDialog("disks")}
                 >
@@ -283,11 +285,11 @@ export function ComputerMenu({
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!available}
+                  disabled={!copies}
                   title={
-                    available
+                    copies
                       ? "Move this computer onto the current base or another template"
-                      : "Only a running or stopped computer can be rebased"
+                      : "This computer has no VM to copy its disks from"
                   }
                   onClick={() => setDialog("rebase")}
                 >

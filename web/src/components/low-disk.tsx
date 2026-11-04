@@ -2,6 +2,7 @@ import { useState } from "react"
 import { HardDriveIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { ResizeDisksDialog } from "@/components/resize-disks-dialog"
+import { canCopyDisks } from "@/components/status-badge"
 import type { Sandbox } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { formatBytes } from "@/lib/utils"
@@ -65,7 +66,6 @@ export function LowDiskStatus({
   const [resizing, setResizing] = useState(false)
   const disks = sandbox?.lowDisks
   if (!sandbox || !disks?.length) return null
-  const available = sandbox.status === "running" || sandbox.status === "stopped"
   return (
     <div
       role="status"
@@ -76,7 +76,7 @@ export function LowDiskStatus({
       <span>
         {lowDiskText(disks)}. {advice(disks)}
       </span>
-      {available && (
+      {canCopyDisks(sandbox) && (
         <Button
           variant="outline"
           size="xs"

@@ -171,17 +171,13 @@ func TestSuspendIsSerialized(t *testing.T) {
 	}
 }
 
-func TestSuspendedSandboxRefusesForkRebaseAndCheckpoint(t *testing.T) {
+func TestSuspendedSandboxRefusesForkAndCheckpoint(t *testing.T) {
 	f := newCheckpointFixture(t)
 	tf := newTransferFake(f)
-	template := rebaseTemplate(t, f, rebaseResources)
 	vm := VMName(f.sandbox)
 	tf.setStatus(vm, runtime.StatusSuspended)
 	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy"); !errors.Is(err, ErrLifecycleState) {
 		t.Fatalf("Fork err = %v", err)
-	}
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrLifecycleState) {
-		t.Fatalf("Rebase err = %v", err)
 	}
 	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "cp"); !errors.Is(err, ErrCheckpointState) {
 		t.Fatalf("CreateCheckpoint err = %v", err)

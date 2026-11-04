@@ -59,8 +59,9 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keep
 	})
 }
 
-// startRebase runs a rebase or a disk resize, operation, of a running or stopped sandbox:
-// plan says where it goes, and the rest is the same. keepTools also copies /opt/mise.
+// startRebase runs a rebase or a disk resize, operation, of a sandbox in any state with a VM to
+// copy from: the copy stops the VM and starts it for itself. plan says where it goes, and the
+// rest is the same. keepTools also copies /opt/mise.
 func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, keepTools bool, plan func(store.Sandbox) (store.RebaseOperation, error)) (View, error) {
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
@@ -100,8 +101,8 @@ func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, 
 	if err != nil {
 		return View{}, err
 	}
-	if status != runtime.StatusRunning && status != runtime.StatusStopped {
-		return View{}, ErrLifecycleState
+	if status == runtime.StatusAbsent {
+		return View{}, lifecycleError("the sandbox has no VM to copy from")
 	}
 	var image *runtime.ImageSource // the default image
 	if req.TemplateID != "" {
@@ -109,7 +110,8 @@ func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, 
 			return View{}, err
 		}
 	}
-	wasRunning := status == runtime.StatusRunning
+	// A sandbox that wasn't up stays down, with a suspended one's memory lost to the copy.
+	wasRunning := status.IsRunning()
 	steps := rebaseStoppedSteps
 	if wasRunning {
 		steps = rebaseRunningSteps
@@ -179,10 +181,8 @@ func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 // rebaseInto builds and fills target, copying Docker's data too when docker is set and the
 // toolchains in /opt/mise when tools is.
 func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning, docker, tools bool) error {
-	if wasRunning {
-		if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
-			return err
-		}
+	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
+		return err
 	}
 	egress, err := m.Egress.Attach(sb)
 	if err != nil {

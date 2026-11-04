@@ -275,9 +275,11 @@ function RebaseForm({
         </span>
       </label>
       <p className="text-muted-foreground">
-        {sandbox.status === "running"
+        {sandbox.status === "running" || sandbox.status === "starting"
           ? "It restarts after the copy."
-          : "It stays stopped."}{" "}
+          : sandbox.status === "suspended"
+            ? "It stops for the copy, which loses what it has in memory, and stays stopped."
+            : "It starts for the copy and stays stopped."}{" "}
         If the rebase fails, it stays as it is.
       </p>
 

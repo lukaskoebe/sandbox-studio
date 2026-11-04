@@ -143,7 +143,7 @@ function DisksForm({
   })
   const valid = asked.every((d) => d.valid)
   const changed = asked.filter((d) => d.valid && d.mib !== d.was)
-  const running = sandbox.status === "running"
+  const running = sandbox.status === "running" || sandbox.status === "starting"
 
   return (
     <form
@@ -159,7 +159,11 @@ function DisksForm({
         <DialogDescription>
           A new generation with these sizes, with the workspace, the home and
           Docker&apos;s data copied over.{" "}
-          {running && "The computer stops for the copy and starts again. "}
+          {running
+            ? "The computer stops for the copy and starts again. "
+            : sandbox.status === "suspended"
+              ? "The computer stops for the copy, which loses what it has in memory, and stays stopped. "
+              : "The computer starts for the copy and stays stopped. "}
           What was installed elsewhere, such as apt packages, is lost.
         </DialogDescription>
       </DialogHeader>

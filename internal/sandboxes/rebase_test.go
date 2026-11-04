@@ -467,6 +467,46 @@ func TestRebaseStoppedSandboxStaysStopped(t *testing.T) {
 	}
 }
 
+// Whatever state a sandbox is in, the copy starts its VM for itself. One that wasn't up stays
+// down, and one that is coming up comes up on the new generation.
+func TestRebaseTakesASandboxInAnyStateWithAVM(t *testing.T) {
+	for status, want := range map[runtime.Status]runtime.Status{
+		runtime.StatusSuspended: runtime.StatusStopped,
+		runtime.StatusCrashed:   runtime.StatusStopped,
+		runtime.StatusDraining:  runtime.StatusStopped,
+		runtime.StatusCreated:   runtime.StatusStopped,
+		runtime.StatusStarting:  runtime.StatusRunning,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			f := newCheckpointFixture(t)
+			tf := newTransferFake(f)
+			template := rebaseTemplate(t, f, rebaseResources)
+			source := VMName(f.sandbox)
+			tf.setWorkspace(source, "files")
+			tf.setStatus(source, status)
+			view, err := rebaseNow(f, f.sandbox.ID, template.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if view.Status != want || tf.workspace(VMName(view.Sandbox)) != "files" {
+				t.Fatalf("view = %+v, workspace %q", view, tf.workspace(VMName(view.Sandbox)))
+			}
+		})
+	}
+}
+
+func TestRebaseOfASandboxWithoutAVMIsRefused(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	if err := tf.Remove(f.ctx, VMName(f.sandbox)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrLifecycleState) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestRebaseFailureRemovesTargetAndRestoresSource(t *testing.T) {
 	for _, running := range []bool{true, false} {
 		for _, step := range []string{"create-transfer", "import", "export", "boot"} {
