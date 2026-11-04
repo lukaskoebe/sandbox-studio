@@ -54,6 +54,8 @@ function useDecide(what: string) {
 export function BrowserActionDecision({ approval }: { approval: Approval }) {
   const act = approval.browserAction
   const [remember, setRemember] = useState(false)
+  // These move files across the browser VM's boundary: no rule can allow them.
+  const alwaysAsked = act?.action === "upload" || act?.action === "download"
   const decide = useDecide("browser action")
   const send = (action: "allow" | "deny" | "dismiss") =>
     decide.mutate({
@@ -61,7 +63,7 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
       body: {
         action,
         scope: "teammate",
-        remember: action !== "dismiss" && remember,
+        remember: action !== "dismiss" && remember && !alwaysAsked,
       },
     })
   return (
@@ -84,10 +86,12 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
           Ephemeral session {act.session}
         </p>
       )}
-      <label className="flex items-center gap-2 text-xs">
-        <Checkbox checked={remember} onCheckedChange={setRemember} />
-        {`Always for ${act?.action ?? "this action"} on this origin`}
-      </label>
+      {!alwaysAsked && (
+        <label className="flex items-center gap-2 text-xs">
+          <Checkbox checked={remember} onCheckedChange={setRemember} />
+          {`Always for ${act?.action ?? "this action"} on this origin`}
+        </label>
+      )}
       <div className="flex items-center gap-1.5">
         <Button
           variant="ghost"

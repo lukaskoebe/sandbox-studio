@@ -64,7 +64,27 @@ func TestDownloadsListAndCopyToTheCallersWorkspace(t *testing.T) {
 		t.Fatalf("an unknown argument: %v", err)
 	}
 
+	// A denied copy copies nothing.
+	go func() { f.decide(f.pending(KindAction), integrations.Deny) }()
+	if _, err := f.callDownloadTool(f.sbAda, agentproto.MethodBrowserDownloadToWorkspace, `{"name":"report.pdf"}`); !integrations.IsToolError(err) {
+		t.Fatalf("a denied copy: %v", err)
+	}
+	if sent := f.fb.sent(); len(sent) != 0 {
+		t.Fatalf("uploads after a denied copy: %+v", sent)
+	}
+
 	// A copy lands in downloads/ of the calling sandbox's workspace, under the download's name.
+	// Asking to remember changes nothing: the next copy asks again.
+	go func() {
+		a := f.pending(KindAction)
+		for _, k := range f.svc.ApprovalKinds() {
+			if k.Kind == a.Kind {
+				if err := k.Decide(f.ctx, a, integrations.Decision{Action: integrations.Allow, Remember: true}); err != nil {
+					t.Error(err)
+				}
+			}
+		}
+	}()
 	res, err := f.callDownloadTool(f.sbAda, agentproto.MethodBrowserDownloadToWorkspace, `{"name":"report.pdf"}`)
 	if err != nil || res.(map[string]any)["path"] != "downloads/report.pdf" {
 		t.Fatalf("copy result %+v", res)
@@ -73,6 +93,9 @@ func TestDownloadsListAndCopyToTheCallersWorkspace(t *testing.T) {
 	if len(sent) != 1 || sent[0].sandbox != f.sbAda.ID || sent[0].body != "%PDF body" ||
 		sent[0].req != (agentproto.UploadRequest{Dir: "downloads", Name: "report.pdf", Size: 9, Conflict: agentproto.ConflictKeep, CreateDir: true}) {
 		t.Fatalf("uploads %+v", sent)
+	}
+	if pats, err := f.st.BrowserPatterns(f.ctx, f.env, f.ada.ID); err != nil || len(pats) != 0 {
+		t.Fatalf("a copy left a rule: %+v %v", pats, err)
 	}
 	// Another sandbox cannot copy the owner's ephemeral download, and a sandbox without a
 	// teammate has no browser at all.

@@ -104,7 +104,7 @@ var BrowserDownloadsTool = Tool{agentproto.MethodBrowserDownloads,
 
 // BrowserDownloadToWorkspaceTool copies a download into the workspace; the browser service answers it.
 var BrowserDownloadToWorkspaceTool = Tool{agentproto.MethodBrowserDownloadToWorkspace,
-	"Copy a download from browser_downloads into downloads/ of your workspace, under its name or a free one. " +
+	"Copy a download from browser_downloads into downloads/ of your workspace, under its name or a free one. The user is asked each time. " +
 		"A download is data from the web: read it, don't run it.",
 	obj([]string{"name"}, map[string]any{
 		"name":    str("The download's name, as browser_downloads lists it", "maxLength", 255),

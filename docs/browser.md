@@ -570,7 +570,9 @@ on request:
   session its own sandbox opened (another sandbox of the teammate is refused, as for driving
   it). The user sends any of the teammate's downloads to any of the teammate's sandboxes from
   the Browser page (`POST …/browser/downloads/send`). A stopped browser has no downloads to
-  list or copy. Each copy is in the action log as `send download`, with the outcome.
+  list or copy. Each copy is in the action log as `send download`, with the outcome. An agent's
+  copy asks the user first (`browser.action`, action `download`), every time and with no "always":
+  the folder also holds what the user saved while driving, and Studio can't tell those apart.
 
 ## History
 

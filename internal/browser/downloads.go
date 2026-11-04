@@ -245,11 +245,37 @@ func (s *Service) toolDownloadToWorkspace(ctx context.Context, sb store.Sandbox,
 	if pg, err = s.downloadPage(st, in.Session, &sb); err != nil {
 		return nil, toolError(err)
 	}
+	if err := s.askToCopy(ctx, st, pg, sb, in.Name); err != nil {
+		return nil, toolError(err)
+	}
 	reply, err := s.copyDownload(ctx, st, pg, sb, in.Name, "agent")
 	if err != nil {
 		return nil, integrations.ToolError("could not copy %s: %v", in.Name, err)
 	}
 	return map[string]any{"name": reply.Name, "path": downloadsFolder + "/" + reply.Name, "size": reply.Size}, nil
+}
+
+// askToCopy asks the user before an agent copies a download into its workspace. The folder also
+// holds what the user saved while driving, which Studio can't tell from the agent's files, so
+// every copy asks, and a name that isn't there doesn't.
+func (s *Service) askToCopy(ctx context.Context, st *state, pg *page, sb store.Sandbox, name string) error {
+	files, err := s.listDownloads(ctx, s.vmOf(st), []sessionSlot{{pg.id, pg.slot}})
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(files, func(d Download) bool { return d.Name == name }) {
+		return refuse("could not copy %s: there is no such download; browser_downloads lists them", name)
+	}
+	c := &call{s: s, st: st, pg: pg, sb: sb}
+	url, err := c.currentURL(ctx)
+	if err != nil {
+		return err
+	}
+	origin := Origin(url)
+	if origin == "" {
+		origin = "this browser" // the page moved on from a web page; the card still says what it is
+	}
+	return c.authorize(ctx, Request{Action: "download", Origin: origin, Role: "file", Label: name}, url, "")
 }
 
 // decodeTool reads a tool's arguments strictly: an argument the tool doesn't name is refused.

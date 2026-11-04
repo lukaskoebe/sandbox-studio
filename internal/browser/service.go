@@ -59,7 +59,7 @@ func (s *Service) decideAction(ctx context.Context, a store.Approval, d integrat
 	}
 	s.notify(a.EnvironmentID)
 	r := Request{Action: p.Action, Origin: p.Origin, Role: p.Role, Label: p.Label, Digest: p.Digest}
-	if d.Remember && status != store.StatusDismissed {
+	if d.Remember && status != store.StatusDismissed && !slices.Contains(alwaysAsked, p.Action) {
 		verdict := store.BrowserAllow
 		if status == store.StatusDenied {
 			verdict = store.BrowserDeny
