@@ -39,7 +39,8 @@ its approval kinds with a decide function, and the API hands the decision to the
   "Allowed for blub on 22 Oct 2026 (GET pypi.org/simple/requests)". The rules table shows it in
   full on hover, offers Add note on a rule without one, and Activity shows the note of the rule
   a decision made. `allow_once` and `deny_once` answer only the connections held for the
-  request, with no rule; the approval then has `once: true`. Git approvals take an optional `note`;
+  request, with no rule (an `allow_once` leaves a held non-GET request other than the one shown to
+  ask for itself); the approval then has `once: true`. Git approvals take an optional `note`;
   `browser.action` takes `remember` to allow or deny the action on that origin from now on.
 - `POST /api/environments/{env}/approvals/{id}/revert` undoes a decision of the AI reviewer. Other
   decisions can't be reverted, and a reviewer's decision only once.

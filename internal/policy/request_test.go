@@ -523,3 +523,82 @@ func TestBrowserChromiumServicesAreDenied(t *testing.T) {
 		t.Fatalf("an allow rule did not win: %+v %v", r, err)
 	}
 }
+
+// A card stands for all the requests of a browser's page to its host, but "Once" answers what it
+// showed and other GETs: anything else held could change something, and asks for itself.
+func TestOnceLeavesOtherWritesToAskForThemselves(t *testing.T) {
+	ctx := context.Background()
+	e, env, _, sb, _ := newTeammateEngine(t)
+	if err := e.Store.SetSecurityLevel(ctx, env.ID, store.LevelLocked); err != nil {
+		t.Fatal(err)
+	}
+	e.Browsers = &fakeSites{page: "docs.example.com", approved: map[string]map[string]bool{}}
+	send := func(req HTTPRequest) <-chan heldResult {
+		out := make(chan heldResult, 1)
+		go func() {
+			r, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "cdn.example.net", Port: 443, Browser: true, Deferred: true, HTTP: &req})
+			out <- heldResult{r, err}
+		}()
+		return out
+	}
+	allowed := func(what string, c <-chan heldResult) {
+		t.Helper()
+		select {
+		case r := <-c:
+			if r.err != nil || r.rule.Action != store.ActionAllow {
+				t.Errorf("%s: %+v %v", what, r.rule, r.err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: not answered", what)
+		}
+	}
+	// pending is the card waiting now that isn't one of the cards answered before.
+	answered := map[string]bool{}
+	pending := func(attempts int) store.Approval {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+			list, _ := e.Store.Approvals(ctx, env.ID, store.StatusPending, 10)
+			for _, a := range list {
+				if !answered[a.ID] && a.Attempts >= attempts {
+					return a
+				}
+			}
+		}
+		t.Fatalf("no card with %d attempts", attempts)
+		return store.Approval{}
+	}
+	once := func(a store.Approval) {
+		t.Helper()
+		answered[a.ID] = true
+		if _, err := e.Resolve(ctx, env.ID, a.ID, Decision{Action: ActionAllowOnce}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	shown := send(HTTPRequest{Method: "POST", Path: "/a"})
+	pending(1)
+	again := send(HTTPRequest{Method: "POST", Path: "/a"})
+	get := send(HTTPRequest{Method: "GET", Path: "/c"})
+	other := send(HTTPRequest{Method: "POST", Path: "/b"})
+	override := send(HTTPRequest{Method: "GET", Path: "/d", Override: true})
+	once(pending(5))
+	allowed("the request the card showed", shown)
+	allowed("the same request", again)
+	allowed("another GET", get)
+
+	// The two left ask, one card at a time, as they share a subject.
+	select {
+	case r := <-other:
+		t.Fatalf("another POST went on the first answer: %+v", r)
+	case r := <-override:
+		t.Fatalf("a GET that names another method went on the first answer: %+v", r)
+	case <-time.After(50 * time.Millisecond):
+	}
+	once(pending(1))
+	once(pending(1))
+	allowed("the other POST, on its own card", other)
+	allowed("the method override, on its own card", override)
+	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 0 {
+		t.Errorf("once made rules: %+v", rules)
+	}
+}

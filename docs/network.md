@@ -249,7 +249,10 @@ traffic, else the exact port. A new or changed rule settles other pending approv
 covers and wakes held connections, so an approved `npm install` finishes without a retry.
 
 "Allow once" and "Deny once" (in the card's Options) create no rule. They decide the
-connections held for this request, and the next connection to the host asks again. Activity
+connections held for this request, and the next connection to the host asks again. A browser's
+card stands for all its page's waiting requests to the host, and Allow once lets through the
+request it shows and any other GET; a held POST or another method gets a card of its own, since
+it could change something. A GET carrying data in its path still goes along. Activity
 shows them as "Approved once" and "Denied once"; a connection denied once gets a 403 that says
 the user denied it.
 

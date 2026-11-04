@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -302,6 +303,27 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 	} else if ok {
 		return r, false, nil
 	}
+	for {
+		r, chosen, again, err := e.ask(ctx, req, host, teammate, wake)
+		if !again {
+			return r, chosen, err
+		}
+		// Another request's "Once" didn't answer this one: it gets a card of its own, unless a rule
+		// came in the meantime.
+		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
+			return store.Rule{}, false, err
+		}
+		if r, ok, err := e.check(ctx, rules, req, teammate); err != nil {
+			return store.Rule{}, false, err
+		} else if ok {
+			return r, r.Origin != store.OriginReviewer, nil
+		}
+	}
+}
+
+// ask shows req as an approval and holds it until the approval is answered, or for e.Hold. again
+// says the answer was for another request, and req must ask for itself.
+func (e *Engine) ask(ctx context.Context, req Request, host, teammate string, wake <-chan struct{}) (r store.Rule, chosen, again bool, err error) {
 	kind, subject, n := e.approvalOf(ctx, req, host, teammate)
 	payload, _ := json.Marshal(n)
 	a, _, err := e.Store.RequestApproval(ctx, store.Approval{
@@ -312,7 +334,7 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 		Payload:       payload,
 	})
 	if err != nil {
-		return store.Rule{}, false, err
+		return store.Rule{}, false, false, err
 	}
 	// Noted before the event, so what a page loads for it says the connection is held.
 	release := e.hold(a.ID, time.Now().Add(e.Hold))
@@ -324,30 +346,34 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 	for {
 		select {
 		case <-ctx.Done():
-			return store.Rule{}, false, ctx.Err()
+			return store.Rule{}, false, false, ctx.Err()
 		case <-timer.C:
 			// The approval stays pending, and pages now show that nothing holds it open.
 			release()
 			e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID, ID: a.ID})
-			return store.Rule{}, false, ErrUndecided
+			return store.Rule{}, false, false, ErrUndecided
 		case <-wake:
 		}
+		var rules []store.Rule
 		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
-			return store.Rule{}, false, err
+			return store.Rule{}, false, false, err
 		}
 		if r, ok, err := e.check(ctx, rules, req, teammate); err != nil {
-			return store.Rule{}, false, err
+			return store.Rule{}, false, false, err
 		} else if ok {
-			return r, r.Origin != store.OriginReviewer, nil
+			return r, r.Origin != store.OriginReviewer, false, nil
 		}
 		cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID)
 		if err == nil && cur.Status == store.StatusApproved && cur.RuleID == "" && !cur.Once {
 			// Approved for its site (decideSite): no rule was made, and none is needed.
-			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, true, nil
+			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, true, false, nil
 		}
 		if err != nil || cur.Status != store.StatusPending {
+			if err == nil && cur.Once && cur.Status == store.StatusApproved && !onceCovers(cur, req) {
+				return store.Rule{}, false, true, nil
+			}
 			r, err := onceAnswer(cur, err, host, req.Port)
-			return r, false, err
+			return r, false, false, err
 		}
 	}
 }
@@ -468,6 +494,21 @@ func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate str
 		}
 	}
 	return kind, subject, n
+}
+
+// onceCovers reports whether an approved "Once" also answers req, held for the same card: a card
+// names one request, but a page's other requests to the host wait on it too. The request it shows
+// goes, and so does another GET, so that a page loading doesn't raise a card each; anything else
+// could change something, and asks for itself.
+func onceCovers(a store.Approval, req Request) bool {
+	if req.HTTP == nil {
+		return true
+	}
+	var shown NetworkRequest
+	if err := json.Unmarshal(a.Payload, &shown); err == nil && shown.Method == req.HTTP.Method && shown.Path == req.HTTP.Path {
+		return true
+	}
+	return req.HTTP.Method == http.MethodGet && !req.HTTP.Override
 }
 
 // onceAnswer is what a held connection gets when its request is no longer pending without a
