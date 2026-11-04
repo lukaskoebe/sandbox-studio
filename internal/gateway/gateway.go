@@ -45,6 +45,7 @@ type Gateway struct {
 		// its requests are checked one by one even where a host rule would splice it.
 		Terminates(context.Context, policy.Request) bool
 		Refused(ctx context.Context, envID, sandboxID, host string) (store.Rule, bool, error)
+		Resolvable(ctx context.Context, req policy.Request) (bool, error)
 	}
 	Sandbox   func(ctx context.Context, id string) (store.Sandbox, error)
 	Resolvers *Resolvers

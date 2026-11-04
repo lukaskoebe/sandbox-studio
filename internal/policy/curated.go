@@ -39,6 +39,13 @@ func parseCurated(src []byte) curatedFile {
 	return f
 }
 
+// curatedHost reports whether an enabled entry covers host on some port.
+func curatedHost(host string, off []string) bool {
+	return slices.ContainsFunc(curated.Entries, func(e CuratedEntry) bool {
+		return !slices.Contains(off, e.ID) && slices.Contains(e.Hosts, host)
+	})
+}
+
 // CuratedList returns the version of the curated list and its entries, in the order of the file.
 func CuratedList() (version string, entries []CuratedEntry) {
 	return curated.Version, slices.Clone(curated.Entries)

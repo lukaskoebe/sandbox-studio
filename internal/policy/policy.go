@@ -792,6 +792,48 @@ func (e *Engine) Refused(ctx context.Context, envID, sandboxID, host string) (st
 	return r, true, nil
 }
 
+// Resolvable reports whether a lookup of req.Host may leave Studio, for req's sandbox: whether it
+// may connect to the host on some port without anybody being asked, by a rule, its kind or its
+// security level. It decides nothing, asks nobody and records nothing. Everything else stays out of
+// other resolvers until it is allowed (docs/network.md).
+func (e *Engine) Resolvable(ctx context.Context, req Request) (bool, error) {
+	teammate, err := e.teammate(ctx, req.EnvironmentID, req.SandboxID)
+	if err != nil {
+		return false, err
+	}
+	rules, _, err := e.snapshot(ctx, req.EnvironmentID)
+	if err != nil {
+		return false, err
+	}
+	host := Normalize(req.Host)
+	for _, r := range e.active(rules, req.Browser) {
+		if r.Action != store.ActionDeny && appliesTo(r, req.SandboxID, teammate) && hostSpecificity(r.Host, host) >= 0 {
+			return true, nil
+		}
+	}
+	if req.Allowed != nil {
+		return slices.Contains(req.Allowed, host), nil
+	}
+	if slices.Contains(req.Preapproved, host) {
+		return true, nil
+	}
+	level, off, err := e.level(ctx, req.EnvironmentID, teammate)
+	if err != nil {
+		return false, err
+	}
+	privateHosts, err := e.Store.PrivateHosts(ctx, req.EnvironmentID)
+	if err != nil {
+		return false, err
+	}
+	private := slices.ContainsFunc(privateHosts, func(h store.PrivateHost) bool { return Covers(h.Host, host) })
+	in := levelInput{level: level, curated: curatedHost(host, off), public: publicHost(host), private: private}
+	switch in.decide() {
+	case allowOpen, allowCurated:
+		return true, nil
+	}
+	return false, nil
+}
+
 // teammate returns the teammate owning a sandbox, or "" for an unowned or unknown one. It is
 // read from the catalog, not from the caller, so a teammate rule can only reach that
 // teammate's sandboxes.

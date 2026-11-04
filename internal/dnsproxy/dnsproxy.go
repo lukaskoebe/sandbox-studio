@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+	"golang.org/x/net/publicsuffix"
 )
 
 const (
@@ -30,9 +31,13 @@ const (
 	tcpIdleTimeout = 10 * time.Second
 	// Clients keep connections and caches well beyond a record's TTL, so answers are
 	// remembered for at least this long.
-	minNameTTL  = time.Hour
-	retryDelay  = 10 * time.Millisecond
-	opCodeQuery = dnsmessage.OpCode(0)
+	minNameTTL = time.Hour
+	// A withheld name's address is kept briefly by clients, so that a rule made for the name gives
+	// it real answers soon, and is remembered much longer, for the clients that keep it anyway.
+	withheldTTL     = 30
+	withheldNameTTL = 30 * 24 * 60 * 60
+	retryDelay      = 10 * time.Millisecond
+	opCodeQuery     = dnsmessage.OpCode(0)
 )
 
 var (
@@ -114,6 +119,15 @@ type Hooks struct {
 	// drops private answers before they reach a sandbox, so each A record becomes an address from
 	// the virtual range that the gateway maps back to the name, and AAAA records are left out.
 	Virtualize func(name string) bool
+	// Withhold reports whether a lookup of the name must stay here: no resolver outside Studio
+	// hears of it, since a name is itself a way to send data out. An A question gets a virtual
+	// address, which the gateway maps back to the name, so a connection is decided by name as
+	// always. Other questions get no answers, and a name under no real top-level domain, which
+	// can't be a public host, gets NXDOMAIN.
+	Withhold func(name string) bool
+	// Withheld is told of a withheld question that no connection follows from, such as TXT or SRV:
+	// nothing else would say why its answer is empty. kind names the record type.
+	Withheld func(name, kind string)
 }
 
 // Server answers DNS queries on one loopback address over UDP and TCP by forwarding them.
@@ -326,6 +340,9 @@ func (s *Server) resolve(network string, q query) []byte {
 		return reply(q, dnsmessage.RCodeNameError)
 	}
 	virtualize := hooks != nil && hooks.Virtualize != nil && hooks.Virtualize(name)
+	if !virtualize && hooks != nil && hooks.Withhold != nil && hooks.Withhold(name) {
+		return s.withhold(q, name, hooks)
+	}
 	for _, up := range s.upstreams {
 		// A virtualized name is a private host: the public fallbacks can't answer it and must
 		// not learn the company's internal names.
@@ -351,6 +368,35 @@ func (s *Server) resolve(network string, q query) []byte {
 	return servfail(q)
 }
 
+// withhold answers q without asking anyone (see Hooks.Withhold).
+func (s *Server) withhold(q query, name string, hooks *Hooks) []byte {
+	if !publicName(name) {
+		return reply(q, dnsmessage.RCodeNameError)
+	}
+	var addr netip.Addr
+	switch q.question.Type {
+	case dnsmessage.TypeA:
+		if q.question.Class == dnsmessage.ClassINET {
+			addr = s.virtual.addr(name, netip.Addr{})
+			s.Names.put(addr, name, withheldNameTTL)
+		}
+	case dnsmessage.TypeAAAA, dnsmessage.TypeHTTPS, dnsmessage.TypeSVCB, dnsmessage.TypePTR:
+		// Asked along with an address, or for it. They say nothing the user needs to know.
+	default:
+		if hooks.Withheld != nil {
+			hooks.Withheld(name, strings.TrimPrefix(q.question.Type.String(), "Type"))
+		}
+	}
+	return ownReply(q, addr, withheldTTL)
+}
+
+// publicName reports whether name is under a real top-level domain. Other names, such as
+// metadata.google.internal, a .local name or a single label, reach no public host.
+func publicName(name string) bool {
+	suffix, icann := publicsuffix.PublicSuffix(name)
+	return icann || strings.Contains(suffix, ".")
+}
+
 // virtualRange is where virtual addresses come from: 198.18.0.0/15, which is never public. The
 // first virtualReserved are Studio's own (VirtualAddr, HostAddr) and are never handed out.
 var virtualRange = netip.MustParseAddr("198.18.0.0").As4()
@@ -361,7 +407,9 @@ const (
 )
 
 // virtualAddrs hands out one virtual address per name and address it answers for, so that a
-// connection to the address names the host to the gateway. It is safe for concurrent use.
+// connection to the address names the host to the gateway. It remembers maxNames of them, as a
+// sandbox chooses the names it asks for; a name it forgot gets another address, and Names keeps
+// the old one's name. It is safe for concurrent use.
 type virtualAddrs struct {
 	mu sync.Mutex
 	by map[string]netip.Addr
@@ -375,7 +423,7 @@ func (v *virtualAddrs) addr(name string, real netip.Addr) netip.Addr {
 	if a, ok := v.by[key]; ok {
 		return a
 	}
-	if v.by == nil {
+	if v.by == nil || len(v.by) >= maxNames {
 		v.by = map[string]netip.Addr{}
 	}
 	// Wraps around after virtualCount addresses, which only a long-lived sandbox reaches.
@@ -596,6 +644,22 @@ func (s *Server) local(q query) ([]byte, bool) {
 	if !IsVirtual(name) {
 		return nil, false
 	}
+	var addr netip.Addr
+	if q.question.Type == dnsmessage.TypeA && q.question.Class == dnsmessage.ClassINET {
+		addr = VirtualAddr
+		if name == HostName {
+			addr = HostAddr
+		} else if ip, ok := LANAddr(name); ok {
+			addr = s.virtual.addr(name, ip)
+		}
+		s.Names.put(addr, name, 60)
+	}
+	return ownReply(q, addr, 60), true
+}
+
+// ownReply builds the reply to q of a name this resolver answers itself: an A record for addr, or
+// no records if addr isn't valid.
+func ownReply(q query, addr netip.Addr, ttl uint32) []byte {
 	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{
 		ID:                 q.header.ID,
 		Response:           true,
@@ -605,27 +669,20 @@ func (s *Server) local(q query) ([]byte, bool) {
 	})
 	b.EnableCompression()
 	if b.StartQuestions() != nil || b.Question(q.question) != nil {
-		return servfail(q), true
+		return servfail(q)
 	}
-	if q.question.Type == dnsmessage.TypeA && q.question.Class == dnsmessage.ClassINET {
-		addr := VirtualAddr
-		if name == HostName {
-			addr = HostAddr
-		} else if ip, ok := LANAddr(name); ok {
-			addr = s.virtual.addr(name, ip)
-		}
+	if addr.IsValid() {
 		if b.StartAnswers() != nil || b.AResource(dnsmessage.ResourceHeader{
-			Name: q.question.Name, Class: dnsmessage.ClassINET, TTL: 60,
+			Name: q.question.Name, Class: dnsmessage.ClassINET, TTL: ttl,
 		}, dnsmessage.AResource{A: addr.As4()}) != nil {
-			return servfail(q), true
+			return servfail(q)
 		}
-		s.Names.put(addr, name, 60)
 	}
 	msg, err := b.Finish()
 	if err != nil {
-		return servfail(q), true
+		return servfail(q)
 	}
-	return msg, true
+	return msg
 }
 
 // query is a standard query we are willing to forward: QR clear, OpCode 0, one question.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- A DNS lookup can't carry data out anymore. A sandbox could send anything to the owner of a domain
+  just by looking up a name, and nobody was asked. Now a lookup leaves Studio only for a name the
+  sandbox may already connect to, by a rule, the curated list or the level Open. Any other name gets
+  an address of Studio's own, and connecting to it asks as always. Until it is allowed, `dig` shows
+  that address, TXT, MX and SRV lookups come back empty (Connections says so), and a name that
+  doesn't exist fails when connecting rather than at lookup. Lookups of names under no real
+  top-level domain, such as `.internal` or `.local`, fail at once unless a rule or the local network
+  list covers them. Each sandbox's resolver also remembers a limited number of names now.
 - Request rules can't be slipped past. A connection to a host with a request rule used to go through
   unchecked if its first bytes didn't look like web traffic, such as a leading line break, an unusual
   method or a late TLS hello. It is now refused, and Connections says why. Rules now match the whole

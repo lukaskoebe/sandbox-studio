@@ -18,12 +18,33 @@ and the entries of its [local network](#local-network) list.
 ## DNS
 
 Each sandbox has its own loopback resolver (UDP and TCP, `dnsproxy`), so names can be mapped
-back per sandbox. It forwards to the host's system resolvers and records A/AAAA answers for
-IP→name lookups. Policy is applied at connect time, and the resolver shapes two answers:
-a name that a [deny rule](#dns-level-deny) refuses gets NXDOMAIN, and a name on the
-[local network](#local-network) list gets virtual addresses. It answers names under
-`studio.internal` itself: `198.18.0.1` for Studio's services, `198.18.0.2` for
-`host.studio.internal`, and a virtual address of its own for each `a-b-c-d.lan.studio.internal`.
+back per sandbox. It records A/AAAA answers for IP→name lookups. Policy is applied at connect
+time, and a lookup is itself a way out: a name reaches whoever runs its domain, with whatever the
+sandbox wrote into it. So a lookup reaches the host's system resolvers only for a name the sandbox
+may already connect to, on some port, without anybody being asked (`Engine.Resolvable`): a rule that
+covers it, its security level (the curated list at `guarded` and `assisted`, public names at
+`open`), or the hosts of a system VM or a template build. The rest is answered here:
+
+- A name with no such permission gets a virtual address from `198.18.0.0/15`, which the gateway maps
+  back to the name. A connection to it is decided, and held and asked about, like any other, and
+  the gateway dials the name, so it doesn't matter what the sandbox was told. A rule made later
+  gives the name real answers once the client looks it up again, within 30 s.
+- Its other questions (AAAA, TXT, MX, SRV and so on) get no answers. One that no connection follows
+  from, like TXT, MX or SRV, goes in the sandbox's connection log, once a minute per name. A tool
+  that needs those records, such as `mongodb+srv://`, needs a rule for the name first.
+- A name under no real top-level domain, such as `metadata.google.internal`, `nas.local` or a single
+  label, gets NXDOMAIN at once, unless a rule or the local network list covers it. It can't be a
+  public host, and nothing should wait on a card for it.
+- A name that a [deny rule](#dns-level-deny) refuses gets NXDOMAIN, and a name on the
+  [local network](#local-network) list gets virtual addresses for what the host's resolvers answer.
+- Names under `studio.internal` are answered here too: `198.18.0.1` for Studio's services,
+  `198.18.0.2` for `host.studio.internal`, and a virtual address of its own for each
+  `a-b-c-d.lan.studio.internal`.
+
+If the policy can't be read, the lookup stays here. Some things look different as a result: until a
+name is allowed, `dig` and `getent` show its virtual address, a name that doesn't exist looks like
+it does (the card appears, and an allowed connection then fails to dial instead of the lookup
+failing), and software that refuses private addresses by itself may count `198.18.0.0/15` as one.
 
 ## Gateway pipeline
 
@@ -382,8 +403,8 @@ A deny rule that covers every port of a name refuses the name at lookup too: the
 lookups of it get NXDOMAIN, so tools fail at once instead of waiting on a held connection. The
 rule may be scoped to the sandbox, its teammate or the environment. A name that some rule with
 ports also covers is never refused at lookup, since that rule may allow it on other ports. A
-name nothing refuses still resolves, so that it can be approved. Connections are still checked
-when they are made, so a refusal here is only the faster answer. A refused lookup goes in the
+name nothing refuses gets [a virtual address or real answers](#dns), so that it can be approved.
+Connections are still checked when they are made, so a refusal here is only the faster answer. A refused lookup goes in the
 sandbox's connection log, once a minute per name, with the rule that refused it.
 
 ## This computer

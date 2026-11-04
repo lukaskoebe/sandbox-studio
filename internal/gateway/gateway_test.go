@@ -27,6 +27,7 @@ type fakePolicy struct {
 	errs       map[string]error      // by host: the connection's answer is this error
 	terminates map[string]bool       // by host: some rule names a method or path for it
 	refused    map[string]store.Rule // by host: lookups of the host are refused by this deny rule
+	resolvable map[string]error      // by host: lookups of the host may leave Studio, unless it holds an error
 }
 
 // Terminates is true for the hosts in terminates.
@@ -50,6 +51,14 @@ func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, 
 		return store.Rule{}, policy.ErrPerRequest
 	}
 	return store.Rule{}, policy.ErrUndecided
+}
+
+// Resolvable is true for the hosts in resolvable.
+func (p *fakePolicy) Resolvable(_ context.Context, req policy.Request) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	err, ok := p.resolvable[req.Host]
+	return ok && err == nil, err
 }
 
 // Refused is the deny rule the fake gives a lookup, by host; nothing else is refused.

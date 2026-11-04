@@ -2,8 +2,10 @@ package dnsproxy
 
 import (
 	"net/netip"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
 )
@@ -152,5 +154,98 @@ func TestVirtualizedNamesSkipFallbacks(t *testing.T) {
 	}
 	if n := len(up.queries()); n != 0 {
 		t.Fatalf("a private host was sent to a fallback resolver %d times", n)
+	}
+}
+
+// A withheld name reaches no resolver: A gets a virtual address that names it, and nothing else
+// gets an answer.
+func TestWithheldNamesStayHere(t *testing.T) {
+	const secret = "c2vjcmv0.attacker.com."
+	up := startUpstream(t, fakeAnswer)
+	srv := listen(t, up.addr)
+	var told []string
+	srv.SetHooks(Hooks{
+		Withhold: func(name string) bool { return name != "allowed.com" },
+		Withheld: func(name, kind string) { told = append(told, name+" "+kind) },
+	})
+
+	h, answers := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x5001, secret, dnsmessage.TypeA)))
+	if h.ID != 0x5001 || h.RCode != dnsmessage.RCodeSuccess || len(answers) != 1 || answers[0].typ != dnsmessage.TypeA || answers[0].name != secret {
+		t.Fatalf("A reply: %+v %+v", h, answers)
+	}
+	addr := answers[0].addr
+	if !netip.MustParsePrefix("198.18.0.0/15").Contains(addr) || addr == VirtualAddr || addr == HostAddr {
+		t.Fatalf("%s is not a fresh virtual address", addr)
+	}
+	if name, ok := srv.Names.Lookup(addr); !ok || name != "c2vjcmv0.attacker.com" {
+		t.Fatalf("virtual address names %q, %v", name, ok)
+	}
+	if _, again := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x5002, secret, dnsmessage.TypeA))); len(again) != 1 || again[0].addr != addr {
+		t.Fatalf("second A reply: %+v, want %s", again, addr)
+	}
+
+	for _, typ := range []dnsmessage.Type{dnsmessage.TypeAAAA, dnsmessage.TypeHTTPS, dnsmessage.TypeTXT, dnsmessage.TypeMX, dnsmessage.TypeNS, dnsmessage.TypeCNAME, dnsmessage.TypeSRV} {
+		h, answers := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x5003, secret, typ)))
+		if h.RCode != dnsmessage.RCodeSuccess || len(answers) != 0 {
+			t.Errorf("%s reply: %+v %+v", typ, h, answers)
+		}
+	}
+	// Only the questions no connection follows from are worth telling about.
+	if got, want := strings.Join(told, ","), "c2vjcmv0.attacker.com TXT,c2vjcmv0.attacker.com MX,c2vjcmv0.attacker.com NS,c2vjcmv0.attacker.com CNAME,c2vjcmv0.attacker.com SRV"; got != want {
+		t.Errorf("told %q, want %q", got, want)
+	}
+
+	// Names that reach no public host fail at once.
+	for _, name := range []string{"metadata.google.internal.", "nas.local.", "nas.", "foo.localhost.", "nothing.invalid.", "github.com.lan."} {
+		h, answers := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x5004, name, dnsmessage.TypeA)))
+		if h.RCode != dnsmessage.RCodeNameError || len(answers) != 0 {
+			t.Errorf("%s: %+v %+v", name, h, answers)
+		}
+	}
+	if n := len(up.queries()); n != 0 {
+		t.Fatalf("%d withheld queries were forwarded", n)
+	}
+
+	// A name that isn't withheld is forwarded, as is a private host's, whatever Withhold says.
+	udpExchange(t, srv.Addr(), buildQuery(0x5005, "allowed.com.", dnsmessage.TypeTXT))
+	if n := len(up.queries()); n != 1 {
+		t.Fatalf("an allowed name: %d forwarded queries, want 1", n)
+	}
+	srv.SetHooks(Hooks{Withhold: func(string) bool { return true }, Virtualize: func(string) bool { return true }})
+	udpExchange(t, srv.Addr(), buildQuery(0x5006, "git.company.local.", dnsmessage.TypeA))
+	if n := len(up.queries()); n != 2 {
+		t.Fatalf("a private host: %d forwarded queries, want 2", n)
+	}
+}
+
+// A client may keep a withheld name's address long past its TTL, and it must still name the host.
+func TestWithheldAddressOutlivesItsTTL(t *testing.T) {
+	up := startUpstream(t, fakeAnswer)
+	srv := listen(t, up.addr)
+	srv.SetHooks(Hooks{Withhold: func(string) bool { return true }})
+	_, answers := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x5101, "app.attacker.com.", dnsmessage.TypeA)))
+	if len(answers) != 1 {
+		t.Fatalf("A reply: %+v", answers)
+	}
+	saved := now
+	t.Cleanup(func() { now = saved })
+	later := saved().Add(7 * 24 * time.Hour)
+	now = func() time.Time { return later }
+	if name, ok := srv.Names.Lookup(answers[0].addr); !ok || name != "app.attacker.com" {
+		t.Fatalf("a week later the address names %q, %v", name, ok)
+	}
+}
+
+// A sandbox picks the names it asks for, so what they cost is bounded.
+func TestVirtualAddressesAreBounded(t *testing.T) {
+	var v virtualAddrs
+	for i := range maxNames + 10 {
+		a := v.addr("n"+strconv.Itoa(i)+".attacker.com", netip.Addr{})
+		if a == VirtualAddr || a == HostAddr {
+			t.Fatalf("handed out %s", a)
+		}
+	}
+	if n := len(v.by); n > maxNames {
+		t.Fatalf("%d names remembered", n)
 	}
 }
