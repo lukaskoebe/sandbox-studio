@@ -113,7 +113,7 @@ func (s *Service) decideControl(ctx context.Context, a store.Approval, d integra
 		}
 	}
 	if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, status, ""); err != nil &&
-		!(status == store.StatusApproved && errors.Is(err, store.ErrNotFound)) {
+		(status != store.StatusApproved || !errors.Is(err, store.ErrNotFound)) {
 		return err
 	}
 	s.notify(a.EnvironmentID)

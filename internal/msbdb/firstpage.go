@@ -189,7 +189,7 @@ func schemaRow(rec []byte) (root int64, ok bool) {
 		return 0, false
 	}
 	text := func(t uint64) bool { return t >= 13 && t%2 == 1 }
-	if !text(types[0]) || !text(types[1]) || !text(types[2]) || !(types[4] == 0 || text(types[4])) {
+	if !text(types[0]) || !text(types[1]) || !text(types[2]) || (types[4] != 0 && !text(types[4])) {
 		return 0, false
 	}
 	at := int(hdr)
