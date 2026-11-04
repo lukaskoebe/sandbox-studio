@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- microsandbox's database survives the loss of its first page ("file is not a database"):
+  Studio's repair at start and `studio restore-msb-db` rebuild that page from the rest of the
+  list of tables and keep every sandbox, where they gave up before. Studio no longer repairs
+  the database while another process has it open, a sandbox VM still running or a second
+  Studio, which damaged the new one; it names those processes in Settings and `studio doctor`
+  instead. A second Studio on the same microsandbox home, even with another data directory,
+  stops with an error, and `restore-msb-db` refuses while either runs.
 - Home draws each sandbox as a line over the last 30 minutes, hour, 2, 8 or 24 hours, with every
   session branching off as it opens and rejoining as it closes: chats above it with their turns,
   terminals below with the programs that ran in them, browser sessions with the stretches you

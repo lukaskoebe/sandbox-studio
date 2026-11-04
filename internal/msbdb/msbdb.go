@@ -152,43 +152,85 @@ func moveAside(path, aside string) error {
 	return nil
 }
 
-// rebuild salvages the catalog at from, which it leaves as it was, into a new file at path.
-func rebuild(ctx context.Context, from, path string) (rows int, partial []string, err error) {
-	// Read a copy, so opening it (which may replay its WAL) leaves from's files as they were.
-	work, err := os.MkdirTemp(filepath.Dir(path), "msb.db.salvage-")
-	if err != nil {
-		return 0, nil, err
-	}
-	defer os.RemoveAll(work)
-	src := filepath.Join(work, "src.db")
-	for _, s := range suffixes {
-		if err := copyFile(from+s, src+s); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return 0, nil, err
+// errUnreadable is a catalog whose list of tables can't be read.
+var errUnreadable = errors.New("its schema can't be read")
+
+// build salvages the catalog at from, which it leaves as it was, into a new catalog it makes
+// in work, and returns that catalog's path. When the list of tables can't be read, the first
+// page, which holds SQLite's header and the start of that list, is likely damaged: build
+// writes a new one on a copy, first keeping the -wal file and then without it.
+func build(ctx context.Context, from, work string) (out string, rows int, partial []string, err error) {
+	attempts := []struct{ firstPage, wal bool }{{false, true}, {true, true}, {true, false}}
+	var first error
+	for i, a := range attempts {
+		// Read a copy, so opening it (which may replay its WAL) leaves from's files as they were.
+		dir := filepath.Join(work, fmt.Sprint(i))
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			return "", 0, nil, err
+		}
+		src := filepath.Join(dir, "src.db")
+		for _, s := range suffixes {
+			if s != "" && !a.wal {
+				continue
+			}
+			if err := copyFile(from+s, src+s); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return "", 0, nil, err
+			}
+		}
+		if a.firstPage {
+			if err := rebuildFirstPage(src, a.wal); err != nil {
+				return "", 0, nil, fmt.Errorf("%w (and its first page can't be rebuilt: %v)", first, err)
+			}
+		}
+		out = filepath.Join(dir, "new.db")
+		rows, partial, err = salvage(ctx, src, out)
+		if err == nil {
+			return out, rows, partial, nil
+		}
+		if first == nil {
+			first = err
+		} else if !errors.Is(err, errUnreadable) {
+			first = fmt.Errorf("%w (with its first page rebuilt: %v)", first, err)
+		}
+		if !errors.Is(first, errUnreadable) {
+			break
 		}
 	}
-	out := filepath.Join(work, "new.db")
-	if rows, partial, err = salvage(ctx, src, out); err != nil {
-		return 0, nil, err
-	}
-	return rows, partial, os.Rename(out, path)
+	return "", 0, nil, first
+}
+
+// workDir makes a directory next to path for build, on the same file system so its result
+// can be renamed into place.
+func workDir(path string) (string, error) {
+	return os.MkdirTemp(filepath.Dir(path), "msb.db.salvage-")
 }
 
 // Fix moves the damaged catalog at path aside, never deleting it, and puts in its place a
 // new catalog with every row that can still be read. When none can be read safely, path is
 // left free for msb to create an empty catalog. It must run before any msb call opens path.
+// The new catalog is built before the damaged one is moved, so path is missing only between
+// two renames.
 func Fix(ctx context.Context, path string, now time.Time) (Repair, error) {
 	aside := path + ".broken-" + now.UTC().Format("20060102T150405Z")
+	r := Repair{Aside: aside}
+	work, err := workDir(path)
+	if err != nil {
+		return Repair{}, err
+	}
+	defer os.RemoveAll(work)
+	out, rows, partial, built := build(ctx, path, work)
 	if err := moveAside(path, aside); err != nil {
 		return Repair{}, fmt.Errorf("move the damaged database aside: %w", err)
 	}
-	r := Repair{Aside: aside}
-	var err error
-	r.Rows, r.Partial, err = rebuild(ctx, aside, path)
-	if err != nil {
+	if built != nil {
+		r.Why = built.Error()
+		return r, nil
+	}
+	if err := os.Rename(out, path); err != nil {
 		r.Why = err.Error()
 		return r, nil
 	}
-	r.Salvaged = true
+	r.Salvaged, r.Rows, r.Partial = true, rows, partial
 	return r, nil
 }
 
@@ -212,23 +254,31 @@ func Asides(path string) ([]string, error) {
 
 // Restore rebuilds the catalog at path from from, a damaged catalog Fix moved aside: when an
 // earlier Studio could not salvage it, a newer one may. The catalog in place is moved aside to
-// path.replaced-<time>, never deleted, and put back if from can't be salvaged either. msb must
-// not have path open: Studio and every sandbox are stopped.
+// path.replaced-<time>, never deleted, and only once from was salvaged. msb must not have path
+// open: Studio and every sandbox are stopped.
 func Restore(ctx context.Context, path, from string, now time.Time) (Repair, error) {
 	if _, err := os.Stat(from); err != nil {
 		return Repair{}, err
+	}
+	work, err := workDir(path)
+	if err != nil {
+		return Repair{}, err
+	}
+	defer os.RemoveAll(work)
+	out, rows, partial, err := build(ctx, from, work)
+	if err != nil {
+		return Repair{}, fmt.Errorf("%s can't be salvaged: %w", from, err)
 	}
 	replaced := path + ".replaced-" + now.UTC().Format("20060102T150405Z")
 	if err := moveAside(path, replaced); err != nil {
 		return Repair{}, fmt.Errorf("move the current database aside: %w", err)
 	}
-	r := Repair{Aside: replaced}
-	var err error
-	if r.Rows, r.Partial, err = rebuild(ctx, from, path); err != nil {
+	r := Repair{Aside: replaced, Rows: rows, Partial: partial}
+	if err := os.Rename(out, path); err != nil {
 		if back := moveAside(replaced, path); back != nil {
-			return r, fmt.Errorf("%s can't be salvaged (%w), and the database in place could not be put back from %s: %v", from, err, replaced, back)
+			return r, fmt.Errorf("put the rebuilt database in place: %w, and the database in place could not be put back from %s: %v", err, replaced, back)
 		}
-		return r, fmt.Errorf("%s can't be salvaged: %w", from, err)
+		return r, fmt.Errorf("put the rebuilt database in place: %w", err)
 	}
 	r.Salvaged = true
 	return r, nil
@@ -274,22 +324,22 @@ func salvage(ctx context.Context, src, out string) (rows int, partial []string, 
 		WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'
 		ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 ELSE 2 END, rowid`)
 	if err != nil {
-		return 0, nil, fmt.Errorf("its schema can't be read: %w", err)
+		return 0, nil, fmt.Errorf("%w: %w", errUnreadable, err)
 	}
 	for q.Next() {
 		var o object
 		if err := q.Scan(&o.kind, &o.name, &o.sql); err != nil {
 			q.Close()
-			return 0, nil, fmt.Errorf("its schema can't be read: %w", err)
+			return 0, nil, fmt.Errorf("%w: %w", errUnreadable, err)
 		}
 		schema = append(schema, o)
 	}
 	q.Close()
 	if err := q.Err(); err != nil {
-		return 0, nil, fmt.Errorf("its schema can't be read: %w", err)
+		return 0, nil, fmt.Errorf("%w: %w", errUnreadable, err)
 	}
 	if len(schema) == 0 {
-		return 0, nil, errors.New("it has no tables")
+		return 0, nil, fmt.Errorf("%w: it lists no tables", errUnreadable)
 	}
 	to, err := open(out)
 	if err != nil {

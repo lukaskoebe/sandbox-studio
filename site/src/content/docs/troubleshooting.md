@@ -19,7 +19,9 @@ Studio's console window must stay open: closing it stops Studio. Studio turns of
 
 ## A sandbox says microsandbox lost its VM
 
-microsandbox keeps its list of sandboxes in its own database, `~/.microsandbox/db/msb.db`. When Studio starts and finds that database damaged, it moves it aside as `msb.db.broken-<time>`, keeping it, and rebuilds it from the rows it can still read. If it could read none, microsandbox starts with an empty list, and the sandboxes it lost can't start, although their disks are kept.
+microsandbox keeps its list of sandboxes in its own database, `~/.microsandbox/db/msb.db`. When Studio starts and finds that database damaged, it moves it aside as `msb.db.broken-<time>`, keeping it, and rebuilds it from the rows it can still read, even when the file's first page, which SQLite needs to read it at all, is lost ("file is not a database"). If it could read none, microsandbox starts with an empty list, and the sandboxes it lost can't start, although their disks are kept.
+
+Studio doesn't repair the database while another process has it open, such as a sandbox's VM that kept running after Studio quit, or a second Studio: moving it aside under them damages the new one. Settings and `studio doctor` then name those processes; stop them, for example with `kill <pid>`, and start Studio again. Only one Studio runs on a microsandbox home: a second one, even with its own data directory, stops with an error. Give it a home of its own with `MSB_HOME`. Keep `~/.microsandbox/db` out of sync and backup tools that replace files while they are open.
 
 To get them back, quit Studio and run:
 
@@ -27,7 +29,7 @@ To get them back, quit Studio and run:
 studio restore-msb-db
 ```
 
-It rebuilds the database from the newest `msb.db.broken-*` file and moves the one in place aside as `msb.db.replaced-<time>`. If you have made sandboxes since, it names them and stops; run it with `-replace` to restore anyway. Those sandboxes then can't start, though their disks are kept as well. To restore from an older file, name it: `studio restore-msb-db ~/.microsandbox/db/msb.db.broken-20261022T072947Z`.
+It rebuilds the database from the newest `msb.db.broken-*` file, including one an earlier Studio couldn't read, and moves the one in place aside as `msb.db.replaced-<time>`. If you have made sandboxes since, it names them and stops; run it with `-replace` to restore anyway. Those sandboxes then can't start, though their disks are kept as well. To restore from an older file, name it: `studio restore-msb-db ~/.microsandbox/db/msb.db.broken-20261022T072947Z`.
 
 ## An agent cannot start
 

@@ -37,6 +37,9 @@ func ensureRuntime(context.Context) (*runtime.Upgrade, error) { return nil, nil 
 
 func repairMSBDB(context.Context, *slog.Logger) {}
 
+// lockMSB takes no lock: the e2e build has no msb, and must not touch the real one's home.
+func lockMSB() (func() error, string, error) { return func() error { return nil }, "", nil }
+
 func newRuntime(opts runtime.Options, log *slog.Logger) studioRuntime {
 	fakeRuntime = e2e.NewRuntime(opts.Image, log)
 	return fakeRuntime

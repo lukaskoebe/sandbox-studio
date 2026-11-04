@@ -1,6 +1,11 @@
 package msbdb
 
-import "strings"
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+)
 
 // VM is a VM process msb's runtime runs.
 type VM struct {
@@ -34,4 +39,30 @@ func vmName(args []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Holders lists the processes other than this one that have the catalog at path, or its -wal
+// or -shm file, open: msb's VMs, an `msb` command, Studio's SSH proxies or another Studio.
+// Moving the files aside under them is what damages a catalog: SQLite in such a process, when
+// it closes the files it renamed, deletes the -wal and -shm files at their old paths, which by
+// then belong to the new catalog. On a system where open files can't be listed it returns none.
+func Holders(path string) []int {
+	var files []string
+	for _, s := range suffixes {
+		f := path + s
+		// The kernel names open files by their real path.
+		if dir, err := filepath.EvalSymlinks(filepath.Dir(f)); err == nil {
+			f = filepath.Join(dir, filepath.Base(f))
+		}
+		if _, err := os.Stat(f); err == nil {
+			files = append(files, f)
+		}
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	pids := openBy(files)
+	slices.Sort(pids)
+	pids = slices.Compact(pids)
+	return slices.DeleteFunc(pids, func(pid int) bool { return pid == os.Getpid() })
 }

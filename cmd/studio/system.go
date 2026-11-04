@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -93,8 +94,33 @@ func runDoctor(w io.Writer, addr, image string) int {
 	return 0
 }
 
-// runningVMs lists the VM processes msb runs; tests replace it.
-var runningVMs = msbdb.RunningVMs
+// runningVMs lists the VM processes msb runs, and msbHolders the other processes with msb's
+// database open; tests replace them.
+var (
+	runningVMs = msbdb.RunningVMs
+	msbHolders = msbdb.Holders
+)
+
+// msbHeld says which processes have msb's database open and how to stop them, or "" when none
+// does: msb's VMs by name, other processes by PID.
+func msbHeld(vms []msbdb.VM, holders []int) string {
+	var list []string
+	seen := map[int]bool{}
+	for _, vm := range vms {
+		list = append(list, fmt.Sprintf("the VM of %s (pid %d)", vm.Name, vm.PID))
+		seen[vm.PID] = true
+	}
+	for _, pid := range holders {
+		if !seen[pid] {
+			list = append(list, fmt.Sprintf("pid %d", pid))
+		}
+	}
+	if len(list) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Other processes have microsandbox's database open: %s. Stop them first, for example with kill <pid> "+
+		"(a sandbox's disks are kept), and quit any other Studio.", strings.Join(list, ", "))
+}
 
 // runRestoreMSBDB rebuilds microsandbox's catalog from one that a repair moved aside, by
 // default the newest: a repair that kept none of its rows left msb an empty catalog, and so
@@ -120,19 +146,33 @@ func runRestoreMSBDB(w io.Writer, addr string, args []string) int {
 		fmt.Fprintf(os.Stderr, "studio restore-msb-db: Studio is running on %s. Quit it first, then run this again.\n", addr)
 		return 1
 	}
-	// A VM that outlived Studio holds the damaged file open and writes to it.
-	if vms := runningVMs(sandboxes.VMPrefix); len(vms) > 0 {
-		var list []string
-		for _, vm := range vms {
-			list = append(list, fmt.Sprintf("%s (pid %d)", vm.Name, vm.PID))
+	// Studio may run on another address; holding its lock keeps one from starting meanwhile.
+	if p, err := paths.Default(); err == nil {
+		release, err := store.TryLock(filepath.Join(p.Data, "studio.lock"))
+		if errors.Is(err, store.ErrLocked) {
+			fmt.Fprintf(os.Stderr, "studio restore-msb-db: Studio is running with its data in %s. Quit it first, then run this again.\n", p.Data)
+			return 1
 		}
-		fmt.Fprintf(os.Stderr, "studio restore-msb-db: %d sandbox VMs still run: %s. Stop them first, for example with kill <pid>; their disks are kept.\n",
-			len(vms), strings.Join(list, ", "))
+		if err == nil {
+			defer func() { _ = release() }()
+		}
+	}
+	release, dir, err := lockMSB()
+	if errors.Is(err, store.ErrLocked) {
+		fmt.Fprintf(os.Stderr, "studio restore-msb-db: another Studio uses microsandbox's home %s. Quit it first, then run this again.\n", filepath.Dir(dir))
 		return 1
+	}
+	if err == nil {
+		defer func() { _ = release() }()
 	}
 	path, err := msbdb.Path()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	// A VM that outlived Studio, or another process, holds the catalog open and writes to it.
+	if held := msbHeld(runningVMs(sandboxes.VMPrefix), msbHolders(path)); held != "" {
+		fmt.Fprintln(os.Stderr, "studio restore-msb-db: "+held+" Then run this again.")
 		return 1
 	}
 	if from == "" {

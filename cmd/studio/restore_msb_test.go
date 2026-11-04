@@ -39,6 +39,7 @@ func writeCatalog(t *testing.T, path string, sandboxes ...string) {
 func TestRestoreMSBDBRebuildsFromTheNewestAside(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("MSB_HOME", t.TempDir())
+	t.Setenv("SANDBOX_STUDIO_HOME", t.TempDir())
 	path, _ := msbdb.Path()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -55,6 +56,24 @@ func TestRestoreMSBDBRebuildsFromTheNewestAside(t *testing.T) {
 		t.Fatalf("with a VM running: status %d", status)
 	}
 	vms = nil
+	holders := []int{4242}
+	msbHolders = func(string) []int { return holders }
+	t.Cleanup(func() { msbHolders = msbdb.Holders })
+	out.Reset()
+	if status := runRestoreMSBDB(&out, addr, []string{"-replace"}); status != 1 {
+		t.Fatalf("with the catalog open in another process: status %d", status)
+	}
+	holders = nil
+
+	// Another Studio on this microsandbox home.
+	release, _, err := lockMSB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status := runRestoreMSBDB(&out, addr, []string{"-replace"}); status != 1 {
+		t.Fatalf("with another Studio's lock held: status %d", status)
+	}
+	_ = release()
 
 	writeCatalog(t, path, "studio-new-g1")
 	if status := runRestoreMSBDB(&out, addr, nil); status != 1 {

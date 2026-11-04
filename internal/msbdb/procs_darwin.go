@@ -25,3 +25,15 @@ func processArgs() map[int][]string {
 	}
 	return out
 }
+
+// openBy lists the processes with one of files open, with lsof, which exits 1 when none has.
+func openBy(files []string) []int {
+	b, _ := exec.Command("lsof", append([]string{"-t", "--"}, files...)...).Output()
+	var pids []int
+	for _, f := range strings.Fields(string(b)) {
+		if pid, err := strconv.Atoi(f); err == nil {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}

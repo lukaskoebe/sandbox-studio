@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -41,8 +42,25 @@ func hostProbes() doctor.Probes {
 	return p
 }
 
-// msbRepaired describes the repair repairMSBDB made when Studio started, if it made one.
-var msbRepaired string
+// msbRepaired describes the repair repairMSBDB made when Studio started, if it made one;
+// msbHeldFix says what to do when it couldn't, because other processes had the database open.
+var msbRepaired, msbHeldFix string
+
+// lockMSB takes a lock in microsandbox's home for this Studio. Two Studios with different
+// data directories share it otherwise, and one repairing msb's database while the other uses
+// it damages the database.
+func lockMSB() (release func() error, dir string, err error) {
+	path, err := msbdb.Path()
+	if err != nil {
+		return nil, "", err
+	}
+	dir = filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, dir, err
+	}
+	release, err = store.TryLock(filepath.Join(dir, "studio.lock"))
+	return release, dir, err
+}
 
 // repairMSBDB checks msb's database before any msb call opens it. A damaged one is moved
 // aside and rebuilt from the rows that can still be read; then msb indexes the snapshots on
@@ -63,22 +81,21 @@ func repairMSBDB(ctx context.Context, log *slog.Logger) {
 		}
 		return
 	}
-	log.Error("microsandbox's database is damaged; repairing it", "path", path, "problem", d.Detail)
-	// VMs outlive Studio. One still running keeps writing the damaged file, so the rebuilt
-	// database may not match what it does; stopping and starting it settles that.
-	running := runningVMs(sandboxes.VMPrefix)
-	for _, vm := range running {
-		log.Warn("a sandbox's VM is still running while microsandbox's database is repaired", "vm", vm.Name, "pid", vm.PID)
+	// VMs outlive Studio, and Studio's SSH proxies and msb commands open the database too.
+	// Moving it aside under them damages the new one: SQLite there deletes the -wal and -shm
+	// files at the old paths when it closes them, which by then are the new database's.
+	if held := msbHeld(runningVMs(sandboxes.VMPrefix), msbHolders(path)); held != "" {
+		msbHeldFix = held + " Then start Studio again: it moves the damaged database aside, keeping it, and rebuilds it from what it can still read."
+		log.Error("microsandbox's database is damaged, but other processes have it open, so Studio leaves it as it is", "path", path, "problem", d.Detail, "held", held)
+		return
 	}
+	log.Error("microsandbox's database is damaged; repairing it", "path", path, "problem", d.Detail)
 	r, err := msbdb.Fix(ctx, path, time.Now())
 	if err != nil {
 		log.Error("could not repair microsandbox's database", "path", path, "err", err)
 		return
 	}
 	msbRepaired = r.Summary()
-	if len(running) > 0 {
-		msbRepaired += fmt.Sprintf("; %d sandboxes kept running through the repair: if one shows as stopped or hangs, stop it and start it again", len(running))
-	}
 	msbOpened.Store(true)
 	if n, err := runtime.ReindexSnapshots(ctx); err != nil {
 		log.Error("msb could not index its snapshots again", "err", err)
@@ -102,6 +119,9 @@ func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
 	if path, err := msbdb.Path(); err == nil && !msbOpened.Load() {
 		var d *msbdb.Damaged
 		if err := msbdb.Check(ctx, path); errors.As(err, &d) {
+			if msbHeldFix != "" {
+				return d.Error(), "", msbHeldFix
+			}
 			return d.Error(), "", runtime.RepairOnRestart
 		}
 	}

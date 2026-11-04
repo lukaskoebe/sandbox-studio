@@ -284,6 +284,18 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		return err
 	}
 	defer func() { _ = release() }()
+	// One Studio per microsandbox home too: Studios with different data directories otherwise
+	// share it, and one repairing msb's database while another uses it damages the database.
+	releaseMSB, msbDir, err := lockMSB()
+	if errors.Is(err, store.ErrLocked) {
+		return fmt.Errorf("another Studio uses microsandbox's home %s, with its data in another directory; "+
+			"two Studios on one microsandbox can damage its database. Quit the other Studio, or give this one a home of its own with MSB_HOME", filepath.Dir(msbDir))
+	}
+	if err != nil {
+		log.Warn("could not lock microsandbox's home", "err", err)
+	} else {
+		defer func() { _ = releaseMSB() }()
+	}
 	// The install record of an update, before the database opens: a rollback restores it.
 	resume, err := updates.ResumeInstall(updatesDir(p), version.Version, log)
 	if err != nil {
