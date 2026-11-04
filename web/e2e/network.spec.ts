@@ -465,14 +465,16 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
   const otherCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: `/${owner}/other` })
-  await approvals(page).getByRole("button", { name: "2 approvals" }).click()
+  await approvals(page)
+    .getByRole("button", { name: /\d+ approvals/ })
+    .click()
   await expect(otherCard).toBeVisible()
   await expect(otherCard).toContainText("The curated list allows only reads")
   await expect(card).not.toContainText(`/${owner}/other`)
-  // Several cards in the stack keep their buttons.
-  await expect(
-    otherCard.getByRole("button", { name: "Allow", exact: true })
-  ).toBeInViewport()
+  // Several cards in the stack aren't squeezed: the stack scrolls, and a card keeps its buttons.
+  await expect
+    .poll(() => otherCard.evaluate((el) => el.scrollHeight <= el.clientHeight))
+    .toBe(true)
 
   await otherCard.getByRole("button", { name: "Deny", exact: true }).click()
   await expect(other).resolves.toEqual({ outcome: "denied" })

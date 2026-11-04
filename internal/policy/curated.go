@@ -85,9 +85,12 @@ func readPostMatches(pattern, path string) bool {
 // repoSegment reports whether s can be a segment of a repository's path on a forge. An escaped or
 // otherwise odd segment isn't, as the forge may read it as something else.
 func repoSegment(s string) bool {
-	return s != "" && s != "-" && !strings.ContainsFunc(s, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-')
-	})
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return s != "" && s != "-"
 }
 
 // curated is the parsed list. It is checked by the tests, so a bad file fails them, not Studio.
