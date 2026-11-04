@@ -80,6 +80,31 @@ else
 fi
 echo "ok: good release installs"
 
+# An older release doesn't replace a newer one, unless asked to; a build with no version can.
+fake_studio() {
+	mkdir -p "$1"
+	printf '#!/bin/sh\necho "studio %s"\necho "base image: x"\n' "$2" >"$1/studio"
+	chmod 755 "$1/studio"
+}
+cp "$tmp/calls" "$tmp/calls.saved"
+fake_studio "$tmp/newer" v10.0.0
+if run_install "$tmp/newer"; then
+	fail "install replaced a newer version"
+fi
+grep -q 'is older' "$tmp/out" || fail "no downgrade error in the output: $(cat "$tmp/out")"
+[ "$("$tmp/newer/studio" | head -n 1)" = "studio v10.0.0" ] || fail "a refused downgrade replaced the binary"
+(
+	export SANDBOX_STUDIO_ALLOW_DOWNGRADE=1
+	run_install "$tmp/newer"
+) || fail "install refused an allowed downgrade: $(cat "$tmp/out")"
+[ "$("$tmp/newer/studio")" = "studio $version" ] || fail "an allowed downgrade didn't install"
+for installed in v9.9.8 v9.9.9 v9.9.9-rc.1 v9.8.12 dev; do
+	fake_studio "$tmp/from-$installed" "$installed"
+	run_install "$tmp/from-$installed" || fail "install from $installed failed: $(cat "$tmp/out")"
+done
+mv "$tmp/calls.saved" "$tmp/calls"
+echo "ok: an older release asks first"
+
 # A tampered checksum fails and installs nothing.
 awk '{ c = substr($1, 1, 1); print (c == "0" ? "1" : "0") substr($1, 2) "  " $2 }' \
 	"$tmp/good-checksums.txt" >"$release/checksums.txt"

@@ -6,6 +6,7 @@
 # Environment:
 #   SANDBOX_STUDIO_VERSION      release tag to install, e.g. v0.1.0 (default: the latest release)
 #   SANDBOX_STUDIO_INSTALL_DIR  directory for the binary (default: ~/.local/bin)
+#   SANDBOX_STUDIO_ALLOW_DOWNGRADE=1  install a release older than the one installed
 #
 # The archive is verified against the release's checksums.txt, and with
 # `gh attestation verify` when the GitHub CLI is installed and logged in. Nothing runs with
@@ -115,6 +116,29 @@ verify_attestation() {
 	gh attestation verify "$tmp/$asset" --repo "$REPO" >/dev/null ||
 		die "gh attestation verify failed for $asset. Nothing was installed."
 	say "Provenance attestation OK."
+}
+
+# An older binary refuses a database a newer one migrated, which would leave no working Studio.
+# A build that doesn't say its version, such as a development one, can't be compared.
+refuse_downgrade() {
+	[ "${SANDBOX_STUDIO_ALLOW_DOWNGRADE:-}" != 1 ] || return 0
+	[ -x "$dir/studio" ] || return 0
+	installed=$("$dir/studio" version 2>/dev/null | head -n 1 | awk '{ print $2 }') || return 0
+	case $installed in
+	v[0-9]*) ;;
+	*) return 0 ;;
+	esac
+	if awk -v a="$version" -v b="$installed" 'BEGIN {
+		sub(/^v/, "", a); sub(/^v/, "", b); sub(/-.*/, "", a); sub(/-.*/, "", b)
+		split(a, x, "."); split(b, y, ".")
+		for (i = 1; i <= 3; i++) {
+			if (x[i] + 0 < y[i] + 0) exit 0
+			if (x[i] + 0 > y[i] + 0) exit 1
+		}
+		exit 1
+	}'; then
+		die "Sandbox Studio $installed is installed, and $version is older: it may not open the data the newer one wrote. To install it anyway, set SANDBOX_STUDIO_ALLOW_DOWNGRADE=1."
+	fi
 }
 
 install_binary() {
@@ -237,6 +261,7 @@ main() {
 	trap 'rm -rf "$tmp"' EXIT
 	trap 'exit 1' HUP INT TERM
 
+	refuse_downgrade
 	say "Installing Sandbox Studio $version ($os/$arch)."
 	fetch "$base/$version/checksums.txt" "$tmp/checksums.txt"
 	fetch "$base/$version/$asset" "$tmp/$asset"

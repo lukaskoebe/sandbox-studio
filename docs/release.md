@@ -90,7 +90,8 @@ Each run of the workflow:
 [`install.sh`](../install.sh) depends on those names: it downloads
 `sandbox-studio_<tag>_<os>_<arch>.tar.gz` and `checksums.txt` from the release, so keep them
 in step when changing the workflow. It installs the newest non-prerelease, or the tag in
-`SANDBOX_STUDIO_VERSION`. `sh scripts/test-install.sh` tests it offline against a fake
+`SANDBOX_STUDIO_VERSION`, and it refuses one older than the installed version unless
+`SANDBOX_STUDIO_ALLOW_DOWNGRADE=1`. `sh scripts/test-install.sh` tests it offline against a fake
 release.
 
 Locally, `make build BASE_IMAGE=ghcr.io/…@sha256:…` sets the same ldflag.
