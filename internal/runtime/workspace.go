@@ -45,14 +45,18 @@ func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, fast
 	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/", Stdout: w})
 }
 
-// UploadTree runs `studio-agent <tree>-export --zstd` as root in a running VM with the archive
-// sent to url, Studio's transfer host, whose certificate caPEM's CA signs. A guest's writes to
-// msb exec's stdout are slow; its TCP through the gateway isn't.
-func (r *Runtime) UploadTree(ctx context.Context, owned OwnedVM, tree Tree, url string, caPEM []byte) error {
+// UploadTree runs `studio-agent <tree>-export` as root in a running VM with the archive, in
+// ExportTree's format, sent to url, Studio's transfer host, whose certificate caPEM's CA signs.
+// A guest's writes to msb exec's stdout are slow; its TCP through the gateway isn't.
+func (r *Runtime) UploadTree(ctx context.Context, owned OwnedVM, tree Tree, fast bool, url string, caPEM []byte) error {
 	if !tree.known() {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
-	return r.runAgentAs(ctx, owned, []string{string(tree) + "-export", "--zstd"}, RunCommand{User: "root", Cwd: "/",
+	args := []string{string(tree) + "-export"}
+	if fast {
+		args = append(args, "--zstd")
+	}
+	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/",
 		Env: map[string]string{agentproto.TransferURLEnv: url, agentproto.TransferCAEnv: string(caPEM)}})
 }
 

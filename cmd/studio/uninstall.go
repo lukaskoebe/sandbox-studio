@@ -143,7 +143,7 @@ func (u *uninstaller) describe(w io.Writer, p uninstallPlan) {
 	if p.data != "" {
 		fmt.Fprintf(w, "  %s (%s): settings, secrets, chats and logs\n", p.data, humanSize(dirSize(p.data)))
 		if n := len(u.sandboxes); n > 0 {
-			fmt.Fprintf(w, "  %s with their disks and checkpoints (%s).\n", counted(n, "sandbox"), someOf(u.sandboxes))
+			fmt.Fprintf(w, "  %s with disks and checkpoints (%s).\n", counted(n, "sandbox"), someOf(u.sandboxes))
 			fmt.Fprintln(w, "    What is in them and isn't pushed anywhere is lost.")
 		}
 	}

@@ -102,7 +102,7 @@ func (t *Transfers) serve(sb store.Sandbox) http.Handler {
 
 // treeUploader is a runtime whose guests can send an export to TransferHost.
 type treeUploader interface {
-	UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, url string, caPEM []byte) error
+	UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, fast bool, url string, caPEM []byte) error
 }
 
 var _ treeUploader = (*runtime.Runtime)(nil)
@@ -128,7 +128,7 @@ func (u uploadingRuntime) ExportTree(ctx context.Context, owned runtime.OwnedVM,
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ran := make(chan error, 1)
-	go func() { ran <- u.up.UploadTree(ctx, owned, tree, "https://"+TransferHost+"/"+token, ca) }()
+	go func() { ran <- u.up.UploadTree(ctx, owned, tree, fast, "https://"+TransferHost+"/"+token, ca) }()
 	select {
 	case body := <-up.body:
 		_, err := io.Copy(w, body)

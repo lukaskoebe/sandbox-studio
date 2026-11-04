@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- An export file stays gzip again when the guest uploads it. With the faster uploads in v0.13.0 it
+  became zstd without saying so, and Studios older than that can't import it.
 - `studio uninstall` is careful with what isn't its own. It removes only the VMs and checkpoints of
   sandboxes in its own catalog, so another Studio's with other data stay, and it refuses while such
   a Studio is running. It lists the VMs before asking. If it can't read microsandbox's list or its

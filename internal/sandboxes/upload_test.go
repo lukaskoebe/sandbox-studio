@@ -24,7 +24,8 @@ type uploadFake struct {
 	claim   string // the sandbox ID the upload authenticates as, if not its own
 	refuse  error  // UploadTree fails with this without sending anything
 	uploads int
-	status  int // the last upload's answer
+	fast    []bool // what each UploadTree was asked for
+	status  int    // the last upload's answer
 }
 
 func newUploadFake(t *testing.T, tf *transferFake, transfers *Transfers) *uploadFake {
@@ -36,7 +37,8 @@ func newUploadFake(t *testing.T, tf *transferFake, transfers *Transfers) *upload
 	return u
 }
 
-func (u *uploadFake) UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, url string, caPEM []byte) error {
+func (u *uploadFake) UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, fast bool, url string, caPEM []byte) error {
+	u.fast = append(u.fast, fast)
 	if !strings.HasPrefix(url, "https://"+TransferHost+"/") || string(caPEM) != "CA" {
 		return fmt.Errorf("url %s, CA %q", url, caPEM)
 	}
@@ -114,6 +116,33 @@ func TestCopyTreeByUpload(t *testing.T) {
 	}
 	if len(transfers.waiting) != 0 {
 		t.Fatalf("%d uploads still expected", len(transfers.waiting))
+	}
+}
+
+// An export file stays gzip, which older Studios import, also when the guest uploads it. Only a
+// copy between two VMs of this Studio is zstd.
+func TestUploadKeepsTheExportsCompression(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	transfers := &Transfers{}
+	u := newUploadFake(t, tf, transfers)
+	rt := uploading(u, transfers)
+	src := runtime.OwnedVM{Name: "src", Labels: map[string]string{"studio.sandbox-id": "sb1", "studio.environment-id": "env"}}
+	tf.setStatus("src", runtime.StatusRunning)
+	tf.setStatus("dst", runtime.StatusRunning)
+	tf.setWorkspace("src", "files")
+	var out strings.Builder
+	if err := rt.ExportTree(f.ctx, src, runtime.TreeWorkspace, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "files" {
+		t.Fatalf("exported %q", out.String())
+	}
+	if err := copyTree(f.ctx, rt, src, runtime.OwnedVM{Name: "dst"}, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(u.fast, []bool{false, true}) {
+		t.Fatalf("asked for fast: %v", u.fast)
 	}
 }
 
