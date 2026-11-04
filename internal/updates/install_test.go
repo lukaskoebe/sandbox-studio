@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -198,6 +199,35 @@ func TestInstallSwapsInAVerifiedRelease(t *testing.T) {
 
 // Nothing changes when the download doesn't match checksums.txt or its attestation doesn't
 // verify, or the release isn't newer.
+func TestInstallWaitsAgainIfSomethingStartedDuringTheBackup(t *testing.T) {
+	r := newRelease(t, "v1.1.0")
+	f := newInstall(t, r)
+	var mu sync.Mutex
+	answers := []bool{true, false, false, true, true}
+	f.in.Idle = func(context.Context) (bool, string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		idle := answers[0]
+		answers = answers[1:]
+		return idle, "a chat is running", nil
+	}
+	backups := 0
+	backup := f.in.Backup
+	f.in.Backup = func(ctx context.Context, path string) error {
+		backups++
+		return backup(ctx, path)
+	}
+	f.in.Start(Release{Tag: "v1.1.0", Assets: r.assets()})
+	select {
+	case <-f.restarts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no restart: %+v", f.in.Progress())
+	}
+	if backups != 2 || len(answers) != 0 {
+		t.Fatalf("backups = %d, idle answers left = %v", backups, answers)
+	}
+}
+
 func TestInstallRefusesWhatDoesntVerify(t *testing.T) {
 	for name, tc := range map[string]struct {
 		tag   string

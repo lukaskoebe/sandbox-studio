@@ -40,9 +40,12 @@ wait (`Installer.Hurry`), cutting off what runs.
    public-good trusted root (fetched with TUF, cached in `<data>/updates/tuf`). The binary is
    then unpacked next to the running one (the directory must be writable) and must answer
    `studio version` with the tag.
-3. **Wait for idle.** No chat turn, template build or sign-in may be running; Studio checks
-   again every two minutes and the UI says what it waits for, until the user restarts now.
-4. **Back up** the database with `VACUUM INTO` to `<data>/updates/<tag>/studio-<old>.db`.
+3. **Wait for idle.** No chat turn, template build, sign-in, fork, rebase, disk resize, export,
+   restore or import may be running; Studio checks again every two minutes and the UI says what
+   it waits for, until the user restarts now. An agent working in a terminal doesn't hold an
+   update: its VM is detached, so it keeps running and only its connections drop for a moment.
+4. **Back up** the database with `VACUUM INTO` to `<data>/updates/<tag>/studio-<old>.db`. If
+   something started during the backup, Studio goes back to waiting and backs up again later.
 5. **Swap.** The running binary moves to `studio.old` (`studio.old.exe`) and the new one takes
    its name. Renaming first works on Windows too, where a running executable can't be
    replaced. The install record `<data>/updates/install.json` (`Pending`) is written.

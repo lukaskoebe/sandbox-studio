@@ -331,14 +331,24 @@ func (in *Installer) install(ctx context.Context, rel Release, hurry <-chan stru
 		return err
 	}
 
-	if err := in.waitIdle(ctx, hurry); err != nil {
-		return err
-	}
-	in.set(func(p *InstallProgress) { p.Phase, p.Detail = PhaseRestarting, "" })
 	backup := filepath.Join(dir, "studio-"+in.Current+".db")
-	os.Remove(backup)
-	if err := in.Backup(ctx, backup); err != nil {
-		return fmt.Errorf("back up the database: %w", err)
+	for {
+		if err := in.waitIdle(ctx, hurry); err != nil {
+			return err
+		}
+		in.set(func(p *InstallProgress) { p.Phase, p.Detail = PhaseRestarting, "" })
+		os.Remove(backup)
+		if err := in.Backup(ctx, backup); err != nil {
+			return fmt.Errorf("back up the database: %w", err)
+		}
+		// A big database takes a while to back up, and something may have started meanwhile.
+		idle, err := in.stillIdle(ctx, hurry)
+		if err != nil {
+			return err
+		}
+		if idle {
+			break
+		}
 	}
 	pending := Pending{Dir: in.Dir, From: in.Current, To: rel.Tag, Exe: in.Exe, Old: oldExe(in.Exe), Backup: backup, DB: in.DB,
 		Supervised: Supervised(), State: StateSwapped, At: time.Now().UTC()}
@@ -370,6 +380,20 @@ func (in *Installer) install(ctx context.Context, rel Release, hurry <-chan stru
 	in.log().Info("restarting into the Studio update", "version", rel.Tag)
 	in.Restart()
 	return nil
+}
+
+// stillIdle reports whether nothing would be cut off by a restart now, or hurry closed.
+func (in *Installer) stillIdle(ctx context.Context, hurry <-chan struct{}) (bool, error) {
+	select {
+	case <-hurry:
+		return true, nil
+	default:
+	}
+	idle, _, err := in.Idle(ctx)
+	if err != nil {
+		return false, fmt.Errorf("check whether Studio is busy: %w", err)
+	}
+	return idle, nil
 }
 
 // waitIdle waits until nothing would be cut off by a restart, or until hurry closes.

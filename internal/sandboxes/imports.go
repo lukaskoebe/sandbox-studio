@@ -80,6 +80,12 @@ func (s *importState) untrack(id string) {
 	delete(s.cancels, id)
 }
 
+func (s *importState) running() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.cancels)
+}
+
 func (s *importState) cancel(id string) {
 	s.mu.Lock()
 	cancel := s.cancels[id]

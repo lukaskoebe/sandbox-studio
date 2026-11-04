@@ -280,7 +280,24 @@ func (m *Manager) tryMutation(id string) (func(), error) {
 	if !mu.TryLock() {
 		return nil, ErrBusy
 	}
-	return mu.Unlock, nil
+	m.mutations.Add(1)
+	return func() {
+		m.mutations.Add(-1)
+		mu.Unlock()
+	}, nil
+}
+
+// Busy says what a restart would cut off among the sandboxes' own work: a fork, rebase, disk
+// resize, export or restore holding a mutation, or an import. Empty means nothing. An agent in
+// a terminal doesn't count: its VM is detached, so it keeps running through a restart.
+func (m *Manager) Busy() string {
+	switch {
+	case m.mutations.Load() > 0:
+		return "a sandbox operation is running"
+	case m.imports.running() > 0:
+		return "a sandbox import is running"
+	}
+	return ""
 }
 
 func (m *Manager) ensureNoRestore(ctx context.Context, envID, id, deletingCheckpointID string) error {

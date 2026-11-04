@@ -572,7 +572,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go logins.Run(ctx)
 	// Automatic updates restart Studio: run ends, and main starts the new binary.
 	var restarting atomic.Bool
-	if checker.Installer, checker.CannotInstall = newInstaller(ctx, p, st, logins, func() { restarting.Store(true); stop() }, log); checker.Installer != nil {
+	if checker.Installer, checker.CannotInstall = newInstaller(ctx, p, st, logins, mgr, func() { restarting.Store(true); stop() }, log); checker.Installer != nil {
 		checker.Installer.SetProgress(resume.Progress)
 	}
 	go checker.Run(ctx)

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
@@ -90,6 +91,8 @@ type Manager struct {
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
 	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.
 	mutating sync.Map
+	// mutations counts the mutations held now, for Busy.
+	mutations atomic.Int64
 
 	terminals  terminalWatch // see WatchTerminals
 	activity   activityLog   // see CountPreview and noteOutput

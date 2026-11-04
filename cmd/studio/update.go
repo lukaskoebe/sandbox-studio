@@ -12,6 +12,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
@@ -29,7 +30,7 @@ func updatesDir(p paths.Paths) string { return filepath.Join(p.Data, "updates") 
 // newInstaller returns the installer of automatic updates, or nil and why where Studio can't
 // replace itself: a development build (no reason), a binary it can't find, or one that Nix
 // manages.
-func newInstaller(ctx context.Context, p paths.Paths, st *store.Store, logins *login.Service, restart func(), log *slog.Logger) (*updates.Installer, string) {
+func newInstaller(ctx context.Context, p paths.Paths, st *store.Store, logins *login.Service, mgr *sandboxes.Manager, restart func(), log *slog.Logger) (*updates.Installer, string) {
 	if !releaseTag.MatchString(version.Version) || strings.HasSuffix(version.Version, "-dirty") {
 		return nil, ""
 	}
@@ -50,13 +51,13 @@ func newInstaller(ctx context.Context, p paths.Paths, st *store.Store, logins *l
 	}
 	return &updates.Installer{
 		Dir: updatesDir(p), Exe: exe, Current: version.Version, Context: ctx, DB: p.DB(), Backup: st.Backup, Restart: restart, Log: log,
-		Idle: func(ctx context.Context) (bool, string, error) { return idleForUpdate(ctx, st, logins) },
+		Idle: func(ctx context.Context) (bool, string, error) { return idleForUpdate(ctx, st, logins, mgr) },
 	}, ""
 }
 
 // idleForUpdate reports whether a restart would cut nothing off: no chat turn, template
 // build or sign-in is running.
-func idleForUpdate(ctx context.Context, st *store.Store, logins *login.Service) (bool, string, error) {
+func idleForUpdate(ctx context.Context, st *store.Store, logins *login.Service, mgr *sandboxes.Manager) (bool, string, error) {
 	chats, err := st.ChatsInState(ctx, store.ChatRunning)
 	if err != nil {
 		return false, "", err
@@ -76,6 +77,9 @@ func idleForUpdate(ctx context.Context, st *store.Store, logins *login.Service) 
 	}
 	if logins.Busy() {
 		return false, "a sign-in is open", nil
+	}
+	if busy := mgr.Busy(); busy != "" {
+		return false, busy, nil
 	}
 	return true, "", nil
 }
