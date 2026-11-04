@@ -28,6 +28,7 @@ for platform in linux_amd64 linux_arm64 darwin_arm64; do
 	name="sandbox-studio_${version}_$platform"
 	mkdir -p "$tmp/build/$name"
 	# Only ever this fake runs, so no test stops a Studio that is really running.
+	# shellcheck disable=SC2016 # expanded by the fake, not here
 	printf '#!/bin/sh\n[ "${1:-}" != restart ] || echo restarted >>"$STUDIO_TEST_CALLS"\necho "studio %s"\n' "$version" >"$tmp/build/$name/studio"
 	chmod 755 "$tmp/build/$name/studio"
 	app="$tmp/build/$name/studio-app"
@@ -36,6 +37,7 @@ for platform in linux_amd64 linux_arm64 darwin_arm64; do
 		mkdir -p "$tmp/build/$name/Sandbox Studio.app/Contents/MacOS"
 		app="$tmp/build/$name/Sandbox Studio.app/Contents/MacOS/studio-app"
 	fi
+	# shellcheck disable=SC2016 # expanded by the fake, not here
 	printf '#!/bin/sh\n[ "$1" != -install-launcher ] || : >"$0.launcher"\necho "studio-app %s"\n' "$version" >"$app"
 	chmod 755 "$app"
 	tar -czf "$release/$name.tar.gz" -C "$tmp/build" "$name"
