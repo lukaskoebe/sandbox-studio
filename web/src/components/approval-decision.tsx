@@ -155,9 +155,12 @@ export type BrowserReach = "browser" | "browsers" | "everywhere"
  */
 export type Lifetime = "always" | "hour" | "session" | "once"
 
-/** Whether an approval is a browser's request, which names its method. */
+/**
+ * Whether an approval is a browser's request, which names its method. The one other request that
+ * asks is a sandbox's write to a host of the curated list, which is decided like a connection.
+ */
 export function isBrowserRequest(a: Approval) {
-  return !!a.network?.method
+  return !!a.network?.method && !a.network.write
 }
 
 /** Where a browser request's decision starts: the teammate's choice of scope, else its browser. */
@@ -486,7 +489,10 @@ export function ApprovalDecision({
     net?.method && net.pathPattern
       ? `${net.method} ${net.pathPattern}`
       : undefined
-  const [requestLevel, setRequestLevel] = useState(false)
+  // A write starts as an allow of writes like it, not of every write to the host.
+  const [requestLevel, setRequestLevel] = useState(
+    !!net?.write && !!net.pathPattern
+  )
   const [anyPort, setAnyPort] = useState(false)
   // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
   const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
@@ -494,7 +500,7 @@ export function ApprovalDecision({
   const [reach, setReach] = useState<BrowserReach>(defaultReach(approval))
   const [picked, setLifetime] = useState<Lifetime>("always")
   // A connection nothing holds open any more can only be answered for its next attempt.
-  const connection = isConnection(approval)
+  const connection = isConnection(approval) || !!net?.write
   const now = useHoldClock(connection ? [approval] : [])
   const gaveUp = connection && heldFor(approval, now) === undefined
   const lifetime = gaveUp && picked === "once" ? "always" : picked
@@ -545,6 +551,11 @@ export function ApprovalDecision({
           {net.initiator && (
             <p className="truncate text-muted-foreground" title={net.initiator}>
               From {net.initiator}
+            </p>
+          )}
+          {net.write && (
+            <p className="text-muted-foreground">
+              A write. The curated list allows only reads on this host.
             </p>
           )}
         </div>

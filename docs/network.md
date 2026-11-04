@@ -142,8 +142,9 @@ An allow or deny rule can also name the requests it covers: `method` (`GET`, `HE
 `PUT`, `PATCH`, `DELETE` or `OPTIONS`; empty is any) and `pathPrefix` (a path ending in `*`,
 such as `/repos/*`; empty is any path). Such a rule decides only requests on connections
 Studio terminates, and a connection is terminated when a rule names its host's requests: the
-browser VM's HTTPS always is, and so is a connection that a host rule allows when a request
-rule names its host. The other requests of the host are decided by its host rules as before.
+browser VM's HTTPS always is, so is a connection that a host rule allows when a request
+rule names its host, and so is a connection the curated list allows to one of its
+[read-only hosts](#curated-list). The other requests of the host are decided by its host rules as before.
 Connections are matched without request rules, so a connection is never decided by one.
 
 Paths are matched after cleaning (dot segments and doubled slashes resolved). An allow covers
@@ -271,7 +272,8 @@ as a `network.request` approval. That approval names the request: method and pat
 query), the top-level site it belongs to, and the Referer the browser sent, which is shown and
 never trusted. A navigation's site is its own host; a subresource belongs to the page the
 browser drove last (`browser.TopLevel`). Approvals are keyed by host and site, so a page's
-requests to one host share one card.
+requests to one host share one card. A write to a read-only host of the [curated list](#curated-list)
+has a card of its own, keyed by its method and path, and no site.
 
 A page that is loading belongs to the site of the navigation that loads it. The broker clears
 a page's URL while it drives a command, so without that the requests of a page under way had no
@@ -359,6 +361,31 @@ The curated list is development infrastructure that Studio ships as data:
 package registries, toolchain downloads, container registries, forge read access and the CDNs they
 use. Each entry has a stable `id`, a name, a group, its exact host names and its ports (80 and 443
 only, and 80 only where the source needs it).
+
+The list is for fetching things. Eight hosts also take writes, which would carry a workspace out
+with no card, using a token of anyone's: `github.com`, `gitlab.com`, `registry.npmjs.org`,
+`crates.io`, `rubygems.org`, `registry-1.docker.io`, `ghcr.io` and `quay.io`, an entry's `readOnly`
+hosts. The list allows only their reads: `GET`, `HEAD`, `OPTIONS`, and a `POST` to a path that ends
+as the entry's `readPosts` say, such as `/git-upload-pack` (a clone or fetch),
+`/info/lfs/objects/batch` (the LFS request that lists objects; uploads go to hosts of their own) or
+npm's audit requests. A path that cleaning changes doesn't read. To see the requests, the gateway
+terminates these connections with the environment's CA, as it does for a host with
+[request rules](#request-rules), and refuses one that isn't HTTP or TLS. The other hosts only
+serve downloads, and their connections pass unread.
+
+A write asks, as a request with its method and path: `git push` to `github.com` shows `POST
+/owner/repo.git/git-receive-pack`, and the client waits on it as on any held connection. It is a
+sandbox's request, so its card has the sandbox's scopes and a card of its own for each path, and it
+starts at a rule for writes like it (`POST /owner/*`). At `assisted`, the reviewer sees it first. A
+browser VM's writes to these hosts ask in the same way, as its own requests. A rule for the host,
+which is the user's word and not the list's, ends all of this: its connections pass unread, unless
+request rules name the host. So does `open`, which allows the host itself, and a template build's
+hosts, which its own steps need.
+
+A client that doesn't trust the environment's CA can't reach these hosts: the guests' system bundle
+has the CA and the base image points the usual variables at it, but a tool with a trust store of its
+own, such as a JDK from mise or Deno without `DENO_TLS_CA_STORE`, fails the handshake, and Connections
+says so. A rule for the host gets it through.
 
 The `guarded`, `assisted` and `open` levels allow an entry's hosts on its ports when no rule matches.
 Settings → Network lists the entries with a search and a switch for each one. A switched-off entry is

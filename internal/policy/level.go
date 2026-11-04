@@ -114,6 +114,8 @@ func (e *Engine) byLevel(ctx context.Context, req Request, teammate, host string
 	}
 	private := slices.ContainsFunc(privateHosts, func(h store.PrivateHost) bool { return Covers(h.Host, host) })
 	entry, listed := curatedMatch(host, req.Port, off)
+	// An entry covers a request it allows, and a write on a read-only host isn't one.
+	listed = listed && (req.HTTP == nil || entry.allowsRequest(host, req.HTTP))
 	in := levelInput{level: level, curated: listed, placeholder: req.Placeholder, public: publicHost(host), private: private, reviewer: e.Reviewer != nil}
 	switch in.decide() {
 	case allowOpen:
@@ -125,7 +127,11 @@ func (e *Engine) byLevel(ctx context.Context, req Request, teammate, host string
 	default:
 		return store.Rule{}, false, nil
 	}
-	return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, true, nil
+	allow = store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}
+	if in.decide() == allowCurated {
+		allow.Origin = store.OriginCurated
+	}
+	return allow, true, nil
 }
 
 // recordAllowed records a connection a level or the curated list allowed, so Activity shows why it

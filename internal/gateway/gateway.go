@@ -269,14 +269,15 @@ func (g *Gateway) handle(c net.Conn) {
 	// A request-level rule for an allowed host needs the requests, so the connection is
 	// terminated. One whose requests can't be read, as its first bytes aren't HTTP or TLS, can't
 	// be checked and doesn't go through: it would pass the rule by not looking like web traffic.
+	curated := rule.Origin == store.OriginCurated
 	checked := rule.Action == store.ActionAllow && g.Policy.Terminates(context.Background(), policy.Request{
-		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port, Browser: sb.Kind == store.SandboxKindBrowser,
+		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port, Browser: sb.Kind == store.SandboxKindBrowser, Curated: curated,
 	})
 	if bound, _ := boundTo(all, host); handled || checked || len(bound) > 0 && web {
 		if !web {
 			problem = rule.Action + " rules only handle HTTP and TLS connections"
 			if checked {
-				problem = "request rules name this host, and they only handle HTTP and TLS connections"
+				problem = "this host's requests are checked, which only works on HTTP and TLS connections"
 			}
 			return
 		}
@@ -299,7 +300,7 @@ func (g *Gateway) handle(c net.Conn) {
 		case browserTLS:
 			gate = func(r *http.Request) string { return g.decideRequest(r, decider, host, port, all) }
 		case rule.Action == store.ActionProxy || checked:
-			gate = func(r *http.Request) string { return g.ruleRequest(r, decider, host, port) }
+			gate = func(r *http.Request) string { return g.ruleRequest(r, decider, host, port, curated) }
 		}
 		g.Conns.opened(entry, ruleID, true)
 		verdict = VerdictAllowed

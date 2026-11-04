@@ -2071,6 +2071,16 @@
               "array",
               "null"
             ]
+          },
+          "readOnly": {
+            "description": "Hosts of the entry that also take writes. Only their reads are allowed; a write asks",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "required": [
@@ -5625,6 +5635,10 @@
             "type": "string"
           },
           "tracker": {
+            "type": "boolean"
+          },
+          "write": {
+            "description": "A sandbox's write to a host of the curated list, which allows only its reads",
             "type": "boolean"
           }
         },

@@ -90,8 +90,13 @@ const conflictVerdicts: Record<string, string> = {
 const kinds: Record<string, ApprovalKind> = {
   network: {
     title: "Network access",
-    summary: (a) =>
-      a.network ? `${a.network.host}:${a.network.port}` : a.subject,
+    summary: (a) => {
+      const net = a.network
+      if (!net) return a.subject
+      return net.write
+        ? `${net.method} ${net.host}${net.path}`
+        : `${net.host}:${net.port}`
+    },
     icon: GlobeIcon,
     area: "network",
     mono: true,

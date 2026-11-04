@@ -75,22 +75,31 @@ func carriesPlaceholder(r *http.Request, all []secrets.Binding, host string) boo
 	return false
 }
 
-// ruleRequest applies the request-level rules to a request on a connection that a proxy rule
-// allowed: a rule that denies the request refuses it. Nothing is asked about the others.
-func (g *Gateway) ruleRequest(r *http.Request, decider store.Sandbox, host string, port int) string {
+// ruleRequest applies the request-level rules to a request on a connection that a proxy rule or a
+// host rule allowed: a rule that denies the request refuses it, and nothing is asked about the
+// others. On a connection the curated list allowed (curated), a read also passes and a write asks,
+// holding the request. It returns what to refuse the request with, or "".
+func (g *Gateway) ruleRequest(r *http.Request, decider store.Sandbox, host string, port int, curated bool) string {
 	info := requestInfo(r, host)
 	rule, err := g.Policy.Decide(r.Context(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name,
-		Host: host, Port: port, HTTP: info, RulesOnly: true,
+		Host: host, Port: port, HTTP: info, RulesOnly: true, Curated: curated,
 	})
+	what := fmt.Sprintf("%s %s on %s", info.Method, info.Path, host)
 	switch {
-	case errors.Is(err, policy.ErrUndecided), err == nil && rule.Action != store.ActionDeny:
+	case err == nil && rule.Action == store.ActionDeny:
+		return fmt.Sprintf("A Sandbox Studio network rule blocks %s.", what)
+	case err == nil:
 		return ""
-	case err != nil:
-		g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
-		return fmt.Sprintf("Sandbox Studio could not check the request %s %s on %s: %v", info.Method, info.Path, host, err)
+	case errors.Is(err, policy.ErrUndecided) && curated:
+		return fmt.Sprintf("Sandbox Studio allows only reads on %s without asking. %s is waiting for approval: retry once the user has answered.", host, what)
+	case errors.Is(err, policy.ErrUndecided):
+		return ""
+	case errors.Is(err, policy.ErrDenied), errors.Is(err, policy.ErrDismissed):
+		return fmt.Sprintf("The user turned down %s.", what)
 	}
-	return fmt.Sprintf("A Sandbox Studio network rule blocks %s %s on %s.", info.Method, info.Path, host)
+	g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
+	return fmt.Sprintf("Sandbox Studio could not check the request %s: %v", what, err)
 }
 
 // requestInfo reads what a request says about itself, for its approval. Chromium sets the

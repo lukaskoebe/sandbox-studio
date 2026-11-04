@@ -151,6 +151,11 @@ export function CuratedList({ env }: { env: string }) {
                             </li>
                           ))}
                         </ul>
+                        {!!e.readOnly?.length && (
+                          <p className="text-muted-foreground">
+                            Reads only on {e.readOnly.join(", ")}. A write asks.
+                          </p>
+                        )}
                       </PopoverContent>
                     </Popover>
                   </li>

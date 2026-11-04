@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,19 @@ func TestCuratedListIsWellFormed(t *testing.T) {
 		for _, p := range e.Ports {
 			if p != 80 && p != 443 {
 				t.Errorf("%s: port %d; the curated list only has web ports", e.ID, p)
+			}
+		}
+		for _, h := range e.ReadOnly {
+			if !slices.Contains(e.Hosts, h) {
+				t.Errorf("%s: read-only host %q isn't one of its hosts", e.ID, h)
+			}
+		}
+		if len(e.ReadPosts) > 0 && len(e.ReadOnly) == 0 {
+			t.Errorf("%s: read POSTs without a read-only host", e.ID)
+		}
+		for _, end := range e.ReadPosts {
+			if !strings.HasPrefix(end, "/") {
+				t.Errorf("%s: read POST %q must start with a slash", e.ID, end)
 			}
 		}
 		for _, h := range e.Hosts {

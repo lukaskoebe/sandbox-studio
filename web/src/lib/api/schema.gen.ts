@@ -3826,6 +3826,8 @@ export interface components {
             id: string;
             name: string;
             ports: number[] | null;
+            /** @description Hosts of the entry that also take writes. Only their reads are allowed; a write asks */
+            readOnly?: string[] | null;
         };
         CuratedView: {
             entries: components["schemas"]["CuratedEntryView"][] | null;
@@ -5050,6 +5052,8 @@ export interface components {
             /** @description The top-level site the request belongs to: the navigation's own, or the browser's page */
             site?: string;
             tracker?: boolean;
+            /** @description A sandbox's write to a host of the curated list, which allows only its reads */
+            write?: boolean;
         };
         OpenInBody: {
             /** @description The pull request's title; empty keeps the proposed one */

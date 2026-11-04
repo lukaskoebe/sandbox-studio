@@ -886,6 +886,8 @@ type curatedEntryView struct {
 	Hosts   []string `json:"hosts"`
 	Ports   []int    `json:"ports"`
 	Enabled bool     `json:"enabled" doc:"Whether the guarded and assisted levels allow the entry's hosts"`
+	// ReadOnly names the hosts of which only the reads are allowed.
+	ReadOnly []string `json:"readOnly,omitempty" doc:"Hosts of the entry that also take writes. Only their reads are allowed; a write asks"`
 }
 
 func (s *Server) curated(ctx context.Context, env string) (curatedView, error) {
@@ -896,7 +898,7 @@ func (s *Server) curated(ctx context.Context, env string) (curatedView, error) {
 	version, entries := policy.CuratedList()
 	v := curatedView{Version: version, Entries: make([]curatedEntryView, 0, len(entries))}
 	for _, c := range entries {
-		v.Entries = append(v.Entries, curatedEntryView{ID: c.ID, Name: c.Name, Group: c.Group, Hosts: c.Hosts, Ports: c.Ports, Enabled: !slices.Contains(e.CuratedOff, c.ID)})
+		v.Entries = append(v.Entries, curatedEntryView{ID: c.ID, Name: c.Name, Group: c.Group, Hosts: c.Hosts, Ports: c.Ports, ReadOnly: c.ReadOnly, Enabled: !slices.Contains(e.CuratedOff, c.ID)})
 	}
 	return v, nil
 }

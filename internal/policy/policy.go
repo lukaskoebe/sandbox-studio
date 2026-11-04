@@ -63,7 +63,7 @@ var (
 	// (ChromiumService), while no rule allows it.
 	ErrChromium = errors.New("the request is one Chromium makes for itself")
 	// ErrNotRequest is returned for a method or path given for an approval of a connection.
-	ErrNotRequest = errors.New("a method or path can only be allowed for a browser request")
+	ErrNotRequest = errors.New("a method or path can only be allowed for a request")
 )
 
 // Request is a connection attempt from a sandbox, or a request on a connection the gateway
@@ -79,6 +79,10 @@ type Request struct {
 	// Deferred is set for a connection the gateway terminates and decides request by request
 	// (a browser VM's HTTPS): with no rule for the connection it is not held.
 	Deferred bool
+	// Curated is set for a connection the curated list allowed (a rule with OriginCurated). If its
+	// host is read-only its connection is terminated, and its requests come with RulesOnly and this:
+	// a read is allowed, and a write is decided as if no entry covered the host.
+	Curated bool
 	// RulesOnly decides by the rules alone: nothing is asked, and ErrUndecided means no rule
 	// covers the request.
 	RulesOnly bool
@@ -121,6 +125,9 @@ type NetworkRequest struct {
 	HTTPRequest
 	// PathPattern is the path prefix an allow for the request would name, such as /repos/*.
 	PathPattern string `json:"pathPattern,omitempty"`
+	// Write is set for a sandbox's write to a host of the curated list, which allows only its reads.
+	// Other requests that ask are a browser's.
+	Write bool `json:"write,omitempty" doc:"A sandbox's write to a host of the curated list, which allows only its reads"`
 	// Tracker is set for a request of a browser denied because its host is on the tracker list.
 	Tracker bool `json:"tracker,omitempty"`
 	// Decided says how a request that no rule covers was decided without asking: "open" (the
@@ -276,7 +283,12 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 		return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, false, nil
 	}
 	if req.RulesOnly {
-		return store.Rule{}, false, ErrUndecided
+		if !req.Curated {
+			return store.Rule{}, false, ErrUndecided
+		}
+		if entry, ok := curatedMatch(req.Host, req.Port, nil); !ok || entry.allowsRequest(Normalize(req.Host), req.HTTP) {
+			return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Action: store.ActionAllow}, false, nil
+		}
 	}
 	if req.Deferred && req.HTTP == nil {
 		return store.Rule{}, false, ErrPerRequest
@@ -338,8 +350,8 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 }
 
 // Terminates reports whether a rule names a method or a path for the host of req, among the
-// rules that cover req's sandbox. Such a host's connections are terminated, and their requests
-// are checked against the rules one by one.
+// rules that cover req's sandbox, or the curated list allowed req and takes only the host's reads.
+// Such a host's connections are terminated, and their requests are checked one by one.
 func (e *Engine) Terminates(ctx context.Context, req Request) bool {
 	teammate, err := e.teammate(ctx, req.EnvironmentID, req.SandboxID)
 	if err != nil {
@@ -362,7 +374,7 @@ func (e *Engine) Terminates(ctx context.Context, req Request) bool {
 		}
 		return true
 	}
-	return false
+	return req.Curated && curatedReadOnly(host)
 }
 
 // check returns the rule that decides req now, if one does: a matching rule; else, for a
@@ -439,6 +451,12 @@ func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate str
 	if req.HTTP != nil {
 		kind, n.HTTPRequest = KindRequest, *req.HTTP
 		n.PathPattern = PathSuggestion(req.HTTP.Path)
+		// A write on a read-only host of the curated list is a sandbox's own, and its card shows the
+		// request: another write gets a card of its own.
+		if req.Curated {
+			n.Write = true
+			return kind, subject + " " + req.HTTP.Method + " " + req.HTTP.Path, n
+		}
 		if !n.Navigation && e.Browsers != nil {
 			n.Site = e.Browsers.TopLevel(ctx, req.EnvironmentID, teammate)
 		}
@@ -741,12 +759,12 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 		if !IsNetworkKind(a.Kind) || json.Unmarshal(a.Payload, &req) != nil {
 			continue
 		}
-		// Only a browser VM's requests are terminated, so only they ask as a KindRequest.
+		// A browser VM's requests ask as a KindRequest, and so does a sandbox's write to a curated host.
 		var http *HTTPRequest
 		if a.Kind == KindRequest {
 			http = &req.HTTPRequest
 		}
-		r, ok := matchRule(e.active(rules, http != nil), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port, http)
+		r, ok := matchRule(e.active(rules, http != nil && !req.Write), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port, http)
 		if !ok {
 			continue
 		}

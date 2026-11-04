@@ -100,3 +100,58 @@ func TestRequestRulesRefuseWhatTheyCantRead(t *testing.T) {
 		t.Fatalf("another host's connection: %q, %v", line, err)
 	}
 }
+
+// curatedPolicy answers a request as the curated list does: a read passes, a write comes back from
+// the hold unanswered.
+type curatedPolicy struct {
+	*fakePolicy
+	curated []policy.Request
+}
+
+func (p *curatedPolicy) Decide(ctx context.Context, req policy.Request) (store.Rule, error) {
+	if req.HTTP == nil {
+		return p.fakePolicy.Decide(ctx, req)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.curated = append(p.curated, req)
+	if req.HTTP.Method == http.MethodGet {
+		return store.Rule{Action: store.ActionAllow}, nil
+	}
+	return store.Rule{}, policy.ErrUndecided
+}
+
+// A connection the curated list allowed to a read-only host is terminated. A read reaches the
+// upstream. A write that nobody has answered doesn't, and it says what it is waiting for.
+func TestCuratedHostsPassReadsAndHoldWrites(t *testing.T) {
+	h := newBrowserHarness(t)
+	pol := &curatedPolicy{fakePolicy: h.policy}
+	h.gw.Policy = pol
+	h.policy.mu.Lock()
+	h.policy.rules["curated.example"] = store.Rule{Action: store.ActionAllow, Origin: store.OriginCurated}
+	h.policy.terminates = map[string]bool{"curated.example": true}
+	h.policy.mu.Unlock()
+
+	agent := h.client(t, h.envCA)
+	if resp, body := get(t, agent, "https://curated.example/o/r"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("a read: status %d: %s", resp.StatusCode, body)
+	}
+	before := h.requests()
+	resp, err := agent.Post("https://curated.example/o/r.git/git-receive-pack", "application/octet-stream", strings.NewReader("pack"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(body), "waiting for approval") {
+		t.Fatalf("a write: status %d: %s", resp.StatusCode, body)
+	}
+	if n := h.requests(); n != before {
+		t.Fatalf("a held write reached the upstream (%d -> %d)", before, n)
+	}
+	for _, req := range pol.curated {
+		if !req.Curated || !req.RulesOnly {
+			t.Errorf("request decided without saying it is the list's: %+v", req)
+		}
+	}
+}
