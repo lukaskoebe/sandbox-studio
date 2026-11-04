@@ -419,8 +419,9 @@ and `internal/store/merges.go`.
 - Conflicts are resolved in the scratch sandbox, by hand or by its teammate, which can also run
   the tests. A text file is resolved once it has no conflict markers; any other conflict once
   its artifact under `/workspace/.studio-merge` is deleted. **Check again** recounts them.
-- **Accept** takes a checkpoint of the source (`before merging <fork>`), then copies
-  everything that changed in the scratch sandbox since it was made into the source. If the
+- **Accept** copies everything that changed in the scratch sandbox since it was made into the
+  source. It takes no checkpoint first ([decisions](decisions.md)): one can't be restored while
+  restore is off, and it costs about as much disk as the sandbox uses. If the
   source changed one of those paths in the meantime, nothing is copied, the merge stays open
   and the answer names the paths. Otherwise Studio records a `merge` event and deletes the
   scratch sandbox. The source must be running.

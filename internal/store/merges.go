@@ -31,7 +31,7 @@ type Merge struct {
 	State         string    `json:"state" enum:"preparing,ready,conflicts,failed,accepted,aborted"`
 	Error         string    `json:"error,omitempty"`
 	Report        string    `json:"-"`
-	CheckpointID  string    `json:"checkpointId,omitempty" doc:"The source's checkpoint taken before Accept"`
+	CheckpointID  string    `json:"checkpointId,omitempty" doc:"The source's checkpoint taken before Accept, by versions that took one"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }

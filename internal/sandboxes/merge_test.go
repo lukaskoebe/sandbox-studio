@@ -146,7 +146,7 @@ func TestMergeForkIntoSource(t *testing.T) {
 	if _, err := f.manager.AcceptMerge(f.ctx, f.env.ID, mg.ID); !errors.As(err, &replayErr) || replayErr.Paths[0] != "workspace/a.txt" {
 		t.Fatalf("accept over a changed source: %v", err)
 	}
-	if v, _ := f.manager.GetMerge(f.ctx, f.env.ID, mg.ID); v.State != store.MergeReady || v.CheckpointID == "" {
+	if v, _ := f.manager.GetMerge(f.ctx, f.env.ID, mg.ID); v.State != store.MergeReady {
 		t.Fatalf("after a refused replay: %+v", v)
 	}
 
@@ -169,16 +169,10 @@ func TestMergeForkIntoSource(t *testing.T) {
 	if last.Kind != store.EventMerge || last.OtherSandboxID != fork.ID {
 		t.Fatalf("last event = %+v", last)
 	}
+	// Accept takes no checkpoint: docs/decisions.md says when it should.
 	checkpoints, err := f.manager.Checkpoints(f.ctx, f.env.ID, f.sandbox.ID)
-	// One per Accept: the refused one, and this one. Both are taken in the same second, so
-	// their order isn't fixed.
-	if err != nil || len(checkpoints) != 2 {
-		t.Fatalf("checkpoints = %+v, %v", checkpoints, err)
-	}
-	for _, c := range checkpoints {
-		if (c.ID == accepted.CheckpointID) != (c.Name == "before merging copy (2)") {
-			t.Fatalf("accepted checkpoint %s, checkpoints = %+v", accepted.CheckpointID, checkpoints)
-		}
+	if err != nil || len(checkpoints) != 0 || accepted.CheckpointID != "" {
+		t.Fatalf("checkpoints = %+v, %v, merge's = %q", checkpoints, err, accepted.CheckpointID)
 	}
 }
 

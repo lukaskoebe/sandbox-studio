@@ -412,19 +412,6 @@ func (m *Manager) AcceptMerge(ctx context.Context, envID, mergeID string) (Merge
 	// merged.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), acceptTimeout)
 	defer cancel()
-	forkName := ""
-	if fork, err := m.Store.Sandbox(ctx, envID, mg.ForkID); err == nil {
-		forkName = fork.Name
-	}
-	cpName, err := m.freeCheckpointName(ctx, envID, source.ID, checkpointNameBeforeMerge(forkName))
-	if err != nil {
-		return MergeView{}, err
-	}
-	cp, err := m.CreateCheckpoint(ctx, envID, source.ID, cpName)
-	if err != nil {
-		return MergeView{}, fmt.Errorf("checkpoint %s before the merge: %w", source.Name, err)
-	}
-	mg.CheckpointID = cp.ID
 	unlock, err := m.tryMutation(source.ID)
 	if err != nil {
 		return MergeView{}, err
@@ -458,34 +445,6 @@ func (m *Manager) AcceptMerge(ctx context.Context, envID, mergeID string) (Merge
 	}
 	m.publishMerge(mg)
 	return m.mergeView(ctx, mg), nil
-}
-
-func checkpointNameBeforeMerge(fork string) string {
-	name := "before merging " + fork
-	if fork == "" {
-		name = "before a merge"
-	}
-	if len(name) > 56 {
-		name = strings.TrimSpace(name[:56])
-	}
-	return name
-}
-
-// freeCheckpointName is name, or name (n) if the sandbox has a checkpoint called that.
-func (m *Manager) freeCheckpointName(ctx context.Context, envID, id, name string) (string, error) {
-	list, err := m.Store.Checkpoints(ctx, envID, id)
-	if err != nil {
-		return "", err
-	}
-	taken := map[string]bool{}
-	for _, cp := range list {
-		taken[cp.Name] = true
-	}
-	free := name
-	for n := 2; taken[free]; n++ {
-		free = fmt.Sprintf("%s (%d)", name, n)
-	}
-	return free, nil
 }
 
 // AbortMerge ends a merge without touching the source and deletes the scratch sandbox. A
