@@ -185,8 +185,12 @@ template, or onto the default image for a sandbox without one, with other disk s
 - After the workspace and the home, it copies Docker's images, containers and volumes, so
   they survive. Containers with a restart policy start again when Docker does.
 - A disk may shrink as long as what it holds fits; a copy that doesn't fit fails and rolls
-  back. A request that changes nothing, a size under 1024 MiB, or a home size for a sandbox
-  without a home disk (a legacy template's) is refused with 422 before anything changes.
+  back. A request that changes nothing or a size under 1024 MiB is refused with 422 before
+  anything changes.
+- A sandbox without a home disk (a legacy template's) is refused with 422 too, whichever disk
+  was asked for. Its home is on the root disk, which a resize replaces, so the home would be
+  lost. A rebase onto a template with a home disk moves it there, and after that it can be
+  resized. The dialog says this and offers no resize.
 - Its record is a rebase record of kind `disks` (migration 055), so failure, rollback and
   recovery are the rebase's. The progress operation is `disks`, with the rebase's steps, and
   its background run may take 2 hours instead of 30 minutes, for a big Docker disk.

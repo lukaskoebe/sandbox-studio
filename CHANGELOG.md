@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A disk resize no longer loses the home of a sandbox from an old template. Its home is on the
+  root disk, which a resize replaces, and a change to the workspace or Docker disk used to go
+  ahead and leave it empty. Studio now refuses, and the dialog says to rebase onto a rebuilt
+  template first.
 - A connection a sandbox waits on can be answered where you see it. The Connections list has
   "Waiting for you" on top, with each host's time left, Allow and Deny, Allow all and Deny all,
   and Options for who and how long. A sandbox's screen shows a quiet count, "2 requests waiting",

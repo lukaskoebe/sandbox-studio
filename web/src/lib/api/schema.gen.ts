@@ -3889,7 +3889,7 @@ export interface components {
             dockerMiB?: number;
             /**
              * Format: int64
-             * @description The size of /home/agent in MiB, at least 1024; only for a sandbox with a home disk
+             * @description The size of /home/agent in MiB, at least 1024
              */
             homeMiB?: number;
             /**

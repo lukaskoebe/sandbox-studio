@@ -90,18 +90,34 @@ func TestResizeDisksKeepsTheTemplate(t *testing.T) {
 func TestResizeDisksRefusesBadSizes(t *testing.T) {
 	f := newCheckpointFixture(t)
 	newTransferFake(f)
-	setHomeMiB(t, f, 0) // a legacy template's sandbox
+	setHomeMiB(t, f, DefaultHomeMiB)
 	for name, sizes := range map[string]DiskSizes{
 		"unchanged": {WorkspaceMiB: f.sandbox.WorkspaceMiB},
 		"too small": {DockerMiB: 512},
-		"home":      {HomeMiB: 8192},
 	} {
 		_, err := f.manager.ResizeDisks(f.ctx, f.env.ID, f.sandbox.ID, sizes)
 		if !errors.Is(err, resources.ErrInvalid) {
 			t.Errorf("%s: err = %v, want ErrInvalid", name, err)
 		}
-		if name == "home" && !errors.Is(err, ErrNoHomeDisk) {
-			t.Errorf("home: err = %v, want ErrNoHomeDisk", err)
+	}
+	if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {
+		t.Fatalf("rebase records = %+v, %v", ops, err)
+	}
+}
+
+// A sandbox with no home disk has its home on the root disk, which a resize replaces. A
+// resize of any of its disks would lose that home, so all are refused before anything changes.
+func TestResizeDisksRefusesASandboxWithoutAHomeDisk(t *testing.T) {
+	f := newCheckpointFixture(t)
+	newTransferFake(f)
+	setHomeMiB(t, f, 0) // a legacy template's sandbox
+	for name, sizes := range map[string]DiskSizes{
+		"workspace": {WorkspaceMiB: 8192},
+		"docker":    {DockerMiB: 8192},
+		"home":      {HomeMiB: 8192},
+	} {
+		if _, err := f.manager.ResizeDisks(f.ctx, f.env.ID, f.sandbox.ID, sizes); !errors.Is(err, ErrNoHomeDisk) {
+			t.Errorf("%s: err = %v, want ErrNoHomeDisk", name, err)
 		}
 	}
 	if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {

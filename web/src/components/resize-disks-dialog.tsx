@@ -66,7 +66,13 @@ export function ResizeDisksDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={!pending}>
-        {open && (
+        {open && !sandbox.homeMiB && (
+          <NoHomeDisk
+            sandbox={sandbox}
+            onClose={() => handleOpenChange(false)}
+          />
+        )}
+        {open && !!sandbox.homeMiB && (
           <DisksForm
             sandbox={sandbox}
             pending={pending}
@@ -82,6 +88,36 @@ export function ResizeDisksDialog({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * A sandbox of a template built before the home disk has its home on the root disk, which a
+ * resize replaces, so Studio doesn't offer one.
+ */
+function NoHomeDisk({
+  sandbox,
+  onClose,
+}: {
+  sandbox: Sandbox
+  onClose: () => void
+}) {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Disks of {sandbox.name}</DialogTitle>
+        <DialogDescription>
+          This computer keeps its home on its root disk. A resize replaces the
+          root disk, so its home would be lost. Rebase it onto a rebuilt
+          template first, which gives it a home disk and copies the home over.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Close
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 
@@ -114,17 +150,12 @@ function DisksForm({
       key: "dockerMiB",
       mib: sandbox.dockerMiB,
     },
-    // A sandbox of a template built before the home disk has its home on the root disk.
-    ...(sandbox.homeMiB
-      ? [
-          {
-            name: "home",
-            label: "Home (/home/agent)",
-            key: "homeMiB",
-            mib: sandbox.homeMiB,
-          } as const,
-        ]
-      : []),
+    {
+      name: "home",
+      label: "Home (/home/agent)",
+      key: "homeMiB",
+      mib: sandbox.homeMiB ?? 0,
+    },
   ] as const satisfies {
     name: DiskName
     label: string

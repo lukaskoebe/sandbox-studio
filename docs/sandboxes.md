@@ -60,7 +60,8 @@ A sandbox made from a template built before the home skeleton (exporter version 
 home disk: its home stays on the root layer next to the toolchains that template keeps
 there, and its forks stay that way. Rebuild the template to get a persistent home directory.
 Rebasing such a sandbox onto a current template gives it a home disk and copies its home
-over. Rebasing a sandbox that has a home disk onto a template without one is refused.
+over. Rebasing a sandbox that has a home disk onto a template without one is refused, and so
+is a disk resize of a sandbox with no home disk, since the resize replaces the root layer.
 
 ## Network
 
