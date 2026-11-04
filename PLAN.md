@@ -28,7 +28,9 @@ Nothing is queued: the next items come from the backlog or the next feedback rou
   either.
 - Copy-on-write forks: a fork copies `/workspace` and the home as a zstd tar, one after the
   other, and loses the root and Docker disks. A snapshot-based fork waits on the same
-  microsandbox #1736 → [feedback plan](docs/design/feedback-v0.8.md#copy-on-write-forks)
+  microsandbox #1736 → [feedback plan](docs/design/feedback-v0.8.md#copy-on-write-forks). Once
+  snapshots are copy-on-write, accepting a fork merge should take a checkpoint of the source again
+  → [decisions](docs/decisions.md).
 - Full-snapshot suspend instead of in-place pause (a restored VM can't get Studio's proxy
   and DNS, #1736 again) → [sandboxes](docs/sandboxes.md#suspend-and-resume)
 - Scheduled checkpoints over a day on real time: a short live run with the times moved back
@@ -76,6 +78,13 @@ Nothing is queued: the next items come from the backlog or the next feedback rou
   view, so Camoufox (Firefox) would mean replacing agent-browser → [browser](docs/browser.md#stealth-mode)
 
 **Git**
+- Try [`@pierre/diffs`](https://diffs.com) (Apache-2.0, v1.6, React adapter) for the Changes panel
+  and the review diffs, in place of our own rendering (`code-view.tsx`, `lib/highlight*`). It takes
+  a raw patch (`PatchDiff`), virtualises, highlights in a worker pool, has line annotations for
+  review comments and a primitive for conflicts, which fork merges could use, and its code calls
+  no outside service. Measure before deciding: the bundle it adds with Shiki, a large diff against
+  today's view, and whether its Shadow DOM takes the Pixel and Quiet styles through its `--diffs-*`
+  variables.
 - The host-agent acceptance check: an agent in a sandbox pushes to `git@github.com:…`
   through review, with the key only in the host agent
 - Pull request reviews, what is left: teammates' own forge accounts (a verdict on the user's

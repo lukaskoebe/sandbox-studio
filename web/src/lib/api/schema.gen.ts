@@ -5000,7 +5000,7 @@ export interface components {
             start?: number;
         };
         MergeView: {
-            /** @description The source's checkpoint taken before Accept */
+            /** @description The source's checkpoint taken before Accept, by versions that took one */
             checkpointId?: string;
             /** Format: date-time */
             createdAt: string;
