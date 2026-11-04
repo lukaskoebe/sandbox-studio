@@ -24,7 +24,7 @@ const ControlPrefix = "/api/e2e/"
 
 // Requests decides a browser request of a sandbox the way the gateway does (POST
 // /api/e2e/requests). Studio sets it: the request needs no browser VM, only the policy.
-var Requests func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error)
+var Requests func(ctx context.Context, sandboxID, host string, port int, curated bool, req policy.HTTPRequest) (store.Rule, error)
 
 // Rejected reports a host's 401 to a request of a sandbox's that carried the secrets names, as
 // the gateway does (POST /api/e2e/rejected). Studio sets it.
@@ -73,8 +73,9 @@ var SetBase func(ctx context.Context, sandboxID, image, version string) error
 //	POST /api/e2e/sandboxes/{id}/push     a Push: the guest clones through the gateway, commits one
 //	                                    file and pushes; answers with Pushed once git is done
 //	POST /api/e2e/requests                {"sandboxId", "host", "port", "method", "path", "navigation",
-//	                                    "site"}: decides one browser request, as the gateway would, and
-//	                                    answers with the outcome once it is decided
+//	                                    "site", "curated"}: decides one browser request, as the gateway
+//	                                    would, or with curated a sandbox's request on a connection the
+//	                                    curated list allowed, and answers with the outcome once it is decided
 //	POST /api/e2e/rejected                {"sandboxId", "host", "names"}: a 401 to a request that
 //	                                    carried those secrets, as the gateway reports it
 //	PUT  /api/e2e/upstream/{repo...}      (re)creates the upstream bare repository <host>/<path> with
@@ -197,13 +198,14 @@ func (r *Runtime) Control() http.Handler {
 			Path       string `json:"path"`
 			Navigation bool   `json:"navigation"`
 			Site       string `json:"site"`
+			Curated    bool   `json:"curated"`
 		}
 		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.SandboxID == "" || body.Host == "" {
-			http.Error(w, "want {sandboxId, host, port, method, path, navigation, site}", http.StatusBadRequest)
+			http.Error(w, "want {sandboxId, host, port, method, path, navigation, site, curated}", http.StatusBadRequest)
 			return
 		}
 		rq := policy.HTTPRequest{Method: body.Method, Path: body.Path, Navigation: body.Navigation, Site: body.Site}
-		rule, err := Requests(req.Context(), body.SandboxID, body.Host, body.Port, rq)
+		rule, err := Requests(req.Context(), body.SandboxID, body.Host, body.Port, body.Curated, rq)
 		outcome := "allowed"
 		switch {
 		case errors.Is(err, policy.ErrDenied), errors.Is(err, policy.ErrDismissed), err == nil && rule.Action == store.ActionDeny:

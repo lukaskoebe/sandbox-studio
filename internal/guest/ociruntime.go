@@ -30,6 +30,7 @@ var containerEnv = []string{
 	"GIT_SSL_CAINFO=" + ContainerCADir + "/ca-bundle.crt",
 	"AWS_CA_BUNDLE=" + ContainerCADir + "/ca-bundle.crt",
 	"NODE_EXTRA_CA_CERTS=" + ContainerCADir + "/ca.crt",
+	"DENO_TLS_CA_STORE=system",
 }
 
 // OCIRuntime runs as runc in a sandbox: the base image puts a script ahead of the real runc

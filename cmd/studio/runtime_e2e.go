@@ -122,13 +122,13 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine,
 		gw.SignIn(sb, host, ask)
 		return nil
 	}
-	e2e.Requests = func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error) {
+	e2e.Requests = func(ctx context.Context, sandboxID, host string, port int, curated bool, req policy.HTTPRequest) (store.Rule, error) {
 		sb, err := st.LookupSandbox(ctx, sandboxID)
 		if err != nil {
 			return store.Rule{}, err
 		}
 		return engine.Decide(ctx, policy.Request{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, SandboxName: sb.Name,
-			Host: host, Port: port, Browser: true, Deferred: true, HTTP: &req})
+			Host: host, Port: port, Browser: !curated, Curated: curated, RulesOnly: curated, Deferred: !curated, HTTP: &req})
 	}
 	e2e.SeedChat = func(ctx context.Context, chatID string, count int) error {
 		for i := 1; i <= count; i++ {

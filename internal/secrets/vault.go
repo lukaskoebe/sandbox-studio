@@ -443,7 +443,7 @@ var namePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,63}$`)
 // Studio CA, so a secret must not shadow them.
 var reservedNames = []string{
 	"PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "PWD", "TMPDIR", "HOSTNAME", "IFS", "ENV", "BASH_ENV",
-	"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO", "AWS_CA_BUNDLE",
+	"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO", "AWS_CA_BUNDLE", "DENO_TLS_CA_STORE",
 }
 
 // reservedPrefixes belong to the dynamic loaders and to Studio.

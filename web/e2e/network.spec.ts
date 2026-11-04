@@ -428,3 +428,67 @@ test("a connection to a forge's SSH port offers a forge", async ({
   ).toContainText("codeberg.org runs Forgejo")
   await api.dismissApprovals()
 })
+
+// The curated list allows a host's reads. A sandbox's write asks, shows what it is, and its rule
+// covers writes like it, not every write to the host.
+test("a sandbox's write to a read-only curated host has a card of its own", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("write"))
+  const owner = freshLabel()
+  const request = (method: string, path: string) =>
+    api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
+      sandboxId: id,
+      host: "github.com",
+      port: 443,
+      method,
+      path,
+      curated: true,
+    })
+
+  await page.goto(`/e/${env}/settings/memory`)
+  await expect(request("GET", `/${owner}/a.git/info/refs`)).resolves.toEqual({
+    outcome: "allowed",
+  })
+
+  const push = `/${owner}/a.git/git-receive-pack`
+  const decided = request("POST", push)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: push })
+  await expect(card).toContainText("The curated list allows only reads")
+  // Another write doesn't join the card: it has its own.
+  const other = request("PUT", `/${owner}/other`)
+  const otherCard = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: `/${owner}/other` })
+  await approvals(page).getByRole("button", { name: "2 approvals" }).click()
+  await expect(otherCard).toBeVisible()
+  await expect(otherCard).toContainText("The curated list allows only reads")
+  await expect(card).not.toContainText(`/${owner}/other`)
+  // Several cards in the stack keep their buttons.
+  await expect(
+    otherCard.getByRole("button", { name: "Allow", exact: true })
+  ).toBeInViewport()
+
+  await otherCard.getByRole("button", { name: "Deny", exact: true }).click()
+  await expect(other).resolves.toEqual({ outcome: "denied" })
+
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(card).toBeHidden()
+  await expect(decided).resolves.toEqual({ outcome: "allowed" })
+
+  // The rule covers POSTs under the path it suggested, and not the host's other writes.
+  await expect(request("POST", `/${owner}/a.git/more`)).resolves.toEqual({
+    outcome: "allowed",
+  })
+  const third = request("POST", `/someone-else-${owner}/b.git/git-receive-pack`)
+  const thirdCard = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: `/someone-else-${owner}/` })
+  await thirdCard.getByRole("button", { name: "Deny", exact: true }).click()
+  await expect(third).resolves.toEqual({ outcome: "denied" })
+})

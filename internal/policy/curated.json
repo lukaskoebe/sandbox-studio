@@ -19,8 +19,8 @@
     {"id": "docker-hub", "name": "Docker Hub", "group": "Container registries", "hosts": ["registry-1.docker.io", "auth.docker.io", "production.cloudflare.docker.com"], "ports": [443], "readOnly": ["registry-1.docker.io"]},
     {"id": "ghcr", "name": "GitHub Container Registry", "group": "Container registries", "hosts": ["ghcr.io", "pkg-containers.githubusercontent.com"], "ports": [443], "readOnly": ["ghcr.io"]},
     {"id": "quay", "name": "Quay", "group": "Container registries", "hosts": ["quay.io"], "ports": [443], "readOnly": ["quay.io"]},
-    {"id": "github", "name": "GitHub (read access)", "group": "Forge read access", "hosts": ["github.com", "codeload.github.com", "raw.githubusercontent.com"], "ports": [443], "readOnly": ["github.com"], "readPosts": ["/git-upload-pack", "/info/lfs/objects/batch"]},
-    {"id": "gitlab", "name": "GitLab (read access)", "group": "Forge read access", "hosts": ["gitlab.com"], "ports": [443], "readOnly": ["gitlab.com"], "readPosts": ["/git-upload-pack", "/info/lfs/objects/batch"]},
+    {"id": "github", "name": "GitHub (read access)", "group": "Forge read access", "hosts": ["github.com", "codeload.github.com", "raw.githubusercontent.com"], "ports": [443], "readOnly": ["github.com"], "readPosts": ["/*/*/git-upload-pack", "/*/*/info/lfs/objects/batch"]},
+    {"id": "gitlab", "name": "GitLab (read access)", "group": "Forge read access", "hosts": ["gitlab.com"], "ports": [443], "readOnly": ["gitlab.com"], "readPosts": ["/**/git-upload-pack", "/**/info/lfs/objects/batch"]},
     {"id": "jsdelivr", "name": "jsDelivr", "group": "CDNs", "hosts": ["cdn.jsdelivr.net"], "ports": [443]},
     {"id": "unpkg", "name": "unpkg", "group": "CDNs", "hosts": ["unpkg.com"], "ports": [443]},
     {"id": "cdnjs", "name": "cdnjs", "group": "CDNs", "hosts": ["cdnjs.cloudflare.com"], "ports": [443]}

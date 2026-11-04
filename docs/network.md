@@ -365,10 +365,13 @@ only, and 80 only where the source needs it).
 The list is for fetching things. Eight hosts also take writes, which would carry a workspace out
 with no card, using a token of anyone's: `github.com`, `gitlab.com`, `registry.npmjs.org`,
 `crates.io`, `rubygems.org`, `registry-1.docker.io`, `ghcr.io` and `quay.io`, an entry's `readOnly`
-hosts. The list allows only their reads: `GET`, `HEAD`, `OPTIONS`, and a `POST` to a path that ends
-as the entry's `readPosts` say, such as `/git-upload-pack` (a clone or fetch),
-`/info/lfs/objects/batch` (the LFS request that lists objects; uploads go to hosts of their own) or
-npm's audit requests. A path that cleaning changes doesn't read. To see the requests, the gateway
+hosts. The list allows only their reads: `GET`, `HEAD`, `OPTIONS`, and a `POST` to a path in the
+entry's `readPosts`: `/owner/repo/git-upload-pack` (a clone or fetch),
+`/owner/repo/info/lfs/objects/batch` (the LFS request that lists objects; an upload is a write of its
+own, here or on another host), or npm's audit requests. The forges' patterns name a repository, since
+a path that only ends like a git request can be a write: `POST
+/api/v4/projects/1/repository/files/git-upload-pack` creates a file on GitLab. A path that cleaning
+changes doesn't read. To see the requests, the gateway
 terminates these connections with the environment's CA, as it does for a host with
 [request rules](#request-rules), and refuses one that isn't HTTP or TLS. The other hosts only
 serve downloads, and their connections pass unread.
@@ -382,10 +385,13 @@ which is the user's word and not the list's, ends all of this: its connections p
 request rules name the host. So does `open`, which allows the host itself, and a template build's
 hosts, which its own steps need.
 
-A client that doesn't trust the environment's CA can't reach these hosts: the guests' system bundle
-has the CA and the base image points the usual variables at it, but a tool with a trust store of its
-own, such as a JDK from mise or Deno without `DENO_TLS_CA_STORE`, fails the handshake, and Connections
-says so. A rule for the host gets it through.
+A client that doesn't trust the environment's CA can't reach these hosts. The guests' system bundle
+has the CA, and the usual variables point at it, including `DENO_TLS_CA_STORE=system` for Deno. A tool
+with a trust store of its own, such as a JDK from mise, fails the handshake, and Connections shows
+that. `keytool -importcert -noprompt -cacerts -storepass changeit -alias sandbox-studio -file
+/etc/sandbox-studio/ca.crt` adds the CA to a JDK, and a rule for the host gets any client through.
+A request with a method-override header (`X-HTTP-Method-Override`, `X-HTTP-Method`,
+`X-Method-Override`) counts as a write, as the upstream may go by it.
 
 The `guarded`, `assisted` and `open` levels allow an entry's hosts on its ports when no rule matches.
 Settings → Network lists the entries with a search and a switch for each one. A switched-off entry is

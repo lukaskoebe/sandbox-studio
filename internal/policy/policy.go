@@ -113,6 +113,9 @@ type HTTPRequest struct {
 	// Report is set for a report Chromium uploads to a site (Reporting API, Network Error
 	// Logging, CSP reports), which ChromiumService denies.
 	Report bool `json:"-"`
+	// Override is set for a request whose headers name another method, which the upstream may
+	// go by: the method here says nothing about what it does.
+	Override bool `json:"-"`
 }
 
 // NetworkRequest is the payload of a network approval.

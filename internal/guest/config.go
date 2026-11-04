@@ -31,7 +31,7 @@ const (
 
 // toolEnv is how mise behaves for the agent: it trusts the project's mise.toml without
 // asking, and installs Python's prebuilt builds instead of compiling them.
-var toolEnv = []string{"MISE_TRUSTED_CONFIG_PATHS=/workspace", "MISE_PYTHON_COMPILE=0"}
+var toolEnv = []string{"MISE_TRUSTED_CONFIG_PATHS=/workspace", "MISE_PYTHON_COMPILE=0", "DENO_TLS_CA_STORE=system"}
 
 // The hook exports toolEnv and the current secrets into every new login shell, which
 // includes new tmux windows; shells that are already running keep what they had.

@@ -41,9 +41,9 @@ func TestCuratedListIsWellFormed(t *testing.T) {
 		if len(e.ReadPosts) > 0 && len(e.ReadOnly) == 0 {
 			t.Errorf("%s: read POSTs without a read-only host", e.ID)
 		}
-		for _, end := range e.ReadPosts {
-			if !strings.HasPrefix(end, "/") {
-				t.Errorf("%s: read POST %q must start with a slash", e.ID, end)
+		for _, pattern := range e.ReadPosts {
+			if !strings.HasPrefix(pattern, "/") {
+				t.Errorf("%s: read POST %q must start with a slash", e.ID, pattern)
 			}
 		}
 		for _, h := range e.Hosts {

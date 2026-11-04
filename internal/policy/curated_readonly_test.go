@@ -35,6 +35,17 @@ func TestCuratedReadOnlyHostsAllowReads(t *testing.T) {
 		{"github.com", http.MethodPut, "/o/r.git/git-upload-pack", false},
 		{"github.com", "get", "/o/r", false},
 		{"gitlab.com", http.MethodPost, "/o/r.git/git-upload-pack", true},
+		{"gitlab.com", http.MethodPost, "/o/sub/group/r/git-upload-pack", true},
+		{"gitlab.com", http.MethodPost, "/o/sub/r.git/info/lfs/objects/batch", true},
+		// Only ending like a git request isn't one: these create files.
+		{"gitlab.com", http.MethodPost, "/api/v4/projects/1/repository/files/git-upload-pack", false},
+		{"gitlab.com", http.MethodPost, "/o/r/-/create/main/git-upload-pack", false},
+		{"gitlab.com", http.MethodPost, "/%61pi/v4/projects/1/repository/files/git-upload-pack", false},
+		{"gitlab.com", http.MethodPost, "/git-upload-pack", false},
+		{"github.com", http.MethodPost, "/o/r/git-upload-pack", true},
+		{"github.com", http.MethodPost, "/o/r/create/main/git-upload-pack", false},
+		{"github.com", http.MethodPost, "/o/r;x/git-upload-pack", false},
+		{"registry.npmjs.org", http.MethodPost, "/pkg/-/npm/v1/security/audits", false},
 		{"gitlab.com", http.MethodPost, "/api/v4/projects", false},
 		{"registry.npmjs.org", http.MethodGet, "/left-pad", true},
 		{"registry.npmjs.org", http.MethodPost, "/-/npm/v1/security/advisories/bulk", true},
@@ -54,6 +65,10 @@ func TestCuratedReadOnlyHostsAllowReads(t *testing.T) {
 		if got := entry(c.host).allowsRequest(c.host, r); got != c.want {
 			t.Errorf("%s %s on %s: %v, want %v", c.method, c.path, c.host, got, c.want)
 		}
+	}
+	// A request that names another method isn't known to read.
+	if entry("github.com").allowsRequest("github.com", &HTTPRequest{Method: http.MethodGet, Path: "/o/r", Override: true}) {
+		t.Error("a request with a method override counts as a read")
 	}
 }
 

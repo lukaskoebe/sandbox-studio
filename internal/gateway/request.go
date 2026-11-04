@@ -111,6 +111,7 @@ func requestInfo(r *http.Request, host string) *policy.HTTPRequest {
 		info.Navigation, info.Site = true, policy.Site(host)
 	}
 	info.Report = isReport(r)
+	info.Override = r.Header.Get("X-HTTP-Method-Override") != "" || r.Header.Get("X-HTTP-Method") != "" || r.Header.Get("X-Method-Override") != ""
 	if ref, err := url.Parse(r.Header.Get("Referer")); err == nil && (ref.Scheme == "http" || ref.Scheme == "https") && ref.Host != "" {
 		info.Initiator = clip(ref.Scheme+"://"+ref.Host, 256)
 	}

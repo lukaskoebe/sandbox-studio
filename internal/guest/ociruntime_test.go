@@ -71,7 +71,7 @@ func TestAddCA(t *testing.T) {
 	want := []string{"PATH=/bin", "NODE_EXTRA_CA_CERTS=/mine.pem",
 		"SSL_CERT_FILE=/dev/sandbox-studio/ca-bundle.crt", "CURL_CA_BUNDLE=/dev/sandbox-studio/ca-bundle.crt",
 		"REQUESTS_CA_BUNDLE=/dev/sandbox-studio/ca-bundle.crt", "GIT_SSL_CAINFO=/dev/sandbox-studio/ca-bundle.crt",
-		"AWS_CA_BUNDLE=/dev/sandbox-studio/ca-bundle.crt"}
+		"AWS_CA_BUNDLE=/dev/sandbox-studio/ca-bundle.crt", "DENO_TLS_CA_STORE=system"}
 	if !slices.Equal(got.Process.Env, want) {
 		t.Errorf("env = %q", got.Process.Env)
 	}

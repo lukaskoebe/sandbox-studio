@@ -7,7 +7,10 @@
   Hub, GHCR or Quay with anybody's token, and nobody was asked. Those eight hosts' requests are now
   read, so a clone, a pull and an install go through as before, and a write gets a card showing what
   it is. A rule for the host still allows everything. Studio now terminates TLS for these hosts, so a
-  tool with its own certificate store, such as a JDK from mise, needs a rule for them.
+  tool with its own certificate store, such as a JDK from mise, needs a rule for them or the CA in
+  that store.
+- With several approvals open, the floating stack squeezed each card and cut off its Allow and Deny
+  buttons on a small window.
 - A DNS lookup can't carry data out anymore. A sandbox could send anything to the owner of a domain
   just by looking up a name, and nobody was asked. Now a lookup leaves Studio only for a name the
   sandbox may already connect to, by a rule, the curated list or the level Open. Any other name gets

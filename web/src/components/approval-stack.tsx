@@ -118,7 +118,7 @@ export function ApprovalStack() {
           "w-80 max-w-full",
           !expanded && (single ? "max-sm:hidden" : "hidden")
         )}
-        viewportClassName="flex max-h-[60vh] flex-col gap-2 *:data-[slot=card]:shadow-lg"
+        viewportClassName="flex max-h-[60vh] flex-col gap-2 *:shrink-0 *:data-[slot=card]:shadow-lg"
       >
         {notifications.canAsk && (
           <Button
@@ -466,11 +466,12 @@ function useNotifications(data: Approval[] | null | undefined) {
       const before = known.get(a.id)
       known.set(a.id, a.heldUntil)
       if (first) continue
+      const heldAgain =
+        !!a.heldUntil && (!before || Date.parse(before) <= Date.now())
       if (isConnection(a) && a.sandboxId) {
-        const heldAgain =
-          !!a.heldUntil && (!before || Date.parse(before) <= Date.now())
         if (isNew || heldAgain) gather(a.sandboxId)
-      } else if (isNew && shouldNotify()) {
+      } else if ((isNew || (a.network?.write && heldAgain)) && shouldNotify()) {
+        // A retried write is the same approval, held again.
         notify(a)
       }
     }
@@ -517,7 +518,10 @@ function notify(a: Approval) {
       notifyApp({ id: a.id, title: kind.title, body })
       return
     }
-    const n = new Notification(kind.title, { body, tag: a.id })
+    const n = new Notification(kind.title, {
+      body,
+      tag: `${a.id}/${a.attempts}`, // the same tag would replace it silently
+    })
     n.onclick = () => {
       window.focus()
       n.close()

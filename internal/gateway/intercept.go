@@ -587,7 +587,7 @@ func handshakeProblem(err error) string {
 	msg := "TLS handshake: " + err.Error()
 	// Clients that reject the certificate say so with an alert. OpenSSL sends it before
 	// encrypting, which reads here as a bad record MAC.
-	for _, sign := range []string{"unknown certificate authority", "bad certificate", "bad record MAC"} {
+	for _, sign := range []string{"unknown certificate", "bad certificate", "bad record MAC"} {
 		if strings.Contains(msg, sign) {
 			return msg + " (the sandbox probably does not trust the environment's Sandbox Studio CA)"
 		}

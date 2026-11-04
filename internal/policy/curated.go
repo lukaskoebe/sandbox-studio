@@ -28,9 +28,9 @@ type CuratedEntry struct {
 	// terminated, so that each request can be read, and a write asks as if the entry didn't cover
 	// the host. The entry's other hosts only serve downloads, and their connections pass unread.
 	ReadOnly []string `json:"readOnly,omitempty" doc:"Hosts of the entry that also take writes. Only their reads are allowed; a write asks"`
-	// ReadPosts are the ends of the paths on those hosts where a POST only reads, such as the
-	// request that fetches from a git repository.
-	ReadPosts []string `json:"readPosts,omitempty" doc:"Ends of the paths on the read-only hosts where a POST only reads"`
+	// ReadPosts are the paths on those hosts where a POST only reads, such as the request that
+	// fetches from a git repository (readPostMatches).
+	ReadPosts []string `json:"readPosts,omitempty" doc:"Paths on the read-only hosts where a POST only reads"`
 }
 
 // allowsRequest reports whether the entry allows the request r to its host: anything on a host that
@@ -40,14 +40,54 @@ func (e CuratedEntry) allowsRequest(host string, r *HTTPRequest) bool {
 	if !slices.Contains(e.ReadOnly, host) {
 		return true
 	}
+	if r.Override {
+		return false
+	}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
 	case http.MethodPost:
 		p := cmp.Or(r.FullPath, r.Path)
-		return cleanPath(p) == p && slices.ContainsFunc(e.ReadPosts, func(end string) bool { return strings.HasSuffix(p, end) })
+		return cleanPath(p) == p && slices.ContainsFunc(e.ReadPosts, func(pattern string) bool { return readPostMatches(pattern, p) })
 	}
 	return false
+}
+
+// readPostMatches reports whether a path fits a readPosts pattern. A pattern with no wildcard is
+// the exact path. In /*/*/x each * is a segment of a repository's path, and in /**/x the ** is two
+// or more of them, as a GitLab project can be in subgroups. It has to name a repository: a path
+// only ending like a git request can be a write, such as GitLab's POST
+// /api/v4/projects/1/repository/files/git-upload-pack, which creates a file, or one of its /-/
+// routes.
+func readPostMatches(pattern, path string) bool {
+	if !strings.Contains(pattern, "*") {
+		return pattern == path
+	}
+	want, got := strings.Split(pattern[1:], "/"), strings.Split(strings.TrimPrefix(path, "/"), "/")
+	if want[0] == "**" {
+		n := len(got) - (len(want) - 1)
+		if n < 2 || got[0] == "api" {
+			return false
+		}
+		want = append(slices.Repeat([]string{"*"}, n), want[1:]...)
+	}
+	if len(want) != len(got) {
+		return false
+	}
+	for i, w := range want {
+		if w == "*" && !repoSegment(got[i]) || w != "*" && w != got[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// repoSegment reports whether s can be a segment of a repository's path on a forge. An escaped or
+// otherwise odd segment isn't, as the forge may read it as something else.
+func repoSegment(s string) bool {
+	return s != "" && s != "-" && !strings.ContainsFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-')
+	})
 }
 
 // curated is the parsed list. It is checked by the tests, so a bad file fails them, not Studio.
