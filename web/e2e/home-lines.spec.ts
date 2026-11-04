@@ -84,7 +84,7 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   await expect(
     lines.locator("title").filter({ hasText: /asked you: .+ → waiting/ })
   ).not.toHaveCount(0)
-  await lines.getByRole("button", { name: "2h" }).click()
+  await lines.getByRole("button", { name: "2h", exact: true }).click()
 
   // A sandbox folds into one line, and unfolds again.
   await lines.getByRole("button", { name: `Fold ${sandbox}` }).click()
