@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A request for changes on GitLab now sets GitLab's own reviewer state, as its "Request changes"
+  button does, besides the note that says so. GitLab publishes the user's pending draft comments
+  with it, so Studio refuses while there are any. Tested against a fake of the API, not a real
+  GitLab.
 - A rebase, disk resize or fork no longer grows its VMs to their memory limits. The copy passed
   through each guest's page cache, and a VM keeps every page of memory it has touched resident
   on the host, which with two VMs could bring a machine close to running out. The export and

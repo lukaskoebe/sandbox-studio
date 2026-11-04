@@ -19,6 +19,9 @@ type fakeGitLab struct {
 	query  []string         // the merge request list's queries
 	diffs  []gitlabDiffEntry
 	me     string // the token's user; when set, /approve answers 401 as GitLab does for a second approval
+
+	drafts        int // the token's user's pending draft comments
+	publishStatus int // what /draft_notes/bulk_publish answers instead of succeeding
 }
 
 const gitlabMR = "/api/v4/projects/group%2Fsub%2Fweb/merge_requests/7"
@@ -43,6 +46,11 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 				write(w, map[string]any{"message": "401 Unauthorized"})
 				return
 			}
+			if f.publishStatus != 0 && strings.HasSuffix(path, "/bulk_publish") {
+				w.WriteHeader(f.publishStatus)
+				write(w, map[string]any{"message": "refused"})
+				return
+			}
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			f.mu.Lock()
@@ -53,6 +61,8 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 			return
 		}
 		switch strings.TrimPrefix(path, gitlabMR) {
+		case "/draft_notes":
+			write(w, make([]map[string]any, f.drafts))
 		case "":
 			write(w, map[string]any{"iid": 7, "title": "Fix x", "description": "Body", "state": "merged", "web_url": "https://gitlab.example/group/sub/web/-/merge_requests/7",
 				"author": map[string]any{"username": "ada"}, "source_branch": "fix", "target_branch": "main", "sha": "head2",
@@ -204,8 +214,38 @@ func TestGitLabRequestsChangesInANote(t *testing.T) {
 	if _, err := g.PostReview(context.Background(), "t", "group/sub", "web", 7, ReviewPost{Verdict: VerdictRequestChanges, Body: "Fix x"}); err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(f.posted) != "[POST /notes]" || f.bodies[0]["body"] != "**Changes requested.**\n\nFix x" {
+	if fmt.Sprint(f.posted) != "[POST /draft_notes/bulk_publish POST /notes]" || f.bodies[0]["reviewer_state"] != "requested_changes" ||
+		f.bodies[1]["body"] != "**Changes requested.**\n\nFix x" {
 		t.Fatalf("%v %v", f.posted, f.bodies)
+	}
+}
+
+// Publishing the state would publish the user's pending draft comments too, so nothing is posted.
+func TestGitLabRequestingChangesLeavesTheUsersDraftsAlone(t *testing.T) {
+	g, f := newFakeGitLab(t)
+	f.drafts = 2
+	_, err := g.PostReview(context.Background(), "t", "group/sub", "web", 7, ReviewPost{Verdict: VerdictRequestChanges, Body: "Fix x"})
+	if err == nil || !strings.Contains(err.Error(), "2 pending draft comments") {
+		t.Fatalf("err %v", err)
+	}
+	if len(f.posted) != 0 {
+		t.Fatalf("posted %v", f.posted)
+	}
+}
+
+// A GitLab without the endpoint has the note that says so; one that refuses posts nothing, so
+// that posting again doesn't repeat the comments.
+func TestGitLabRequestingChangesWithoutTheState(t *testing.T) {
+	g, f := newFakeGitLab(t)
+	f.publishStatus = http.StatusNotFound
+	if url, err := g.PostReview(context.Background(), "t", "group/sub", "web", 7, ReviewPost{Verdict: VerdictRequestChanges, Body: "Fix x"}); err != nil || url == "" {
+		t.Fatalf("url %q, err %v", url, err)
+	}
+	f.posted = nil
+	f.publishStatus = http.StatusForbidden
+	_, err := g.PostReview(context.Background(), "t", "group/sub", "web", 7, ReviewPost{Verdict: VerdictRequestChanges, Body: "Fix x"})
+	if err == nil || !strings.Contains(err.Error(), "didn't record") || len(f.posted) != 0 {
+		t.Fatalf("posted %v, err %v", f.posted, err)
 	}
 }
 

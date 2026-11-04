@@ -14,7 +14,7 @@ import (
 
 // GitLab's merge requests as pull requests (docs/git-review.md#pull-request-reviews). GitLab
 // has no review object: a review is posted as an approval, a discussion per line comment and
-// a note with the summary, and "request changes" is a note that says so.
+// a note with the summary, and "request changes" is a note that says so and the reviewer state.
 
 // gitlabMaxAnswer bounds one answer of GitLab's that carries diffs.
 const gitlabMaxAnswer = 8 << 20
@@ -336,7 +336,11 @@ type gitlabVersion struct {
 // PostReview posts a review on a merge request: the approval first, so a refused one posts
 // nothing, then a discussion per line comment on the diff version of r.CommitID (the newest
 // without one), then the summary as a note. Request changes is the summary with
-// **Changes requested.** in front, since GitLab's REST API has no such verdict.
+// **Changes requested.** in front, which still tells on a GitLab that doesn't know the state.
+// The state goes first, as an approval does, so that a refused one posts nothing and posting
+// again doesn't repeat the comments. GitLab sets it only on publishing a review, which also
+// publishes the user's own pending draft comments, so a user who has some is asked to deal with
+// them first.
 func (g *GitLab) PostReview(ctx context.Context, token, owner, repo string, number int, r ReviewPost) (string, error) {
 	mr := g.mr(owner, repo, number)
 	body := r.Body
@@ -357,6 +361,21 @@ func (g *GitLab) PostReview(ctx context.Context, token, owner, repo string, numb
 			}
 		}
 	case VerdictRequestChanges:
+		var drafts []struct {
+			ID int64 `json:"id"`
+		}
+		if err := g.call(ctx, token, http.MethodGet, mr+"/draft_notes", nil, &drafts); err != nil && !strings.Contains(err.Error(), "404") {
+			return "", err
+		}
+		if len(drafts) > 0 {
+			return "", fmt.Errorf("you have %d pending draft comments on this merge request, which GitLab would publish with a request for changes; submit or delete them in GitLab and post this review again", len(drafts))
+		}
+		// A GitLab without the endpoint, or one that publishes only with drafts, has only the
+		// note, which says so.
+		err := g.call(ctx, token, http.MethodPost, mr+"/draft_notes/bulk_publish", map[string]any{"reviewer_state": "requested_changes"}, nil)
+		if err != nil && !strings.Contains(err.Error(), "404") {
+			return "", fmt.Errorf("GitLab didn't record the request for changes: %w", err)
+		}
 		body = strings.TrimSpace("**Changes requested.**\n\n" + body)
 	default:
 		return "", fmt.Errorf("unknown verdict %q", r.Verdict)

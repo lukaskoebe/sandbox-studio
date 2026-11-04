@@ -475,7 +475,12 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   then opens a discussion per line comment (`POST …/discussions` with a text position on the
   diff version of the reviewed head: `new_line` for an added line, `old_line` for a removed
   one, both for a kept one), then posts the summary as a note, whose link the review keeps.
-  Its REST API has no request-changes verdict: that note starts with **Changes requested.**
+  A request for changes starts that note with **Changes requested.** and first sets the
+  reviewer state (`POST …/draft_notes/bulk_publish` with `reviewer_state: requested_changes`,
+  the only REST call that sets it). GitLab publishes the user's pending draft comments with
+  it, so Studio refuses while there are any. A GitLab that answers 404 has the note only, and one
+  that ignores the field (older than the state) too. GitLab blocks the merge on the state only on
+  Premium and Ultimate. This was tested against a fake of the API, not a real GitLab.
   The approval's payload is updated to what was posted. A forge refuses a verdict from the pull
   request's own author, so when the token's account opened it the review posts as a comment
   that starts with **Approved.** or **Changes requested.**, and the review says so.
@@ -492,8 +497,8 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   discarded it; nothing was posted." and the note.
 - **Not yet:** accounts of their own for teammates (so a review posts as the teammate, and
   a verdict on the user's own pull request isn't turned into a comment), Studio noticing
-  review requests for a teammate, and GitLab's request-changes verdict and batched draft
-  notes (one notification for a whole review) ([forge-reviews.md](design/forge-reviews.md)).
+  review requests for a teammate, and GitLab's batched draft notes (one notification for a
+  whole review) ([forge-reviews.md](design/forge-reviews.md)).
 
 ## Integration interface
 
