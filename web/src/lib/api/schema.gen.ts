@@ -3197,6 +3197,11 @@ export interface components {
             git?: components["schemas"]["GitDetail"];
             /** @description git in a sandbox wants credentials for a host no forge covers */
             gitCredential?: components["schemas"]["GitCredentialPayload"];
+            /**
+             * Format: date-time
+             * @description When the last connection held for this approval gives up; absent when nothing holds it open, so an answer only helps the next attempt
+             */
+            heldUntil?: string;
             id: string;
             kind: string;
             /** @description Two facts that disagree */

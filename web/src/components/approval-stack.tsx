@@ -1,7 +1,14 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { Link } from "@tanstack/react-router"
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react"
-import { ApprovalDecision } from "@/components/approval-decision"
+import {
+  ApprovalDecision,
+  decideEach,
+  decisionBody,
+  refreshDecisions,
+} from "@/components/approval-decision"
 import { NetworkGroupCard } from "@/components/approval-group"
 import {
   BrowserActionDecision,
@@ -25,9 +32,14 @@ import { MemoryShareDecision } from "@/components/memory-sessions"
 import { PermissionDecision } from "@/components/chat/permission-card"
 import { Ident } from "@/components/ident"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
-import { shouldNotify, useNotificationPermission } from "@/lib/notifications"
+import {
+  shouldNotify,
+  shouldNotifyConnections,
+  useNotificationPermission,
+} from "@/lib/notifications"
 import { KindChip } from "@/components/kind-chip"
 import { WaitingCount } from "@/components/waiting-count"
+import { approvalHost } from "@/components/waiting-requests"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
@@ -52,7 +64,12 @@ import {
   isNetworkApproval,
 } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
-import { appNotifies, notifyApp } from "@/lib/desktop"
+import {
+  heldFor,
+  isConnection,
+  waitingConnections,
+} from "@/lib/connection-holds"
+import { appAllowAllEvent, appNotifies, notifyApp } from "@/lib/desktop"
 
 /** Cards the open stack lists; the rest are one link away. */
 const maxCards = 3
@@ -377,22 +394,85 @@ function ChatPermissionSummary({ approval }: { approval: Approval }) {
   )
 }
 
+/** How long a sandbox's connections gather into one notification, in ms. */
+const gatherConnections = 3000
+/** With more hosts than these a notification can't name, it offers no Allow all. */
+const noticeHosts = 3
+
 /**
  * Notifies about approvals that arrive while the window is not in front. The ones pending on
- * the first load are only remembered, so opening the app does not notify.
+ * the first load are only remembered, so opening the app does not notify. A sandbox's held
+ * connections gather into one notification, and one held again after it gave up counts as new.
  */
 function useNotifications(data: Approval[] | null | undefined) {
   const { permission, request } = useNotificationPermission()
-  const seen = useRef<Set<string> | null>(null)
+  const queryClient = useQueryClient()
+  const seen = useRef<Map<string, string | undefined> | null>(null)
+  const latest = useRef(data)
+  const gathering = useRef(new Map<string, number>())
+  // What each notification's Allow all answers: what it named, and nothing that came after.
+  const named = useRef(new Map<string, Approval[]>())
+
+  useEffect(() => {
+    const timers = gathering.current
+    return () => timers.forEach((t) => clearTimeout(t))
+  }, [])
+
+  useEffect(() => {
+    const allowAll = (e: Event) => {
+      const list = named.current.get((e as CustomEvent<string>).detail)
+      if (!list) return
+      // The narrowest rule: nobody saw Options, and the rule outlives this click.
+      void decideEach(list, (a) =>
+        decisionBody(a, "allow", {
+          lifetime: "always",
+          scope: "sandbox",
+          reach: "browser",
+          host: a.network?.host,
+        })
+      ).then((failure) => {
+        refreshDecisions(queryClient)
+        if (failure) {
+          toast.error("Could not allow every host", { description: failure })
+        }
+      })
+    }
+    window.addEventListener(appAllowAllEvent, allowAll)
+    return () => window.removeEventListener(appAllowAllEvent, allowAll)
+  }, [queryClient])
 
   useEffect(() => {
     if (!data) return
+    latest.current = data
     const first = seen.current === null
-    const known = seen.current ?? new Set<string>()
+    const known = seen.current ?? new Map<string, string | undefined>()
+    const gather = (sandboxId: string) => {
+      if (gathering.current.has(sandboxId)) return
+      gathering.current.set(
+        sandboxId,
+        window.setTimeout(() => {
+          gathering.current.delete(sandboxId)
+          const held = waitingConnections(latest.current, sandboxId).filter(
+            (a) => heldFor(a, Date.now()) !== undefined
+          )
+          if (held.length === 0 || !shouldNotifyConnections()) return
+          named.current.set(noticeId(sandboxId), held)
+          notifyConnections(sandboxId, held)
+        }, gatherConnections)
+      )
+    }
     for (const a of data) {
-      if (known.has(a.id)) continue
-      known.add(a.id)
-      if (!first && shouldNotify()) notify(a)
+      const isNew = !known.has(a.id)
+      const before = known.get(a.id)
+      known.set(a.id, a.heldUntil)
+      if (first) continue
+      if (isConnection(a) && a.sandboxId) {
+        const heldAgain =
+          !!a.heldUntil && (!before || Date.parse(before) <= Date.now())
+        if (isNew || heldAgain) gather(a.sandboxId)
+      } else if (isNew && shouldNotify()) {
+        notify(a)
+      }
     }
     seen.current = known
   }, [data])
@@ -400,6 +480,30 @@ function useNotifications(data: Approval[] | null | undefined) {
   return {
     canAsk: permission === "default",
     request,
+  }
+}
+
+const noticeId = (sandboxId: string) => `connections-${sandboxId}`
+
+/** One sandbox's held connections as one notification, which replaces the one before it. */
+function notifyConnections(sandboxId: string, held: Approval[]) {
+  const id = noticeId(sandboxId)
+  const title = `${approvalSource(held[0]) ?? "A sandbox"} is waiting on a connection`
+  const names = held.slice(0, noticeHosts).map(approvalHost).join(", ")
+  const more = held.length - noticeHosts
+  const body = more > 0 ? `${names} and ${more} more` : names
+  try {
+    if (appNotifies) {
+      notifyApp({ id, title, body, allowAll: more <= 0 })
+      return
+    }
+    const n = new Notification(title, { body, tag: id })
+    n.onclick = () => {
+      window.focus()
+      n.close()
+    }
+  } catch {
+    // Some browsers only show notifications from a service worker; the page still shows them.
   }
 }
 

@@ -56,3 +56,37 @@ export function useNotificationPermission() {
 export function shouldNotify() {
   return !document.hasFocus() && notificationPermission() === "granted"
 }
+
+const connectionsKey = "studio-notify-connections"
+
+function connectionNoticesOn() {
+  try {
+    return localStorage.getItem(connectionsKey) !== "off"
+  } catch {
+    return true
+  }
+}
+
+/**
+ * Whether this browser tells about held connections, which can come in numbers, as approvals of
+ * other kinds it always tells about.
+ */
+export function useConnectionNotices() {
+  const on = useSyncExternalStore(subscribe, connectionNoticesOn)
+  return {
+    on,
+    set: (next: boolean) => {
+      try {
+        localStorage.setItem(connectionsKey, next ? "on" : "off")
+      } catch {
+        // It stays as it was for this page.
+      }
+      changed()
+    },
+  }
+}
+
+/** Whether Studio should tell about a held connection now. */
+export function shouldNotifyConnections() {
+  return shouldNotify() && connectionNoticesOn()
+}

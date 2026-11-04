@@ -17,7 +17,7 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react"
 import { SaveCheckpointDialog } from "@/components/checkpoints-section"
-import { ConnectionsPanel } from "@/components/connections-panel"
+import { ConnectionsSheet } from "@/components/connections-panel"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { MergeForkDialog } from "@/components/merge-fork"
@@ -42,14 +42,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import {
   $api,
@@ -403,19 +395,12 @@ export function ComputerMenu({
         open={dialog === "disks"}
         onOpenChange={close}
       />
-      <Sheet open={dialog === "connections"} onOpenChange={close}>
-        <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>Connections</SheetTitle>
-            <SheetDescription className="sr-only">
-              Where {sb.name} connects
-            </SheetDescription>
-          </SheetHeader>
-          <ScrollArea className="min-h-0 flex-1">
-            <ConnectionsPanel env={env} sandbox={sb} />
-          </ScrollArea>
-        </SheetContent>
-      </Sheet>
+      <ConnectionsSheet
+        env={env}
+        sandbox={sb}
+        open={dialog === "connections"}
+        onOpenChange={close}
+      />
       {dialog === "ssh" && <SSHDialog sandbox={sb} open onOpenChange={close} />}
       {owner && (
         <CreateSandboxDialog

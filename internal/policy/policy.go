@@ -165,9 +165,53 @@ type Engine struct {
 	rules map[string][]store.Rule  // per environment, loaded on demand
 	wake  map[string]chan struct{} // closed when an environment's rules or approvals change
 	hits  map[string]ruleHits      // connections rules decided, not yet written to the store
+	holds map[string]*held         // the connections held right now, by approval ID
 
 	reviewMu sync.Mutex
 	reviews  map[string]*question // the reviewer's questions this session, by reviewKey
+}
+
+// held is what is holding an approval's request open: its connections, and when the last of
+// them gives up.
+type held struct {
+	count int
+	until time.Time
+}
+
+// hold notes a connection held for the approval until the time. The returned function ends that.
+func (e *Engine) hold(id string, until time.Time) (release func()) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.holds == nil {
+		e.holds = make(map[string]*held)
+	}
+	h := e.holds[id]
+	if h == nil {
+		h = &held{}
+		e.holds[id] = h
+	}
+	h.count++
+	if until.After(h.until) {
+		h.until = until
+	}
+	return sync.OnceFunc(func() {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if h.count--; h.count == 0 {
+			delete(e.holds, id)
+		}
+	})
+}
+
+// HeldUntil says when the last connection held for the approval gives up. False means nothing
+// holds it open, as after a timeout or a restart: an answer then only helps the next attempt.
+func (e *Engine) HeldUntil(id string) (time.Time, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if h := e.holds[id]; h != nil {
+		return h.until, true
+	}
+	return time.Time{}, false
 }
 
 // ruleHits are the connections one rule decided since the hits were last written.
@@ -253,6 +297,9 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 	if err != nil {
 		return store.Rule{}, false, err
 	}
+	// Noted before the event, so what a page loads for it says the connection is held.
+	release := e.hold(a.ID, time.Now().Add(e.Hold))
+	defer release()
 	e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID, ID: a.ID})
 
 	timer := time.NewTimer(e.Hold)
@@ -262,6 +309,9 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 		case <-ctx.Done():
 			return store.Rule{}, false, ctx.Err()
 		case <-timer.C:
+			// The approval stays pending, and pages now show that nothing holds it open.
+			release()
+			e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID, ID: a.ID})
 			return store.Rule{}, false, ErrUndecided
 		case <-wake:
 		}

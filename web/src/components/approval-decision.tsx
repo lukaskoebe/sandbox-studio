@@ -2,7 +2,9 @@ import { useState, type ReactNode } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
+import { heldFor, isConnection, useHoldClock } from "@/lib/connection-holds"
 import { CaretDownIcon } from "@phosphor-icons/react"
+import { HoldStatus } from "@/components/hold-status"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -16,6 +18,7 @@ import {
 import {
   $api,
   errorMessage,
+  fetchClient,
   errorStatus,
   type Approval,
 } from "@/lib/api/client"
@@ -222,6 +225,28 @@ export function decisionBody(
 }
 
 /** The label of the allow or deny button for a lifetime, such as "Allow for 1 hour". */
+/**
+ * Answers the approvals in turn. A host that an earlier rule of this run already covers answers
+ * 409 and is skipped. Gives the first failure, if there is one.
+ */
+export async function decideEach(
+  approvals: Approval[],
+  body: (a: Approval) => DecideBody
+): Promise<string | undefined> {
+  let failure: string | undefined
+  for (const a of approvals) {
+    const { error, response } = await fetchClient.POST(
+      "/api/environments/{env}/approvals/{id}/decide",
+      {
+        params: { path: { env: a.environmentId, id: a.id } },
+        body: body(a),
+      }
+    )
+    if (error && response.status !== 409) failure ??= errorMessage(error)
+  }
+  return failure
+}
+
 export function decisionLabel(
   action: "allow" | "deny",
   lifetime: Lifetime,
@@ -376,10 +401,13 @@ export function LifetimeToggle({
   value,
   onChange,
   browser,
+  once = true,
 }: {
   value: Lifetime
   onChange: (lifetime: Lifetime) => void
   browser: boolean
+  /** Whether "Once" is a choice: it answers only connections held right now. */
+  once?: boolean
 }) {
   const items: { value: Lifetime; label: string; title: string }[] = [
     { value: "always", label: "Always", title: "A rule that stays" },
@@ -394,11 +422,15 @@ export function LifetimeToggle({
           },
         ]
       : []),
-    {
-      value: "once",
-      label: "Once",
-      title: "Only this request, without a rule; the next one asks again",
-    },
+    ...(once
+      ? [
+          {
+            value: "once" as const,
+            label: "Once",
+            title: "Only this request, without a rule; the next one asks again",
+          },
+        ]
+      : []),
   ]
   return (
     <ToggleGroup
@@ -460,7 +492,12 @@ export function ApprovalDecision({
   const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
   const [scope, setScope] = useState<DecisionScope>(defaultScope)
   const [reach, setReach] = useState<BrowserReach>(defaultReach(approval))
-  const [lifetime, setLifetime] = useState<Lifetime>("always")
+  const [picked, setLifetime] = useState<Lifetime>("always")
+  // A connection nothing holds open any more can only be answered for its next attempt.
+  const connection = isConnection(approval)
+  const now = useHoldClock(connection ? [approval] : [])
+  const gaveUp = connection && heldFor(approval, now) === undefined
+  const lifetime = gaveUp && picked === "once" ? "always" : picked
   const [note, setNote] = useState("")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
@@ -498,6 +535,7 @@ export function ApprovalDecision({
 
   return (
     <div className="grid grid-cols-1 gap-2">
+      {connection && <HoldStatus approvals={[approval]} now={now} />}
       <SSHForgeHint approval={approval} />
       {net?.method && (
         <div className="grid gap-0.5 text-xs">
@@ -585,6 +623,7 @@ export function ApprovalDecision({
               value={lifetime}
               onChange={setLifetime}
               browser={browser}
+              once={!gaveUp}
             />
           </OptionRow>
           {browser && lifetime === "session" && (
@@ -619,10 +658,12 @@ export function ApprovalDecision({
             }
           >
             {busy("dismiss") && <Spinner className="size-3" />}
-            Ignore
+            {gaveUp ? "Dismiss" : "Ignore"}
           </TooltipTrigger>
           <TooltipContent>
-            Refuse this time without creating a rule
+            {gaveUp
+              ? "Forget this request; the next attempt asks again"
+              : "Refuse this time without creating a rule"}
           </TooltipContent>
         </Tooltip>
         {compact && (
@@ -664,7 +705,9 @@ export function ApprovalDecision({
           onClick={() => act("allow")}
         >
           {busy("allow") && <Spinner />}
-          {decisionLabel("allow", lifetime)}
+          {gaveUp && lifetime === "always"
+            ? "Allow next time"
+            : decisionLabel("allow", lifetime)}
         </Button>
       </div>
     </div>

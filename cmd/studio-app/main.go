@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -128,6 +129,12 @@ func main() {
 	var app *application.App
 	var win *application.WebviewWindow
 	notifier := &optionalNotifier{NotificationService: notifications.New()}
+	registerAllowAll := sync.OnceValue(func() error {
+		return notifier.RegisterNotificationCategory(notifications.NotificationCategory{
+			ID:      allowAllCategory,
+			Actions: []notifications.NotificationAction{{ID: allowAllAction, Title: "Allow all"}},
+		})
+	})
 	l := &launcher.Launcher{
 		Addr:    *addr,
 		Serving: launcher.HTTPServing(*addr),
@@ -186,7 +193,18 @@ func main() {
 			if !notifier.on.Load() {
 				return errors.New("the system takes no notifications from the app")
 			}
-			return notifier.SendNotification(notifications.NotificationOptions{ID: n.ID, Title: n.Title, Body: n.Body})
+			options := notifications.NotificationOptions{ID: n.ID, Title: n.Title, Body: n.Body}
+			if !n.AllowAll {
+				return notifier.SendNotification(options)
+			}
+			// A system that can't take the button still shows the notification.
+			options.CategoryID = allowAllCategory
+			if err := registerAllowAll(); err != nil {
+				log.Printf("a notification's button: %v", err)
+				options.CategoryID = ""
+				return notifier.SendNotification(options)
+			}
+			return notifier.SendNotificationWithActions(options)
 		},
 	}
 	selfTest := make(chan map[string]any, 1)
@@ -233,8 +251,14 @@ func main() {
 			}
 		},
 	})
-	// Clicking a notification brings the window to the front, on the page it was on.
-	notifier.OnNotificationResponse(func(notifications.NotificationResult) {
+	// Clicking a notification brings the window to the front, on the page it was on. Its Allow
+	// all answers from where the user is, without moving them.
+	notifier.OnNotificationResponse(func(r notifications.NotificationResult) {
+		if r.Error == nil && r.Response.ActionIdentifier == allowAllAction {
+			id := r.Response.ID
+			application.InvokeAsync(func() { win.ExecJS(allowAllScript(id)) })
+			return
+		}
 		application.InvokeAsync(func() { win.Show().Focus() })
 	})
 

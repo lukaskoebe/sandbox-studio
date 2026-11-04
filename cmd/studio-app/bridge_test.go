@@ -94,3 +94,23 @@ func TestWindowButtonsWorkFromAnyPage(t *testing.T) {
 		t.Fatalf("actions %v", actions)
 	}
 }
+
+func TestAllowAllScript(t *testing.T) {
+	got := allowAllScript(`connections-a"b`)
+	want := `window.dispatchEvent(new CustomEvent("studio:allow-all", {detail: "connections-a\"b"}))`
+	if got != want {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestNoticeWithAllowAll(t *testing.T) {
+	var got notice
+	b := &bridge{base: "http://127.0.0.1:7878", notify: func(n notice) error { got = n; return nil }}
+	msg := `studio:notify {"id":"connections-1","title":"dev is waiting on a connection","body":"a.example:443","allowAll":true}`
+	if err := b.handle(msg, "http://127.0.0.1:7878"); err != nil {
+		t.Fatal(err)
+	}
+	if !got.AllowAll || got.ID != "connections-1" {
+		t.Fatalf("notice %+v", got)
+	}
+}

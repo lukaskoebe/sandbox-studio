@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- A connection a sandbox waits on can be answered where you see it. The Connections list has
+  "Waiting for you" on top, with each host's time left, Allow and Deny, Allow all and Deny all,
+  and Options for who and how long. A sandbox's screen shows a quiet count, "2 requests waiting",
+  which opens the hosts when you click it: nothing opens by itself there, and they float only on
+  other pages.
+- Studio says when a connection stops being held. A card counts down, "Connection held, 42 s
+  left". After that it says the client saw a failure, and offers "Allow next time" and Dismiss;
+  the Connections list keeps these under "Gave up waiting". When the client tries again, the
+  request is held again.
+- Connections held while Studio isn't in front make one notification per sandbox, gathered over a
+  few seconds, and one that names all its hosts has an Allow all button in the app. Allow all there
+  makes a rule for that sandbox and only what the notification names. Settings → General can turn
+  these notifications off.
 - A full home disk is easier to recover from. A sparse file stays sparse in a rebase or disk
   resize, so one larger than the disk no longer fails the copy. A disk that fills up during the
   copy says which disk and what to do, instead of a broken pipe error. A rebase onto a template

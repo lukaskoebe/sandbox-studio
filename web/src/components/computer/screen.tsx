@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
+import { WaitingChip } from "@/components/waiting-chip"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Sandbox, type Teammate } from "@/lib/api/client"
 import { isBrowserAsk } from "@/lib/approval-kinds"
@@ -223,6 +224,7 @@ export function ComputerScreen({
             chatComputer={chatComputer?.id ?? thread?.chat.sandboxId}
             onPick={(id) => onChange({ computer: id })}
           />
+          <WaitingChip env={env} sandbox={sb} />
           {shown.length ? (
             <div
               role="tablist"

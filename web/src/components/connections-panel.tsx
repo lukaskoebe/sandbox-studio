@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react"
 import { CountPill } from "@/components/count-pill"
 import { Ident } from "@/components/ident"
+import { WaitingRequests, approvalHost } from "@/components/waiting-requests"
 import { StatusDot, type Status } from "@/components/status-dot"
 import {
   Empty,
@@ -16,6 +17,13 @@ import {
   useRecording,
 } from "@/components/recorded-requests"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -23,17 +31,48 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import {
   $api,
   errorMessage,
   type Connection,
   type Sandbox,
 } from "@/lib/api/client"
+import { waitingConnections } from "@/lib/connection-holds"
 import { cn, formatBytes, hostPort } from "@/lib/utils"
 
+/** A sandbox's Connections, as a sheet over the page. */
+export function ConnectionsSheet({
+  env,
+  sandbox,
+  open,
+  onOpenChange,
+}: {
+  env: string
+  sandbox: Sandbox
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Connections</SheetTitle>
+          <SheetDescription className="sr-only">
+            Where {sandbox.name} connects
+          </SheetDescription>
+        </SheetHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <ConnectionsPanel env={env} sandbox={sandbox} />
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 /**
- * The body of a sandbox's Connections panel: where it connects, newest first, and the
- * requests a recording of its intercepted traffic kept.
+ * The body of a sandbox's Connections panel: what waits for an answer, where it connects, newest
+ * first, and the requests a recording of its intercepted traffic kept.
  */
 export function ConnectionsPanel({
   env,
@@ -46,6 +85,15 @@ export function ConnectionsPanel({
   const state = recording.data
   const [tab, setTab] = useState<"connections" | "requests">("connections")
   const recorded = !!state && (state.recording || state.count > 0)
+  const pending = usePendingApprovals()
+  const waiting = waitingConnections(pending.data, sandbox.id)
+  const log = (
+    <ConnectionLog
+      env={env}
+      id={sandbox.id}
+      waiting={waiting.map(approvalHost)}
+    />
+  )
   return (
     <>
       <p className="px-4 pt-3 pb-2 text-xs text-muted-foreground">
@@ -59,6 +107,7 @@ export function ConnectionsPanel({
         </Link>
         .
       </p>
+      <WaitingRequests approvals={waiting} sandbox={sandbox} />
       <RecordingControl
         env={env}
         id={sandbox.id}
@@ -79,7 +128,7 @@ export function ConnectionsPanel({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="connections" className="flex min-h-0 flex-col">
-            <ConnectionLog env={env} id={sandbox.id} />
+            {log}
           </TabsContent>
           <TabsContent value="requests">
             <RecordedRequests
@@ -91,19 +140,19 @@ export function ConnectionsPanel({
           </TabsContent>
         </Tabs>
       ) : (
-        <ConnectionLog env={env} id={sandbox.id} />
+        log
       )}
     </>
   )
 }
 
-/** A verdict as one of the four statuses: held for you is waiting, allowed is running. */
+/** A verdict as one of the four statuses: held for you is waiting, allowed is running. One that gave up has stopped waiting. */
 const verdictStatus: Record<string, Status> = {
   open: "stopped",
   allowed: "running",
   denied: "failed",
   failed: "failed",
-  undecided: "waiting",
+  undecided: "stopped",
   pending: "waiting",
 }
 
@@ -128,7 +177,16 @@ function VerdictDot({ conn }: { conn: Connection }) {
 }
 
 /** Mounted only while the panel is open, so the log refreshes only then. */
-function ConnectionLog({ env, id }: { env: string; id: string }) {
+function ConnectionLog({
+  env,
+  id,
+  waiting,
+}: {
+  env: string
+  id: string
+  /** The hosts answered above the log, whose held connections aren't repeated in it. */
+  waiting: string[]
+}) {
   const conns = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/connections",
@@ -144,8 +202,12 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
       </p>
     )
   }
-  const list = conns.data ?? []
+  const list = (conns.data ?? []).filter(
+    (c) =>
+      c.verdict !== "pending" || !waiting.includes(hostPort(c.host, c.port))
+  )
   if (list.length === 0) {
+    if (waiting.length > 0) return null
     return (
       <Empty className="mx-4 mb-4">
         <EmptyHeader>
@@ -160,6 +222,9 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
 
   return (
     <ScrollArea className="min-h-0 flex-1" viewportClassName="px-4 pb-4">
+      {waiting.length > 0 && (
+        <h3 className="section-label text-muted-foreground">Earlier</h3>
+      )}
       <ul>
         {list.map((c) => (
           <li key={c.id} className="grid gap-1 border-b py-2 text-xs">

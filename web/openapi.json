@@ -206,6 +206,11 @@
             "$ref": "#/components/schemas/GitCredentialPayload",
             "description": "git in a sandbox wants credentials for a host no forge covers"
           },
+          "heldUntil": {
+            "description": "When the last connection held for this approval gives up; absent when nothing holds it open, so an answer only helps the next attempt",
+            "format": "date-time",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },

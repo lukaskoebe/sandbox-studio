@@ -173,7 +173,9 @@ The computer's ⋯ (`components/computer/computer-menu.tsx`) has its name and ID
 and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkpoint now,
 Checkpoints (lineage and checkpoints in a sheet), Fork, Merge into its source for a fork,
 Connections (a sheet), Resources, Rebase, Export, Another computer, Suspend or Resume, and
-Delete. A computer that is off shows dark glass with Start and the checkpoint it keeps, and a
+Delete. Beside the computer's name, a count of its waiting connections
+(`components/waiting-chip.tsx`) opens their hosts, with Allow all, Deny all and Review individually,
+which is the top of Connections (`components/waiting-requests.tsx`). A computer that is off shows dark glass with Start and the checkpoint it keeps, and a
 teammate's keeps its Browser tab, as the browser has a VM of its own; one being created shows
 its progress. Folded, the screen is a strip of tab icons. Enlarged, it takes the page, and the
 conversation is a strip with the teammate's face, a dot while something waits for you, and the

@@ -203,7 +203,8 @@ private hosts list and this computer's ports are edited under Settings → Ports
   [AI reviewer](#ai-reviewer-assisted) allowed or denied. A reviewer's decision has a Revert.
 
 Pending network approvals (connections and browser requests) are on Home and in the approval
-stack. The old addresses `/e/$env/network` and `/network/rules` redirect to Settings → Network,
+stack. A sandbox's connections are also on top of its Connections list and behind a count on its
+screen, which then leaves them out of the stack. The old addresses `/e/$env/network` and `/network/rules` redirect to Settings → Network,
 `/network/requests` to Home and `/network/activity` to Settings → Activity.
 
 ## Hold and ask
@@ -223,6 +224,13 @@ covers and wakes held connections, so an approved `npm install` finishes without
 connections held for this request, and the next connection to the host asks again. Activity
 shows them as "Approved once" and "Denied once"; a connection denied once gets a 403 that says
 the user denied it.
+
+A timeout leaves the approval pending. While a connection is held, the approval's `heldUntil` says
+when the last one gives up (`Engine.HeldUntil`, in memory, so a restart ends it along with the
+connections). Without it nothing holds the request open and the client has seen a failure, so
+pages offer "Allow next time" and Dismiss rather than Once. A retry holds it again. Studio doesn't
+notice a client that disconnects early: the gateway waits on the answer, not on the client, so
+such a request shows as held until its time runs out.
 
 Connections from one sandbox that arrive within 3 seconds of each other show as one card on the
 approval stack, with Allow all, Review individually and Deny all (see

@@ -455,3 +455,50 @@ func TestRunWritesHitsOnShutdown(t *testing.T) {
 		t.Fatalf("the shutdown did not write the hit: %+v", stored)
 	}
 }
+
+// A page tells a connection still held from one that gave up by HeldUntil, which the first
+// event already says and the event at the timeout no longer does.
+func TestHeldUntil(t *testing.T) {
+	ctx := context.Background()
+	e, env, sb := newEngine(t)
+	e.Hold = 200 * time.Millisecond
+	sub, cancel := e.Bus.Subscribe()
+	defer cancel()
+	req := Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "example.org", Port: 443}
+	done := make(chan error, 2)
+	decide := func() {
+		_, err := e.Decide(ctx, req)
+		done <- err
+	}
+	go decide()
+
+	ev := <-sub
+	until, ok := e.HeldUntil(ev.ID)
+	if !ok || !until.After(time.Now()) {
+		t.Fatalf("held on the first event: %v %v", until, ok)
+	}
+
+	// A second attempt holds with it and outlasts the first, and the approval stays held until
+	// the last has gone.
+	time.Sleep(100 * time.Millisecond)
+	go decide()
+	<-sub
+	later, ok := e.HeldUntil(ev.ID)
+	if !ok || !later.After(until) {
+		t.Fatalf("a retry should move the time: %v, then %v %v", until, later, ok)
+	}
+	if err := <-done; !errors.Is(err, ErrUndecided) {
+		t.Fatalf("first: %v", err)
+	}
+	if _, ok := e.HeldUntil(ev.ID); !ok {
+		t.Fatal("the second attempt still holds it")
+	}
+	<-sub // the first's timeout
+	<-sub // the second's
+	if _, ok := e.HeldUntil(ev.ID); ok {
+		t.Fatal("nothing holds it after the last event")
+	}
+	if err := <-done; !errors.Is(err, ErrUndecided) {
+		t.Fatalf("second: %v", err)
+	}
+}

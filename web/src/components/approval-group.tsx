@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import {
+  decideEach,
   decisionBody,
   decisionLabel,
   defaultReach,
@@ -17,6 +18,7 @@ import {
   type DecisionScope,
   type Lifetime,
 } from "@/components/approval-decision"
+import { HoldStatus } from "@/components/hold-status"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
 import {
@@ -26,10 +28,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { errorMessage, fetchClient, type Approval } from "@/lib/api/client"
+import type { Approval } from "@/lib/api/client"
 import { ruleClass } from "@/lib/accents"
 import { groupSite } from "@/lib/approval-groups"
 import { approvalKind, approvalSource } from "@/lib/approval-kinds"
+import { heldFor, isConnection, useHoldClock } from "@/lib/connection-holds"
 import { cn, formatAge, hostPort } from "@/lib/utils"
 
 /**
@@ -57,7 +60,13 @@ export function NetworkGroupCard({
   )
   const browser = isBrowserRequest(first)
   const [reach, setReach] = useState<BrowserReach>(defaultReach(first))
-  const [lifetime, setLifetime] = useState<Lifetime>("always")
+  const [picked, setLifetime] = useState<Lifetime>("always")
+  // Connections nothing holds open any more can only be answered for their next attempts.
+  const connections = isConnection(first)
+  const now = useHoldClock(connections ? approvals : [])
+  const gaveUp =
+    connections && approvals.every((a) => heldFor(a, now) === undefined)
+  const lifetime = gaveUp && picked === "once" ? "always" : picked
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [working, setWorking] = useState<"allow" | "deny">()
   const kind = approvalKind(first)
@@ -70,26 +79,16 @@ export function NetworkGroupCard({
     a.network ? hostPort(a.network.host, a.network.port) : a.subject
   )
 
-  // Decides the hosts in turn. A host that an earlier rule of this run already covers answers
-  // 409 and is skipped.
   async function decideAll(action: "allow" | "deny") {
     setWorking(action)
-    let failure: string | undefined
-    for (const a of approvals) {
-      const { error, response } = await fetchClient.POST(
-        "/api/environments/{env}/approvals/{id}/decide",
-        {
-          params: { path: { env: a.environmentId, id: a.id } },
-          body: decisionBody(a, action, {
-            lifetime,
-            scope,
-            reach,
-            host: a.network?.host,
-          }),
-        }
-      )
-      if (error && response.status !== 409) failure ??= errorMessage(error)
-    }
+    const failure = await decideEach(approvals, (a) =>
+      decisionBody(a, action, {
+        lifetime,
+        scope,
+        reach,
+        host: a.network?.host,
+      })
+    )
     setWorking(undefined)
     refreshDecisions(queryClient)
     if (failure) {
@@ -117,6 +116,7 @@ export function NetworkGroupCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2">
+        {connections && <HoldStatus approvals={approvals} now={now} />}
         <ScrollArea viewportClassName="max-h-28">
           <ul className="flex flex-wrap gap-1 text-xs">
             {hosts.map((host, i) => (
@@ -147,6 +147,7 @@ export function NetworkGroupCard({
               value={lifetime}
               onChange={setLifetime}
               browser={browser}
+              once={!gaveUp}
             />
           </>
         )}
@@ -178,7 +179,9 @@ export function NetworkGroupCard({
             onClick={() => void decideAll("allow")}
           >
             {working === "allow" && <Spinner />}
-            {decisionLabel("allow", lifetime, true)}
+            {gaveUp && lifetime === "always"
+              ? "Allow all next time"
+              : decisionLabel("allow", lifetime, true)}
           </Button>
         </div>
       </CardContent>

@@ -90,10 +90,21 @@ export function openExternal(url: string) {
   post("open", new URL(url, window.location.href).href)
 }
 
-/** Shows a notification of the system's; clicking it brings the app's window to the front. */
-export function notifyApp(n: { id: string; title: string; body: string }) {
+/**
+ * Shows a notification of the system's; clicking it brings the app's window to the front. With
+ * allowAll it also has an Allow all button, which fires appAllowAllEvent on the page.
+ */
+export function notifyApp(n: {
+  id: string
+  title: string
+  body: string
+  allowAll?: boolean
+}) {
   post("notify", JSON.stringify(n))
 }
+
+/** Fired on the window when a notification's Allow all is clicked; its detail is the notice's ID. */
+export const appAllowAllEvent = "studio:allow-all"
 
 /**
  * Sends what would open a new window to the system browser: window.open, links with a target

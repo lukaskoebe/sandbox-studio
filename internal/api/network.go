@@ -44,6 +44,8 @@ type ApprovalTeammate struct {
 type ApprovalView struct {
 	store.Approval
 	Network *policy.NetworkRequest `json:"network,omitempty"`
+	// HeldUntil is set for a pending network approval while a connection waits on the answer.
+	HeldUntil *time.Time `json:"heldUntil,omitempty" doc:"When the last connection held for this approval gives up; absent when nothing holds it open, so an answer only helps the next attempt"`
 	// Teammate is set for network approvals from a sandbox that a teammate owns.
 	Teammate *ApprovalTeammate    `json:"teammate,omitempty"`
 	Git      *gitreview.GitDetail `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
@@ -76,6 +78,9 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var req policy.NetworkRequest
 		if json.Unmarshal(a.Payload, &req) == nil {
 			v.Network = &req
+		}
+		if until, ok := s.Policy.HeldUntil(a.ID); ok && a.Status == store.StatusPending {
+			v.HeldUntil = &until
 		}
 	case gitreview.KindPush, gitreview.KindPR:
 		if s.Git != nil {

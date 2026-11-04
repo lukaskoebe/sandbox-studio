@@ -41,7 +41,10 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { useNotificationPermission } from "@/lib/notifications"
+import {
+  useConnectionNotices,
+  useNotificationPermission,
+} from "@/lib/notifications"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { setupOver, useSetup } from "@/lib/setup"
 import { setStyleName, useStyleName, type StyleName } from "@/lib/theme"
@@ -269,6 +272,7 @@ function ImportReport({
 /** The browser's permission to notify about approvals while Studio's window is not in front. */
 function NotificationsSection() {
   const { permission, request } = useNotificationPermission()
+  const connections = useConnectionNotices()
   return (
     <SettingRow
       icon={BellIcon}
@@ -295,6 +299,24 @@ function NotificationsSection() {
           The browser blocks them for this site. Allow notifications in its site
           settings, next to the address bar.
         </p>
+      )}
+      {permission === "granted" && (
+        <label className="flex items-start gap-2">
+          <Switch
+            checked={connections.on}
+            onCheckedChange={connections.set}
+            className="mt-0.5"
+          />
+          <span className="grid gap-0.5">
+            <span>
+              Tell me when a connection is held and Studio isn't in front
+            </span>
+            <span className="text-muted-foreground">
+              One notification per sandbox, gathered over a few seconds. Never
+              while you are looking at Studio.
+            </span>
+          </span>
+        </label>
       )}
     </SettingRow>
   )

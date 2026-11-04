@@ -23,6 +23,20 @@ type notice struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Body  string `json:"body"`
+	// AllowAll adds a button that answers what the notice names, through the page.
+	AllowAll bool `json:"allowAll,omitempty"`
+}
+
+// The Allow all button of a notice, which tells the page.
+const (
+	allowAllCategory = "studio.allow-all"
+	allowAllAction   = "allow-all"
+)
+
+// allowAllScript tells the page a notice's Allow all was clicked (web/src/lib/desktop.ts).
+func allowAllScript(id string) string {
+	detail, _ := json.Marshal(id)
+	return fmt.Sprintf(`window.dispatchEvent(new CustomEvent("studio:allow-all", {detail: %s}))`, detail)
 }
 
 // bridge takes the page's messages. Only Studio's own origin may send them: a page the window

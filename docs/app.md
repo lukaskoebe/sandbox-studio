@@ -54,7 +54,7 @@ the webview has a message handler, `window.webkit.messageHandlers.external` (Web
 | Message | Does |
 |---|---|
 | `studio:open <url>` | opens an http(s) address in the system browser |
-| `studio:notify {"id","title","body"}` | shows a system notification; clicking it shows the window |
+| `studio:notify {"id","title","body","allowAll"}` | shows a system notification; clicking it shows the window, and with `allowAll` its Allow all button fires `studio:allow-all` on the page with the notification's ID |
 | `studio:selftest <json>` | the self-test's result (below) |
 | `studio:quit` | closes the app, after Settings > General shut Studio down |
 | `studio:window minimise\|maximise\|close` | what a frameless window's buttons do; from any page |
