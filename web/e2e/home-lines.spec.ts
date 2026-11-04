@@ -31,9 +31,10 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     foreground: ["pnpm", "dev"],
     path: "/workspace",
   })
-  await api.json("PUT", `/api/e2e/sandboxes/${id}/ports`, { ports: [5173] })
 
   const lines = page.getByRole("region", { name: "Sandboxes" })
+  // Other tests' sandboxes have a main terminal and a preview on :3000 too.
+  const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(
     lines.getByRole("link", { name: `chat · ${name} · Please run the tests` })
   ).toBeVisible()
@@ -46,7 +47,7 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     lines.getByRole("link", { name: /^dev · pnpm dev · you, / })
   ).toBeVisible()
   await expect(
-    lines.getByRole("link", { name: /^preview :5173, / })
+    own.getByRole("link", { name: /^preview :3000, / })
   ).toBeVisible()
 
   // The tests end and the dev server's terminal closes: it rejoins the line.
@@ -55,8 +56,6 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     "DELETE",
     `/api/environments/${env}/sandboxes/${id}/terminals/dev`
   )
-  // Other tests' sandboxes have a terminal named main too.
-  const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(
     own.getByRole("link", { name: /^main · workspace · you, / })
   ).toBeVisible({ timeout: 30_000 })
@@ -113,27 +112,27 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   await api.json("PUT", "/api/system/previews", { enabled: false })
   try {
     await api.json("PUT", `/api/e2e/sandboxes/${id}/ports`, {
-      ports: [5173, 3000, 8080, 5432],
+      ports: [3000, 5173, 8080, 5432],
     })
     await page.goto(`/e/${env}`)
     const crowd = lines.getByRole("link", {
-      name: /^4 previews · :5173 :3000 :5432 :8080, /,
+      name: /^4 previews · :3000 :5173 :5432 :8080, /,
     })
     await expect(crowd).toBeVisible({ timeout: 30_000 })
     await expect(
-      lines.getByRole("link", { name: /^preview :3000, / })
+      own.getByRole("link", { name: /^preview :5173, / })
     ).toHaveCount(0)
     await crowd.locator("text").last().click()
-    await expect(page).toHaveURL(/tab=preview&port=(3000|8080|5432)/)
+    await expect(page).toHaveURL(/tab=preview&port=(5173|8080|5432)/)
     const off = page.getByText("Previews are off")
     await expect(off).toBeVisible()
     await expect(
-      page.getByText(/^Port (3000|8080|5432) can't open here/)
+      page.getByText(/^Port (5173|8080|5432) can't open here/)
     ).toBeVisible()
     await page.getByRole("button", { name: "Turn on previews" }).click()
     await expect(off).toHaveCount(0)
     await expect(page.getByRole("combobox", { name: "Port" })).toHaveText(
-      /Port (3000|8080|5432)/
+      /Port (5173|8080|5432)/
     )
   } finally {
     await api.json("PUT", "/api/system/previews", {
