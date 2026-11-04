@@ -8,6 +8,10 @@
             "description": "The browser action, such as click or fill",
             "type": "string"
           },
+          "digest": {
+            "description": "Binds the approval to the whole text, which text may clip",
+            "type": "string"
+          },
           "label": {
             "description": "Accessible name of the element",
             "type": "string"
@@ -37,7 +41,7 @@
             "type": "string"
           },
           "text": {
-            "description": "What the agent wants to type or select",
+            "description": "What the agent wants to type, select or press",
             "type": "string"
           },
           "url": {
@@ -1983,6 +1987,10 @@
         "properties": {
           "credential": {
             "description": "Name of the vault secret",
+            "type": "string"
+          },
+          "field": {
+            "description": "Stands for the field's attributes when asked, which must still hold when it is filled",
             "type": "string"
           },
           "label": {

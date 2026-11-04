@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- An approval holds for what its card shows. Browser: an Allow for typing "Alice" no longer lets a
+  retry type "Mallory", and an approved key doesn't press another, as the key is now on the card. A
+  retry with other arguments replaces the card. A credential isn't filled into a field that changed
+  while you decided. Git: a card left behind by a crash can't approve a newer push than the one it
+  shows.
 - An export file stays gzip again when the guest uploads it. With the faster uploads in v0.13.0 it
   became zstd without saying so, and Studios older than that can't import it.
 - `studio uninstall` is careful with what isn't its own. It removes only the VMs and checkpoints of

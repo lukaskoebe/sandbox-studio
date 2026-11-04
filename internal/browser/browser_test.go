@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -659,6 +660,138 @@ func TestActionApprovalAndRemember(t *testing.T) {
 	// Unknown refs are refused before anything runs.
 	if _, err := f.call(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e99"}`); err == nil || !strings.Contains(err.Error(), "snapshot") {
 		t.Errorf("unknown ref: %v", err)
+	}
+}
+
+// An approval holds for what its card showed. A retry with other text gets a new card, and a
+// grant for one key doesn't press another.
+func TestActionApprovalHoldsForItsText(t *testing.T) {
+	f := newFixture(t)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	f.svc.Hold = 50 * time.Millisecond
+	decide := func(a store.Approval) {
+		t.Helper()
+		for _, k := range f.svc.ApprovalKinds() {
+			if k.Kind == a.Kind {
+				if err := k.Decide(f.ctx, a, integrations.Decision{Action: integrations.Allow}); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+	ran := func(args ...string) bool {
+		for _, c := range f.fb.allCommands() {
+			if slices.Equal(c.Args, args) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// The retry changes the text while the first card waits: the card follows it.
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserFill, `{"ref":"e1","text":"Alice"}`); err == nil {
+		t.Fatal("fill went through without approval")
+	}
+	first := f.pending(KindAction)
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserFill, `{"ref":"e1","text":"Mallory"}`); err == nil {
+		t.Fatal("fill went through without approval")
+	}
+	second := f.pending(KindAction)
+	var p ActionPayload
+	if err := json.Unmarshal(second.Payload, &p); err != nil {
+		t.Fatal(err)
+	}
+	if second.ID == first.ID || p.Text != "Mallory" {
+		t.Fatalf("card %s says %q after one %s", second.ID, p.Text, first.ID)
+	}
+	if a, err := f.st.Approval(f.ctx, f.env, first.ID); err != nil || a.Status != store.StatusDismissed {
+		t.Fatalf("first card: %+v, %v", a, err)
+	}
+
+	clear := func() {
+		t.Helper()
+		list, err := f.st.Approvals(f.ctx, f.env, store.StatusPending, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range list {
+			if err := f.st.DecideApproval(f.ctx, f.env, a.ID, store.StatusDismissed, ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	// Allowed, it runs what the card showed, and a grant covers nothing else.
+	decide(second)
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserFill, `{"ref":"e1","text":"Alice"}`); err == nil || ran("fill", "@e1", "Alice") {
+		t.Fatalf("other text ran on the grant: %v", err)
+	}
+	f.mustCall(f.sbAda, agentproto.MethodBrowserFill, `{"ref":"e1","text":"Mallory"}`)
+	if !ran("fill", "@e1", "Mallory") {
+		t.Fatal("the approved text didn't run")
+	}
+
+	// Text past what the card holds binds all the same.
+	clear()
+	long := strings.Repeat("a", 600)
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserFill, `{"ref":"e3","text":"`+long+`"}`); err == nil {
+		t.Fatal("fill went through without approval")
+	}
+	decide(f.pending(KindAction))
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserFill, `{"ref":"e3","text":"`+long+`b"}`); err == nil {
+		t.Fatal("longer text ran on the grant")
+	}
+
+	// A key is on its card and in its grant.
+	clear()
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserPress, `{"key":"Tab"}`); err == nil {
+		t.Fatal("press went through without approval")
+	}
+	a := f.pending(KindAction)
+	if err := json.Unmarshal(a.Payload, &p); err != nil || p.Text != "Tab" {
+		t.Fatalf("press card %+v, %v", p, err)
+	}
+	decide(a)
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserPress, `{"key":"Enter"}`); err == nil || ran("press", "Enter") {
+		t.Fatalf("Enter ran on Tab's grant: %v", err)
+	}
+	f.mustCall(f.sbAda, agentproto.MethodBrowserPress, `{"key":"Tab"}`)
+}
+
+// The page changes while the user decides, so that the ref names another field: the credential
+// doesn't go into it.
+func TestCredentialIsntFilledIntoAFieldThatChanged(t *testing.T) {
+	f := newFixture(t)
+	sec, err := f.st.CreateSecret(f.ctx, store.Secret{EnvironmentID: f.env, Name: "example-login", Sealed: []byte("sealed"), Hosts: []string{"example.com"}, Placeholder: "stud_x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.keys[sec.ID] = sentinel
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	f.svc.Hold = 50 * time.Millisecond
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserFillCredential, `{"ref":"e2","name":"example-login"}`); err == nil {
+		t.Fatal("filled without approval")
+	}
+	f.fb.mu.Lock()
+	for i := range f.fb.fields {
+		if f.fb.fields[i].ref == "e2" {
+			f.fb.fields[i].typ, f.fb.fields[i].autocomplete = "text", ""
+		}
+	}
+	f.fb.mu.Unlock()
+	a := f.pending(KindCredential)
+	for _, k := range f.svc.ApprovalKinds() {
+		if k.Kind == KindCredential {
+			err = k.Decide(f.ctx, a, integrations.Decision{Action: integrations.Allow})
+		}
+	}
+	if err == nil || !strings.Contains(err.Error(), "the field changed") {
+		t.Fatalf("decide: %v", err)
+	}
+	for _, c := range f.fb.allCommands() {
+		if c.Args[0] == "fill" {
+			t.Fatalf("filled: %v", c.Args[:2])
+		}
 	}
 }
 

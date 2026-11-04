@@ -32,7 +32,8 @@ type ActionPayload struct {
 	URL          string `json:"url"`
 	Role         string `json:"role,omitempty" doc:"Accessibility role of the element"`
 	Label        string `json:"label,omitempty" doc:"Accessible name of the element"`
-	Text         string `json:"text,omitempty" doc:"What the agent wants to type or select"`
+	Text         string `json:"text,omitempty" doc:"What the agent wants to type, select or press"`
+	Digest       string `json:"digest,omitempty" doc:"Binds the approval to the whole text, which text may clip"`
 }
 
 // CredentialPayload is the request of a browser.credential approval.
@@ -48,6 +49,7 @@ type CredentialPayload struct {
 	URL          string `json:"url"`
 	Role         string `json:"role,omitempty"`
 	Label        string `json:"label,omitempty"`
+	Field        string `json:"field,omitempty" doc:"Stands for the field's attributes when asked, which must still hold when it is filled"`
 }
 
 // credOutcome is the result of filling one approved credential, for the agent call that
@@ -181,8 +183,9 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		}
 		return result, nil
 	}
+	payload.Field = c.s.fieldPrint(ctx, c.st, c.pg, ref)
 	raw, _ := json.Marshal(payload)
-	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindCredential, Subject: subject, Payload: raw})
+	a, created, err := c.s.Store.RequestExactApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindCredential, Subject: subject, Payload: raw})
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +274,30 @@ func (s *Service) decideCredential(ctx context.Context, a store.Approval, allow 
 	return err
 }
 
+// fieldPrint stands for what a field says about itself, to tell it from another under its ref:
+// a snapshot would renumber the refs. It reads no value, and a page that keeps these the same
+// keeps the print the same.
+func (s *Service) fieldPrint(ctx context.Context, st *state, pg *page, ref string) string {
+	attrs := []string{"type", "name", "autocomplete", "placeholder", "aria-label"}
+	cmds := make([][]string, len(attrs))
+	for i, attr := range attrs {
+		cmds[i] = []string{"get", "attr", "@" + ref, attr}
+	}
+	items, err := s.batch(ctx, st, pg, cmds)
+	if err != nil {
+		return "unreadable"
+	}
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Success {
+			values = append(values, attrValue(item.Result))
+		} else {
+			values = append(values, "")
+		}
+	}
+	return textDigest(strings.Join(values, "\x00"))
+}
+
 func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPayload) error {
 	st := s.state(envID, p.TeammateID)
 	select {
@@ -304,6 +331,10 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 	}
 	if Origin(cur.URL) != p.Origin {
 		return fail(refuse("the page moved to %s since the request; ask again", Origin(cur.URL)))
+	}
+	// A page can change while the user decides, and the ref then names another field.
+	if p.Field != "" && s.fieldPrint(ctx, st, pg, p.Ref) != p.Field {
+		return fail(refuse("the field changed since the request; take a browser_snapshot and ask again"))
 	}
 	sec, err := s.credential(ctx, envID, p.TeammateID, p.SandboxID, p.Credential, cur.URL)
 	if err != nil {

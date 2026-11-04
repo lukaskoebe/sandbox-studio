@@ -659,6 +659,34 @@ func TestPushIsStagedAndApprovalPushesUpstream(t *testing.T) {
 	h.assertTokenHidden(t, g)
 }
 
+// A card left behind with no push of its own, as by a crash, doesn't get to approve a new push
+// while showing its old review.
+func TestPushReplacesACardItDoesntShow(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	repo := g.clone(t)
+	orphan, _, err := h.svc.Store.RequestApproval(h.ctx, store.Approval{EnvironmentID: h.env.ID, SandboxID: g.sb.ID, Kind: KindPush,
+		Subject: "forge/owner/repo:main", Payload: []byte(`{"new":"old"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c1 := commitFile(t, repo, "main.go", "package main\n", "Add main")
+	if err := push(repo, "refs/heads/main:refs/heads/main", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	pending := h.approvals(t, KindPush, store.StatusPending)
+	if len(pending) != 1 || pending[0].ID == orphan.ID {
+		t.Fatalf("pending = %+v, orphan %s", pending, orphan.ID)
+	}
+	d, err := h.svc.GitDetail(h.ctx, pending[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Review.New != c1.String() || d.Push.NewSHA != c1.String() {
+		t.Fatalf("the card shows %s and the push ships %s, want %s", d.Review.New, d.Push.NewSHA, c1)
+	}
+}
+
 func TestFailedPushSaysWhyAndCanBePushedAgain(t *testing.T) {
 	h := newHarness(t)
 	g := h.guest(t, h.env.ID, "one")

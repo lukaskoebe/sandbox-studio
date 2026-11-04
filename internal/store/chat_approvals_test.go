@@ -48,6 +48,33 @@ func newChatApprovalFixture(t *testing.T) chatApprovalFixture {
 	return chatApprovalFixture{store: s, env: env, sb: sb, chat: chat, turn: turn, item: item}
 }
 
+// A pending request answers for what it shows: the same one counts an attempt, another replaces it.
+func TestRequestExactApproval(t *testing.T) {
+	f := newChatApprovalFixture(t)
+	ctx := context.Background()
+	req := Approval{EnvironmentID: f.env.ID, SandboxID: f.sb.ID, Kind: "k", Subject: "s", Payload: []byte(`{"a":1}`)}
+	first, created, err := f.store.RequestExactApproval(ctx, req)
+	if err != nil || !created {
+		t.Fatalf("first: %v, created %v", err, created)
+	}
+	again, created, err := f.store.RequestExactApproval(ctx, req)
+	if err != nil || created || again.ID != first.ID || again.Attempts != first.Attempts+1 {
+		t.Fatalf("the same: %+v, %v, created %v", again, err, created)
+	}
+	req.Payload = []byte(`{"a":2}`)
+	other, created, err := f.store.RequestExactApproval(ctx, req)
+	if err != nil || !created || other.ID == first.ID || string(other.Payload) != `{"a":2}` {
+		t.Fatalf("another: %+v, %v, created %v", other, err, created)
+	}
+	old, err := f.store.Approval(ctx, f.env.ID, first.ID)
+	if err != nil || old.Status != StatusDismissed {
+		t.Fatalf("the first: %+v, %v", old, err)
+	}
+	if err := f.store.DecideApproval(ctx, f.env.ID, first.ID, StatusApproved, ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an answer to the old card: %v", err)
+	}
+}
+
 func TestRequestApprovalAndUpdateChatItemBindingAndRollback(t *testing.T) {
 	f := newChatApprovalFixture(t)
 	ctx := context.Background()

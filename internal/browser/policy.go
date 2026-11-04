@@ -31,6 +31,9 @@ type Request struct {
 	Label  string // its accessible name
 	// Sensitive marks a password-like target field (see Field.Sensitive).
 	Sensitive bool
+	// Digest binds an approval's grant to what the action types, selects or presses. A pattern
+	// has no say in it: it allows the action whatever the text.
+	Digest string
 }
 
 // denied are agent-browser capabilities no agent gets, whatever the patterns say: script

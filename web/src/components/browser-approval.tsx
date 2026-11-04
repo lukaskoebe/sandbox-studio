@@ -67,7 +67,7 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
   return (
     <div className="grid gap-2">
       {act?.text && (
-        <p className="truncate font-mono text-xs" title={act.text}>
+        <p className="max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap">
           {act.text}
         </p>
       )}

@@ -3,7 +3,9 @@ package browser
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -234,6 +236,7 @@ func (c *call) element(ref string) (string, refInfo, error) {
 
 // authorize applies the policy to an action, asking the user when it says so.
 func (c *call) authorize(ctx context.Context, r Request, url, text string) error {
+	r.Digest = textDigest(text)
 	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.teammate)
 	if err != nil {
 		return err
@@ -251,10 +254,10 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 	}
 	teammate, _ := c.s.Store.Teammate(ctx, c.st.env, c.st.teammate)
 	p := ActionPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
-		Session: c.pg.id, Action: r.Action, Origin: r.Origin, URL: url, Role: r.Role, Label: r.Label, Text: clip(text, 500)}
+		Session: c.pg.id, Action: r.Action, Origin: r.Origin, URL: url, Role: r.Role, Label: r.Label, Text: clip(text, 500), Digest: r.Digest}
 	raw, _ := json.Marshal(p)
 	subject := fmt.Sprintf("%s: %s %s on %s%s", teammate.Name, r.Action, target(r.Role, r.Label), r.Origin, sessionNote(c.pg.id))
-	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindAction, Subject: clip(subject, 500), Payload: raw})
+	a, created, err := c.s.Store.RequestExactApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindAction, Subject: clip(subject, 500), Payload: raw})
 	if err != nil {
 		return err
 	}
@@ -274,6 +277,15 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 		return refuse("waiting for the user to approve %s on %s in Studio; call again in a minute to retry", r.Action, r.Origin)
 	}
 	return refuse("the user did not allow %s on %s", r.Action, r.Origin)
+}
+
+// textDigest stands for what an action types, selects or presses, in full.
+func textDigest(text string) string {
+	if text == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
 }
 
 // act runs a page-changing action on an element: policy, command, log.
@@ -579,7 +591,7 @@ func (c *call) press(ctx context.Context, params json.RawMessage) (any, error) {
 	if !keyPattern.MatchString(in.Key) || in.Key == "-" {
 		return nil, refuse("key must be a key name such as Enter, Tab or Control+a")
 	}
-	return c.act(ctx, "press", "", []string{"press", in.Key}, "", in.Key)
+	return c.act(ctx, "press", "", []string{"press", in.Key}, in.Key, in.Key)
 }
 
 func (c *call) selectOption(ctx context.Context, params json.RawMessage) (any, error) {

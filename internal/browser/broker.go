@@ -500,7 +500,7 @@ func (s *Service) takeGrant(st *state, session string, r Request) bool {
 		if now.After(g.until) {
 			continue
 		}
-		if g.session == session && g.req.Action == r.Action && g.req.Origin == r.Origin && g.req.Role == r.Role && g.req.Label == r.Label {
+		if g.session == session && g.req.Action == r.Action && g.req.Origin == r.Origin && g.req.Role == r.Role && g.req.Label == r.Label && g.req.Digest == r.Digest {
 			st.grants = append(st.grants[:i], st.grants[i+1:]...)
 			return true
 		}

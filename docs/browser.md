@@ -217,7 +217,11 @@ Unknown actions are denied.
   element and text. "Always for <action> on this origin" stores an allow pattern. The
   calling tool waits up to 30 s for the decision. After that the agent gets a "waiting for
   approval" answer, and an approval granted later holds for 5 minutes for the same action
-  on the same element.
+  on the same element with the same text or key. A retry with other arguments replaces the
+  card, so the card shows what an Allow runs (`Store.RequestExactApproval`). A credential's
+  card works the same way, and just before the fill Studio compares what the field says about
+  itself (type, name, autocomplete, placeholder, aria-label) with the request: a field that
+  changed while the user decided isn't filled. It can't tell two fields that say the same.
 
 ## Redaction
 

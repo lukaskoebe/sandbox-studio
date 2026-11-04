@@ -348,6 +348,30 @@ func (s *Store) RequestApproval(ctx context.Context, a Approval) (out Approval, 
 	return out, created, tx.Commit()
 }
 
+// RequestExactApproval is RequestApproval for a request whose payload says what an Allow lets
+// run. A pending request with the same subject and another payload is dismissed and replaced,
+// so that a card always shows what it allows, and one the user is about to answer can't change
+// under them: an answer to the old card finds it gone. An identical request counts an attempt.
+func (s *Store) RequestExactApproval(ctx context.Context, a Approval) (out Approval, created bool, err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return a, false, err
+	}
+	defer tx.Rollback()
+	t := now()
+	_, err = tx.ExecContext(ctx, `UPDATE approvals SET status = ?, decided_at = ?, updated_at = ?
+		WHERE environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind = ? AND subject = ? AND status = 'pending' AND payload <> ?`,
+		StatusDismissed, t, t, a.EnvironmentID, a.SandboxID, a.Kind, a.Subject, string(a.Payload))
+	if err != nil {
+		return a, false, err
+	}
+	out, created, err = requestApprovalTx(ctx, tx, a)
+	if err != nil {
+		return out, created, err
+	}
+	return out, created, tx.Commit()
+}
+
 // RequestApprovalAndUpdateChatItem creates an approval and links it to its chat item in
 // the same transaction. A permission approval is not visible without its item link.
 func (s *Store) RequestApprovalAndUpdateChatItem(ctx context.Context, a Approval, it ChatItem) (out Approval, updated ChatItem, created bool, err error) {

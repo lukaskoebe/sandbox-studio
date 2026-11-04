@@ -3124,6 +3124,8 @@ export interface components {
         ActionPayload: {
             /** @description The browser action, such as click or fill */
             action: string;
+            /** @description Binds the approval to the whole text, which text may clip */
+            digest?: string;
             /** @description Accessible name of the element */
             label?: string;
             /** @description scheme://host[:port] of the page */
@@ -3136,7 +3138,7 @@ export interface components {
             session?: string;
             teammateId: string;
             teammateName: string;
-            /** @description What the agent wants to type or select */
+            /** @description What the agent wants to type, select or press */
             text?: string;
             url: string;
         };
@@ -3802,6 +3804,8 @@ export interface components {
         CredentialPayload: {
             /** @description Name of the vault secret */
             credential: string;
+            /** @description Stands for the field's attributes when asked, which must still hold when it is filled */
+            field?: string;
             label?: string;
             origin: string;
             ref: string;

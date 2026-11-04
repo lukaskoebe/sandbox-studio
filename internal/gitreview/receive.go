@@ -425,7 +425,9 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	if err != nil {
 		return "", refusal("internal error")
 	}
-	a, _, err := s.Store.RequestApproval(ctx, store.Approval{
+	// A card left pending by a crash or a lost connection has no push of its own, and an Allow
+	// on it mustn't ship what it doesn't show. This replaces it.
+	a, _, err := s.Store.RequestExactApproval(ctx, store.Approval{
 		EnvironmentID: t.sb.EnvironmentID, SandboxID: t.sb.ID, Kind: KindPush,
 		Subject: fmt.Sprintf("%s/%s:%s", t.forge.Name, t.path(), cmd.Name.Short()), Payload: payload,
 	})
@@ -433,8 +435,15 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 		s.Log.Error("git remote: approval", "err", err)
 		return "", refusal("internal error: Sandbox Studio could not queue the push")
 	}
+	// The client may be gone by now, which mustn't leave the card behind.
+	dismiss := func() {
+		if err := s.Store.DecideApproval(context.WithoutCancel(ctx), a.EnvironmentID, a.ID, store.StatusDismissed, ""); err != nil {
+			s.Log.Warn("git remote: dismiss an unrecorded push's approval", "approval", a.ID, "err", err)
+		}
+	}
 	id := store.NewID()
 	if err := repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/studio/push/"+id), cmd.New)); err != nil {
+		dismiss()
 		return "", refusal("internal error: Sandbox Studio could not stage the push")
 	}
 	_, err = s.Store.CreateGitPush(ctx, store.GitPush{
@@ -444,9 +453,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	})
 	if err != nil {
 		s.Log.Error("git remote: record push", "err", err)
-		if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, store.StatusDismissed, ""); err != nil {
-			s.Log.Warn("git remote: dismiss an unrecorded push's approval", "approval", a.ID, "err", err)
-		}
+		dismiss()
 		return "", refusal("internal error: Sandbox Studio could not record the push")
 	}
 	s.publish(t.sb.EnvironmentID, a.ID)

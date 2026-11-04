@@ -3,7 +3,10 @@
 Every action Studio holds for the user is a row in one `approvals` table: kind, subject,
 typed payload, status (`pending`, `approved`, `denied`, `dismissed`), attempts and, for
 network approvals, the rule it created. A repeated request with the same subject while one
-is pending raises `attempts` instead of adding a row.
+is pending raises `attempts` instead of adding a row. Where the payload says what an Allow lets
+run (browser actions and credentials, git pushes) that holds only for an identical request: one
+with another payload dismisses the pending row and makes a new one, so a card always shows what
+it allows, and an answer to the old card finds it gone (`Store.RequestExactApproval`).
 
 ## Kinds
 
