@@ -226,6 +226,9 @@ type mentry struct {
 
 type manifest struct {
 	Entries []mentry `json:"entries"`
+	// GitRoots are the directories with a .git whose files git listed when the snapshot was
+	// taken. An older snapshot has none at all, as opposed to an empty list.
+	GitRoots []string `json:"gitRoots"`
 }
 
 func (m *manifest) index() map[string]mentry {
@@ -595,6 +598,9 @@ type walker struct {
 	base  map[string]mentry
 	out   []mentry
 	bytes int64
+	// listed are the directories with a .git that git listed, unlisted those it couldn't, whose
+	// ignored files the walk therefore can't tell from the rest.
+	listed, unlisted []string
 }
 
 func (s *snapshots) scan(st *store, base map[string]mentry, save bool) (*walker, error) {
@@ -603,7 +609,7 @@ func (s *snapshots) scan(st *store, base map[string]mentry, save bool) (*walker,
 		return nil, err
 	}
 	defer unix.Close(root)
-	w := &walker{s: s, base: base}
+	w := &walker{s: s, base: base, listed: []string{}}
 	if save {
 		w.st = st
 	}
@@ -626,7 +632,11 @@ func (w *walker) dir(fd int, rel string, f *gitFilter, st *store) error {
 	}
 	slices.Sort(names)
 	if slices.Contains(names, ".git") {
-		f = w.s.filter(rel)
+		if f = w.s.filter(rel); f != nil {
+			w.listed = append(w.listed, rel)
+		} else {
+			w.unlisted = append(w.unlisted, rel)
+		}
 	}
 	for _, name := range names {
 		if name == ".git" || (rel == "" && name == lostFound) {
@@ -798,7 +808,7 @@ func (s *snapshots) scanAndWrite(st *store, id string, base map[string]mentry, r
 			}
 		}
 		if w, err = s.scan(st, base, true); err == nil {
-			err = st.writeManifest(id, &manifest{Entries: w.out})
+			err = st.writeManifest(id, &manifest{Entries: w.out, GitRoots: w.listed})
 		}
 		if !errors.Is(err, unix.ENOSPC) {
 			break
@@ -969,8 +979,34 @@ func (s *snapshots) compare(st *store, a, b *manifest, only string, diffs bool) 
 	return out, more
 }
 
+// blindRoots are the directories under which a scan of the live tree can't be trusted to
+// leave out ignored files: git couldn't list them now, or a repository that was there when
+// the snapshot was taken no longer is, as after an rm -rf .git. A snapshot from before
+// GitRoots doesn't say what was a repository, so the whole workspace is blind unless git
+// can list it now.
+func blindRoots(m *manifest, live *walker) []string {
+	blind := slices.Clone(live.unlisted)
+	if m.GitRoots == nil && !slices.Contains(live.listed, "") {
+		return append(blind, "")
+	}
+	for _, root := range m.GitRoots {
+		if !slices.Contains(live.listed, root) {
+			blind = append(blind, root)
+		}
+	}
+	return blind
+}
+
+func underAny(roots []string, p string) bool {
+	return slices.ContainsFunc(roots, func(root string) bool {
+		return root == "" || p == root || strings.HasPrefix(p, root+"/")
+	})
+}
+
 // restore puts the workspace back as snapshot id has it. Paths the snapshot leaves out
-// (.git, ignored files, files too large) are not touched.
+// (.git, ignored files, files too large) are not touched, and neither is a path it doesn't
+// have when git can't say whether that path is ignored: such a file stays and is counted
+// in Kept, since it may be an .env or a node_modules that no snapshot holds.
 func (s *snapshots) restore(id string) (agentproto.SnapshotReply, error) {
 	st, err := s.openStore()
 	if err != nil {
@@ -1016,6 +1052,7 @@ func (s *snapshots) restore(id string) (agentproto.SnapshotReply, error) {
 	}
 
 	// Remove what the snapshot doesn't have, deepest first.
+	blind := blindRoots(m, live)
 	for i := len(live.out) - 1; i >= 0; i-- {
 		e := live.out[i]
 		w, ok := want[e.Path]
@@ -1024,6 +1061,12 @@ func (s *snapshots) restore(id string) (agentproto.SnapshotReply, error) {
 		}
 		if e.Type == 'f' && e.Hash == "" && !ok {
 			continue // too large to have been kept
+		}
+		if !ok && underAny(blind, e.Path) {
+			if e.Type != 'd' {
+				reply.Kept++
+			}
+			continue
 		}
 		err := removeAt(root, e.Path, e.Type == 'd')
 		switch {

@@ -243,6 +243,11 @@ func (s *Service) Undo(ctx context.Context, envID, chatID, turnID string) error 
 	if len(reply.Failed) > 0 {
 		text += fmt.Sprintf("; %d files couldn't be put back: %s", len(reply.Failed), strings.Join(reply.Failed, ", "))
 	}
+	if reply.Kept == 1 {
+		text += "; 1 newer file stayed, because git couldn't say whether it is ignored"
+	} else if reply.Kept > 1 {
+		text += fmt.Sprintf("; %d newer files stayed, because git couldn't say whether they are ignored", reply.Kept)
+	}
 	if _, err := s.Store.AddChatItem(ctx, markerItem(t, MarkerUndo, text)); err != nil {
 		return err
 	}

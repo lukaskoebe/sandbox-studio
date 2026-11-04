@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Undo no longer deletes files it can't vouch for. If git couldn't list the workspace when a turn
+  was undone, or the turn had removed `.git`, ignored files such as `.env` or `node_modules` looked
+  new and were deleted, and no snapshot holds them. They now stay, and the note in the chat says
+  how many did.
 - A disk resize no longer loses the home of a sandbox from an old template. Its home is on the
   root disk, which a resize replaces, and a change to the workspace or Docker disk used to go
   ahead and leave it empty. Studio now refuses, and the dialog says to rebase onto a rebuilt

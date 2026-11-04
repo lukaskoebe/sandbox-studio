@@ -62,6 +62,9 @@ type SnapshotReply struct {
 	Restored int      `json:"restored,omitempty"`
 	Removed  int      `json:"removed,omitempty"`
 	Failed   []string `json:"failed,omitempty"`
+	// Kept counts files the snapshot doesn't have that stayed, because git couldn't say
+	// whether they are ignored.
+	Kept int `json:"kept,omitempty"`
 }
 
 // FileChange is one file a turn changed.

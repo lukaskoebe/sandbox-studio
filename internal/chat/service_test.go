@@ -34,6 +34,7 @@ type fakeGuest struct {
 	started  []agentproto.StartSession
 	startErr error // returned by StartSession when set
 	killed   []string
+	kept     int // files a restore says stayed
 	// The workspace as path → content, and its snapshots by ID.
 	ws    map[string]string
 	snaps map[string]map[string]string
@@ -118,7 +119,7 @@ func (g *fakeGuest) Snapshot(_ context.Context, _ string, req agentproto.Snapsho
 			return agentproto.SnapshotReply{}, errors.New("no such snapshot")
 		}
 		g.ws = maps.Clone(snap)
-		return agentproto.SnapshotReply{Restored: len(snap)}, nil
+		return agentproto.SnapshotReply{Restored: len(snap), Kept: g.kept}, nil
 	case agentproto.SnapshotGC:
 		for id := range g.snaps {
 			if !slices.Contains(req.Keep, id) {

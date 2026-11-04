@@ -156,6 +156,26 @@ func TestTaskDoneOnlyAfterChanges(t *testing.T) {
 	}
 }
 
+// When git couldn't say what is ignored, an undo leaves new files alone, and the note says so.
+func TestUndoSaysWhatStayed(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	f.g.ws = map[string]string{"a": "1"}
+	f.g.turnEdits = []map[string]string{{"a": "2"}}
+	f.g.kept = 3
+	turn := f.send(t, "one")
+	f.wait(t, turn.ID)
+	if err := f.s.Undo(ctx, env, f.chat.ID, turn.ID); err != nil {
+		t.Fatal(err)
+	}
+	log, _ := f.s.Get(ctx, env, f.chat.ID)
+	want := "Undid this change; 3 newer files stayed, because git couldn't say whether they are ignored"
+	if last := log.Items[len(log.Items)-1]; last.Marker == nil || last.Marker.Text != want {
+		t.Fatalf("marker %+v", last.Marker)
+	}
+}
+
 func TestFailedTurnSaysTheDiskIsFull(t *testing.T) {
 	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Fail: "Internal error: OpenCode service failure"}}})
 	// A full Docker disk fails Docker, not the agent, and isn't named.

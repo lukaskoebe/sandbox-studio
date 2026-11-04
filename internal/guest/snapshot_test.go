@@ -74,6 +74,97 @@ func take(t *testing.T, s *snapshots, req agentproto.SnapshotRequest) agentproto
 	return r
 }
 
+// Files no snapshot holds, such as an .env or a node_modules, stay when git can't say whether
+// they are ignored. What the snapshot does hold still goes back.
+func TestSnapshotRestoreKeepsWhatGitCantVouchFor(t *testing.T) {
+	ignored := map[string]string{".gitignore": ".env\nnode_modules/\n", "a.txt": "one\n", ".env": "SECRET=1\n", "node_modules/x/i.js": "x\n"}
+	check := func(t *testing.T, ws string, r agentproto.SnapshotReply, newFiles int) {
+		t.Helper()
+		if len(r.Failed) != 0 || r.Kept != 2+newFiles {
+			t.Fatalf("restore %+v", r)
+		}
+		if read(t, filepath.Join(ws, ".env")) != "SECRET=1\n" || read(t, filepath.Join(ws, "node_modules/x/i.js")) != "x\n" {
+			t.Fatal("ignored files changed")
+		}
+		if read(t, filepath.Join(ws, "a.txt")) != "one\n" {
+			t.Fatal("a.txt not restored")
+		}
+	}
+
+	t.Run("git fails on restore", func(t *testing.T) {
+		s, ws := newSnapshots(t)
+		gitInit(t, ws)
+		put(t, ws, ignored)
+		take(t, s, agentproto.SnapshotRequest{ID: "t1"})
+		put(t, ws, map[string]string{"a.txt": "two\n", "new.txt": "new\n"})
+		s.list = func(string) ([]string, error) { return nil, errors.New("dubious ownership") }
+		check(t, ws, take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"}), 1)
+	})
+
+	t.Run("the turn removed .git", func(t *testing.T) {
+		s, ws := newSnapshots(t)
+		gitInit(t, ws)
+		put(t, ws, ignored)
+		take(t, s, agentproto.SnapshotRequest{ID: "t1"})
+		must(t, os.RemoveAll(filepath.Join(ws, ".git")))
+		put(t, ws, map[string]string{"a.txt": "two\n"})
+		check(t, ws, take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"}), 0)
+	})
+
+	t.Run("a snapshot older than GitRoots", func(t *testing.T) {
+		s, ws := newSnapshots(t)
+		gitInit(t, ws)
+		put(t, ws, ignored)
+		take(t, s, agentproto.SnapshotRequest{ID: "t1"})
+		st, err := s.openStore()
+		must(t, err)
+		defer st.close()
+		m, err := st.readManifest("t1")
+		must(t, err)
+		m.GitRoots = nil
+		must(t, st.writeManifest("t1", m))
+		must(t, os.RemoveAll(filepath.Join(ws, ".git")))
+		put(t, ws, map[string]string{"a.txt": "two\n"})
+		check(t, ws, take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"}), 0)
+	})
+
+	// Only the repository git can't list is blind: new files elsewhere still go.
+	t.Run("a nested repository", func(t *testing.T) {
+		s, ws := newSnapshots(t)
+		gitInit(t, ws)
+		gitInit(t, filepath.Join(ws, "sub"))
+		put(t, ws, map[string]string{"a.txt": "one\n", "sub/b.txt": "b\n"})
+		list := s.list
+		take(t, s, agentproto.SnapshotRequest{ID: "t1"})
+		s.list = func(d string) ([]string, error) {
+			if filepath.Base(d) == "sub" {
+				return nil, errors.New("broken")
+			}
+			return list(d)
+		}
+		put(t, ws, map[string]string{"new.txt": "new\n", "sub/.env": "SECRET=1\n"})
+		r := take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"})
+		if r.Kept != 1 || read(t, filepath.Join(ws, "sub/.env")) != "SECRET=1\n" {
+			t.Fatalf("restore %+v", r)
+		}
+		if _, err := os.Stat(filepath.Join(ws, "new.txt")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("new.txt: %v", err)
+		}
+	})
+
+	// Without git a snapshot holds everything, so a new file really is new.
+	t.Run("no repository", func(t *testing.T) {
+		s, ws := newSnapshots(t)
+		put(t, ws, map[string]string{"a.txt": "one\n"})
+		take(t, s, agentproto.SnapshotRequest{ID: "t1"})
+		put(t, ws, map[string]string{"new.txt": "new\n"})
+		r := take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"})
+		if r.Kept != 0 || r.Removed != 1 {
+			t.Fatalf("restore %+v", r)
+		}
+	})
+}
+
 func TestSnapshotRestore(t *testing.T) {
 	s, ws := newSnapshots(t)
 	gitInit(t, ws)
