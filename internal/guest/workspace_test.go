@@ -47,7 +47,7 @@ func roundTrip(t *testing.T, c Compression) {
 
 	dst := t.TempDir()
 	must(t, os.Mkdir(filepath.Join(dst, "lost+found"), 0o700))
-	must(t, ImportWorkspace(dst, &archive))
+	must(t, ImportWorkspace(dst, &archive, nil))
 	t.Cleanup(func() { _ = os.Chmod(filepath.Join(dst, "sub"), 0o700) })
 	t.Cleanup(func() { _ = os.Chmod(filepath.Join(src, "sub"), 0o700) })
 
@@ -90,7 +90,7 @@ func TestWorkspaceImportRefusesTruncatedZstd(t *testing.T) {
 	var archive bytes.Buffer
 	must(t, ExportWorkspaceAs(src, &archive, &bytes.Buffer{}, Zstd))
 	cut := archive.Bytes()[:archive.Len()-8]
-	if err := ImportWorkspace(t.TempDir(), bytes.NewReader(cut)); err == nil {
+	if err := ImportWorkspace(t.TempDir(), bytes.NewReader(cut), nil); err == nil {
 		t.Fatal("a truncated archive imported")
 	}
 }
@@ -100,7 +100,7 @@ func TestWorkspaceImportRefusesNonEmptyWorkspace(t *testing.T) {
 	must(t, ExportWorkspace(t.TempDir(), &archive, &bytes.Buffer{}))
 	dst := t.TempDir()
 	must(t, os.WriteFile(filepath.Join(dst, "existing"), nil, 0o600))
-	if err := ImportWorkspace(dst, &archive); err == nil || !strings.Contains(err.Error(), "not empty") {
+	if err := ImportWorkspace(dst, &archive, nil); err == nil || !strings.Contains(err.Error(), "not empty") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -143,7 +143,7 @@ func TestWorkspaceImportRejectsMaliciousArchives(t *testing.T) {
 			parent := t.TempDir()
 			dst := filepath.Join(parent, "workspace")
 			must(t, os.Mkdir(dst, 0o755))
-			if err := ImportWorkspace(dst, bytes.NewReader(archive(t, headers))); err == nil {
+			if err := ImportWorkspace(dst, bytes.NewReader(archive(t, headers)), nil); err == nil {
 				t.Fatal("import succeeded")
 			}
 			if _, err := os.Lstat(filepath.Join(parent, "escape")); !os.IsNotExist(err) {
@@ -159,7 +159,7 @@ func TestWorkspaceImportRejectsTruncatedArchive(t *testing.T) {
 	var full bytes.Buffer
 	must(t, ExportWorkspace(src, &full, &bytes.Buffer{}))
 	for _, n := range []int{full.Len() / 2, full.Len() - 4} {
-		if err := ImportWorkspace(t.TempDir(), bytes.NewReader(full.Bytes()[:n])); err == nil {
+		if err := ImportWorkspace(t.TempDir(), bytes.NewReader(full.Bytes()[:n]), nil); err == nil {
 			t.Fatalf("import of %d of %d bytes succeeded", n, full.Len())
 		}
 	}
@@ -187,5 +187,31 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestImportReportsHowFarItGot(t *testing.T) {
+	src := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(src, "a"), bytes.Repeat([]byte("a"), 3000), 0o644))
+	must(t, os.Mkdir(filepath.Join(src, "d"), 0o755))
+	must(t, os.WriteFile(filepath.Join(src, "d", "b"), bytes.Repeat([]byte("b"), 1500), 0o644))
+	// A second name of a file is copied, and counted, once.
+	must(t, os.Link(filepath.Join(src, "a"), filepath.Join(src, "d", "a2")))
+	must(t, os.Symlink("a", filepath.Join(src, "link")))
+	for _, c := range []struct {
+		compression Compression
+		last        string
+	}{
+		{Zstd, "copied 4500 4500\n"},
+		// An export file says nothing of its size.
+		{Gzip, "copied 4500 0\n"},
+	} {
+		var archive, progress bytes.Buffer
+		must(t, ExportWorkspaceAs(src, &archive, &bytes.Buffer{}, c.compression))
+		must(t, ImportWorkspace(t.TempDir(), &archive, &progress))
+		lines := strings.SplitAfter(progress.String(), "\n")
+		if last := lines[len(lines)-2]; last != c.last {
+			t.Errorf("%v: last line %q, want %q", c.compression, last, c.last)
+		}
 	}
 }

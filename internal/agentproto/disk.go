@@ -37,3 +37,13 @@ func (d Disk) Low() bool { return d.Total > 0 && d.Free < min(d.Total/10, 512<<2
 // Full says too little is free for an agent to write its session: under 64 MiB, or a
 // fiftieth of a smaller disk.
 func (d Disk) Full() bool { return d.Total > 0 && d.Free < min(d.Total/50, 64<<20) }
+
+// A copy between VMs tells how far it got. A zstd export (`<tree>-export --zstd`) first counts
+// the bytes of the tree's files and writes them in the PAX record ArchiveSizeRecord of a global
+// header at the start of its archive. `<tree>-import` writes a CopyProgressPrefix line to its
+// stdout about once a second while it runs, and once at the end: "copied <bytes> <total>", the
+// bytes of files written so far and the archive's total, 0 when the archive doesn't say.
+const (
+	ArchiveSizeRecord  = "STUDIO.size"
+	CopyProgressPrefix = "copied "
+)

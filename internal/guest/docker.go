@@ -13,7 +13,7 @@ func ExportDocker(root string, w io.Writer, warn io.Writer, c Compression) error
 }
 
 // ImportDocker extracts an ExportDocker archive into the empty Docker disk at root, with
-// ImportWorkspace's checks.
-func ImportDocker(root string, r io.Reader) error {
-	return importTree(root, r, true)
+// ImportWorkspace's checks and progress.
+func ImportDocker(root string, r io.Reader, progress io.Writer) error {
+	return importTree(root, r, true, progress)
 }

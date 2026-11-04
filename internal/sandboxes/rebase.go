@@ -203,17 +203,18 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 		return err
 	}
 	m.advance(sb.ID, StepCopy)
-	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, target.HomeMiB); err != nil {
+	report := m.copying(sb.ID)
+	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, target.HomeMiB, report); err != nil {
 		return err
 	}
 	if tools {
-		if err := copyTools(ctx, rt, ownedVM(sb), ownedVM(target)); err != nil {
+		if err := copyTools(ctx, rt, ownedVM(sb), ownedVM(target), report); err != nil {
 			return err
 		}
 	}
 	if docker {
 		limit := &limitWriter{left: int64(target.DockerMiB) << 20, err: ErrDockerTooLarge}
-		if err := copyTree(ctx, rt, ownedVM(sb), ownedVM(target), runtime.TreeDocker, limit); err != nil {
+		if err := copyTree(ctx, rt, ownedVM(sb), ownedVM(target), runtime.TreeDocker, limit, report); err != nil {
 			return err
 		}
 	}

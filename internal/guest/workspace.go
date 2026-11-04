@@ -14,13 +14,17 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sys/unix"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
 // Workspace archives are a PAX tar of the workspace with relative names, compressed with
@@ -77,28 +81,22 @@ func exportTree(root string, w io.Writer, warn io.Writer, opts treeOptions, c Co
 		return err
 	}
 	tw := tar.NewWriter(gz)
+	if c == Zstd {
+		// Only a copy between VMs is zstd; an export file stays as older Studios read it.
+		err := tw.WriteHeader(&tar.Header{Typeflag: tar.TypeXGlobalHeader, Format: tar.FormatPAX,
+			PAXRecords: map[string]string{agentproto.ArchiveSizeRecord: strconv.FormatInt(treeSize(root, opts), 10)}})
+		if err != nil {
+			return err
+		}
+	}
 	links := map[[2]uint64]string{} // device and inode → first archived name
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	err = walkTree(root, opts, func(p, rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) && p != root {
 				fmt.Fprintf(warn, "skipped %s: it disappeared during the export\n", p)
 				return nil
 			}
 			return err
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if rel == lostFound && d.IsDir() {
-			return fs.SkipDir
-		}
-		if opts.skip != nil && opts.skip(rel) {
-			if d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
 		}
 		info, err := d.Info()
 		if errors.Is(err, fs.ErrNotExist) {
@@ -117,6 +115,58 @@ func exportTree(root string, w io.Writer, warn io.Writer, opts treeOptions, c Co
 		return err
 	}
 	return gz.Close()
+}
+
+// walkTree walks root as an export does, leaving out lost+found and what opts skips, with each
+// entry's name relative to root.
+func walkTree(root string, opts treeOptions, fn func(p, rel string, d fs.DirEntry, err error) error) error {
+	return filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fn(p, "", d, err)
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == lostFound && d.IsDir() {
+			return fs.SkipDir
+		}
+		if opts.skip != nil && opts.skip(rel) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		return fn(p, rel, d, nil)
+	})
+}
+
+// treeSize is the bytes of the regular files an export of root writes, counting a file with
+// several names once. It reads only the files' status, so it is quick next to the copy; a tree
+// that changes meanwhile makes it an estimate.
+func treeSize(root string, opts treeOptions) int64 {
+	var total int64
+	seen := map[[2]uint64]bool{}
+	_ = walkTree(root, opts, func(p, rel string, d fs.DirEntry, err error) error {
+		if err != nil || !d.Type().IsRegular() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if st, ok := info.Sys().(*syscall.Stat_t); ok && st.Nlink > 1 {
+			key := [2]uint64{uint64(st.Dev), st.Ino}
+			if seen[key] {
+				return nil
+			}
+			seen[key] = true
+		}
+		total += info.Size()
+		return nil
+	})
+	return total
 }
 
 func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]uint64]string, special bool, warn io.Writer) error {
@@ -174,7 +224,7 @@ func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]u
 		if err := tw.WriteHeader(h); err != nil {
 			return err
 		}
-		n, err := io.CopyN(tw, f, st.Size)
+		n, err := copyOut(tw, f, st.Size)
 		if errors.Is(err, io.EOF) {
 			// The file shrank during the export. Pad it to the size in its header.
 			fmt.Fprintf(warn, "%s changed during the export\n", rel)
@@ -249,13 +299,14 @@ func (zeroReader) Read(p []byte) (int, error) {
 // a symlink, entries whose parent directory is not in the archive, duplicate entries, and
 // entry types other than files, directories, symlinks and hardlinks. It restores owners,
 // modes and mtimes. A failed import leaves a partial tree; the caller discards it.
-func ImportWorkspace(root string, r io.Reader) error {
-	return importTree(root, r, false)
+// With progress set it writes there how far it got, as agentproto.CopyProgressPrefix says.
+func ImportWorkspace(root string, r io.Reader, progress io.Writer) error {
+	return importTree(root, r, false, progress)
 }
 
 // importTree is ImportWorkspace. With special it also creates devices and FIFOs and sets
 // extended attributes, the entries an export with treeOptions.special writes.
-func importTree(root string, r io.Reader, special bool) error {
+func importTree(root string, r io.Reader, special bool, progress io.Writer) error {
 	rootFD, err := unix.Open(root, unix.O_DIRECTORY|unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return fmt.Errorf("open workspace: %w", err)
@@ -270,6 +321,10 @@ func importTree(root string, r io.Reader, special bool) error {
 	}
 	defer gz.Close()
 	im := &importer{root: rootFD, seen: map[string]byte{}, special: special}
+	defer im.cache.drop()
+	if progress != nil {
+		defer im.report(progress)()
+	}
 	tr := tar.NewReader(gz)
 	for {
 		h, err := tr.Next()
@@ -278,6 +333,12 @@ func importTree(root string, r io.Reader, special bool) error {
 		}
 		if err != nil {
 			return fmt.Errorf("read archive: %w", err)
+		}
+		if h.Typeflag == tar.TypeXGlobalHeader {
+			if n, err := strconv.ParseInt(h.PAXRecords[agentproto.ArchiveSizeRecord], 10, 64); err == nil && n > 0 {
+				im.total.Store(n)
+			}
+			continue
 		}
 		if err := im.entry(h, tr); err != nil {
 			return fmt.Errorf("%q: %w", h.Name, err)
@@ -325,6 +386,36 @@ type importer struct {
 	seen    map[string]byte // archive name → type flag
 	dirs    []*tar.Header   // in archive order; their metadata is applied last
 	special bool
+	cache   cacheDropper
+	// copied counts the bytes of files written, total those the archive says it holds.
+	copied, total atomic.Int64
+}
+
+// report writes how far the import got to w about once a second, until the function it
+// returns is called, which writes it a last time.
+func (im *importer) report(w io.Writer) func() {
+	line := func() {
+		fmt.Fprintf(w, "%s%d %d\n", agentproto.CopyProgressPrefix, im.copied.Load(), im.total.Load())
+	}
+	stop, ended := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(ended)
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				line()
+			case <-stop:
+				line()
+				return
+			}
+		}
+	}()
+	return func() {
+		close(stop)
+		<-ended
+	}
 }
 
 func (im *importer) entry(h *tar.Header, r io.Reader) error {
@@ -374,8 +465,10 @@ func (im *importer) entry(h *tar.Header, r io.Reader) error {
 			return err
 		}
 		f := os.NewFile(uintptr(fd), name)
-		_, err = io.Copy(f, r)
+		var n int64
+		n, err = io.Copy(im.cache.writer(f, &im.copied), r)
 		if err == nil {
+			im.cache.written(fd, n)
 			err = setMetadata(fd, h)
 		}
 		if err == nil && im.special {

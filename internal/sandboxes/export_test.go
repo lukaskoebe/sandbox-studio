@@ -454,11 +454,11 @@ type failAllTransfer struct {
 	step string
 }
 
-func (f *failAllTransfer) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader) error {
+func (f *failAllTransfer) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader, progress func(copied, total int64)) error {
 	if f.step == "import" && tree == runtime.TreeWorkspace || f.step == "import-home" && tree == runtime.TreeHome {
 		return errors.New("injected failure at /secret/host/path")
 	}
-	return f.transferFake.ImportTree(ctx, owned, tree, r)
+	return f.transferFake.ImportTree(ctx, owned, tree, r, progress)
 }
 
 func (f *failAllTransfer) Boot(ctx context.Context, name string) error {

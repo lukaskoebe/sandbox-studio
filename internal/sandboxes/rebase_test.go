@@ -133,7 +133,7 @@ func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tr
 	return err
 }
 
-func (f *transferFake) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader) error {
+func (f *transferFake) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader, progress func(copied, total int64)) error {
 	trees, suffix := f.trees(tree)
 	f.record("import" + suffix + ":" + owned.Name)
 	done, err := f.run(owned.Name)
@@ -150,6 +150,9 @@ func (f *transferFake) ImportTree(ctx context.Context, owned runtime.OwnedVM, tr
 	}
 	if err := f.failure("import" + suffix + ":" + owned.Name); err != nil {
 		return err
+	}
+	if progress != nil {
+		progress(int64(len(data)), int64(len(data)))
 	}
 	f.mu.Lock()
 	trees[owned.Name] = data
@@ -280,6 +283,49 @@ func TestRebaseAnswersAtOnceAndPublishesItsSteps(t *testing.T) {
 	// A rebase saves no progress: its rebase record recovers it.
 	if saved, err := f.store.SettingsWithPrefix(f.ctx, progressKeyPrefix); err != nil || len(saved) != 0 {
 		t.Fatalf("saved progress = %v, %v", saved, err)
+	}
+}
+
+// reportingTransfer holds an import of the workspace after it reported its progress.
+type reportingTransfer struct {
+	*transferFake
+	reported, release chan struct{}
+}
+
+func (r *reportingTransfer) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, rd io.Reader, progress func(copied, total int64)) error {
+	if tree == runtime.TreeWorkspace {
+		progress(100, 300)
+		close(r.reported)
+		<-r.release
+	}
+	return r.transferFake.ImportTree(ctx, owned, tree, rd, progress)
+}
+
+func TestRebaseShowsHowFarItsCopyGot(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.setWorkspace(source, "files")
+	reporting := &reportingTransfer{transferFake: tf, reported: make(chan struct{}), release: make(chan struct{})}
+	f.manager.Runtime = reporting
+
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	<-reporting.reported
+	v, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := CopyProgress{Tree: "workspace", Bytes: 100, TotalBytes: 300}
+	if v.Progress == nil || v.Progress.Step != StepCopy || v.Progress.Copy == nil || *v.Progress.Copy != want {
+		t.Fatalf("progress = %+v, copy %+v", v.Progress, v.Progress.Copy)
+	}
+	close(reporting.release)
+	if err := f.manager.Wait(f.ctx, f.sandbox.ID); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -665,16 +711,16 @@ func TestCopyTreeStopsAtLimit(t *testing.T) {
 	tf.setStatus("dst", runtime.StatusRunning)
 	tf.setWorkspace("src", "0123456789")
 	tf.setHome("src", "0123456789")
-	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeWorkspace, &limitWriter{left: 9, err: ErrWorkspaceTooLarge}); !errors.Is(err, ErrWorkspaceTooLarge) {
+	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeWorkspace, &limitWriter{left: 9, err: ErrWorkspaceTooLarge}, nil); !errors.Is(err, ErrWorkspaceTooLarge) {
 		t.Fatalf("err = %v, want ErrWorkspaceTooLarge", err)
 	}
-	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeHome, &limitWriter{left: 9, err: ErrHomeTooLarge}); !errors.Is(err, ErrHomeTooLarge) {
+	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeHome, &limitWriter{left: 9, err: ErrHomeTooLarge}, nil); !errors.Is(err, ErrHomeTooLarge) {
 		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
 	}
 	if tf.workspace("dst") != "" || tf.home("dst") != "" {
 		t.Fatal("import succeeded past the limit")
 	}
-	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}); err != nil || tf.workspace("dst") != "0123456789" {
+	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}, nil); err != nil || tf.workspace("dst") != "0123456789" {
 		t.Fatalf("err = %v, workspace %q", err, tf.workspace("dst"))
 	}
 }

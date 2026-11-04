@@ -325,7 +325,7 @@ func importArchive(ctx context.Context, rt transferRuntime, rec store.Sandbox, t
 		return importError(fmt.Sprintf("uploaded %s is unavailable", tree))
 	}
 	defer f.Close()
-	if err := rt.ImportTree(ctx, ownedVM(rec), tree, f); err != nil {
+	if err := rt.ImportTree(ctx, ownedVM(rec), tree, f, nil); err != nil {
 		return fmt.Errorf("import %s: %w", tree, err)
 	}
 	return nil

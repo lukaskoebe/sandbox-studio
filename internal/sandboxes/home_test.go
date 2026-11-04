@@ -99,10 +99,10 @@ func TestHomeCopyStopsAtTheHomeDisk(t *testing.T) {
 	tf.setStatus("src", runtime.StatusRunning)
 	tf.setStatus("dst", runtime.StatusRunning)
 	tf.setHome("src", string(make([]byte, 1<<20+1)))
-	if err := copyTrees(f.ctx, tf, src, dst, 1024, 1); !errors.Is(err, ErrHomeTooLarge) {
+	if err := copyTrees(f.ctx, tf, src, dst, 1024, 1, nil); !errors.Is(err, ErrHomeTooLarge) {
 		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
 	}
-	if err := copyTrees(f.ctx, tf, src, dst, 1024, 2); err != nil {
+	if err := copyTrees(f.ctx, tf, src, dst, 1024, 2, nil); err != nil {
 		t.Fatalf("a 2 MiB home disk: %v", err)
 	}
 }

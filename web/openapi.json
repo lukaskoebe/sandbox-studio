@@ -1657,6 +1657,36 @@
         ],
         "type": "object"
       },
+      "CopyProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "description": "The bytes of files copied so far",
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalBytes": {
+            "description": "The bytes of the tree's files",
+            "format": "int64",
+            "type": "integer"
+          },
+          "tree": {
+            "enum": [
+              "workspace",
+              "home",
+              "tools",
+              "docker"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "tree",
+          "bytes",
+          "totalBytes"
+        ],
+        "type": "object"
+      },
       "CopyTeammateInBody": {
         "additionalProperties": false,
         "properties": {
@@ -6289,6 +6319,10 @@
       "Progress": {
         "additionalProperties": false,
         "properties": {
+          "copy": {
+            "$ref": "#/components/schemas/CopyProgress",
+            "description": "The copy of the tree being copied, during the copy step"
+          },
           "error": {
             "description": "Why the step failed",
             "type": "string"

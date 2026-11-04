@@ -31,11 +31,11 @@ func TestDockerExportImportKeepsSpecialFiles(t *testing.T) {
 
 	var archive bytes.Buffer
 	must(t, ExportDocker(src, &archive, &bytes.Buffer{}, Zstd))
-	if err := ImportWorkspace(t.TempDir(), bytes.NewReader(archive.Bytes())); err == nil {
+	if err := ImportWorkspace(t.TempDir(), bytes.NewReader(archive.Bytes()), nil); err == nil {
 		t.Fatal("a workspace import took a FIFO")
 	}
 	dst := t.TempDir()
-	must(t, ImportDocker(dst, &archive))
+	must(t, ImportDocker(dst, &archive, nil))
 
 	got := filepath.Join(dst, "overlay2", "abc", "diff")
 	for path, want := range map[string]string{filepath.Join(got, "bin") + "\x00user.studio": "file\x00value", got + "\x00user.opaque": "y"} {

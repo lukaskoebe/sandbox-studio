@@ -26,6 +26,7 @@ import { cn, formatBytes } from "@/lib/utils"
 type Run = NonNullable<Sandbox["progress"]>
 type Step = Run["step"]
 type Pull = NonNullable<Run["pull"]>
+type Copy = NonNullable<Run["copy"]>
 type StepState = "done" | "running" | "failed" | "pending"
 
 /** What each step of a create, fork, rebase or disk resize is called on screen. */
@@ -33,11 +34,19 @@ const stepLabels: Record<Step, string> = {
   prepare: "Preparing the sandbox for the copy",
   pull: "Pulling the image",
   vm: "Starting the VM",
-  copy: "Copying the workspace",
+  copy: "Copying the files",
   boot: "Booting the guest",
   services: "Starting services",
   agent: "Connecting the agent",
   configure: "Configuring secrets and CA",
+}
+
+/** What each copied tree is called on screen. */
+const treeLabels: Record<Copy["tree"], string> = {
+  workspace: "Workspace",
+  home: "Home directory",
+  tools: "Tools",
+  docker: "Docker's data",
 }
 
 const verbs: Record<Run["operation"], string> = {
@@ -124,6 +133,9 @@ export function SandboxProgress({
                   {state === "running" && step === "pull" && (
                     <PullBar pull={run?.pull} />
                   )}
+                  {state === "running" && step === "copy" && (
+                    <CopyBar copy={run?.copy} />
+                  )}
                 </li>
               )
             })}
@@ -183,6 +195,38 @@ function PullBar({ pull }: { pull?: Pull }) {
     <div className="space-y-1 pl-6">
       <Progress value={value} />
       {text && <p className="text-muted-foreground tabular-nums">{text}</p>}
+    </div>
+  )
+}
+
+/**
+ * The copy's bar, for the tree being copied: by bytes once its total is known, else
+ * indeterminate. A tree that changes during the copy may pass the total it was counted at.
+ */
+function CopyBar({ copy }: { copy?: Copy }) {
+  if (!copy)
+    return (
+      <div className="pl-6">
+        <Progress value={null} />
+      </div>
+    )
+  const known = copy.totalBytes > 0
+  const size = known
+    ? `${formatBytes(copy.bytes)} of ${formatBytes(copy.totalBytes)}`
+    : copy.bytes > 0
+      ? formatBytes(copy.bytes)
+      : ""
+  return (
+    <div className="space-y-1 pl-6">
+      <Progress
+        value={
+          known ? Math.min((copy.bytes / copy.totalBytes) * 100, 100) : null
+        }
+      />
+      <p className="text-muted-foreground tabular-nums">
+        {treeLabels[copy.tree]}
+        {size && `: ${size}`}
+      </p>
     </div>
   )
 }

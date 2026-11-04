@@ -64,7 +64,8 @@ func ExportTools(dir string, w io.Writer, warn io.Writer, c Compression) error {
 // stays as the template made it. The archive's tool pins that dir's config doesn't pin go to
 // keptToolsFile, so they stay on the PATH while the new template's pins win. Shims are made
 // again last. What can't be merged is said on warn rather than failing the rebase.
-func ImportTools(dir string, r io.Reader, warn io.Writer) error {
+// It reports progress as ImportWorkspace does.
+func ImportTools(dir string, r io.Reader, warn, progress io.Writer) error {
 	st, err := os.Lstat(dir)
 	if err != nil {
 		return fmt.Errorf("the new template has no %s: %w", dir, err)
@@ -77,7 +78,7 @@ func ImportTools(dir string, r io.Reader, warn io.Writer) error {
 		return err
 	}
 	defer os.RemoveAll(staging)
-	if err := ImportWorkspace(staging, r); err != nil {
+	if err := ImportWorkspace(staging, r, progress); err != nil {
 		return err
 	}
 	moved := 0

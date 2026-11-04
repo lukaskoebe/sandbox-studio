@@ -51,7 +51,7 @@ func TestToolsMergeIntoTheNewTemplate(t *testing.T) {
 	if err := ExportTools(old, &archive, &warn, Zstd); err != nil {
 		t.Fatal(err)
 	}
-	if err := ImportTools(cur, &archive, &warn); err != nil {
+	if err := ImportTools(cur, &archive, &warn, nil); err != nil {
 		t.Fatal(err)
 	}
 	if warn.Len() > 0 {
@@ -101,7 +101,7 @@ func TestToolsWithoutConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	cur := t.TempDir()
-	if err := ImportTools(cur, &archive, &warn); err != nil {
+	if err := ImportTools(cur, &archive, &warn, nil); err != nil {
 		t.Fatal(err)
 	}
 	if entries, _ := os.ReadDir(cur); len(entries) != 0 {
@@ -117,7 +117,7 @@ func TestToolsWithoutConfig(t *testing.T) {
 	if err := ExportTools(old, &archive, &warn, Zstd); err != nil {
 		t.Fatal(err)
 	}
-	if err := ImportTools(cur, &archive, &warn); err != nil {
+	if err := ImportTools(cur, &archive, &warn, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(cur, "installs/go/1.23.0/bin/go")); err != nil {

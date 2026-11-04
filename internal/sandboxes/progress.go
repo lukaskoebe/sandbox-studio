@@ -90,6 +90,7 @@ type Progress struct {
 	Step      string        `json:"step" enum:"prepare,pull,vm,copy,boot,services,agent,configure" doc:"The step that runs, or the one that failed"`
 	Error     string        `json:"error,omitempty" doc:"Why the step failed"`
 	Pull      *PullProgress `json:"pull,omitempty" doc:"The image pull, once it reports sizes"`
+	Copy      *CopyProgress `json:"copy,omitempty" doc:"The copy of the tree being copied, during the copy step"`
 }
 
 // PullProgress counts an image pull. Totals are 0 while unknown.
@@ -98,6 +99,14 @@ type PullProgress struct {
 	LayersDone int   `json:"layersDone"`
 	Bytes      int64 `json:"bytes"`
 	TotalBytes int64 `json:"totalBytes"`
+}
+
+// CopyProgress counts the copy of one tree between two VMs: the workspace, the home directory,
+// the toolchains a rebase keeps, or Docker's data. TotalBytes is 0 while unknown.
+type CopyProgress struct {
+	Tree       string `json:"tree" enum:"workspace,home,tools,docker"`
+	Bytes      int64  `json:"bytes" doc:"The bytes of files copied so far"`
+	TotalBytes int64  `json:"totalBytes" doc:"The bytes of the tree's files"`
 }
 
 // operation is a create or fork that runs, or one that failed and stays until the sandbox
@@ -177,6 +186,29 @@ func (m *Manager) pulled(id string, pull runtime.PullProgress) {
 	m.opsMu.Unlock()
 	if publish {
 		m.publish(envID, id)
+	}
+}
+
+// copying returns what tells the operation on sandbox id how far its copy got.
+func (m *Manager) copying(id string) copyReport {
+	return func(tree runtime.Tree, copied, total int64) {
+		m.opsMu.Lock()
+		op := m.ops[id]
+		if op == nil || op.progress.State != ProgressRunning || op.progress.Step != StepCopy {
+			m.opsMu.Unlock()
+			return
+		}
+		// A new tree is published at once; the bytes at most every pullPublishInterval.
+		publish := op.progress.Copy == nil || op.progress.Copy.Tree != string(tree) || time.Since(op.published) >= pullPublishInterval
+		op.progress.Copy = &CopyProgress{Tree: string(tree), Bytes: copied, TotalBytes: total}
+		if publish {
+			op.published = time.Now()
+		}
+		envID := op.envID
+		m.opsMu.Unlock()
+		if publish {
+			m.publish(envID, id)
+		}
 	}
 }
 
@@ -320,6 +352,10 @@ func (m *Manager) withProgress(v View) View {
 	if p.Pull != nil {
 		pull := *p.Pull
 		p.Pull = &pull
+	}
+	if p.Copy != nil {
+		copied := *p.Copy
+		p.Copy = &copied
 	}
 	m.opsMu.Unlock()
 	v.Progress = &p

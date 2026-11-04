@@ -296,7 +296,7 @@ func (m *app) newBody(w, h int) []string {
 var stepLabels = map[string]string{
 	sandboxes.StepPull:      "Pulling the image",
 	sandboxes.StepVM:        "Starting the VM",
-	sandboxes.StepCopy:      "Copying the workspace",
+	sandboxes.StepCopy:      "Copying the files",
 	sandboxes.StepBoot:      "Booting the guest",
 	sandboxes.StepServices:  "Starting services",
 	sandboxes.StepAgent:     "Connecting the agent",
@@ -343,6 +343,9 @@ func (m *app) progressBody(w, h int) []string {
 					lines = append(lines, "    "+styleDim.Render(text))
 				}
 			}
+			if step == sandboxes.StepCopy && run.Copy != nil {
+				lines = append(lines, "    "+styleDim.Render(copyText(*run.Copy)))
+			}
 		default:
 			lines = append(lines, "  "+styleDim.Render("· "+label))
 		}
@@ -368,6 +371,17 @@ func pullText(p sandboxes.PullProgress) string {
 		return fmt.Sprintf("%d of %d layers", p.LayersDone, p.Layers)
 	}
 	return ""
+}
+
+// copyText counts the copy of a tree, by bytes of its total once that is known.
+func copyText(c sandboxes.CopyProgress) string {
+	switch {
+	case c.TotalBytes > 0:
+		return fmt.Sprintf("%s: %s of %s", c.Tree, bytesText(c.Bytes), bytesText(c.TotalBytes))
+	case c.Bytes > 0:
+		return fmt.Sprintf("%s: %s", c.Tree, bytesText(c.Bytes))
+	}
+	return c.Tree
 }
 
 // bytesText is a size in the largest unit that keeps it at least 1.

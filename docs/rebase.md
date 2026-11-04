@@ -68,6 +68,25 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
   that doesn't fit fails with a message that says to delete caches, or give the sandbox a
   bigger home disk, and try again; Docker's data, with one that says to prune. If either
   side fails, the copy fails.
+- A copy tells how far it got (`Progress.Copy`). A zstd export first adds up the sizes of the
+  tree's files, reading only their status, and writes the sum in the PAX record `STUDIO.size`
+  of a global header at the start of the archive; an export file stays gzip, without it. The
+  import writes `copied <bytes> <total>` to its stdout about once a second, and
+  `Runtime.ImportTree` always reads that stdout, even with nobody to tell: lines left for
+  `runAgent` would crowd out a failure's message in its bounded channel.
+- A copy doesn't fill the VMs' memory. Everything read or written passes through the guest's
+  page cache, and the VM's host process keeps each guest page resident once touched, so an
+  uncached copy grows both VMs to their memory size on the host. Giving pages back afterwards
+  is slow and partial (the balloon's free page reporting), and page cache isn't freed at all
+  until the guest runs short. So the guest doesn't touch them in the first place, reusing the
+  same few pages: the export drops each file it
+  read from the cache, every 32 MiB and at its end, unless the file had pages cached before,
+  as a running sandbox's working files may. The import has only new files: it starts their
+  writeback as each is written, and once 32 MiB or 256 files are waiting, waits for it and
+  drops them (`internal/guest/pagecache.go`). Measured on 2026-11-04
+  ([`spikes/transfer-memory`](../spikes/transfer-memory/README.md)), copying 1.8 GiB in a 2
+  GiB VM: 2106 MiB resident at the peak and 48 s before, 256 MiB and 29 s after. Directory
+  entries and inodes stay cached, about 1 KiB per file, until the guest needs the memory.
 - Transfer mode creates or starts a VM without `studio-agent boot`, so no guest services
   or containers run. `Boot` starts them afterwards.
 

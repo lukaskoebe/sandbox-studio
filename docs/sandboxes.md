@@ -106,7 +106,7 @@ is on:
 | `prepare` | the sandbox stops and starts again for the copy (rebase and disk resize) |
 | `pull` | the image; the view carries layers and bytes while the pull reports them |
 | `vm` | the VM starts |
-| `copy` | the workspace copy (fork and rebase), and Docker's data's for a disk resize |
+| `copy` | the workspace and home copy (fork and rebase), the tools a rebase keeps and Docker's data for a disk resize; the view carries the tree and its bytes |
 | `boot` | `studio-agent boot` runs |
 | `services` | the supervisor starts containerd, Docker and the agent |
 | `agent` | the agent answers requests |

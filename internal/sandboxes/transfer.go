@@ -35,8 +35,12 @@ type transferRuntime interface {
 	StartForTransfer(context.Context, string) error
 	Boot(context.Context, string) error
 	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, bool, io.Writer) error
-	ImportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Reader) error
+	ImportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Reader, func(copied, total int64)) error
 }
+
+// copyReport is told how far the copy of a tree got: the bytes of its files copied, and their
+// total, 0 while unknown.
+type copyReport func(tree runtime.Tree, copied, total int64)
 
 var _ transferRuntime = (*runtime.Runtime)(nil)
 
@@ -55,14 +59,14 @@ func (m *Manager) transfer() (transferRuntime, error) {
 // homeMiB (0 for none). A source without a home disk gives its root disk's home, which is what
 // a sandbox from a legacy template keeps there. The copies run one after the other: the
 // runtime runs one command per VM at a time, and a second gets runtime.ErrRunPending.
-func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB, homeMiB int) error {
-	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}); err != nil {
+func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB, homeMiB int, report copyReport) error {
+	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}, report); err != nil {
 		return err
 	}
 	if homeMiB == 0 {
 		return nil
 	}
-	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: int64(homeMiB) << 20, err: ErrHomeTooLarge})
+	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: int64(homeMiB) << 20, err: ErrHomeTooLarge}, report)
 }
 
 // toolsLimit caps the toolchains a rebase that keeps tools copies. They land on the target's
@@ -70,14 +74,19 @@ func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM
 const toolsLimit = 32 << 30
 
 // copyTools merges the toolchains and global mise config of src into dst's.
-func copyTools(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM) error {
-	return copyTree(ctx, rt, src, dst, runtime.TreeTools, &limitWriter{left: toolsLimit, err: ErrToolsTooLarge})
+func copyTools(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, report copyReport) error {
+	return copyTree(ctx, rt, src, dst, runtime.TreeTools, &limitWriter{left: toolsLimit, err: ErrToolsTooLarge}, report)
 }
 
 // copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
 // archive passes through the host in memory and is never stored there. It fails once the
-// archive exceeds limit, or when either side fails.
-func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, limit *limitWriter) error {
+// archive exceeds limit, or when either side fails. report, if set, is told how far it got.
+func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, limit *limitWriter, report copyReport) error {
+	var progress func(copied, total int64)
+	if report != nil {
+		report(tree, 0, 0)
+		progress = func(copied, total int64) { report(tree, copied, total) }
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	pr, pw := io.Pipe()
@@ -92,7 +101,7 @@ func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM,
 		pw.CloseWithError(err) // nil gives the import a clean EOF
 		exported <- err
 	}()
-	err := rt.ImportTree(ctx, dst, tree, pr)
+	err := rt.ImportTree(ctx, dst, tree, pr, progress)
 	if err != nil {
 		err = fmt.Errorf("import %s: %w", tree, err)
 		cancel()
@@ -248,7 +257,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 		}
 	}
-	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB, rec.HomeMiB)
+	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB, rec.HomeMiB, m.copying(rec.ID))
 	if !sourceRunning {
 		err = errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 	}

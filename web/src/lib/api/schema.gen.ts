@@ -3661,6 +3661,20 @@ export interface components {
             teammateId: string;
             teammateName: string;
         };
+        CopyProgress: {
+            /**
+             * Format: int64
+             * @description The bytes of files copied so far
+             */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description The bytes of the tree's files
+             */
+            totalBytes: number;
+            /** @enum {string} */
+            tree: "workspace" | "home" | "tools" | "docker";
+        };
         CopyTeammateInBody: {
             /** @description The environment to copy the teammate to; not the one it is in */
             targetEnvironmentId: string;
@@ -5211,6 +5225,8 @@ export interface components {
             ports?: number[] | null;
         };
         Progress: {
+            /** @description The copy of the tree being copied, during the copy step */
+            copy?: components["schemas"]["CopyProgress"];
             /** @description Why the step failed */
             error?: string;
             /**

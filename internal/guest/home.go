@@ -103,7 +103,7 @@ func copyTree(src, dst string, warn io.Writer) error {
 		pw.CloseWithError(err)
 		exported <- err
 	}()
-	err := ImportWorkspace(dst, pr)
+	err := ImportWorkspace(dst, pr, nil)
 	pr.CloseWithError(errors.New("import ended"))
 	return errors.Join(<-exported, err)
 }
@@ -130,9 +130,9 @@ func ExportHomeAs(home string, w io.Writer, warn io.Writer, c Compression) error
 
 // ImportHome extracts a home archive into the empty home disk, drops the mise login
 // profile block of templates built before /opt/mise, and marks the home so it is never
-// seeded.
-func ImportHome(home string, r io.Reader) error {
-	if err := ImportWorkspace(home, r); err != nil {
+// seeded. It reports progress as ImportWorkspace does.
+func ImportHome(home string, r io.Reader, progress io.Writer) error {
+	if err := ImportWorkspace(home, r, progress); err != nil {
 		return err
 	}
 	if err := stripLegacyProfile(home); err != nil {

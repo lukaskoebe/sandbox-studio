@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- A rebase, disk resize or fork no longer grows its VMs to their memory limits. The copy passed
+  through each guest's page cache, and a VM keeps every page of memory it has touched resident
+  on the host, which with two VMs could bring a machine close to running out. The export and
+  the import now drop the cache of the files they copy as they go: copying 1.8 GiB peaked at 256
+  MiB of host memory instead of 2.1 GiB, in 29 s instead of 48 s. A running sandbox's fork
+  leaves the files it had in its cache there.
+- The copy of a fork, rebase or disk resize shows how far it got: which of the
+  workspace, home directory, tools and Docker's data it is on, with a bar and the bytes copied
+  of the total, in the app and the terminal UI.
+
 ## v0.15.0 — 2026-11-04
 
 - microsandbox's database survives the loss of its first page ("file is not a database"):

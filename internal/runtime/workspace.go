@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -56,12 +57,43 @@ func (r *Runtime) UploadTree(ctx context.Context, owned OwnedVM, tree Tree, url 
 }
 
 // ImportTree extracts an archive from rd into the empty tree of a running VM. It runs
-// `studio-agent <tree>-import` as root.
-func (r *Runtime) ImportTree(ctx context.Context, owned OwnedVM, tree Tree, rd io.Reader) error {
+// `studio-agent <tree>-import` as root. progress, if set, is told how far it got: the bytes of
+// files written and the archive's total, 0 when it doesn't say.
+func (r *Runtime) ImportTree(ctx context.Context, owned OwnedVM, tree Tree, rd io.Reader, progress func(copied, total int64)) error {
 	if !tree.known() {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
-	return r.runAgent(ctx, owned, string(tree)+"-import", RunCommand{Stdin: rd})
+	// Always read, or the lines would go where runAgent looks for the error, which they'd crowd out.
+	return r.runAgent(ctx, owned, string(tree)+"-import", RunCommand{Stdin: rd, Stdout: &copyLines{report: progress}})
+}
+
+// copyLines reads the agentproto.CopyProgressPrefix lines an import writes to its stdout and
+// tells report, if set.
+type copyLines struct {
+	report  func(copied, total int64)
+	partial []byte
+}
+
+func (c *copyLines) Write(p []byte) (int, error) {
+	c.partial = append(c.partial, p...)
+	for {
+		i := bytes.IndexByte(c.partial, '\n')
+		if i < 0 {
+			break
+		}
+		line := string(c.partial[:i])
+		c.partial = c.partial[i+1:]
+		var copied, total int64
+		if rest, ok := strings.CutPrefix(line, agentproto.CopyProgressPrefix); ok {
+			if _, err := fmt.Sscan(rest, &copied, &total); err == nil && c.report != nil {
+				c.report(copied, total)
+			}
+		}
+	}
+	if len(c.partial) > 4096 {
+		c.partial = c.partial[:0] // not a progress line
+	}
+	return len(p), nil
 }
 
 // RunAgentCommand runs `studio-agent <args>` in a running VM as the agent user, in its home,

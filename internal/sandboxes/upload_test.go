@@ -87,7 +87,7 @@ func TestCopyTreeByUpload(t *testing.T) {
 	tf.setStatus("dst", runtime.StatusRunning)
 	tf.setWorkspace("src", "0123456789")
 
-	if err := copyTree(f.ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}); err != nil {
+	if err := copyTree(f.ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if tf.workspace("dst") != "0123456789" || u.uploads != 1 || u.status != http.StatusNoContent {
@@ -99,14 +99,14 @@ func TestCopyTreeByUpload(t *testing.T) {
 
 	// Past the limit, the copy ends the upload and nothing is imported.
 	tf.setWorkspace("dst", "")
-	err := copyTree(f.ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: 9, err: ErrWorkspaceTooLarge})
+	err := copyTree(f.ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: 9, err: ErrWorkspaceTooLarge}, nil)
 	if !errors.Is(err, ErrWorkspaceTooLarge) || tf.workspace("dst") != "" {
 		t.Fatalf("err %v, workspace %q", err, tf.workspace("dst"))
 	}
 
 	// Another sandbox can't deliver it: the copy gets nothing and falls back to msb exec.
 	u.claim = "sb2"
-	if err := copyTree(f.ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}); err != nil {
+	if err := copyTree(f.ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if u.status != http.StatusNotFound || !tf.saw("export:src") || tf.workspace("dst") != "0123456789" {
@@ -127,7 +127,7 @@ func TestCopyTreeFallsBackWhenTheGuestCantUpload(t *testing.T) {
 	tf.setStatus("src", runtime.StatusRunning)
 	tf.setStatus("dst", runtime.StatusRunning)
 	tf.setHome("src", "home")
-	if err := copyTree(f.ctx, uploading(u, transfers), src, runtime.OwnedVM{Name: "dst"}, runtime.TreeHome, &limitWriter{left: 10, err: ErrHomeTooLarge}); err != nil {
+	if err := copyTree(f.ctx, uploading(u, transfers), src, runtime.OwnedVM{Name: "dst"}, runtime.TreeHome, &limitWriter{left: 10, err: ErrHomeTooLarge}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if tf.home("dst") != "home" || !tf.saw("export-home:src") {

@@ -88,7 +88,7 @@ func TestHomeExportImportCarriesHomeAndDropsLegacyMise(t *testing.T) {
 	must(t, ExportHome(src, &archive, &bytes.Buffer{}))
 	dst := t.TempDir()
 	must(t, os.Mkdir(filepath.Join(dst, "lost+found"), 0o700))
-	must(t, ImportHome(dst, &archive))
+	must(t, ImportHome(dst, &archive, nil))
 
 	if data, err := os.ReadFile(filepath.Join(dst, ".local", "share", "opencode", "session.json")); err != nil || string(data) != "{}" {
 		t.Fatalf("session = %q, %v", data, err)
@@ -119,7 +119,7 @@ func TestImportHomeRefusesANonEmptyHome(t *testing.T) {
 	must(t, ExportHome(t.TempDir(), &archive, &bytes.Buffer{}))
 	dst := t.TempDir()
 	must(t, os.WriteFile(filepath.Join(dst, ".bashrc"), nil, 0o644))
-	if err := ImportHome(dst, &archive); err == nil {
+	if err := ImportHome(dst, &archive, nil); err == nil {
 		t.Fatal("imported into a home that holds files")
 	}
 }

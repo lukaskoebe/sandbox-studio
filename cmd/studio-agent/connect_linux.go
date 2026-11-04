@@ -67,7 +67,7 @@ func workspaceExport(dst, warn io.Writer, zstd bool) error {
 }
 
 func workspaceImport(src io.Reader) error {
-	return guest.ImportWorkspace(guest.Workdir, bufio.NewReaderSize(src, 1<<20))
+	return guest.ImportWorkspace(guest.Workdir, bufio.NewReaderSize(src, 1<<20), os.Stdout)
 }
 
 func homeExport(dst, warn io.Writer, zstd bool) error {
@@ -79,7 +79,7 @@ func homeExport(dst, warn io.Writer, zstd bool) error {
 }
 
 func homeImport(src io.Reader) error {
-	return guest.ImportHome(guest.Home, bufio.NewReaderSize(src, 1<<20))
+	return guest.ImportHome(guest.Home, bufio.NewReaderSize(src, 1<<20), os.Stdout)
 }
 
 func toolsExport(dst, warn io.Writer, zstd bool) error {
@@ -91,7 +91,7 @@ func toolsExport(dst, warn io.Writer, zstd bool) error {
 }
 
 func toolsImport(src io.Reader) error {
-	return guest.ImportTools(guest.MiseDir, bufio.NewReaderSize(src, 1<<20), os.Stderr)
+	return guest.ImportTools(guest.MiseDir, bufio.NewReaderSize(src, 1<<20), os.Stderr, os.Stdout)
 }
 
 func dockerExport(dst, warn io.Writer, zstd bool) error {
@@ -103,5 +103,5 @@ func dockerExport(dst, warn io.Writer, zstd bool) error {
 }
 
 func dockerImport(src io.Reader) error {
-	return guest.ImportDocker(agentproto.DockerDir, bufio.NewReaderSize(src, 1<<20))
+	return guest.ImportDocker(agentproto.DockerDir, bufio.NewReaderSize(src, 1<<20), os.Stdout)
 }
