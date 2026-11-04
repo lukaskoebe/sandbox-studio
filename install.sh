@@ -140,6 +140,11 @@ install_binary() {
 		cp "$app" "$dir/.studio-app.$$"
 		mv -f "$dir/.studio-app.$$" "$dir/studio-app"
 		say "Installed the app to $dir/studio-app."
+		# Into the desktop's launcher, where it can be pinned. An app that can't load its libraries
+		# here says so when it is started.
+		if [ "$(uname -s)" = Linux ]; then
+			"$dir/studio-app" -install-launcher >/dev/null 2>&1 || true
+		fi
 	fi
 	# On macOS the app is Sandbox Studio.app: the system's notifications need a bundle.
 	bundle="$tmp/x/${asset%.tar.gz}/Sandbox Studio.app"

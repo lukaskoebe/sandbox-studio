@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- On Linux the Studio app is in the desktop's launcher, with its icon, and can be pinned there:
+  the installer and the app's start write its desktop entry, its window says which entry is its
+  own, and `studio uninstall` removes it.
 - A long diff in a review no longer holds up the page while it opens: a diff over 600 lines is
   highlighted in a worker, a file at a time, and shows plain until then. A line over 2000
   characters, as in a minified file, stays plain.

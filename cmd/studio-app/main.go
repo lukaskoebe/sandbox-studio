@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/desktopentry"
 	"github.com/lukaskoebe/sandbox-studio/internal/launcher"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -58,6 +59,11 @@ func (n *optionalNotifier) ServiceStartup(ctx context.Context, options applicati
 //go:embed icon.png
 var icon []byte
 
+// launcherIcon is the desktop entry's: larger than a launcher draws it, where icon is the window's.
+//
+//go:embed icon-512.png
+var launcherIcon []byte
+
 // trayIcon is the macOS menu bar's template image: only its alpha counts there, so it is the
 // cube alone on a transparent ground (tray.svg), where icon would be a filled square.
 //
@@ -67,14 +73,37 @@ var trayIcon []byte
 // version is set by the release build, as studio's is.
 var version = "dev"
 
+// installLauncher puts the app in a Linux desktop's launcher, where it can be pinned.
+func installLauncher() error {
+	if goruntime.GOOS != "linux" {
+		return nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	f, err := desktopentry.Locate()
+	if err != nil {
+		return err
+	}
+	return f.Install(exe, launcherIcon)
+}
+
 func main() {
 	addr := flag.String("addr", "127.0.0.1:7878", "the address Studio listens on")
 	studioFlag := flag.String("studio", "", "the studio binary; default the one next to this app")
 	test := flag.Bool("selftest", false, "load Studio in a hidden window, print what the page found as JSON and exit")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	installOnly := flag.Bool("install-launcher", false, "put the app in the desktop's launcher and exit (Linux)")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("studio-app " + version)
+		return
+	}
+	if *installOnly {
+		if err := installLauncher(); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 
@@ -82,6 +111,13 @@ func main() {
 	// opens the browser instead.
 	if goruntime.GOOS == "linux" && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
 		log.Fatal("no graphical display (neither DISPLAY nor WAYLAND_DISPLAY is set)")
+	}
+	// So that a user who updated, or moved the program, finds it there. A build from a tree that
+	// says nothing of its version shouldn't take the installed app's place.
+	if version != "dev" && !*test {
+		if err := installLauncher(); err != nil {
+			log.Printf("the launcher entry: %v", err)
+		}
 	}
 	studio, err := studioBinary(*studioFlag)
 	if err != nil {
@@ -169,6 +205,8 @@ func main() {
 		Description: "Sandbox Studio in a window of its own",
 		Icon:        icon,
 		Services:    []application.Service{application.NewService(notifier)},
+		// The program's name too: a desktop finds the entry of a window by it.
+		Linux: application.LinuxOptions{ApplicationID: desktopentry.ID},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: *test,
 		},

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
+	"github.com/lukaskoebe/sandbox-studio/internal/desktopentry"
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -270,6 +271,9 @@ func hostUninstaller(ctx context.Context, addr string) (*uninstaller, error) {
 				return err
 			}})
 		}
+	}
+	if f, err := desktopentry.Locate(); err == nil && f.Installed() {
+		u.entries = append(u.entries, loginEntry{"The launcher entry, " + f.Entry, f.Remove})
 	}
 	if svc, err := sshService(p, addr); err == nil {
 		if st, err := svc.Status(); err == nil && st.Enabled {

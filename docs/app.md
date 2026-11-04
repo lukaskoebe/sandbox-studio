@@ -33,6 +33,15 @@ server is still the product, and the app is a window and a tray around it.
   Studio in it again when it isn't there: Studio didn't start, or on Linux the window was
   closed.
 
+- **The launcher** (Linux): a launcher pins and shows only what has a desktop entry, and takes
+  a window for an entry's app when the window's app id is the entry's file name. The installer
+  (`studio-app -install-launcher`) and each start of a released app write
+  `dev.sandbox-studio.app.desktop` to `$XDG_DATA_HOME/applications` (else
+  `~/.local/share/applications`) and its icon under `icons/` beside it, naming the program that
+  wrote them, and `studio uninstall` removes them (`internal/desktopentry`). The app sets the
+  same id on its window. macOS's Dock keeps the bundle and Windows' taskbar the program, with no
+  entry.
+
 The process logic (state, start, login links, quit) is `internal/launcher`, shared with the
 Windows tray launcher `studiow.exe`.
 

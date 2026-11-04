@@ -64,7 +64,7 @@ These run without a Studio to talk to (`cmd/studio/quit.go`, `restart.go`, `unin
 |---|---|
 | `quit` | stops the running Studio and waits until it let go of its data directory; sandboxes keep running. Settings > General > Shut down does the same (`POST /api/system/shutdown`) |
 | `restart` | stops the running Studio and starts this binary in its place: through the login entry when that starts this binary, else detached, logging to `logs/studio.log`. It does nothing when Studio isn't running. `install.sh` runs it, as a Studio keeps running its old binary until it stops |
-| `uninstall` | removes the programs next to this binary, the login entry, the SSH Include line, the data directory, Studio's VMs and checkpoints, and `~/.microsandbox` unless it has VMs that aren't named `ss-*` |
+| `uninstall` | removes the programs next to this binary, the launcher entry, the login entry, the SSH Include line, the data directory, Studio's VMs and checkpoints, and `~/.microsandbox` unless it has VMs that aren't named `ss-*` |
 
 `uninstall` lists what goes and asks for the word `uninstall`; without a terminal it needs `-yes`.
 `-keep-data` keeps the data, the sandboxes (stopped) and microsandbox, for installing again;

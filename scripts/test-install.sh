@@ -36,7 +36,7 @@ for platform in linux_amd64 linux_arm64 darwin_arm64; do
 		mkdir -p "$tmp/build/$name/Sandbox Studio.app/Contents/MacOS"
 		app="$tmp/build/$name/Sandbox Studio.app/Contents/MacOS/studio-app"
 	fi
-	printf '#!/bin/sh\necho "studio-app %s"\n' "$version" >"$app"
+	printf '#!/bin/sh\n[ "$1" != -install-launcher ] || : >"$0.launcher"\necho "studio-app %s"\n' "$version" >"$app"
 	chmod 755 "$app"
 	tar -czf "$release/$name.tar.gz" -C "$tmp/build" "$name"
 	printf '%s  %s\n' "$(sha256 "$release/$name.tar.gz")" "$name.tar.gz" >>"$release/checksums.txt"
@@ -76,6 +76,7 @@ if [ "$(uname -s)" = Darwin ]; then
 	[ ! -e "$tmp/good/studio-app" ] || fail "the earlier bare app was left next to the bundle"
 else
 	[ "$("$tmp/good/studio-app")" = "studio-app $version" ] || fail "the app was not installed next to studio"
+	[ -e "$tmp/good/studio-app.launcher" ] || fail "the app was not put in the launcher"
 fi
 echo "ok: good release installs"
 
