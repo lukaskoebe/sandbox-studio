@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.15.0 — 2026-11-04
 
 - microsandbox's database survives the loss of its first page ("file is not a database"):
   Studio's repair at start and `studio restore-msb-db` rebuild that page from the rest of the
