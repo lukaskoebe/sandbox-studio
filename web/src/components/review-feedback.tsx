@@ -17,8 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Tokens, useDiffTokens } from "@/components/code-view"
-import type { Token } from "@/lib/highlight"
+import { Tokens, useDiffTokens, type LineTokens } from "@/components/code-view"
 import { textareaClass } from "@/components/memory-dialogs"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
@@ -277,7 +276,7 @@ type ChunkProps = {
   lines: DiffLine[]
   start: number
   end: number
-  tokens: Map<number, Token[]>
+  tokens: LineTokens
   comments?: LineComment[]
   editing?: number
   actions: Actions

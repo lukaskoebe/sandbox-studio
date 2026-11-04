@@ -24,7 +24,9 @@ binary embeds (`//go:embed`) and serves at `/`.
 - Editors: CodeMirror (YAML specs, Caddyfiles). Code Studio only shows (Files, diffs) is
   highlighted by Lezer's parsers without an editor (`src/lib/highlight.ts`): each language's
   parser is its own chunk, loaded when a file of it first shows, and the tokens take the
-  `tok-*` classes in `styles.css`. Toasts: sonner.
+  `tok-*` classes in `styles.css`. A diff over 600 lines highlights in a worker
+  (`src/lib/highlight.worker.ts`), which sends its tokens back as numbers, and a line over 2000
+  characters stays plain. Toasts: sonner.
 - Installable app: `public/manifest.webmanifest` (served as `application/manifest+json`)
   with the icons in `public/` (`icon.svg` is the source; the PNGs and `favicon.ico` are
   rendered from it, the maskable one without the rounded corners). There is no service

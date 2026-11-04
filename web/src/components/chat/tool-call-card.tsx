@@ -214,10 +214,10 @@ export function Diff({
                 r.op === "+" && "bg-emerald-500/10",
                 r.op === "-" && "bg-destructive/10",
                 // A highlighted line keeps its syntax's colors.
-                !tokens.has(i) &&
+                !tokens.get(i) &&
                   r.op === "+" &&
                   "text-emerald-800 dark:text-emerald-300",
-                !tokens.has(i) && r.op === "-" && "text-destructive"
+                !tokens.get(i) && r.op === "-" && "text-destructive"
               )}
             >
               <span
@@ -229,7 +229,7 @@ export function Diff({
               >
                 {r.op}{" "}
               </span>
-              {tokens.has(i) ? <Tokens tokens={tokens.get(i)!} /> : r.text}
+              {tokens.get(i) ? <Tokens tokens={tokens.get(i)!} /> : r.text}
             </div>
           )
         )}

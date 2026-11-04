@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A long diff in a review no longer holds up the page while it opens: a diff over 600 lines is
+  highlighted in a worker, a file at a time, and shows plain until then. A line over 2000
+  characters, as in a minified file, stays plain.
 - The Studio app's window has no system title bar on Linux and macOS, and the height it took goes
   to the page. On Linux a slim bar at the top of the main column moves the window (double click
   maximises) and has its minimise, maximise and close buttons, and the window resizes from its

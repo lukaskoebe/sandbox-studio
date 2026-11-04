@@ -28,6 +28,8 @@ export default defineConfig({
     viteReact(),
   ],
   build: { outDir: "../internal/webui/static/app", emptyOutDir: true },
+  // The highlighting worker loads each language's parser when it needs it.
+  worker: { format: "es" },
   server: {
     port: 3000,
     // `pnpm dev:lan` listens on all interfaces; IP addresses and this machine's name work.

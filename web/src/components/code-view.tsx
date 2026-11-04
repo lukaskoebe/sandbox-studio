@@ -1,7 +1,13 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import type { DiffLine } from "@/components/review-feedback"
-import { highlightLines, useParsers, type Token } from "@/lib/highlight"
+import { highlightLines, languageOf, type Token } from "@/lib/highlight"
+import type {
+  EncodedSide,
+  HighlightReply,
+  HighlightRequest,
+} from "@/lib/highlight.worker"
+import { useParsers } from "@/lib/use-parsers"
 
 /** A line's tokens as spans. */
 export function Tokens({ tokens }: { tokens: Token[] }) {
@@ -55,40 +61,154 @@ export function CodeView({ path, text }: { path: string; text: string }) {
   )
 }
 
+/** A diff line's tokens by the line's index, or undefined for a line shown plain. */
+export type LineTokens = { get: (i: number) => Token[] | undefined }
+
+const noTokens: LineTokens = { get: () => undefined }
+
+/** A diff longer than this highlights in a worker: a long one would hold up the page. */
+const workerLines = 600
+/** A longer line shows plain: as a minified file's would, its tokens make thousands of elements. */
+const maxTokenLine = 2000
+/** How often a worker's results show, in ms: each time the lines near the view render again. */
+const showEvery = 200
+
+/** The indexes of each file's lines on its old and new sides, so a side reads as its file does. */
+function fileSides(lines: DiffLine[]) {
+  const sides = new Map<string, { old: number[]; new: number[] }>()
+  lines.forEach((l, i) => {
+    if (!l.file) return
+    let s = sides.get(l.file)
+    if (!s) sides.set(l.file, (s = { old: [], new: [] }))
+    if (l.text.startsWith("+")) s.new.push(i)
+    else if (l.text.startsWith("-")) s.old.push(i)
+    else {
+      s.old.push(i)
+      s.new.push(i)
+    }
+  })
+  return sides
+}
+
+const tooLong = (l: DiffLine) => l.text.length > maxTokenLine
+
+function sideText(lines: DiffLine[], side: number[]) {
+  return side
+    .map((i) => (tooLong(lines[i]) ? "" : lines[i].text.slice(1)))
+    .join("\n")
+}
+
+/** The tokens of a side's line k, from the worker's runs and the line's own text. */
+function runsOf(line: string, side: EncodedSide, k: number, classes: string[]) {
+  const out: Token[] = []
+  let at = 0
+  for (let r = side.starts[k]; r < side.starts[k + 1]; r += 2) {
+    const end = at + side.runs[r]
+    out.push({ text: line.slice(at, end), cls: classes[side.runs[r + 1]] })
+    at = end
+  }
+  return out
+}
+
+/** The tokens of a long diff as a worker finds them, a file at a time: none until then. */
+function useWorkerTokens(lines: DiffLine[] | undefined): LineTokens {
+  const [shown, setShown] = useState<{
+    lines: DiffLine[]
+    tokens: LineTokens
+  }>()
+  useEffect(() => {
+    if (!lines) return
+    const files = [...fileSides(lines)].filter(([file]) => languageOf(file))
+    if (files.length === 0) return
+    let worker: Worker
+    try {
+      worker = new Worker(
+        new URL("../lib/highlight.worker.ts", import.meta.url),
+        { type: "module" }
+      )
+    } catch {
+      return // The diff stays plain.
+    }
+    // Where each line's tokens are: which file and side, and its line there.
+    const found: { side: EncodedSide; classes: string[] }[] = []
+    const sideOf = new Int32Array(lines.length).fill(-1)
+    const lineOf = new Int32Array(lines.length)
+    const get = (i: number) => {
+      const f = found[sideOf[i]] as (typeof found)[number] | undefined
+      return f && runsOf(lines[i].text.slice(1), f.side, lineOf[i], f.classes)
+    }
+    let last = 0
+    const show = () => {
+      last = performance.now()
+      setShown({ lines, tokens: { get } })
+    }
+    // One file at a time, and a page that moves on ends the worker in the middle of one.
+    let next = 0
+    const send = () => {
+      if (next === files.length) {
+        worker.terminate()
+        show()
+        return
+      }
+      const [path, s] = files[next]
+      worker.postMessage({
+        path,
+        sides: [sideText(lines, s.old), sideText(lines, s.new)],
+      } satisfies HighlightRequest)
+    }
+    worker.onmessage = ({ data }: MessageEvent<HighlightReply>) => {
+      const [, s] = files[next++]
+      if (data) {
+        // A context line takes the new side's tokens.
+        ;[s.old, s.new].forEach((indexes, n) => {
+          found.push({ side: data.sides[n], classes: data.classes })
+          indexes.forEach((i, k) => {
+            if (tooLong(lines[i])) return
+            sideOf[i] = found.length - 1
+            lineOf[i] = k
+          })
+        })
+      }
+      if (performance.now() - last > showEvery) show()
+      send()
+    }
+    worker.onerror = () => worker.terminate()
+    send()
+    return () => worker.terminate()
+  }, [lines])
+  return shown && shown.lines === lines ? shown.tokens : noTokens
+}
+
 /**
  * The tokens of each code line of a diff, by the line's index: each file's old and new
- * sides are highlighted as runs of text, so a line is colored as it reads in its file.
+ * sides are highlighted as runs of text, so a line is colored as it reads in its file. A long
+ * diff shows plain until a worker has them, so the page stays responsive.
  */
-export function useDiffTokens(lines: DiffLine[]) {
+export function useDiffTokens(lines: DiffLine[]): LineTokens {
+  const long = lines.length > workerLines
   const files = useMemo(
-    () => [...new Set(lines.flatMap((l) => (l.file ? [l.file] : [])))],
-    [lines]
+    () =>
+      long ? [] : [...new Set(lines.flatMap((l) => (l.file ? [l.file] : [])))],
+    [lines, long]
   )
   const parserFor = useParsers(files)
-  return useMemo(() => {
+  const direct = useMemo(() => {
+    if (long) return noTokens
     const out = new Map<number, Token[]>()
-    const sides = new Map<string, { old: number[]; new: number[] }>()
-    lines.forEach((l, i) => {
-      if (!l.file || !parserFor(l.file)) return
-      let s = sides.get(l.file)
-      if (!s) sides.set(l.file, (s = { old: [], new: [] }))
-      if (l.text.startsWith("+")) s.new.push(i)
-      else if (l.text.startsWith("-")) s.old.push(i)
-      else {
-        s.old.push(i)
-        s.new.push(i)
-      }
-    })
-    for (const [file, s] of sides) {
+    for (const [file, s] of fileSides(lines)) {
+      const parser = parserFor(file)
+      if (!parser) continue
       for (const side of [s.old, s.new]) {
-        const text = side.map((i) => lines[i].text.slice(1)).join("\n")
-        const highlighted = highlightLines(text, parserFor(file))
+        const highlighted = highlightLines(sideText(lines, side), parser)
         // A context line takes the new side's tokens.
         side.forEach((i, k) => {
-          if (side === s.new || !out.has(i)) out.set(i, highlighted[k])
+          if (!tooLong(lines[i]) && (side === s.new || !out.has(i)))
+            out.set(i, highlighted[k])
         })
       }
     }
     return out
-  }, [lines, parserFor])
+  }, [lines, long, parserFor])
+  const fromWorker = useWorkerTokens(long ? lines : undefined)
+  return long ? fromWorker : direct
 }

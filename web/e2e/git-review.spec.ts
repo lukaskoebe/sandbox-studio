@@ -403,3 +403,60 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   await page.goto(`/e/${env}/chats/${fresh.id}`)
   await expect(page.getByRole("main")).toContainText("Keep the todo list short")
 })
+
+test("a long diff is highlighted off the page's thread, and a very long line stays plain", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const id = await api.createSandbox(sandboxName("long-diff"))
+  await api.guestReady(id)
+  await api.push(id, {
+    url: forge.url,
+    file: "a.txt",
+    content: "a\n",
+    message: "A long change",
+  })
+  const code = Array.from(
+    { length: 1000 },
+    (_, i) => `+func f${i}() string { return "s${i}" }`
+  )
+  const long = `+var long = "${"x".repeat(3000)}"`
+  const diff = [
+    "diff --git a/main.go b/main.go",
+    "--- a/main.go",
+    "+++ b/main.go",
+    "@@ -0,0 +1,1002 @@",
+    long,
+    ...code,
+    "",
+  ].join("\n")
+  // The diff comes as if the push had changed that much.
+  await page.route(/\/api\/.*approvals/, async (route) => {
+    if (route.request().method() !== "GET") return route.continue()
+    const r = await route.fetch()
+    const body = (await r.text()).replace(
+      /"diff":"(?:[^"\\]|\\.)*"/g,
+      () => `"diff":${JSON.stringify(diff)}`
+    )
+    await route.fulfill({ response: r, body })
+  })
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+  await card.getByRole("button", { name: "Review" }).click()
+  const sheet = page.getByRole("dialog")
+
+  const line = sheet.locator("pre div.whitespace-pre")
+  const first = line.filter({ hasText: 'func f0() string { return "s0" }' })
+  await expect(first).toBeVisible()
+  await expect(first.locator(".tok-keyword").first()).toHaveText("func")
+  await expect(first.locator(".tok-string")).toHaveText('"s0"')
+  const longLine = line.filter({ hasText: "var long" })
+  await expect(longLine).toBeVisible()
+  await expect(longLine.locator("[class*=tok-]")).toHaveCount(0)
+  await expect(longLine).toHaveText(long)
+})

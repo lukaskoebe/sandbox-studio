@@ -1,8 +1,8 @@
 // Syntax highlighting for code Studio shows but doesn't edit: a file in Files and the
 // lines of a diff. Lezer's parsers, as Studio's editors use, each loaded when a file of its
 // language first shows up, and Lezer's tags mapped to the theme's code colors (tok-* in
-// styles.css).
-import { useCallback, useEffect, useSyncExternalStore } from "react"
+// styles.css). A large diff highlights in a worker (highlight.worker.ts), so this file works
+// without a page or React.
 import type { StreamParser } from "@codemirror/language"
 import type { Parser } from "@lezer/common"
 import { highlightCode, tagHighlighter, tags as t } from "@lezer/highlight"
@@ -38,7 +38,7 @@ const highlighter = tagHighlighter([
   { tag: t.invalid, class: "text-destructive" },
 ])
 
-type Loader = () => Promise<Parser>
+export type Loader = () => Promise<Parser>
 
 /** A legacy CodeMirror mode as a parser. */
 async function stream<TState>(mode: () => Promise<StreamParser<TState>>) {
@@ -49,7 +49,7 @@ async function stream<TState>(mode: () => Promise<StreamParser<TState>>) {
   return StreamLanguage.define(m).parser
 }
 
-const loaders: Record<string, Loader> = {
+export const loaders: Record<string, Loader> = {
   js: () =>
     import("@lezer/javascript").then((m) =>
       m.parser.configure({ dialect: "jsx" })
@@ -224,53 +224,16 @@ export function languageOf(path: string) {
   return dot > 0 ? extensions[name.slice(dot + 1)] : undefined
 }
 
-const parsers = new Map<string, Parser>()
-const pending = new Set<string>()
-const listeners = new Set<() => void>()
-let version = 0
-
-function load(lang: string) {
-  const loader = loaders[lang] as Loader | undefined
-  if (parsers.has(lang) || pending.has(lang) || !loader) return
-  pending.add(lang)
-  loader()
-    .then((p) => {
-      parsers.set(lang, p)
-      version++
-      listeners.forEach((l) => l())
-    })
-    // A language that fails to load is shown plain.
-    .catch(() => {})
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-/**
- * The parser for each of these files once its language has loaded: undefined meanwhile, and
- * for a file of no language Studio knows.
- */
-export function useParsers(paths: string[]) {
-  const v = useSyncExternalStore(subscribe, () => version)
-  const key = paths.join("\n")
-  useEffect(() => {
-    for (const p of key.split("\n")) {
-      const lang = languageOf(p)
-      if (lang) load(lang)
-    }
-  }, [key])
-  // v changes when a parser loads, and with it the function.
-  return useCallback((path: string) => parsers.get(languageOf(path) ?? ""), [v])
-}
-
 /** Past this, a file shows plain: highlighting it would hold up the page. */
 const maxLength = 256 * 1024
 
 /** The text's lines, each as tokens; plain without a parser. */
-export function highlightLines(text: string, parser?: Parser): Token[][] {
-  if (!parser || text.length > maxLength)
+export function highlightLines(
+  text: string,
+  parser?: Parser,
+  max = maxLength
+): Token[][] {
+  if (!parser || text.length > max)
     return text.split("\n").map((l) => [{ text: l, cls: "" }])
   const lines: Token[][] = [[]]
   try {
