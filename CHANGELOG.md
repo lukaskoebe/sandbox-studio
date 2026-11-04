@@ -8,6 +8,8 @@
   no longer shrinks a disk you resized, which made growing a full home and then rebasing fail.
   Starting an agent on a full home says the home is full. In all of these, the sandbox and its
   files stay as they were.
+- The settings sidebar's section headings stand out from its items: the items use the foreground
+  color, as in the main sidebar, and the headings stay muted.
 - On Linux the Studio app is in the desktop's launcher, with its icon, and can be pinned there:
   the installer and the app's start write its desktop entry, its window says which entry is its
   own, and `studio uninstall` removes it.
