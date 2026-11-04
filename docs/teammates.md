@@ -221,6 +221,10 @@ A due run:
   the chat list marks it as scheduled, its title stays, and memory leaves it out, as it does
   heartbeats.
 
+The schedule moves on just before the chat starts, so a crash at that moment loses the run rather
+than running it twice when Studio comes back, and a one-off task lost this way stays open with no
+time left. A task paused or edited while a run was deciding doesn't run.
+
 When Studio was not running at a time, the latest one still runs if it is less than an hour
 late. Older times are logged as missed ("Studio was not running"), at most 24 at once.
 

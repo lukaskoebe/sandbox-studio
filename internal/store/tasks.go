@@ -284,6 +284,22 @@ func (s *Store) SetTaskNextRun(ctx context.Context, envID, id string, next *time
 	return err
 }
 
+// MoveTaskNextRun moves a task's schedule from its run at from to next, or to none with nil.
+// False means it wasn't at from any more: it was paused, edited or done meanwhile.
+func (s *Store) MoveTaskNextRun(ctx context.Context, envID, id string, from time.Time, next *time.Time) (bool, error) {
+	var at any
+	if next != nil {
+		at = next.Unix()
+	}
+	res, err := s.db.ExecContext(ctx, "UPDATE teammate_tasks SET next_run_at = ? WHERE environment_id = ? AND id = ? AND next_run_at = ?",
+		at, envID, id, from.Unix())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // StartTask marks an open task in progress, as its run starts. Other states stay.
 func (s *Store) StartTask(ctx context.Context, envID, id string) error {
 	_, err := s.db.ExecContext(ctx, "UPDATE teammate_tasks SET status = ?, updated_at = ? WHERE environment_id = ? AND id = ? AND status = ?",

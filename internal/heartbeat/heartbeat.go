@@ -143,6 +143,7 @@ func Due(h *store.Heartbeat, last, now time.Time) bool {
 type verdict struct {
 	outcome, reason, chat string
 	busy                  bool
+	gone                  bool // the task was paused or edited while its run was deciding
 }
 
 var quiet = verdict{}

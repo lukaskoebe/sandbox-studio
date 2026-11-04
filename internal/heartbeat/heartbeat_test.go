@@ -83,6 +83,7 @@ type fakeChats struct {
 	sendErr error
 	gate    chan struct{} // Send waits on it after the chat is running
 	entered chan struct{} // receives when Send has started a chat
+	onRun   func()        // called as a run's chat is made
 }
 
 func (f *fakeChats) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harness string) (store.Chat, error) {
@@ -96,6 +97,9 @@ func (f *fakeChats) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harne
 }
 
 func (f *fakeChats) CreateRun(ctx context.Context, sb store.Sandbox, harness, taskID, title string) (store.Chat, error) {
+	if f.onRun != nil {
+		f.onRun()
+	}
 	c, err := f.st.CreateChat(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harness, TaskID: taskID, Title: title})
 	if err == nil {
 		f.mu.Lock()

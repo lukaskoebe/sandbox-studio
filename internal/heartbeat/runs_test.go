@@ -99,6 +99,74 @@ func TestADueRunStartsAChatOfItsOwn(t *testing.T) {
 	}
 }
 
+// The schedule has moved on by the time the chat exists, so a crash after this point can't run
+// the task again when Studio comes back.
+func TestADueRunClaimsItsTimeBeforeItsChat(t *testing.T) {
+	f := newFixture(t)
+	f.sandbox(runtime.StatusRunning, false)
+	task := f.scheduled("Triage", daily, f.now)
+	var seen *time.Time
+	f.chats.onRun = func() {
+		cur, err := f.st.Task(context.Background(), f.env.ID, task.ID)
+		if err != nil {
+			t.Error(err)
+		}
+		seen = cur.NextRunAt
+	}
+	f.due(task)
+	if seen == nil || !seen.After(f.now) {
+		t.Fatalf("next run as the chat was made: %v, want after %v", seen, f.now)
+	}
+}
+
+// The scheduler read its list before the task was paused or edited: the run doesn't start, and
+// what the user did stays.
+func TestAStaleDueRunLeavesThePausedOrEditedTask(t *testing.T) {
+	ctx := context.Background()
+	later := func(f *fixture) *time.Time {
+		at := f.now.Add(48 * time.Hour)
+		return &at
+	}
+	for name, moved := range map[string]func(f *fixture) *time.Time{
+		"paused": func(*fixture) *time.Time { return nil },
+		"edited": later,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.sandbox(runtime.StatusRunning, false)
+			stale := f.scheduled("Triage", daily, f.now)
+			want := moved(f)
+			if err := f.st.SetTaskNextRun(ctx, f.env.ID, stale.ID, want); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.svc.Due(ctx, stale, f.now); err != nil {
+				t.Fatal(err)
+			}
+			if runs := f.runs(stale); len(runs) != 0 {
+				t.Fatalf("runs: %+v", runs)
+			}
+			cur, err := f.st.Task(ctx, f.env.ID, stale.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (want == nil) != (cur.NextRunAt == nil) || want != nil && want.Unix() != cur.NextRunAt.Unix() {
+				t.Fatalf("next run = %v, want %v", cur.NextRunAt, want)
+			}
+		})
+	}
+	// A list older than the pause itself: the schedule says so before anything is looked at.
+	f := newFixture(t)
+	paused := daily
+	paused.Paused = true
+	stale := f.scheduled("Triage", paused, f.now)
+	if err := f.svc.Due(ctx, stale, f.now); err != nil {
+		t.Fatal(err)
+	}
+	if runs := f.runs(stale); len(runs) != 0 {
+		t.Fatalf("paused task's runs: %+v", runs)
+	}
+}
+
 func TestABusyRunWaitsThenRuns(t *testing.T) {
 	f := newFixture(t)
 	sb := f.sandbox(runtime.StatusRunning, true)

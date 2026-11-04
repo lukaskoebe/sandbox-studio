@@ -57,10 +57,12 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 
 // Due handles task t, whose next run is due at now. The latest due time runs when it is less
 // than CatchUp late, or when a busy teammate made it wait; earlier times are logged as missed.
-// A run that finds the teammate busy waits up to RunWait, then is skipped with why. Once the
-// run starts or is skipped, the schedule moves to its next time after now.
+// A run that finds the teammate busy waits up to RunWait, then is skipped with why. The schedule
+// moves to its next time after now just before the run starts, or once it is skipped, so a crash
+// in between loses that run instead of running it twice: a repeated task can do more harm than
+// a run that didn't happen. A task paused or edited meanwhile keeps what that made of it.
 func (s *Service) Due(ctx context.Context, t store.Task, now time.Time) error {
-	if t.Schedule == nil || t.NextRunAt == nil {
+	if t.Schedule == nil || t.NextRunAt == nil || t.Schedule.Paused {
 		return nil
 	}
 	if !s.enter(t.TeammateID) {
@@ -80,22 +82,28 @@ func (s *Service) Due(ctx context.Context, t store.Task, now time.Time) error {
 			return err
 		}
 	}
-	next := tasks.NextRun(t.Schedule, now)
+	at, next := *t.NextRunAt, tasks.NextRun(t.Schedule, now)
 	if due.IsZero() {
-		return s.moved(ctx, t, next)
+		_, err := s.moved(ctx, t, at, next)
+		return err
 	}
 	if len(missed) > 0 {
-		if err := s.moved(ctx, t, &due); err != nil { // the misses are logged; the due run is next
+		if _, err := s.moved(ctx, t, at, &due); err != nil { // the misses are logged; the due run is next
 			return err
 		}
+		at = due
 	}
 	tm, err := s.Store.Teammate(ctx, t.EnvironmentID, t.TeammateID)
 	if err != nil {
 		return err
 	}
-	v, err := s.startRun(ctx, tm, t, due)
+	v, err := s.startRun(ctx, tm, t, due, func() (bool, error) { return s.moved(ctx, t, at, next) })
 	if err != nil {
 		return err
+	}
+	if v.gone {
+		s.unwait(t.ID)
+		return nil
 	}
 	if v.busy {
 		if !waiting {
@@ -115,7 +123,12 @@ func (s *Service) Due(ctx context.Context, t store.Task, now time.Time) error {
 	if _, err := s.logRun(ctx, t, run); err != nil {
 		return err
 	}
-	return s.moved(ctx, t, next)
+	if v.outcome == store.BeatStarted {
+		s.publish(t.EnvironmentID)
+		return nil
+	}
+	_, err = s.moved(ctx, t, at, next)
+	return err
 }
 
 // RunNow starts a run of a teammate's task at once, for Run now. It makes the checks a due run
@@ -141,7 +154,7 @@ func (s *Service) RunNow(ctx context.Context, envID, teammateID, taskID string) 
 	}
 	defer s.leave(tm.ID)
 	now := s.now().In(time.Local)
-	v, err := s.startRun(ctx, tm, t, now)
+	v, err := s.startRun(ctx, tm, t, now, nil)
 	if err != nil {
 		return store.TaskRun{}, err
 	}
@@ -159,7 +172,7 @@ func (s *Service) RunNow(ctx context.Context, envID, teammateID, taskID string) 
 // startRun starts a run of task t of teammate tm, at its time at, in a chat of its own: in the
 // task's sandbox, or the teammate's latest. It makes a check-in's checks; a teammate that is
 // busy in the sandbox, or a previous run still running, is a busy verdict.
-func (s *Service) startRun(ctx context.Context, tm store.Teammate, t store.Task, at time.Time) (verdict, error) {
+func (s *Service) startRun(ctx context.Context, tm store.Teammate, t store.Task, at time.Time, claim func() (bool, error)) (verdict, error) {
 	env := tm.EnvironmentID
 	var sb store.Sandbox
 	var err error
@@ -207,6 +220,13 @@ func (s *Service) startRun(ctx context.Context, tm store.Teammate, t store.Task,
 	if err != nil {
 		return skip("%v", err), nil
 	}
+	if claim != nil {
+		if claimed, err := claim(); err != nil {
+			return verdict{}, err
+		} else if !claimed {
+			return verdict{gone: true}, nil
+		}
+	}
 	c, err := s.Chats.CreateRun(ctx, sb, launch.Harness.Name(), t.ID, runTitle(t, at))
 	if err != nil {
 		return verdict{}, err
@@ -228,13 +248,15 @@ func (s *Service) logRun(ctx context.Context, t store.Task, run store.TaskRun) (
 	return run, err
 }
 
-// moved moves t's schedule to next and tells the Tasks tab.
-func (s *Service) moved(ctx context.Context, t store.Task, next *time.Time) error {
-	if err := s.Store.SetTaskNextRun(ctx, t.EnvironmentID, t.ID, next); err != nil {
-		return err
+// moved moves t's schedule from its run at from to next and tells the Tasks tab. False means the
+// schedule wasn't at from any more.
+func (s *Service) moved(ctx context.Context, t store.Task, from time.Time, next *time.Time) (bool, error) {
+	ok, err := s.Store.MoveTaskNextRun(ctx, t.EnvironmentID, t.ID, from, next)
+	if err != nil {
+		return false, err
 	}
 	s.publish(t.EnvironmentID)
-	return nil
+	return ok, nil
 }
 
 func (s *Service) publish(envID string) {
