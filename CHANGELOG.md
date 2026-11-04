@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `docker pull` from Docker Hub or Quay no longer stops on a card. Their downloads also come from
+  `production.cloudfront.docker.com` and `cdn01.quay.io` to `cdn03.quay.io`, which the curated list
+  was missing.
 - The curated list allows reads, not writes. At the Guarded and Assisted levels, a sandbox could push
   to `github.com` or `gitlab.com`, publish to npm, crates.io or RubyGems, or push an image to Docker
   Hub, GHCR or Quay with anybody's token, and nobody was asked. Those eight hosts' requests are now
