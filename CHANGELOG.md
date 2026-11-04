@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `studio uninstall` is careful with what isn't its own. It removes only the VMs and checkpoints of
+  sandboxes in its own catalog, so another Studio's with other data stay, and it refuses while such
+  a Studio is running. It lists the VMs before asking. If it can't read microsandbox's list or its
+  own catalog, it removes nothing and says why; `-keep-data` still removes the programs. A VM it
+  can't remove stops it there, with the data and the program kept, so it can be run again.
 - Undo no longer deletes files it can't vouch for. If git couldn't list the workspace when a turn
   was undone, or the turn had removed `.git`, ignored files such as `.env` or `node_modules` looked
   new and were deleted, and no snapshot holds them. They now stay, and the note in the chat says

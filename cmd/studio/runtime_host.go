@@ -51,7 +51,9 @@ func (m msbVMs) names(ctx context.Context) ([]string, error) {
 
 func (m msbVMs) stop(ctx context.Context, name string) error   { return m.rt.Stop(ctx, name) }
 func (m msbVMs) remove(ctx context.Context, name string) error { return m.rt.Remove(ctx, name) }
-func (m msbVMs) removeCheckpoints(ctx context.Context) error   { return runtime.RemoveCheckpoints(ctx) }
+func (m msbVMs) removeCheckpoints(ctx context.Context, sandboxIDs []string) error {
+	return runtime.RemoveCheckpoints(ctx, sandboxIDs)
+}
 
 func hostProbes() doctor.Probes {
 	p := doctor.HostProbes()

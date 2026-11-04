@@ -151,3 +151,15 @@ func TestResizeDisksFailureRollsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestVMSandboxID(t *testing.T) {
+	sb := store.Sandbox{ID: "abc-g2", Generation: 7}
+	if id, ok := VMSandboxID(VMName(sb)); !ok || id != sb.ID {
+		t.Fatalf("id %q, %v", id, ok)
+	}
+	for _, name := range []string{"mine", "ss-", "ss-abc", "ss--g1", "ss-abc-gx", "abc-g1", "ss-prewarm-0123456789abcdef01234567"} {
+		if id, ok := VMSandboxID(name); ok {
+			t.Errorf("%s: id %q", name, id)
+		}
+	}
+}

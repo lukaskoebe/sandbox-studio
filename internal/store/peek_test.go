@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -44,5 +45,26 @@ func TestPeekSettingNeitherMigratesNorWrites(t *testing.T) {
 	}
 	if _, err := PeekSetting(ctx, filepath.Join(t.TempDir(), "none.db"), "k"); err == nil {
 		t.Fatal("a missing catalog was read")
+	}
+}
+
+// The IDs take in every kind of sandbox, since each has VMs; the names only the user's.
+func TestPeekSandboxesByKind(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "studio.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TABLE sandboxes (id TEXT PRIMARY KEY, name TEXT, kind TEXT);
+		INSERT INTO sandboxes VALUES ('a', 'dev', ''), ('b', 'browser', 'browser')`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if ids, err := PeekSandboxIDs(ctx, path); err != nil || !slices.Equal(ids, []string{"a", "b"}) {
+		t.Fatalf("ids %v, %v", ids, err)
+	}
+	if names, err := PeekSandboxNames(ctx, path); err != nil || !slices.Equal(names, []string{"dev"}) {
+		t.Fatalf("names %v, %v", names, err)
 	}
 }

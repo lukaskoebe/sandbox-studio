@@ -19,6 +19,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/desktopentry"
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -32,8 +33,8 @@ type vmHost interface {
 	names(ctx context.Context) ([]string, error)
 	stop(ctx context.Context, name string) error
 	remove(ctx context.Context, name string) error
-	// removeCheckpoints removes the snapshots of Studio's checkpoints.
-	removeCheckpoints(ctx context.Context) error
+	// removeCheckpoints removes the snapshots of the checkpoints of these sandboxes.
+	removeCheckpoints(ctx context.Context, sandboxIDs []string) error
 }
 
 // loginEntry is something Studio added to the user's setup outside its own directories.
@@ -50,6 +51,9 @@ type uninstaller struct {
 	vms        vmHost
 	entries    []loginEntry
 	sandboxes  []string // the names the user knows the sandboxes by
+	ids        []string // every sandbox in this installation's catalog, which its VMs are named after
+	catalogErr error    // why the catalog couldn't be read
+	lockMSB    func() (release func() error, err error)
 	running    func() bool
 	stopStudio func(context.Context) error
 	closeApps  func()
@@ -60,9 +64,21 @@ type uninstallPlan struct {
 	programs []string
 	data     string // "" when it stays
 	vms      []string
-	others   []string // VMs that aren't Studio's
+	others   []string // VMs that aren't this installation's
 	msbHome  string   // "" when it stays
 	notes    []string // what stays, and why
+	blocked  error    // why nothing can be removed: there's no telling which VMs are whose
+}
+
+// owns says whether VM name belongs to this installation: its sandbox is in the catalog, or
+// it only warms up a base image. Another installation, with another data directory, shares
+// microsandbox's home and names its VMs the same way, so the prefix alone says nothing.
+func (u *uninstaller) owns(name string) bool {
+	if runtime.IsPrewarmVM(name) {
+		return true
+	}
+	id, ok := sandboxes.VMSandboxID(name)
+	return ok && slices.Contains(u.ids, id)
 }
 
 func (u *uninstaller) plan(ctx context.Context) uninstallPlan {
@@ -79,11 +95,20 @@ func (u *uninstaller) plan(ctx context.Context) uninstallPlan {
 	}
 	all, err := u.vms.names(ctx)
 	if err != nil {
-		p.notes = append(p.notes, fmt.Sprintf("Studio's VMs stay, and microsandbox with them: reading its list failed: %v", err))
+		err = fmt.Errorf("reading microsandbox's list of VMs failed: %w", err)
+	} else if u.catalogErr != nil {
+		err = fmt.Errorf("reading Studio's list of sandboxes failed: %w", u.catalogErr)
+	}
+	if err != nil {
+		if u.keepData {
+			p.notes = append(p.notes, fmt.Sprintf("Studio's VMs stay as they are: %v", err))
+		} else {
+			p.blocked = err
+		}
 		return p
 	}
 	for _, name := range all {
-		if strings.HasPrefix(name, sandboxes.VMPrefix) {
+		if u.owns(name) {
 			p.vms = append(p.vms, name)
 		} else {
 			p.others = append(p.others, name)
@@ -94,7 +119,7 @@ func (u *uninstaller) plan(ctx context.Context) uninstallPlan {
 	case u.keepMSB:
 		p.notes = append(p.notes, "microsandbox stays in "+u.msbHome+", as asked.")
 	case len(p.others) > 0:
-		p.notes = append(p.notes, fmt.Sprintf("microsandbox stays in %s: it has %d sandboxes that aren't Studio's (%s).", u.msbHome, len(p.others), someOf(p.others)))
+		p.notes = append(p.notes, fmt.Sprintf("microsandbox stays in %s: it has %s that aren't this Studio's (%s).", u.msbHome, counted(len(p.others), "VM"), someOf(p.others)))
 	default:
 		if err := removableDir(u.msbHome, "db"); err != nil {
 			p.notes = append(p.notes, err.Error())
@@ -118,9 +143,16 @@ func (u *uninstaller) describe(w io.Writer, p uninstallPlan) {
 	if p.data != "" {
 		fmt.Fprintf(w, "  %s (%s): settings, secrets, chats and logs\n", p.data, humanSize(dirSize(p.data)))
 		if n := len(u.sandboxes); n > 0 {
-			fmt.Fprintf(w, "  %d sandboxes with their disks and checkpoints (%s).\n", n, someOf(u.sandboxes))
+			fmt.Fprintf(w, "  %s with their disks and checkpoints (%s).\n", counted(n, "sandbox"), someOf(u.sandboxes))
 			fmt.Fprintln(w, "    What is in them and isn't pushed anywhere is lost.")
 		}
+	}
+	if n := len(p.vms); n > 0 {
+		verb := "go"
+		if u.keepData {
+			verb = "stop"
+		}
+		fmt.Fprintf(w, "  %s of this Studio's %s (%s).\n", counted(n, "VM"), verb, someOf(p.vms))
 	}
 	if p.msbHome != "" {
 		fmt.Fprintf(w, "  %s (%s): microsandbox and its images; -keep-microsandbox keeps them\n", p.msbHome, humanSize(dirSize(p.msbHome)))
@@ -137,9 +169,11 @@ func (u *uninstaller) describe(w io.Writer, p uninstallPlan) {
 	fmt.Fprintln(w)
 }
 
-// run does the plan and returns what failed. Each step runs even if an earlier one failed, the
-// programs go last so that a failure can be run again, and a Studio that won't stop changes
-// nothing at all.
+// run does the plan in stages and returns what failed. A VM or disk that can't be removed ends
+// it there: the catalog says which VMs are this Studio's, and the program is what runs this
+// again, so the data and the programs go last. An entry that can't be removed doesn't hold up
+// the rest, only the programs. A Studio that won't stop, or another one using microsandbox,
+// changes nothing at all.
 func (u *uninstaller) run(ctx context.Context, w io.Writer, p uninstallPlan) []error {
 	if u.running() {
 		fmt.Fprintln(w, "Stopping Studio.")
@@ -148,6 +182,17 @@ func (u *uninstaller) run(ctx context.Context, w io.Writer, p uninstallPlan) []e
 		}
 	}
 	u.closeApps()
+	msbDB := filepath.Join(u.msbHome, "db", "msb.db")
+	release := func() error { return nil }
+	if !u.keepData && exists(msbDB) {
+		var err error
+		switch release, err = u.lockMSB(); {
+		case errors.Is(err, store.ErrLocked):
+			return []error{fmt.Errorf("nothing was removed: another Studio, with other data, is using microsandbox in %s. Quit it and try again", u.msbHome)}
+		case err != nil:
+			return []error{fmt.Errorf("nothing was removed: locking microsandbox: %w", err)}
+		}
+	}
 	var failed []error
 	note := func(err error, format string, args ...any) {
 		if err != nil {
@@ -157,6 +202,7 @@ func (u *uninstaller) run(ctx context.Context, w io.Writer, p uninstallPlan) []e
 	for _, e := range u.entries {
 		note(e.disable(), "%s", e.name)
 	}
+	entriesFailed := len(failed)
 	for _, name := range p.vms {
 		if u.keepData {
 			note(u.vms.stop(ctx, name), "stop VM %s", name)
@@ -165,19 +211,29 @@ func (u *uninstaller) run(ctx context.Context, w io.Writer, p uninstallPlan) []e
 			note(u.vms.remove(ctx, name), "remove VM %s", name)
 		}
 	}
+	_ = release() // a held lock can't be removed with its directory on Windows
+	if len(failed) > entriesFailed {
+		return failed
+	}
 	switch {
 	case p.msbHome != "":
 		fmt.Fprintf(w, "Removing %s.\n", p.msbHome)
 		note(removeTree(p.msbHome), "remove %s", p.msbHome)
-	case !u.keepData && exists(filepath.Join(u.msbHome, "db", "msb.db")):
-		note(u.vms.removeCheckpoints(ctx), "remove Studio's checkpoints")
+	case !u.keepData && exists(msbDB):
+		note(u.vms.removeCheckpoints(ctx, u.ids), "remove this Studio's checkpoints")
 		if err := os.Remove(filepath.Join(u.msbHome, "db", "studio.lock")); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			note(err, "remove microsandbox's lock of Studio's")
 		}
 	}
+	if len(failed) > entriesFailed {
+		return failed
+	}
 	if p.data != "" {
 		fmt.Fprintf(w, "Removing %s.\n", p.data)
 		note(removeTree(p.data), "remove %s", p.data)
+	}
+	if len(failed) > 0 {
+		return failed
 	}
 	for _, program := range p.programs {
 		note(removeTree(program), "remove %s", program)
@@ -211,6 +267,11 @@ func runUninstall(ctx context.Context, in io.Reader, w io.Writer, addr string, i
 
 func (u *uninstaller) confirmAndRun(ctx context.Context, in io.Reader, w io.Writer, yes bool) int {
 	p := u.plan(ctx)
+	if p.blocked != nil {
+		fmt.Fprintf(w, "Nothing was removed: %v.\n", p.blocked)
+		fmt.Fprintln(w, "Studio can't tell which VMs are its own without that. Fix it and try again, or pass -keep-data to remove only the programs.")
+		return 1
+	}
 	u.describe(w, p)
 	if !yes {
 		fmt.Fprintf(w, "This can't be undone. Type %s to go on: ", uninstallWord)
@@ -224,6 +285,9 @@ func (u *uninstaller) confirmAndRun(ctx context.Context, in io.Reader, w io.Writ
 	if len(failed) > 0 {
 		for _, err := range failed {
 			fmt.Fprintln(w, err)
+		}
+		if exists(u.exe) {
+			fmt.Fprintln(w, "Sandbox Studio isn't fully uninstalled. What wasn't reached stays: fix this and run studio uninstall again.")
 		}
 		return 1
 	}
@@ -250,7 +314,11 @@ func hostUninstaller(ctx context.Context, addr string) (*uninstaller, error) {
 	}
 	u := &uninstaller{
 		exe: exe, data: p.Data, msbHome: home,
-		vms:        hostVMs(),
+		vms: hostVMs(),
+		lockMSB: func() (func() error, error) {
+			release, _, err := lockMSB()
+			return release, err
+		},
 		running:    func() bool { return holdsData(p) },
 		stopStudio: func(ctx context.Context) error { return stopStudio(ctx, p, addr) },
 		closeApps: func() {
@@ -263,6 +331,9 @@ func hostUninstaller(ctx context.Context, addr string) (*uninstaller, error) {
 	}
 	if names, err := store.PeekSandboxNames(ctx, p.DB()); err == nil {
 		u.sandboxes = names
+	}
+	if exists(p.DB()) {
+		u.ids, u.catalogErr = store.PeekSandboxIDs(ctx, p.DB())
 	}
 	if svc, err := autostart.Default(); err == nil {
 		if st, err := svc.Status(); err == nil && st.Enabled {
@@ -284,6 +355,17 @@ func hostUninstaller(ctx context.Context, addr string) (*uninstaller, error) {
 		}
 	}
 	return u, nil
+}
+
+// counted says how many of something there are: 1 VM, 2 VMs.
+func counted(n int, what string) string {
+	switch {
+	case n == 1:
+		return "1 " + what
+	case strings.HasSuffix(what, "x"):
+		return fmt.Sprintf("%d %ses", n, what)
+	}
+	return fmt.Sprintf("%d %ss", n, what)
 }
 
 // studioPrograms are exe and what the installer put next to it.

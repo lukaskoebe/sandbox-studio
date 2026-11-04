@@ -33,6 +33,9 @@ var (
 	repoComponentRE    = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*$`)
 )
 
+// IsPrewarmVM says whether name is a VM that warms up a base image. No sandbox lives in one.
+func IsPrewarmVM(name string) bool { return strings.HasPrefix(name, prewarmNamePrefix) }
+
 type prewarmRequest struct {
 	Image          string
 	Name           string

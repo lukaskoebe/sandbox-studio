@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -158,6 +159,22 @@ type CreateRequest struct {
 
 // VMName is the microsandbox name of the current generation of sb.
 func VMName(sb store.Sandbox) string { return fmt.Sprintf("%s%s-g%d", VMPrefix, sb.ID, sb.Generation) }
+
+// VMSandboxID is the sandbox a name of VMName's belongs to.
+func VMSandboxID(name string) (string, bool) {
+	rest, ok := strings.CutPrefix(name, VMPrefix)
+	if !ok {
+		return "", false
+	}
+	i := strings.LastIndex(rest, "-g")
+	if i <= 0 {
+		return "", false
+	}
+	if _, err := strconv.Atoi(rest[i+2:]); err != nil {
+		return "", false
+	}
+	return rest[:i], true
+}
 
 func vmNameAtGeneration(sb store.Sandbox, generation int) string {
 	sb.Generation = generation

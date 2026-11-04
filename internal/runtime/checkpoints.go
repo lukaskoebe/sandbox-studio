@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 
 	msb "github.com/superradcompany/microsandbox/sdk/go"
@@ -381,16 +380,20 @@ func checkEgress(configJSON string, egress Egress) error {
 	return nil
 }
 
-// RemoveCheckpoints removes every checkpoint of Studio's and leaves other snapshots alone, for
-// an uninstall that keeps microsandbox.
-func RemoveCheckpoints(ctx context.Context) error {
+// RemoveCheckpoints removes every checkpoint of these sandboxes and leaves other snapshots alone,
+// another Studio's included, for an uninstall that keeps microsandbox.
+func RemoveCheckpoints(ctx context.Context, sandboxIDs []string) error {
+	groups := make(map[string]bool, len(sandboxIDs))
+	for _, id := range sandboxIDs {
+		groups[checkpointGroup(id)] = true
+	}
 	indexed, err := msb.Snapshot.List(ctx)
 	if err != nil {
 		return err
 	}
 	var failed []error
 	for _, handle := range indexed {
-		if group := handle.Group(); group != nil && strings.HasPrefix(*group, "sbx-") {
+		if group := handle.Group(); group != nil && groups[*group] {
 			if err := handle.Remove(ctx, true); err != nil && !msb.IsKind(err, msb.ErrSnapshotNotFound) {
 				failed = append(failed, err)
 			}

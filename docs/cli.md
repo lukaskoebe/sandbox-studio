@@ -64,13 +64,23 @@ These run without a Studio to talk to (`cmd/studio/quit.go`, `restart.go`, `unin
 |---|---|
 | `quit` | stops the running Studio and waits until it let go of its data directory; sandboxes keep running. Settings > General > Shut down does the same (`POST /api/system/shutdown`) |
 | `restart` | stops the running Studio and starts this binary in its place: through the login entry when that starts this binary, else detached, logging to `logs/studio.log`. It does nothing when Studio isn't running. `install.sh` runs it, as a Studio keeps running its old binary until it stops |
-| `uninstall` | removes the programs next to this binary, the launcher entry, the login entry, the SSH Include line, the data directory, Studio's VMs and checkpoints, and `~/.microsandbox` unless it has VMs that aren't named `ss-*` |
+| `uninstall` | removes the programs next to this binary, the launcher entry, the login entry, the SSH Include line, the data directory, this Studio's VMs and checkpoints, and `~/.microsandbox` unless it has other VMs |
 
 `uninstall` lists what goes and asks for the word `uninstall`; without a terminal it needs `-yes`.
 `-keep-data` keeps the data, the sandboxes (stopped) and microsandbox, for installing again;
-`-keep-microsandbox` keeps microsandbox and its images. If Studio doesn't stop, nothing changes.
-Otherwise every step runs even after one failed, and the programs go last, so that it can run
-again. A data or microsandbox directory that holds the home directory, or doesn't look like
+`-keep-microsandbox` keeps microsandbox and its images.
+
+A VM is this Studio's if its name, `ss-<sandbox>-g<generation>`, names a sandbox in this data
+directory's catalog, or it only warms up a base image (`ss-prewarm-*`). Another Studio with another
+data directory shares `~/.microsandbox` and names its VMs the same way, so `uninstall` leaves those,
+their checkpoints and microsandbox itself alone, and refuses while such a Studio runs (it holds
+`db/studio.lock`). If microsandbox's list or the catalog can't be read, nothing is removed, since
+there is no telling whose the VMs are; `-keep-data` removes no VM, so it still goes on.
+
+If Studio doesn't stop, nothing changes. After that the stages run in order: the login and launcher
+entries, the VMs, microsandbox or the checkpoints, the data, the programs. A failure among the VMs,
+microsandbox or the data ends it there, as the catalog tells whose the VMs are and the program is
+what runs it again. An entry that can't be removed keeps only the programs. A data or microsandbox directory that holds the home directory, or doesn't look like
 Studio's, stays: those locations come from the environment. On Windows the running `studio.exe`
 can't remove itself, so that step reports it and the file stays.
 
