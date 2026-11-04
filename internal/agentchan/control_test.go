@@ -252,3 +252,17 @@ func (h *controlTestHarness) nextResult(t *testing.T, result <-chan sessionsResu
 		return sessionsResult{}
 	}
 }
+
+func TestHomeWriteError(t *testing.T) {
+	full := errors.New(`.claude.json: write .claude.json.studio-1: no space left on device`)
+	if err := homeWriteError(full); !errors.Is(err, ErrHomeFull) {
+		t.Errorf("err = %v", err)
+	}
+	other := errors.New("permission denied")
+	if err := homeWriteError(other); !errors.Is(err, other) {
+		t.Errorf("err = %v", err)
+	}
+	if err := homeWriteError(nil); err != nil {
+		t.Errorf("err = %v", err)
+	}
+}

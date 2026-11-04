@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/diskspace"
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -325,10 +326,16 @@ func importArchive(ctx context.Context, rt transferRuntime, rec store.Sandbox, t
 		return importError(fmt.Sprintf("uploaded %s is unavailable", tree))
 	}
 	defer f.Close()
-	if err := rt.ImportTree(ctx, ownedVM(rec), tree, f, nil); err != nil {
-		return fmt.Errorf("import %s: %w", tree, err)
+	err = rt.ImportTree(ctx, ownedVM(rec), tree, f, nil)
+	switch {
+	case err == nil:
+		return nil
+	case agentproto.NoSpace(err) && tree == runtime.TreeHome:
+		return ErrHomeTooLarge
+	case agentproto.NoSpace(err) && tree == runtime.TreeWorkspace:
+		return ErrWorkspaceTooLarge
 	}
-	return nil
+	return fmt.Errorf("import %s: %w", tree, err)
 }
 
 // createImportRecord records the sandbox under the exported name, or the first free

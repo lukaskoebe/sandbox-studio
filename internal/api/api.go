@@ -385,7 +385,8 @@ func apiError(err error) error {
 		errors.Is(err, sandboxes.ErrCheckpointState),
 		errors.Is(err, sandboxes.ErrLifecycleState),
 		errors.Is(err, sandboxes.ErrWorkspaceTooLarge), errors.Is(err, sandboxes.ErrHomeTooLarge), errors.Is(err, sandboxes.ErrDockerTooLarge),
-		errors.Is(err, sandboxes.ErrTemplateWithoutHome), errors.Is(err, tasks.ErrCannotRun):
+		errors.Is(err, sandboxes.ErrTemplateWithoutHome), errors.Is(err, tasks.ErrCannotRun),
+		errors.Is(err, agentchan.ErrHomeFull):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, sandboxes.ErrTransferUnsupported):
 		return huma.Error503ServiceUnavailable(err.Error())

@@ -566,6 +566,17 @@ func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadReques
 	return out, json.Unmarshal(line, &out)
 }
 
+// ErrHomeFull means the guest's home disk has no room for a file Studio writes there. What is
+// in the home stays as it was.
+var ErrHomeFull = errors.New("the home disk is full; free some space from a terminal, such as with rm -rf ~/.cache ~/.npm, or give the sandbox a bigger home disk")
+
+func homeWriteError(err error) error {
+	if agentproto.NoSpace(err) {
+		return ErrHomeFull
+	}
+	return err
+}
+
 // WriteHomeFiles writes harness config files into the terminal user's home in the guest.
 func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error {
 	// An older guest would write a Keys file whole over the harness's own, and refuse a block
@@ -583,7 +594,7 @@ func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.
 		files = kept
 	}
 	var ok struct{}
-	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeFiles}, agentproto.HomeFiles{Files: files}, &ok)
+	return homeWriteError(h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeFiles}, agentproto.HomeFiles{Files: files}, &ok))
 }
 
 // WriteHomeDir replaces a directory in the terminal user's home as a whole; see
@@ -594,7 +605,7 @@ func (h *Hub) WriteHomeDir(ctx context.Context, id string, dir agentproto.HomeDi
 		return agentproto.ErrGuestOutdated
 	}
 	var ok struct{}
-	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeDir}, dir, &ok)
+	return homeWriteError(h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeDir}, dir, &ok))
 }
 
 // HarnessError is a session start the guest refused because of the harness itself: it is

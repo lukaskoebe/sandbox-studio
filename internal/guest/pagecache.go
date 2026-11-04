@@ -3,6 +3,7 @@
 package guest
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"sync/atomic"
@@ -64,7 +65,7 @@ const maxPending = 256
 
 // writer returns a writer to the new file f that drops what it wrote every cacheChunk, for a
 // file larger than that, and adds what it writes to copied.
-func (*cacheDropper) writer(f *os.File, copied *atomic.Int64) io.Writer {
+func (*cacheDropper) writer(f *os.File, copied *atomic.Int64) *droppingWriter {
 	return &droppingWriter{f: f, fd: int(f.Fd()), copied: copied}
 }
 
@@ -102,16 +103,26 @@ func dropWritten(fd int, off, length int64) {
 	_ = unix.Fadvise(fd, off, length, unix.FADV_DONTNEED)
 }
 
-// droppingWriter writes a new file and drops each cacheChunk of it it wrote.
+// droppingWriter writes a new file and drops each cacheChunk of it it wrote. A write of nothing
+// but zeros moves past them instead: an archive holds a sparse file's holes as zeros, and
+// writing them can take a disk that the file fits on as it was.
 type droppingWriter struct {
 	f       *os.File
 	fd      int
 	n, done int64 // written, and dropped up to
+	hole    bool  // the last write moved past zeros
 	copied  *atomic.Int64
 }
 
-func (w *droppingWriter) Write(p []byte) (int, error) {
-	n, err := w.f.Write(p)
+func (w *droppingWriter) Write(p []byte) (n int, err error) {
+	w.hole = allZero(p)
+	if w.hole {
+		if _, err = w.f.Seek(int64(len(p)), io.SeekCurrent); err == nil {
+			n = len(p)
+		}
+	} else {
+		n, err = w.f.Write(p)
+	}
 	w.n += int64(n)
 	w.copied.Add(int64(n))
 	if w.n-w.done >= cacheChunk {
@@ -119,4 +130,16 @@ func (w *droppingWriter) Write(p []byte) (int, error) {
 		w.done = w.n
 	}
 	return n, err
+}
+
+// finish gives a file that ends in a hole its size.
+func (w *droppingWriter) finish() error {
+	if !w.hole {
+		return nil
+	}
+	return w.f.Truncate(w.n)
+}
+
+func allZero(p []byte) bool {
+	return len(p) > 0 && p[0] == 0 && bytes.Equal(p[1:], p[:len(p)-1])
 }

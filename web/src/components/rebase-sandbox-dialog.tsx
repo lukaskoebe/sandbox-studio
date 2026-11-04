@@ -208,7 +208,23 @@ function RebaseForm({
       </fieldset>
 
       {selected ? (
-        <TemplateResources resources={selected.resources} />
+        <TemplateResources
+          resources={{
+            ...selected.resources,
+            // A rebase doesn't shrink a disk.
+            workspaceMiB: Math.max(
+              selected.resources.workspaceMiB,
+              sandbox.workspaceMiB
+            ),
+            dockerMiB: Math.max(
+              selected.resources.dockerMiB,
+              sandbox.dockerMiB
+            ),
+            homeMiB:
+              selected.resources.homeMiB &&
+              Math.max(selected.resources.homeMiB, sandbox.homeMiB ?? 0),
+          }}
+        />
       ) : (
         choice === "" && (
           <p className="text-muted-foreground">

@@ -466,7 +466,11 @@ func (im *importer) entry(h *tar.Header, r io.Reader) error {
 		}
 		f := os.NewFile(uintptr(fd), name)
 		var n int64
-		n, err = io.Copy(im.cache.writer(f, &im.copied), r)
+		w := im.cache.writer(f, &im.copied)
+		n, err = io.Copy(w, r)
+		if err == nil {
+			err = w.finish()
+		}
 		if err == nil {
 			im.cache.written(fd, n)
 			err = setMetadata(fd, h)

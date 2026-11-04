@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -83,5 +84,49 @@ func TestCopiesLeaveTheirFilesOutOfTheCache(t *testing.T) {
 		if n := cachedPages(t, p); n != 0 {
 			t.Errorf("import: %s has %d pages in the cache", name, n)
 		}
+	}
+}
+
+// A sparse file an export reads as zeros takes no more on the disk it is imported to, whether its
+// hole is in the middle or at the end.
+func TestImportKeepsHoles(t *testing.T) {
+	src := t.TempDir()
+	const size = 64 << 20
+	for name, at := range map[string]int64{"middle": size, "end": 0} {
+		f, err := os.Create(filepath.Join(src, name))
+		must(t, err)
+		_, err = f.WriteAt([]byte("start"), at)
+		must(t, err)
+		must(t, f.Truncate(size+5))
+		must(t, f.Close())
+	}
+	must(t, os.WriteFile(filepath.Join(src, "zeros"), make([]byte, 100), 0o644))
+	var archive bytes.Buffer
+	must(t, ExportWorkspaceAs(src, &archive, &bytes.Buffer{}, Zstd))
+
+	dst := t.TempDir()
+	must(t, ImportWorkspace(dst, &archive, nil))
+	for name, at := range map[string]int64{"middle": size, "end": 0} {
+		p := filepath.Join(dst, name)
+		st, err := os.Stat(p)
+		must(t, err)
+		if st.Size() != size+5 {
+			t.Errorf("%s: size %d", name, st.Size())
+		}
+		if taken := st.Sys().(*syscall.Stat_t).Blocks * 512; taken > 1<<20 {
+			t.Errorf("%s takes %d bytes", name, taken)
+		}
+		f, err := os.Open(p)
+		must(t, err)
+		head := make([]byte, 5)
+		_, err = f.ReadAt(head, at)
+		must(t, err)
+		must(t, f.Close())
+		if string(head) != "start" {
+			t.Errorf("%s: %q at %d", name, head, at)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(dst, "zeros")); err != nil || !bytes.Equal(b, make([]byte, 100)) {
+		t.Errorf("zeros: %d bytes, %v", len(b), err)
 	}
 }

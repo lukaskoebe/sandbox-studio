@@ -68,10 +68,13 @@ resumed.
   `node_modules` (334 MB, 34,000 files, 68 MB as zstd tar) goes at 48 MB/s uploaded and 30
   MB/s over stdout, where its compression hides most of the difference.
 - The workspace stream is limited to the target's workspace size, the home stream to the
-  target's home disk (`homeMiB`, 4 GiB unless set), and Docker's to its Docker disk. A home
-  that doesn't fit fails with a message that says to delete caches, or give the sandbox a
-  bigger home disk, and try again; Docker's data, with one that says to prune. If either
-  side fails, the copy fails.
+  target's home disk (`homeMiB`, 4 GiB unless set), and Docker's to its Docker disk. That counts
+  compressed bytes, so a tree can also fill the target's disk during the import, and either way
+  it fails with the same message: a home's says to delete caches, or give the sandbox a bigger
+  home disk, and try again; Docker's says to prune. If either side fails, the copy fails.
+- A sparse file stays sparse: the archive holds its holes as zeros, and the import moves past a
+  run of zeros instead of writing it. So a file larger than its disk still copies, though the
+  export takes the time to read the holes.
 - A copy tells how far it got (`Progress.Copy`). A zstd export first adds up the sizes of the
   tree's files, reading only their status, and writes the sum in the PAX record `STUDIO.size`
   of a global header at the start of the archive; an export file stays gzip, without it. The
@@ -100,7 +103,9 @@ resumed.
 `"keepTools": true` to [keep the mise tools](#keeping-tools)), or
 without a template ID onto the current base image, which is what new sandboxes get. A rebase
 onto the base keeps the sandbox's resources; one from a template sandbox drops the template's
-tools. The rebase dialog offers the base first, then the ready templates, and picks the
+tools. A rebase onto a template takes its CPUs and memory and doesn't shrink a disk: a disk the
+template makes smaller than the sandbox's, as one resized for its data is, keeps the sandbox's
+size, and one it makes larger grows. The rebase dialog offers the base first, then the ready templates, and picks the
 sandbox's template rebuilt on the current base when there is one
 ([base images](sandboxes.md#which-base-a-sandbox-runs)).
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -18,7 +19,7 @@ var (
 	// running, resume needs it suspended, and start refuses a suspended one.
 	ErrLifecycleState = errors.New("sandbox must be running or stopped")
 	// ErrWorkspaceTooLarge means the copied workspace does not fit the target's disk.
-	ErrWorkspaceTooLarge = errors.New("workspace does not fit the target disk")
+	ErrWorkspaceTooLarge = errors.New("/workspace does not fit the workspace disk; delete what it no longer needs, or give it a bigger workspace disk, and try again")
 	// ErrHomeTooLarge means the copied home directory does not fit the target's home disk.
 	ErrHomeTooLarge = errors.New("home directory /home/agent does not fit the home disk; delete caches in it, or give it a bigger home disk, and try again")
 	// ErrToolsTooLarge means the toolchains a rebase would keep are more than toolsLimit.
@@ -80,7 +81,9 @@ func copyTools(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM
 
 // copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
 // archive passes through the host in memory and is never stored there. It fails once the
-// archive exceeds limit, or when either side fails. report, if set, is told how far it got.
+// archive exceeds limit, or when either side fails: with limit's error if dst's disk fills up,
+// as the archive's compressed size says little about what its files take there. report, if
+// set, is told how far it got.
 func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, limit *limitWriter, report copyReport) error {
 	var progress func(copied, total int64)
 	if report != nil {
@@ -102,12 +105,17 @@ func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM,
 		exported <- err
 	}()
 	err := rt.ImportTree(ctx, dst, tree, pr, progress)
+	full := agentproto.NoSpace(err)
 	if err != nil {
 		err = fmt.Errorf("import %s: %w", tree, err)
 		cancel()
 	}
 	pr.CloseWithError(fmt.Errorf("%s import ended", tree))
-	return errors.Join(<-exported, err)
+	exportErr := <-exported
+	if full {
+		return limit.err
+	}
+	return errors.Join(exportErr, err)
 }
 
 // limitWriter fails with err once more than left bytes are written.

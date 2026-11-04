@@ -1,7 +1,6 @@
 package sandboxes
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -38,8 +37,11 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keep
 			if resolved, err = m.templateResources(ctx, envID, templateID); err != nil {
 				return store.RebaseOperation{}, err
 			}
-			// A template that names no home size keeps the sandbox's.
-			resolved.HomeMiB = cmp.Or(resolved.HomeMiB, int64(sb.HomeMiB))
+			// A rebase moves all that a disk holds, so a template's smaller disk, or one it
+			// doesn't name, keeps the sandbox's: one resized to hold more would no longer fit.
+			resolved.WorkspaceMiB = max(resolved.WorkspaceMiB, int64(sb.WorkspaceMiB))
+			resolved.DockerMiB = max(resolved.DockerMiB, int64(sb.DockerMiB))
+			resolved.HomeMiB = max(resolved.HomeMiB, int64(sb.HomeMiB))
 		}
 		// The home disk moves with the sandbox only onto a template that has one. A sandbox with
 		// a home disk is refused rather than losing its home.

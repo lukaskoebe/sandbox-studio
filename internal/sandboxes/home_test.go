@@ -3,6 +3,7 @@ package sandboxes
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
@@ -79,13 +80,24 @@ func TestHomeDiskSize(t *testing.T) {
 		if view.HomeMiB != 6144 || tf.specs[VMName(view.Sandbox)].HomeMiB != 6144 {
 			t.Fatalf("rebased home = %d, spec %d", view.HomeMiB, tf.specs[VMName(view.Sandbox)].HomeMiB)
 		}
-		// ...and one that names it gives its own.
+		// ...and so does one that names a smaller one, which what a resize made room for might
+		// not fit...
 		res := rebaseResources
 		res.HomeMiB = 2048
+		res.WorkspaceMiB = int64(view.WorkspaceMiB / 2)
+		workspace := view.WorkspaceMiB
 		if view, err = rebaseNow(f, f.sandbox.ID, rebaseTemplate(t, f, res).ID); err != nil {
 			t.Fatal(err)
 		}
-		if view.HomeMiB != 2048 || tf.specs[VMName(view.Sandbox)].HomeMiB != 2048 {
+		if view.HomeMiB != 6144 || tf.specs[VMName(view.Sandbox)].HomeMiB != 6144 || view.WorkspaceMiB != workspace {
+			t.Fatalf("rebased home = %d, spec %d, workspace %d", view.HomeMiB, tf.specs[VMName(view.Sandbox)].HomeMiB, view.WorkspaceMiB)
+		}
+		// ...while a larger one grows it.
+		res.HomeMiB = 8192
+		if view, err = rebaseNow(f, f.sandbox.ID, rebaseTemplate(t, f, res).ID); err != nil {
+			t.Fatal(err)
+		}
+		if view.HomeMiB != 8192 || tf.specs[VMName(view.Sandbox)].HomeMiB != 8192 {
 			t.Fatalf("rebased home = %d, spec %d", view.HomeMiB, tf.specs[VMName(view.Sandbox)].HomeMiB)
 		}
 	})
@@ -164,5 +176,25 @@ func TestExportNamesABiggerHome(t *testing.T) {
 	_, manifest := exportToBuffer(t, f, f.sandbox.ID)
 	if manifest.Resources.HomeMiB != 8192 || manifest.HomeLimit() != 8192<<20 {
 		t.Fatalf("manifest resources = %+v, home limit %d", manifest.Resources, manifest.HomeLimit())
+	}
+}
+
+// A disk that fills up during the import says which disk and what to do, whatever the guest's
+// error around it says.
+func TestCopyToAFullDiskSaysSo(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	src, dst := runtime.OwnedVM{Name: "src"}, runtime.OwnedVM{Name: "dst"}
+	tf.setStatus("src", runtime.StatusRunning)
+	tf.setStatus("dst", runtime.StatusRunning)
+	tf.setHome("src", "home")
+	tf.fail("import-home:dst", errors.New(`home-import: io error: Broken pipe (os error 32) (studio-agent: home-import: "a": write a: no space left on device)`))
+	if err := copyTrees(f.ctx, tf, src, dst, 1024, 1024, nil); !errors.Is(err, ErrHomeTooLarge) {
+		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
+	}
+	tf.fail("import-home:dst", errors.New("home-import: some other failure"))
+	err := copyTrees(f.ctx, tf, src, dst, 1024, 1024, nil)
+	if errors.Is(err, ErrHomeTooLarge) || err == nil || !strings.Contains(err.Error(), "some other failure") {
+		t.Fatalf("err = %v", err)
 	}
 }

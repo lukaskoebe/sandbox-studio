@@ -216,6 +216,11 @@ type HomeDir struct {
 // KindHomeDir; the host falls back to what that guest knows.
 var ErrGuestOutdated = errors.New("the sandbox's agent is from another Studio version")
 
+// NoSpace reports whether err, which came from the guest as text, says that a disk there is full.
+func NoSpace(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "no space left on device")
+}
+
 // Limits of a HomeDir request.
 const (
 	MaxHomeDirFiles = 4000
