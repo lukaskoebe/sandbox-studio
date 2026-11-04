@@ -63,6 +63,28 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   ).toBeVisible()
   await expect(lines.getByText("3 open · 1 closed")).toBeVisible()
 
+  // The last half hour: the terminals' output was counted, and the chat's question to the user
+  // is flagged as waiting.
+  const half = lines.getByRole("button", { name: "30m" })
+  await half.click()
+  await expect(half).toHaveAttribute("aria-pressed", "true")
+  await expect
+    .poll(
+      async () =>
+        (await api.json<{ activity: { kind: string; key: string }[] }>(
+          "GET",
+          `/api/environments/${env}/sessions?minutes=30`
+        ))!.activity.some(
+          (a) => a.kind === "terminal" && a.key.startsWith("main@")
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(true)
+  await expect(
+    lines.locator("title").filter({ hasText: /asked you: .+ → waiting/ })
+  ).not.toHaveCount(0)
+  await lines.getByRole("button", { name: "2h" }).click()
+
   // A sandbox folds into one line, and unfolds again.
   await lines.getByRole("button", { name: `Fold ${sandbox}` }).click()
   await expect(

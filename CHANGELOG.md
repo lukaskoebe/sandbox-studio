@@ -2,12 +2,16 @@
 
 ## Unreleased
 
-- Home draws each sandbox as a line over the last 2, 8 or 24 hours, with every session branching
-  off as it opens and rejoining as it closes: chats above it with their turns, terminals below
-  with the programs that ran in them, browser sessions with the stretches you drove, and
-  previews dotted, three or more that open together on one branch. Forks start their own line,
-  checkpoints and merges sit on it, and a branch opens its thread or tab. It replaces the list
-  of chats working now.
+- Home draws each sandbox as a line over the last 30 minutes, hour, 2, 8 or 24 hours, with every
+  session branching off as it opens and rejoining as it closes: chats above it with their turns,
+  terminals below with the programs that ran in them, browser sessions with the stretches you
+  drove, and previews dotted, three or more that open together on one branch. A branch widens
+  with how busy it was (a chat's tool calls, a terminal's output, browser actions, a preview's
+  requests, minute by minute in its tooltip), and flags name what you would want to know: a
+  failed command, a question for you with how long it waited, a push, a blocked request. Forks
+  start their own line, checkpoints and merges sit on it, and a branch opens its thread or tab.
+  The quiet style draws it in sans with rounded widths. It replaces the list of chats working
+  now.
 - A link to a sandbox's Preview tab while previews are off opens the tab anyway, saying that
   previews are off, listing the ports and offering to turn them on, where before it showed the
   terminal instead.

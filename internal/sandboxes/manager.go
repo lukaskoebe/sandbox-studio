@@ -91,6 +91,7 @@ type Manager struct {
 	mutating sync.Map
 
 	terminals  terminalWatch // see WatchTerminals
+	activity   activityLog   // see CountPreview and noteOutput
 	imports    importState
 	importPoll time.Duration                // build status poll interval; 0 means 1s
 	diskFree   func(string) (uint64, error) // overrides the free-disk probe in tests

@@ -199,6 +199,7 @@ func (m *Manager) noteTerminals(envID, id string, list []Terminal, at time.Time)
 	prev, had := w.last[id]
 	w.last[id] = watchedTerminals{env: envID, at: at, list: list}
 	w.mu.Unlock()
+	m.noteOutput(id, prev.list, list, prev.at, at)
 	if !had || summary(prev.list) != summary(list) {
 		m.publishTerminals(envID, id)
 	}
@@ -348,6 +349,7 @@ func (m *Manager) watchTerminals(ctx context.Context) {
 	if complete {
 		m.closeSpansExcept(ctx, watched, time.Now())
 	}
+	m.flushActivity(ctx, time.Now())
 	m.terminals.mu.Lock()
 	var gone []string
 	for id := range m.terminals.last {

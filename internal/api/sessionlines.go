@@ -18,6 +18,9 @@ type SessionLines struct {
 	Spans  []store.SessionSpan  `json:"spans" doc:"The terminals, programs, browser sessions, takeovers and ports open at some time in the window, oldest first"`
 	Turns  []store.ChatTurnSpan `json:"turns" doc:"The chat turns that ran at some time in the window, oldest first, at most 2000"`
 	Events []store.SandboxEvent `json:"events" doc:"The sandboxes' lineage events in the window: creates, forks, checkpoints, merges and the like"`
+	// Activity and Flags are what a branch's width and its worded marks show (mock L4, Pulse).
+	Activity []store.SessionActivity `json:"activity" doc:"How busy each session was, by minute, oldest first: chats' tool calls, terminals' output, browser actions, preview requests"`
+	Flags    []store.SessionFlag     `json:"flags" doc:"What is worth a word on the lines, oldest first: questions for the user, blocked requests, pushes, failed commands"`
 }
 
 func (s *Server) registerSessionLines(api huma.API) {
@@ -25,16 +28,21 @@ func (s *Server) registerSessionLines(api huma.API) {
 		OperationID: "sessionLines", Method: http.MethodGet, Path: "/api/environments/{env}/sessions", Tags: []string{"sandboxes"},
 		Description: "What the environment's sandboxes had open over the last hours, for Home: chat turns, terminals and the programs " +
 			"in them, browser sessions and the user's turns in them, ports listening, and lineage events. Terminals and ports are " +
-			"seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days.",
+			"seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days. Activity counts " +
+			"each session's work by minute, and flags mark the questions, blocked requests, pushes and failed commands.",
 	}, func(ctx context.Context, in *struct {
-		Env   string `path:"env" doc:"Environment ID"`
-		Hours int    `query:"hours" minimum:"1" maximum:"336" default:"24" doc:"How far back the window starts"`
+		Env     string `path:"env" doc:"Environment ID"`
+		Hours   int    `query:"hours" minimum:"1" maximum:"336" default:"24" doc:"How far back the window starts"`
+		Minutes int    `query:"minutes" minimum:"0" maximum:"1440" doc:"How far back the window starts, in minutes, for windows shorter than an hour; overrides hours when set"`
 	}) (*struct{ Body SessionLines }, error) {
 		if _, err := s.Store.Environment(ctx, in.Env); err != nil {
 			return nil, apiError(err)
 		}
 		until := time.Now()
 		since := until.Add(-time.Duration(in.Hours) * time.Hour)
+		if in.Minutes > 0 {
+			since = until.Add(-time.Duration(in.Minutes) * time.Minute)
+		}
 		out := SessionLines{Since: since, Until: until}
 		var err error
 		if out.Spans, err = s.Store.SessionSpans(ctx, in.Env, since, until); err != nil {
@@ -44,6 +52,12 @@ func (s *Server) registerSessionLines(api huma.API) {
 			return nil, apiError(err)
 		}
 		if out.Events, err = s.Store.EnvironmentEvents(ctx, in.Env, since, until); err != nil {
+			return nil, apiError(err)
+		}
+		if out.Activity, err = s.Store.SessionActivityIn(ctx, in.Env, since, until); err != nil {
+			return nil, apiError(err)
+		}
+		if out.Flags, err = s.Store.SessionFlags(ctx, in.Env, since, until); err != nil {
 			return nil, apiError(err)
 		}
 		return &struct{ Body SessionLines }{out}, nil

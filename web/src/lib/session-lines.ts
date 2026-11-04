@@ -4,6 +4,7 @@ export type SessionLinesData = components["schemas"]["SessionLines"]
 type Span = components["schemas"]["SessionSpan"]
 type Turn = components["schemas"]["ChatTurnSpan"]
 type LineageEvent = components["schemas"]["SandboxEvent"]
+type SessionFlag = components["schemas"]["SessionFlag"]
 
 /** What a branch is: which side of the line it takes, its color and its label follow. */
 export type BranchKind = "chat" | "terminal" | "browser" | "preview"
@@ -16,6 +17,9 @@ export type Block = {
   tone: "turn" | "live" | "waiting" | "stopped" | "run" | "drive"
   label?: string
 }
+
+/** How busy a session was in one minute: tool calls, output, actions or requests. */
+export type Beat = { at: number; count: number; errors: number }
 
 /** A session as a branch off its sandbox's line, from when it opened to when it closed. */
 export type Branch = {
@@ -30,6 +34,8 @@ export type Branch = {
   /** The user's own session, such as a shell they opened. */
   yours: boolean
   blocks: Block[]
+  /** How busy it was, by minute, oldest first; its width follows them. */
+  beats: Beat[]
   /** A group's previews, which opened around the same time (groupPreviews). */
   group?: Branch[]
   /** What a click opens. */
@@ -97,6 +103,26 @@ export function buildBranches(
   }
   const chatOwner = new Map<string, string>()
 
+  // Activity, by session: chats by ID and browsers by teammate, wherever they ran; terminals
+  // and previews by their sandbox and span key.
+  const beatsOf = new Map<string, Beat[]>()
+  const beatKey = (kind: string, sandbox: string, key: string) =>
+    kind === "chat" || kind === "browser"
+      ? `${kind}\x00\x00${key}`
+      : `${kind}\x00${sandbox}\x00${key}`
+  for (const a of data.activity ?? []) {
+    const k = beatKey(a.kind, a.sandboxId, a.key)
+    const beat = { at: ms(a.at)!, count: a.count, errors: a.errors ?? 0 }
+    const list = beatsOf.get(k)
+    if (list) list.push(beat)
+    else beatsOf.set(k, [beat])
+  }
+  /** The beats of a session from start to end, give or take the minute they fall in. */
+  const beats = (k: string, start: number, end?: number) =>
+    (beatsOf.get(k) ?? []).filter(
+      (b) => b.at + 60_000 > start && (end === undefined || b.at <= end)
+    )
+
   // Chats: one branch per run of turns.
   const byChat = new Map<string, Turn[]>()
   for (const t of data.turns ?? []) {
@@ -140,6 +166,11 @@ export function buildBranches(
                   : "turn",
           }
         }),
+        beats: beats(
+          beatKey("chat", "", chatId),
+          ms(first.startedAt)!,
+          open ? undefined : last
+        ),
         link: { to: "chat", teammateId: first.teammateId, chatId },
       })
       group = []
@@ -191,6 +222,7 @@ export function buildBranches(
             : "you",
           yours: !agent,
           blocks: blocksOf(s, "run"),
+          beats: beats(beatKey("terminal", s.sandboxId, s.key), start, end),
           link: { to: "screen", tab: "terminal", term: name },
         })
         break
@@ -205,6 +237,9 @@ export function buildBranches(
           who: s.teammateId ? teammateName(s.teammateId) : undefined,
           yours: false,
           blocks: blocksOf(s, "drive"),
+          beats: s.teammateId
+            ? beats(beatKey("browser", "", s.teammateId), start, end)
+            : [],
           link: { to: "screen", tab: "browser" },
         })
         break
@@ -217,6 +252,7 @@ export function buildBranches(
           title: s.label || `:${s.key}`,
           yours: false,
           blocks: [],
+          beats: beats(beatKey("preview", s.sandboxId, s.key), start, end),
           link: {
             to: "screen",
             tab: "preview",
@@ -266,6 +302,7 @@ export function groupPreviews(branches: Branch[]): Branch[] {
         title: `${crowd.length} previews`,
         yours: false,
         blocks: [],
+        beats: crowd.flatMap((b) => b.beats).sort((a, b) => a.at - b.at),
         group: crowd,
         link: newest.link,
       })
@@ -378,4 +415,142 @@ export function packLanes(
     } else lanes.push({ end: to, branches: [b] })
   }
   return lanes.map((l) => l.branches)
+}
+
+/** Something on a sandbox's line worth a word: a question for the user, a blocked request, a
+ * push or a failed command. */
+export type Flag = {
+  at: number
+  /** When a question was answered; unset while it waits. */
+  until?: number
+  kind: SessionFlag["kind"]
+  /** The chat it belongs to, whose branch it goes on. */
+  chatId?: string
+  text: string
+  /** All of it, for the tooltip. */
+  detail: string
+  /** A failed push, a denied question. */
+  bad: boolean
+}
+
+/** What a request for the user asked, in a word or two. */
+function asked(f: SessionFlag) {
+  switch (f.subject) {
+    case "git.push":
+      // "GitHub/owner/repo:branch" → "repo:branch"
+      return `push ${f.label.slice(f.label.lastIndexOf("/") + 1)}?`
+    case "chat.permission":
+      return `${f.label}?`
+    case "network":
+    case "network.request":
+      return `reach ${f.label}?`
+    case "browser.action":
+    case "browser.credential":
+    case "browser.control":
+    case "browser.show":
+      return "browser?"
+    default:
+      return f.label ? `${f.label}?` : "a question"
+  }
+}
+
+const minutes = (d: number) => {
+  const m = Math.round(d / 60_000)
+  return m < 1
+    ? "at once"
+    : m < 60
+      ? `${m}m later`
+      : `${Math.round(m / 60)}h later`
+}
+
+/** The flags of each sandbox, oldest first. */
+export function buildFlags(flags: SessionFlag[]): Map<string, Flag[]> {
+  const out = new Map<string, Flag[]>()
+  for (const f of flags) {
+    const at = ms(f.at)!
+    const until = ms(f.until)
+    let text: string
+    let detail: string
+    let bad = false
+    switch (f.kind) {
+      case "failed":
+        text = `✗ ${f.label}`
+        detail = `${f.label} failed`
+        bad = true
+        break
+      case "blocked":
+        text = `⚠ blocked ${f.label}`
+        detail =
+          `blocked a request to ${f.label}` +
+          ((f.count ?? 0) > 1 ? `, tried ${f.count} times` : "")
+        break
+      case "push":
+        bad = f.state === "failed" || f.state === "rejected"
+        text = `▲ ${bad ? "push failed" : "pushed"} ${f.label}`
+        detail = text.slice(2)
+        break
+      case "asked": {
+        const answer =
+          until === undefined
+            ? "waiting"
+            : f.state === "approved"
+              ? `yes, ${minutes(until - at)}`
+              : f.state === "denied"
+                ? `no, ${minutes(until - at)}`
+                : `dismissed, ${minutes(until - at)}`
+        bad = f.state === "denied"
+        text = `⏸ ${asked(f)} → ${answer}`
+        detail = `asked you: ${f.label || f.subject} → ${answer}`
+        break
+      }
+    }
+    const flag: Flag = {
+      at,
+      until,
+      kind: f.kind,
+      chatId: f.chatId,
+      text,
+      detail,
+      bad,
+    }
+    const list = out.get(f.sandboxId)
+    if (list) list.push(flag)
+    else out.set(f.sandboxId, [flag])
+  }
+  return out
+}
+
+/** A stretch of a branch's activity: the beats from one time to another, summed. */
+export type Pulse = { from: number; to: number; count: number; errors: number }
+
+/**
+ * A branch's beats summed into buckets of bucket ms counted from origin, from start to end:
+ * every bucket, empty ones included, so a drawn width falls back to the line between bursts.
+ * Beats outside start and end go in the first or last bucket.
+ */
+export function pulses(
+  beats: Beat[],
+  origin: number,
+  bucket: number,
+  start: number,
+  end: number
+): Pulse[] {
+  const first = Math.floor((start - origin) / bucket)
+  const n = Math.min(
+    2000,
+    Math.max(1, Math.floor((end - origin) / bucket) - first + 1)
+  )
+  const out: Pulse[] = Array.from({ length: n }, (_, i) => ({
+    from: origin + (first + i) * bucket,
+    to: origin + (first + i + 1) * bucket,
+    count: 0,
+    errors: 0,
+  }))
+  for (const b of beats) {
+    const i = Math.floor((b.at - origin) / bucket) - first
+    const p = out[Math.max(0, Math.min(n - 1, i))]
+    p.count += b.count
+    p.errors += b.errors
+  }
+  return out
 }

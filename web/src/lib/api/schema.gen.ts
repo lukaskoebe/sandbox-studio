@@ -2208,7 +2208,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What the environment's sandboxes had open over the last hours, for Home: chat turns, terminals and the programs in them, browser sessions and the user's turns in them, ports listening, and lineage events. Terminals and ports are seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days. */
+        /** @description What the environment's sandboxes had open over the last hours, for Home: chat turns, terminals and the programs in them, browser sessions and the user's turns in them, ports listening, and lineage events. Terminals and ports are seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days. Activity counts each session's work by minute, and flags mark the questions, blocked requests, pushes and failed commands. */
         get: operations["sessionLines"];
         put?: never;
         post?: never;
@@ -6011,9 +6011,60 @@ export interface components {
             /** Format: int64 */
             windows: number;
         };
+        SessionActivity: {
+            /**
+             * Format: date-time
+             * @description The minute's start
+             */
+            at: string;
+            /**
+             * Format: int64
+             * @description Tool calls of a chat, looks that found a terminal had printed, actions in a browser, requests a preview answered
+             */
+            count: number;
+            /**
+             * Format: int64
+             * @description Of those, failed tool calls, failed or denied browser actions, and preview answers of 500 and up
+             */
+            errors?: number;
+            /** @description The session: a chat's ID, a terminal's span key, the teammate whose browser it is, or a port */
+            key: string;
+            /** @enum {string} */
+            kind: "chat" | "terminal" | "browser" | "preview";
+            sandboxId: string;
+        };
+        SessionFlag: {
+            /** Format: date-time */
+            at: string;
+            /** @description The chat it belongs to, when there is one */
+            chatId?: string;
+            /**
+             * Format: int64
+             * @description How often a blocked request was tried
+             */
+            count?: number;
+            /** @enum {string} */
+            kind: "asked" | "blocked" | "push" | "failed";
+            /** @description What it was: a host, a branch, a command */
+            label: string;
+            sandboxId: string;
+            /** @description A question's answer (pending, approved, denied, dismissed), or a push's end (pushed, failed, rejected) */
+            state?: string;
+            /** @description A question's kind, such as git.push or chat.permission */
+            subject?: string;
+            /**
+             * Format: date-time
+             * @description When a question was answered; unset while it waits
+             */
+            until?: string;
+        };
         SessionLines: {
+            /** @description How busy each session was, by minute, oldest first: chats' tool calls, terminals' output, browser actions, preview requests */
+            activity: components["schemas"]["SessionActivity"][] | null;
             /** @description The sandboxes' lineage events in the window: creates, forks, checkpoints, merges and the like */
             events: components["schemas"]["SandboxEvent"][] | null;
+            /** @description What is worth a word on the lines, oldest first: questions for the user, blocked requests, pushes, failed commands */
+            flags: components["schemas"]["SessionFlag"][] | null;
             /** Format: date-time */
             since: string;
             /** @description The terminals, programs, browser sessions, takeovers and ports open at some time in the window, oldest first */
@@ -12376,6 +12427,8 @@ export interface operations {
             query?: {
                 /** @description How far back the window starts */
                 hours?: number;
+                /** @description How far back the window starts, in minutes, for windows shorter than an hour; overrides hours when set */
+                minutes?: number;
             };
             header?: never;
             path: {

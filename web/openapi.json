@@ -8502,13 +8502,131 @@
         ],
         "type": "object"
       },
+      "SessionActivity": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "The minute's start",
+            "format": "date-time",
+            "type": "string"
+          },
+          "count": {
+            "description": "Tool calls of a chat, looks that found a terminal had printed, actions in a browser, requests a preview answered",
+            "format": "int64",
+            "type": "integer"
+          },
+          "errors": {
+            "description": "Of those, failed tool calls, failed or denied browser actions, and preview answers of 500 and up",
+            "format": "int64",
+            "type": "integer"
+          },
+          "key": {
+            "description": "The session: a chat's ID, a terminal's span key, the teammate whose browser it is, or a port",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "chat",
+              "terminal",
+              "browser",
+              "preview"
+            ],
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandboxId",
+          "kind",
+          "key",
+          "at",
+          "count"
+        ],
+        "type": "object"
+      },
+      "SessionFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chatId": {
+            "description": "The chat it belongs to, when there is one",
+            "type": "string"
+          },
+          "count": {
+            "description": "How often a blocked request was tried",
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "asked",
+              "blocked",
+              "push",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "description": "What it was: a host, a branch, a command",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "description": "A question's answer (pending, approved, denied, dismissed), or a push's end (pushed, failed, rejected)",
+            "type": "string"
+          },
+          "subject": {
+            "description": "A question's kind, such as git.push or chat.permission",
+            "type": "string"
+          },
+          "until": {
+            "description": "When a question was answered; unset while it waits",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandboxId",
+          "kind",
+          "at",
+          "label"
+        ],
+        "type": "object"
+      },
       "SessionLines": {
         "additionalProperties": false,
         "properties": {
+          "activity": {
+            "description": "How busy each session was, by minute, oldest first: chats' tool calls, terminals' output, browser actions, preview requests",
+            "items": {
+              "$ref": "#/components/schemas/SessionActivity"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "events": {
             "description": "The sandboxes' lineage events in the window: creates, forks, checkpoints, merges and the like",
             "items": {
               "$ref": "#/components/schemas/SandboxEvent"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "flags": {
+            "description": "What is worth a word on the lines, oldest first: questions for the user, blocked requests, pushes, failed commands",
+            "items": {
+              "$ref": "#/components/schemas/SessionFlag"
             },
             "type": [
               "array",
@@ -8550,7 +8668,9 @@
           "until",
           "spans",
           "turns",
-          "events"
+          "events",
+          "activity",
+          "flags"
         ],
         "type": "object"
       },
@@ -19689,7 +19809,7 @@
     },
     "/api/environments/{env}/sessions": {
       "get": {
-        "description": "What the environment's sandboxes had open over the last hours, for Home: chat turns, terminals and the programs in them, browser sessions and the user's turns in them, ports listening, and lineage events. Terminals and ports are seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days.",
+        "description": "What the environment's sandboxes had open over the last hours, for Home: chat turns, terminals and the programs in them, browser sessions and the user's turns in them, ports listening, and lineage events. Terminals and ports are seen every 10 s while a tab is open and every minute otherwise; closed sessions are kept for 14 days. Activity counts each session's work by minute, and flags mark the questions, blocked requests, pushes and failed commands.",
         "operationId": "sessionLines",
         "parameters": [
           {
@@ -19713,6 +19833,19 @@
               "format": "int64",
               "maximum": 336,
               "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "How far back the window starts, in minutes, for windows shorter than an hour; overrides hours when set",
+            "explode": false,
+            "in": "query",
+            "name": "minutes",
+            "schema": {
+              "description": "How far back the window starts, in minutes, for windows shorter than an hour; overrides hours when set",
+              "format": "int64",
+              "maximum": 1440,
+              "minimum": 0,
               "type": "integer"
             }
           }

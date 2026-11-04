@@ -102,9 +102,11 @@ func (m *Manager) closeSpansExcept(ctx context.Context, running map[string]bool,
 // spanDays is how long closed spans are kept.
 const spanDays = 14
 
-// pruneSpans deletes the spans that closed more than spanDays ago.
+// pruneSpans deletes the spans that closed more than spanDays ago, and the activity of
+// those days.
 func (m *Manager) pruneSpans(ctx context.Context, at time.Time) {
 	if m.Store != nil {
 		_ = m.Store.PruneSessionSpans(ctx, at.AddDate(0, 0, -spanDays))
+		_ = m.Store.PruneSessionActivity(ctx, at.AddDate(0, 0, -spanDays))
 	}
 }

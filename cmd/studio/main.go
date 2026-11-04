@@ -578,7 +578,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
 	registerControl(mux, st, engine, gw)
-	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
+	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mgr.CountPreview, mux)))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up
 	// the shutdown.

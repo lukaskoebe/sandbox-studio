@@ -44,8 +44,13 @@ func Parse(hostport string) (id string, port int, ok bool) {
 	return id, port, true
 }
 
-// Route sends preview hosts to a proxy and everything else to next.
-func Route(dial DialFunc, next http.Handler) http.Handler {
+// CountFunc is told of each request a preview answered, with the status it answered; 0 is a
+// connection taken over, such as a WebSocket.
+type CountFunc func(sandboxID string, port, status int)
+
+// Route sends preview hosts to a proxy and everything else to next. count, if set, is told
+// of each request a preview answered.
+func Route(dial DialFunc, count CountFunc, next http.Handler) http.Handler {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			id, port, _ := Parse(pr.In.Host)
@@ -90,13 +95,42 @@ func Route(dial DialFunc, next http.Handler) http.Handler {
 		},
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, _, ok := Parse(r.Host); ok {
-			proxy.ServeHTTP(w, r)
+		if id, port, ok := Parse(r.Host); ok {
+			if count == nil {
+				proxy.ServeHTTP(w, r)
+				return
+			}
+			rec := &statusRecorder{ResponseWriter: w}
+			proxy.ServeHTTP(rec, r)
+			count(id, port, rec.status)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
+
+// statusRecorder keeps the status a preview answered. Unwrap lets http.ResponseController
+// reach the connection, for flushing and for upgrades.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	if r.status == 0 || r.status < 200 {
+		r.status = code
+	}
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 // stripStudioCookies keeps preview authentication credentials away from the guest while
 // leaving the preview application's own cookies intact.

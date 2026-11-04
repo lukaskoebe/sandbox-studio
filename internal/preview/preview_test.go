@@ -48,7 +48,11 @@ func TestRoute(t *testing.T) {
 		gotID, gotPort = id, port
 		return net.Dial("tcp", upstream.Listener.Addr().String())
 	}
-	h := Route(dial, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var counted []string
+	count := func(id string, port, status int) {
+		counted = append(counted, fmt.Sprintf("%s:%d %d", id, port, status))
+	}
+	h := Route(dial, count, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "studio")
 	}))
 
@@ -62,6 +66,13 @@ func TestRoute(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "http://localhost:7878/", nil))
 	if rec.Body.String() != "studio" {
 		t.Fatalf("non-preview host: %q", rec.Body.String())
+	}
+
+	// A port nothing answers on is a 502, which Home's lines count as an error.
+	h = Route(func(context.Context, string, int) (net.Conn, error) { return nil, io.EOF }, count, http.NotFoundHandler())
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "http://8080-sb1.localhost:7878/", nil))
+	if fmt.Sprint(counted) != "[sb1:5173 200 sb1:8080 502]" {
+		t.Fatalf("counted %v", counted)
 	}
 }
 
@@ -81,7 +92,7 @@ func TestRouteCookieBoundary(t *testing.T) {
 
 	h := Route(func(ctx context.Context, _ string, _ int) (net.Conn, error) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
-	}, http.NotFoundHandler())
+	}, nil, http.NotFoundHandler())
 	req := httptest.NewRequest("GET", "http://3000-sb1.localhost:7878/", nil)
 	req.Header.Set("Cookie", webauth.SessionCookie+"=studio; app=kept; "+webauth.PreviewCookie+"=ticket; "+webauth.PreviewFrameCookie+"=ticket")
 	rec := httptest.NewRecorder()
@@ -120,9 +131,11 @@ func TestRouteFiltersUpgradeResponseCookies(t *testing.T) {
 	}))
 	defer upstream.Close()
 
+	// Counting the request leaves the connection to be taken over.
+	counted := make(chan int, 1)
 	proxy := httptest.NewServer(Route(func(ctx context.Context, _ string, _ int) (net.Conn, error) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
-	}, http.NotFoundHandler()))
+	}, func(_ string, _, status int) { counted <- status }, http.NotFoundHandler()))
 	defer proxy.Close()
 	_, studioPort, err := net.SplitHostPort(proxy.Listener.Addr().String())
 	if err != nil {
@@ -151,6 +164,10 @@ func TestRouteFiltersUpgradeResponseCookies(t *testing.T) {
 	setCookies := resp.Cookies()
 	if len(setCookies) != 1 || setCookies[0].Name != "app" || setCookies[0].Value != "kept" {
 		t.Fatalf("upgrade response cookies: got %#v, want only app=kept", setCookies)
+	}
+	conn.Close()
+	if status := <-counted; status >= 500 {
+		t.Fatalf("upgrade counted as %d", status)
 	}
 }
 
@@ -185,7 +202,7 @@ func TestRouteGuardsServiceWorkers(t *testing.T) {
 	dial := func(ctx context.Context, id string, port int) (net.Conn, error) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
 	}
-	h := Route(dial, http.NotFoundHandler())
+	h := Route(dial, nil, http.NotFoundHandler())
 
 	req := httptest.NewRequest("GET", "http://5173-sb1.localhost:7878/sw.js", nil)
 	req.Header.Set("Service-Worker", "script")
