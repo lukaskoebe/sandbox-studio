@@ -3942,14 +3942,49 @@
         ],
         "type": "object"
       },
+      "ForkDefaults": {
+        "additionalProperties": false,
+        "properties": {
+          "docker": {
+            "description": "Copy Docker's images, containers and volumes, which needs the base stopped",
+            "type": "boolean"
+          },
+          "script": {
+            "description": "Run ~/.config/studio/on-fork.sh in a terminal of the fork once it is up",
+            "type": "boolean"
+          },
+          "tools": {
+            "description": "Copy the tools installed with mise use and the global mise config",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "docker",
+          "tools",
+          "script"
+        ],
+        "type": "object"
+      },
       "ForkInBody": {
         "additionalProperties": false,
         "properties": {
+          "docker": {
+            "description": "Also copy Docker's images, containers and volumes, which needs a stopped sandbox. Omitted, it follows the sandbox's fork defaults.",
+            "type": "boolean"
+          },
           "name": {
             "description": "Name of the new sandbox",
             "maxLength": 40,
             "minLength": 1,
             "type": "string"
+          },
+          "script": {
+            "description": "Run ~/.config/studio/on-fork.sh in a terminal of the new sandbox once it is up. Omitted, it follows the sandbox's fork defaults.",
+            "type": "boolean"
+          },
+          "tools": {
+            "description": "Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7502,6 +7537,10 @@
           "environmentId": {
             "type": "string"
           },
+          "forkDefaults": {
+            "$ref": "#/components/schemas/ForkDefaults",
+            "description": "Set on a base: what its forks take unless a fork says otherwise"
+          },
           "forkOf": {
             "description": "The ID of the sandbox this one was forked from, which it can be merged back into",
             "type": "string"
@@ -10888,6 +10927,10 @@
           },
           "environmentId": {
             "type": "string"
+          },
+          "forkDefaults": {
+            "$ref": "#/components/schemas/ForkDefaults",
+            "description": "Set on a base: what its forks take unless a fork says otherwise"
           },
           "forkOf": {
             "description": "The ID of the sandbox this one was forked from, which it can be merged back into",
@@ -17018,6 +17061,122 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/base": {
+      "delete": {
+        "description": "The sandbox itself and its existing forks don't change.",
+        "operationId": "clearSandboxBase",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Stop a sandbox being a base",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "put": {
+        "description": "A base is offered as a starting point for new sandboxes, and its forks copy what these defaults say unless the fork request says otherwise. Calling it again changes them.",
+        "operationId": "setSandboxBase",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkDefaults"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Make a sandbox a base",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/chats": {
       "get": {
         "operationId": "listSandboxChats",
@@ -18083,7 +18242,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/fork": {
       "post": {
-        "description": "Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
+        "description": "Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state and tools are copied when asked for, by the request or the sandbox's fork defaults; Docker state needs a stopped sandbox. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
         "operationId": "forkSandbox",
         "parameters": [
           {

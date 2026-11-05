@@ -86,7 +86,7 @@ func TestForkOfLegacySandboxHasNoHomeDisk(t *testing.T) {
 	tf.setWorkspace(VMName(source.Sandbox), "files")
 	tf.setHome(VMName(source.Sandbox), "root home")
 
-	fork, err := f.manager.Fork(f.ctx, f.env.ID, source.ID, "legacy-fork")
+	fork, err := f.manager.Fork(f.ctx, f.env.ID, source.ID, "legacy-fork", ForkOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

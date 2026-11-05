@@ -651,7 +651,7 @@ func TestRebaseAndForkAreSerialized(t *testing.T) {
 	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrBusy) {
 		t.Fatalf("Rebase err = %v, want ErrBusy", err)
 	}
-	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy"); !errors.Is(err, ErrBusy) {
+	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{}); !errors.Is(err, ErrBusy) {
 		t.Fatalf("Fork err = %v, want ErrBusy", err)
 	}
 }
@@ -669,7 +669,7 @@ func TestForkCopiesWorkspaceAndHomeIntoNewSandbox(t *testing.T) {
 			tf.setWorkspace(source, "files")
 			tf.setHome(source, "dotfiles")
 
-			answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+			answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -714,7 +714,7 @@ func TestForkFailureRemovesFork(t *testing.T) {
 	tf.setWorkspace(source, "files")
 	tf.fail("export:"+source, errors.New("injected"))
 
-	answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+	answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -911,5 +911,152 @@ func TestRebaseKeepsToolsWhenAsked(t *testing.T) {
 	}
 	if view, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID); err != nil || view.TemplateID != "" || view.Status != runtime.StatusRunning {
 		t.Fatalf("after the failed rebase: %+v %v", view, err)
+	}
+}
+
+func yes() *bool { v := true; return &v }
+func no() *bool  { v := false; return &v }
+
+func TestForkCopiesDockerAndToolsWhenAsked(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	tf.guestBoots = true
+	source := VMName(f.sandbox)
+	tf.setWorkspace(source, "files")
+	tf.mu.Lock()
+	tf.dockers[source], tf.tools[source] = []byte("images"), []byte("mise")
+	tf.mu.Unlock()
+
+	fork := func(name string, opts ForkOptions) string {
+		t.Helper()
+		answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, name, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.manager.Wait(f.ctx, answered.ID); err != nil {
+			t.Fatal(err)
+		}
+		return VMName(answered.Sandbox)
+	}
+	plain := fork("plain", ForkOptions{})
+	full := fork("full", ForkOptions{Docker: yes(), Tools: yes()})
+
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
+	if len(tf.dockers[plain]) != 0 || len(tf.tools[plain]) != 0 {
+		t.Fatalf("a plain fork got docker %q, tools %q", tf.dockers[plain], tf.tools[plain])
+	}
+	if string(tf.dockers[full]) != "images" || string(tf.tools[full]) != "mise" {
+		t.Fatalf("the fork got docker %q, tools %q", tf.dockers[full], tf.tools[full])
+	}
+}
+
+// Docker's daemon has to be down for its copy, and a fork can't promise to start a source it
+// stopped again after a crash, so it refuses instead. Tools don't have that problem.
+func TestForkWithDockerRefusesARunningSource(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	tf.guestBoots = true
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.mu.Lock()
+	tf.tools[source] = []byte("mise")
+	tf.mu.Unlock()
+
+	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{Docker: yes()}); !errors.Is(err, ErrLifecycleState) {
+		t.Fatalf("err = %v", err)
+	}
+	if status, _ := tf.Status(f.ctx, source); status != runtime.StatusRunning {
+		t.Fatalf("source is %s", status)
+	}
+	answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{Tools: yes()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.Wait(f.ctx, answered.ID); err != nil {
+		t.Fatal(err)
+	}
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
+	if string(tf.tools[VMName(answered.Sandbox)]) != "mise" {
+		t.Fatalf("tools = %q", tf.tools[VMName(answered.Sandbox)])
+	}
+}
+
+func TestForkOfABaseTakesItsDefaultsUnlessToldOtherwise(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	tf.guestBoots = true
+	source := VMName(f.sandbox)
+	tf.mu.Lock()
+	tf.dockers[source], tf.tools[source] = []byte("images"), []byte("mise")
+	tf.mu.Unlock()
+	view, err := f.manager.SetBase(f.ctx, f.env.ID, f.sandbox.ID, &store.ForkDefaults{Docker: true, Script: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ForkDefaults == nil || !view.ForkDefaults.Docker || view.ForkDefaults.Tools {
+		t.Fatalf("view = %+v", view.ForkDefaults)
+	}
+
+	fork := func(name string, opts ForkOptions) View {
+		t.Helper()
+		answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, name, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.manager.Wait(f.ctx, answered.ID); err != nil {
+			t.Fatal(err)
+		}
+		v, err := f.manager.Get(f.ctx, f.env.ID, answered.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+
+	byDefault := fork("by-default", ForkOptions{})
+	if byDefault.ForkDefaults != nil {
+		t.Fatalf("the fork is a base too: %+v", byDefault.ForkDefaults)
+	}
+	select {
+	case req := <-guestSessions:
+		if req.Name != forkScriptSession || req.Harness != "" || req.Command[0] != "bash" {
+			t.Fatalf("session = %+v", req)
+		}
+	default:
+		t.Fatal("the base's script default didn't run")
+	}
+	overridden := fork("overridden", ForkOptions{Docker: no(), Script: no(), Tools: yes()})
+	select {
+	case req := <-guestSessions:
+		t.Fatalf("a fork that said no started %+v", req)
+	default:
+	}
+
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
+	if string(tf.dockers[VMName(byDefault.Sandbox)]) != "images" || len(tf.tools[VMName(byDefault.Sandbox)]) != 0 {
+		t.Fatalf("by default: docker %q, tools %q", tf.dockers[VMName(byDefault.Sandbox)], tf.tools[VMName(byDefault.Sandbox)])
+	}
+	if len(tf.dockers[VMName(overridden.Sandbox)]) != 0 || string(tf.tools[VMName(overridden.Sandbox)]) != "mise" {
+		t.Fatalf("overridden: docker %q, tools %q", tf.dockers[VMName(overridden.Sandbox)], tf.tools[VMName(overridden.Sandbox)])
+	}
+}
+
+func TestSetBaseCanBeUndone(t *testing.T) {
+	f := newCheckpointFixture(t)
+	if _, err := f.manager.SetBase(f.ctx, f.env.ID, f.sandbox.ID, &store.ForkDefaults{Tools: true}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := f.manager.SetBase(f.ctx, f.env.ID, f.sandbox.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ForkDefaults != nil {
+		t.Fatalf("still a base: %+v", view.ForkDefaults)
+	}
+	if _, err := f.manager.SetBase(f.ctx, f.env.ID, "missing", &store.ForkDefaults{}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("err = %v", err)
 	}
 }

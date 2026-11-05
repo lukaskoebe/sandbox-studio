@@ -210,7 +210,8 @@ data needs a live run.
 
 ## Fork
 
-`POST /api/environments/{env}/sandboxes/{id}/fork` with `{"name": "..."}`.
+`POST /api/environments/{env}/sandboxes/{id}/fork` with `{"name": "..."}`, and optionally
+`docker`, `tools` and `script`.
 
 The fork gets a new ID and egress identity, with the same template and resources. Its
 workspace is copied from the source, and its home too if the source has a home disk. A fork
@@ -220,6 +221,25 @@ stopped again. The fork is booted. The request returns before the copy and boot 
 the fork is in state `creating` until it runs, and `failed` if a step fails. A failed fork
 keeps its record until it is deleted; see [creation progress](sandboxes.md#creation-progress).
 The source keeps its chats; the fork starts without any.
+
+`tools` also merges the toolchains and global config in `/opt/mise`, as a rebase that keeps
+tools does. `docker` also copies Docker's disk, as a disk resize does, with its longer time
+limit. It needs a stopped source, because Docker has to be down for the copy, and a running one
+gets a 409 rather than being stopped: a fork has no recovery record to start the source again
+after a crash. `script` runs `~/.config/studio/on-fork.sh` in a plain terminal session named
+`on-fork` once the guest is configured, through a `KindStartSession` without a harness. It ends
+in the terminal's normal shell, so its output and status stay readable. The script only runs when
+asked for, never because the file exists, since an agent in the source could have written it. A
+failure to start it is logged and doesn't fail the fork.
+
+An option left out takes the source's `forkDefaults`, off for an ordinary sandbox. A merge's
+scratch copy ignores them. `PUT .../base` sets those defaults, which is what makes a sandbox a
+base, and `DELETE .../base` clears them. A base is otherwise an ordinary sandbox: the column
+is all it adds, the fork doesn't inherit it, and New computer's "Start from" lists the bases and
+posts a fork without options. The TUI and CLI forks send only a name, so they follow the
+defaults too. Rules aren't copied: a teammate-scoped rule or secret reaches every fork, as
+a fork keeps its source's teammate.
+
 On success the fork and its source each record a `fork` event in their history, see [lineage](sandboxes.md#lineage).
 
 ## Limits

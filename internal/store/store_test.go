@@ -41,3 +41,35 @@ func TestSandboxesAreEnvironmentScoped(t *testing.T) {
 		t.Fatalf("list %+v", list)
 	}
 }
+
+func TestForkDefaultsMakeASandboxABase(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, _ := s.CreateEnvironment(ctx, "work")
+	sb, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: env.ID, Name: "dev", CPUs: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sb, _ = s.Sandbox(ctx, env.ID, sb.ID); sb.ForkDefaults != nil {
+		t.Fatalf("a new sandbox is a base: %+v", sb.ForkDefaults)
+	}
+	if err := s.SetSandboxForkDefaults(ctx, env.ID, sb.ID, &ForkDefaults{Docker: true, Script: true}); err != nil {
+		t.Fatal(err)
+	}
+	if sb, _ = s.Sandbox(ctx, env.ID, sb.ID); sb.ForkDefaults == nil || *sb.ForkDefaults != (ForkDefaults{Docker: true, Script: true}) {
+		t.Fatalf("defaults = %+v", sb.ForkDefaults)
+	}
+	if err := s.SetSandboxForkDefaults(ctx, env.ID, sb.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if sb, _ = s.Sandbox(ctx, env.ID, sb.ID); sb.ForkDefaults != nil {
+		t.Fatalf("still a base: %+v", sb.ForkDefaults)
+	}
+	if err := s.SetSandboxForkDefaults(ctx, env.ID, "missing", nil); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+}

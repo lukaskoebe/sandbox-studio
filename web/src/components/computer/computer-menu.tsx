@@ -7,6 +7,7 @@ import {
   DownloadSimpleIcon,
   FloppyDiskIcon,
   GitForkIcon,
+  StackIcon,
   GitMergeIcon,
   HardDriveIcon,
   PauseIcon,
@@ -19,6 +20,7 @@ import {
 import { SaveCheckpointDialog } from "@/components/checkpoints-section"
 import { ConnectionsSheet } from "@/components/connections-panel"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import { BaseDialog } from "@/components/base-dialog"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { MergeForkDialog } from "@/components/merge-fork"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
@@ -56,6 +58,7 @@ type Dialog =
   | "checkpoint"
   | "history"
   | "fork"
+  | "base"
   | "merge"
   | "rebase"
   | "resources"
@@ -217,6 +220,13 @@ export function ComputerMenu({
                   <GitForkIcon />
                   Fork
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  title="Keep this computer as the starting point for new ones"
+                  onClick={() => setDialog("base")}
+                >
+                  <StackIcon />
+                  {sb.forkDefaults ? "Base settings" : "Use as a base"}
+                </DropdownMenuItem>
                 {source && (
                   <DropdownMenuItem
                     disabled={!running}
@@ -368,6 +378,9 @@ export function ComputerMenu({
         open={dialog === "fork"}
         onOpenChange={close}
       />
+      {dialog === "base" && (
+        <BaseDialog env={env} sandbox={sb} open onOpenChange={close} />
+      )}
       {source && (
         <MergeForkDialog
           env={env}

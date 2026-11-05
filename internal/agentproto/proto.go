@@ -234,7 +234,8 @@ type HomeFiles struct {
 }
 
 // StartSession is the body of a KindStartSession stream: a detached tmux session named
-// Name, in the workspace, running Command through a login shell with Env added.
+// Name, in the workspace, running Command through a login shell with Env added. With Harness
+// it's an agent session; without, a plain terminal.
 type StartSession struct {
 	Name    string            `json:"name"`
 	Harness string            `json:"harness"`

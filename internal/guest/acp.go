@@ -35,6 +35,9 @@ func checkStartACP(req agentproto.StartACP) error {
 	if !validSessionName(req.Chat) {
 		return errors.New("invalid chat ID")
 	}
+	if !harnessName.MatchString(req.Harness) {
+		return errors.New("invalid harness name")
+	}
 	if err := checkStartSession(agentproto.StartSession{Name: req.Chat, Harness: req.Harness, Command: req.Command}); err != nil {
 		return err
 	}

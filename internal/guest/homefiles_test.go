@@ -261,6 +261,17 @@ func TestStartSessionCommand(t *testing.T) {
 	if got := startCommand(req); !slices.Equal(got[len(got)-6:], []string{";", "set-option", "-t", "=claude:", agentproto.ChatOption, "abc7"}) {
 		t.Fatalf("chat tag: %q", got)
 	}
+	// Without a harness it's a plain terminal, which isn't marked as an agent's.
+	plain := agentproto.StartSession{Name: "on-fork", Command: []string{"bash", "-c", "true"}}
+	if err := checkStartSession(plain); err != nil {
+		t.Fatal(err)
+	}
+	if got := startCommand(plain); slices.Contains(got, agentproto.HarnessOption) {
+		t.Fatalf("a plain terminal was marked as an agent's: %q", got)
+	}
+	if err := checkStartACP(agentproto.StartACP{Chat: "abc7", Command: []string{"claude"}}); err == nil {
+		t.Error("an ACP agent was accepted without a harness")
+	}
 	for _, bad := range []agentproto.StartSession{
 		{Name: "a b", Harness: "claude", Command: []string{"claude"}},
 		{Name: "a", Harness: "Claude!", Command: []string{"claude"}},

@@ -79,6 +79,12 @@ func copyTools(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM
 	return copyTree(ctx, rt, src, dst, runtime.TreeTools, &limitWriter{left: toolsLimit, err: ErrToolsTooLarge}, report)
 }
 
+// copyDocker copies Docker's data from src into dst's Docker disk of dockerMiB. Neither VM may
+// have Docker running: both must be in transfer mode.
+func copyDocker(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, dockerMiB int, report copyReport) error {
+	return copyTree(ctx, rt, src, dst, runtime.TreeDocker, &limitWriter{left: int64(dockerMiB) << 20, err: ErrDockerTooLarge}, report)
+}
+
 // copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
 // archive passes through the host in memory and is never stored there. It fails once the
 // archive exceeds limit, or when either side fails: with limit's error if dst's disk fills up,
@@ -150,16 +156,43 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 // home disk, of its home. The fork has its own ID, egress identity and gateway credentials,
 // and the source's template and resources.
 // A running source is copied live, so files written during the copy may be inconsistent.
-// A stopped source is started without services for the copy and stopped again. Docker
-// state is not copied. The fork is returned in state creating; the copy runs in the
-// background, holding the source, and a failed fork keeps its record in state failed.
-func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error) {
-	return m.fork(ctx, envID, id, name, true)
+// A stopped source is started without services for the copy and stopped again. opts adds
+// Docker's data and the toolchains in /opt/mise. Docker's data needs a stopped source: its
+// daemon has to be down for the copy, and a fork has no recovery record to start the source
+// again after a crash, so a running one is refused rather than stopped. It can also run the
+// fork's on-fork script, see startForkScript. The fork is returned in state creating; the copy
+// runs in the background, holding the source, and a failed fork keeps its record in state failed.
+func (m *Manager) Fork(ctx context.Context, envID, id, name string, opts ForkOptions) (View, error) {
+	return m.fork(ctx, envID, id, name, opts.resolve, true)
 }
 
-// fork is Fork. With recordBase, the fork records the base a merge back finds its changes
-// against; a merge's scratch sandbox doesn't need one.
-func (m *Manager) fork(ctx context.Context, envID, id, name string, recordBase bool) (View, error) {
+// ForkOptions says what a fork does beyond copying the workspace and the home. An option left
+// nil takes the source's fork default, which is off unless the source is a base.
+type ForkOptions struct {
+	Docker, Tools, Script *bool
+}
+
+func (o ForkOptions) resolve(source store.Sandbox) store.ForkDefaults {
+	var d store.ForkDefaults
+	if source.ForkDefaults != nil {
+		d = *source.ForkDefaults
+	}
+	if o.Docker != nil {
+		d.Docker = *o.Docker
+	}
+	if o.Tools != nil {
+		d.Tools = *o.Tools
+	}
+	if o.Script != nil {
+		d.Script = *o.Script
+	}
+	return d
+}
+
+// fork is Fork, with pick saying what it does for the source it finds. With recordBase, the fork
+// records the base a merge back finds its changes against; a merge's scratch sandbox doesn't
+// need one.
+func (m *Manager) fork(ctx context.Context, envID, id, name string, pick func(store.Sandbox) store.ForkDefaults, recordBase bool) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
@@ -197,6 +230,10 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, recordBase b
 	if status != runtime.StatusRunning && status != runtime.StatusStopped {
 		return View{}, ErrLifecycleState
 	}
+	opts := pick(sb)
+	if opts.Docker && status != runtime.StatusStopped {
+		return View{}, lifecycleError("stop the computer to copy its Docker images")
+	}
 	var image *runtime.ImageSource
 	if sb.TemplateID != "" {
 		if _, err := m.templateResources(ctx, envID, sb.TemplateID); err != nil {
@@ -229,8 +266,12 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, recordBase b
 	}
 	handedOff = true
 	sourceRunning := status == runtime.StatusRunning
-	m.background(rec, transferTimeout, func() { unlockFork(); unlock() }, func(ctx context.Context) error {
-		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning); err != nil {
+	timeout := transferTimeout
+	if opts.Docker {
+		timeout = diskResizeTimeout
+	}
+	m.background(rec, timeout, func() { unlockFork(); unlock() }, func(ctx context.Context) error {
+		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning, opts); err != nil {
 			return m.removeFailedVM(ctx, rec, err, false)
 		}
 		if recordBase {
@@ -242,7 +283,7 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, recordBase b
 	return m.acceptedView(ctx, rec), nil
 }
 
-func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool) error {
+func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool, opts store.ForkDefaults) error {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		return err
@@ -265,7 +306,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 		}
 	}
-	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB, rec.HomeMiB, m.copying(rec.ID))
+	err = m.copyFork(ctx, rt, ownedVM(sb), rec, opts)
 	if !sourceRunning {
 		err = errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 	}
@@ -277,7 +318,60 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 		return err
 	}
 	m.markStarted(ctx, rec)
-	return m.awaitGuest(ctx, rec)
+	if err := m.awaitGuest(ctx, rec); err != nil {
+		return err
+	}
+	if opts.Script {
+		m.startForkScript(ctx, rec)
+	}
+	return nil
+}
+
+// forkScriptSession is the terminal a fork's script runs in.
+const forkScriptSession = "on-fork"
+
+// forkScript runs the guest's on-fork script, says how it ended and becomes the terminal's normal
+// shell, so its output stays readable and the terminal stays usable. It runs through bash, so the
+// file needn't be executable.
+const forkScript = `f="$HOME/.config/studio/on-fork.sh"
+if [ -f "$f" ]; then
+	echo "Running ~/.config/studio/on-fork.sh"
+	bash "$f"
+	echo "on-fork.sh ended with status $?"
+else
+	echo "There is no ~/.config/studio/on-fork.sh to run."
+fi
+exec /opt/studio/bin/login-shell
+`
+
+// startForkScript starts the on-fork script in a terminal of the fork. It's only ever asked for,
+// never because the file exists: an agent in the source could have written it. It doesn't wait
+// for the script, and the fork is fine without it, so a failure to start is only logged.
+func (m *Manager) startForkScript(ctx context.Context, rec store.Sandbox) {
+	err := m.Hub.StartSession(ctx, rec.ID, agentproto.StartSession{
+		Name: forkScriptSession, Command: []string{"bash", "-c", forkScript},
+	})
+	if err != nil {
+		m.Log.Warn("on-fork script", "sandbox", rec.ID, "err", err)
+	}
+}
+
+// copyFork copies what a fork takes from src into rec's VM.
+func (m *Manager) copyFork(ctx context.Context, rt transferRuntime, src runtime.OwnedVM, rec store.Sandbox, opts store.ForkDefaults) error {
+	report := m.copying(rec.ID)
+	dst := ownedVM(rec)
+	if err := copyTrees(ctx, rt, src, dst, rec.WorkspaceMiB, rec.HomeMiB, report); err != nil {
+		return err
+	}
+	if opts.Tools {
+		if err := copyTools(ctx, rt, src, dst, report); err != nil {
+			return err
+		}
+	}
+	if opts.Docker {
+		return copyDocker(ctx, rt, src, dst, rec.DockerMiB, report)
+	}
+	return nil
 }
 
 // stopQuietly stops a VM even when ctx has ended.
@@ -299,4 +393,19 @@ func (m *Manager) removeFailedFork(ctx context.Context, rec store.Sandbox, cause
 		return errors.Join(cause, fmt.Errorf("fork record cleanup failed: %w", err))
 	}
 	return cause
+}
+
+// SetBase makes a sandbox a base with these fork defaults, or with nil an ordinary sandbox again.
+func (m *Manager) SetBase(ctx context.Context, envID, id string, defaults *store.ForkDefaults) (View, error) {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return View{}, err
+	}
+	if m.failedCreation(id) {
+		return View{}, lifecycleError("the sandbox could not be created; delete it")
+	}
+	if err := m.Store.SetSandboxForkDefaults(ctx, envID, id, defaults); err != nil {
+		return View{}, err
+	}
+	m.publish(envID, id)
+	return m.Get(ctx, envID, id)
 }

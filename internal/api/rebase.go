@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // A workspace copy can take a while; it continues if the client disconnects. A disk resize
@@ -96,7 +97,10 @@ func (s *Server) registerTransfers(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Sandbox ID"`
 		Body struct {
-			Name string `json:"name" minLength:"1" maxLength:"40" doc:"Name of the new sandbox"`
+			Name   string `json:"name" minLength:"1" maxLength:"40" doc:"Name of the new sandbox"`
+			Docker *bool  `json:"docker,omitempty" doc:"Also copy Docker's images, containers and volumes, which needs a stopped sandbox. Omitted, it follows the sandbox's fork defaults."`
+			Tools  *bool  `json:"tools,omitempty" doc:"Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults."`
+			Script *bool  `json:"script,omitempty" doc:"Run ~/.config/studio/on-fork.sh in a terminal of the new sandbox once it is up. Omitted, it follows the sandbox's fork defaults."`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -105,12 +109,41 @@ func (s *Server) registerTransfers(api huma.API) {
 		Summary: "Copy a sandbox into a new one",
 		Description: "Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. " +
 			"It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. " +
-			"Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
+			"Docker state and tools are copied when asked for, by the request or the sandbox's fork defaults; Docker state needs a stopped sandbox. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *forkIn) (*sandboxOut, error) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), transferTimeout)
 		defer cancel()
-		view, err := s.Sandboxes.Fork(ctx, in.Env, in.ID, in.Body.Name)
+		view, err := s.Sandboxes.Fork(ctx, in.Env, in.ID, in.Body.Name, sandboxes.ForkOptions{Docker: in.Body.Docker, Tools: in.Body.Tools, Script: in.Body.Script})
+		return &sandboxOut{view}, apiError(err)
+	})
+
+	type setBaseIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Body store.ForkDefaults
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setSandboxBase", Method: http.MethodPut,
+		Path: "/api/environments/{env}/sandboxes/{id}/base", Tags: []string{"sandboxes"},
+		Summary:     "Make a sandbox a base",
+		Description: "A base is offered as a starting point for new sandboxes, and its forks copy what these defaults say unless the fork request says otherwise. Calling it again changes them.",
+	}, func(ctx context.Context, in *setBaseIn) (*sandboxOut, error) {
+		view, err := s.Sandboxes.SetBase(ctx, in.Env, in.ID, &in.Body)
+		return &sandboxOut{view}, apiError(err)
+	})
+
+	type clearBaseIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Sandbox ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "clearSandboxBase", Method: http.MethodDelete,
+		Path: "/api/environments/{env}/sandboxes/{id}/base", Tags: []string{"sandboxes"},
+		Summary:     "Stop a sandbox being a base",
+		Description: "The sandbox itself and its existing forks don't change.",
+	}, func(ctx context.Context, in *clearBaseIn) (*sandboxOut, error) {
+		view, err := s.Sandboxes.SetBase(ctx, in.Env, in.ID, nil)
 		return &sandboxOut{view}, apiError(err)
 	})
 }

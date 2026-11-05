@@ -38,7 +38,8 @@ The power button stops a running computer and starts one that is off; a computer
 | **Checkpoints** | Shows where the sandbox came from and its checkpoints. |
 | **Stop** (the power button) | Powers off the VM. Files on its disks stay, but running processes and terminal sessions end. Use **Start** to boot it again. |
 | **Suspend** | Pauses a running VM with its memory and processes. **Resume** continues it, including terminal sessions. Suspended memory does not survive a host reboot. |
-| **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not, nor is what was installed elsewhere, such as apt packages and tools from `mise use -g`. The fork gets its own network approvals. |
+| **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are always copied; see [A fresh computer per task](#a-fresh-computer-per-task) for Docker's data and tools. What was installed elsewhere, such as apt packages, isn't. The fork gets its own network approvals. |
+| **Use as a base** | Makes it a starting point for new computers (see below). |
 | **Connections** | Lists where the sandbox connects. **Record intercepted traffic** keeps, for 15 minutes, the HTTP requests Studio handles for it (a browser's pages, proxy and Caddy rules, hosts with secrets) with their headers and bodies, and secret values masked. They stay in memory only and go an hour after recording stops, or on **Clear**. |
 | **Resources** | Changes its CPUs and memory (see below). |
 | **Disks** | Changes the size of the workspace, Docker and home disks (see below). |
@@ -106,6 +107,26 @@ Your editor lists the `.studio` hosts among its SSH hosts. **Connect over SSH** 
 Studio uses its own key and host key, so none of your keys are needed or changed. You log in as `agent`; `ssh root@my-app.studio` logs in as root. An SSH session has the terminal's environment, such as the CA variables, secret placeholders and mise: an interactive one opens your terminal shell at `/workspace`, and a command runs through `bash -l` in the home. A sandbox created before Studio 0.17 keeps `/bin/sh` without that environment until you rebase it; there, run `ssh -t my-app.studio bash -l`. An editor that installs a server in the sandbox, as VS Code and JetBrains Gateway do, downloads it through the sandbox's network rules, so allow the request if Studio asks. It lands in the home, so give the home more room if it's short (**Disks** in the **⋯** menu), and a fork brings it along. `scp` copies the files but then reports an error, because of a fault in microsandbox's SFTP server; `sftp` doesn't.
 
 If a dotfile manager such as home-manager keeps `~/.ssh/config` read-only, Studio says which `Include` line to add there yourself. `studio ssh disable` and the switch remove it.
+
+## A fresh computer per task
+
+Keep one computer prepared, with your repositories in `/workspace`, your tools, your Docker images and your shell set up, and copy it for each task. Choose **Use as a base** in its **⋯** menu to say what a copy takes:
+
+- **Docker's images, containers and volumes.** This takes as long as they are big, and the computer has to be stopped, so keep a base stopped. Studio won't stop it for you.
+- **The tools installed with `mise use`.** Software installed in other ways, such as apt packages, isn't copied.
+- **Running `~/.config/studio/on-fork.sh`.** The script runs in a terminal named `on-fork` once the copy is up, starting in `/workspace`. You can read its output there, and it ends with the status it finished with. Studio only runs it if you ask for it here or in the fork dialog. For example, to bring every repository up to date:
+
+  ```sh
+  for repo in /workspace/*/.git; do
+    git -C "${repo%/.git}" fetch --prune && git -C "${repo%/.git}" pull --rebase
+  done
+  ```
+
+A base gets a small **base** mark. **New computer** then has a **Start from** field listing your bases, and **Fork** starts with the same choices, which you can change for that copy.
+
+A copy keeps the base's template, resources and teammate. It has its own network approvals, so a host you allowed for the base alone isn't allowed for the copy. To allow a host or give a secret to every copy, scope the rule or secret to the teammate.
+
+Each copy is a full copy on your disk, as Studio can't share data between them yet.
 
 ## Export a workspace
 

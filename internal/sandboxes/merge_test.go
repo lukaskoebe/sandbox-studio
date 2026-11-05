@@ -84,7 +84,7 @@ func (f *mergeFake) archive(vm string) string {
 func forkForMerge(t *testing.T, f *checkpointFixture, mf *mergeFake) store.Sandbox {
 	t.Helper()
 	mf.setStatus(VMName(f.sandbox), runtime.StatusRunning)
-	v, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+	v, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,5 +222,28 @@ func TestMergeNeedsARunningForkOfALiveSandbox(t *testing.T) {
 	}
 	if mg := waitMerge(t, f, started.ID); mg.State != store.MergeFailed || mg.Error == "" {
 		t.Fatalf("merge after a failed export = %+v", mg)
+	}
+}
+
+// A merge's scratch copy is Studio's own: a base's defaults, which could refuse it or run a script
+// in it, don't apply.
+func TestMergeScratchIgnoresForkDefaults(t *testing.T) {
+	f := newCheckpointFixture(t)
+	mf := newMergeFake(f)
+	fork := forkForMerge(t, f, mf)
+	if _, err := f.manager.SetBase(f.ctx, f.env.ID, f.sandbox.ID, &store.ForkDefaults{Docker: true, Script: true}); err != nil {
+		t.Fatal(err)
+	}
+	started, err := f.manager.StartMerge(f.ctx, f.env.ID, fork.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mg := waitMerge(t, f, started.ID); mg.State == store.MergeFailed {
+		t.Fatalf("merge = %+v", mg)
+	}
+	select {
+	case req := <-guestSessions:
+		t.Fatalf("the scratch started %+v", req)
+	default:
 	}
 }

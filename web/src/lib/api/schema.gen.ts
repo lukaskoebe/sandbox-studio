@@ -1517,6 +1517,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/base": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a sandbox a base
+         * @description A base is offered as a starting point for new sandboxes, and its forks copy what these defaults say unless the fork request says otherwise. Calling it again changes them.
+         */
+        put: operations["setSandboxBase"];
+        post?: never;
+        /**
+         * Stop a sandbox being a base
+         * @description The sandbox itself and its existing forks don't change.
+         */
+        delete: operations["clearSandboxBase"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/chats": {
         parameters: {
             query?: never;
@@ -1749,7 +1773,7 @@ export interface paths {
         put?: never;
         /**
          * Copy a sandbox into a new one
-         * @description Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
+         * @description Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state and tools are copied when asked for, by the request or the sandbox's fork defaults; Docker state needs a stopped sandbox. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
          */
         post: operations["forkSandbox"];
         delete?: never;
@@ -4505,9 +4529,23 @@ export interface components {
         ForgeToken: {
             token: string;
         };
+        ForkDefaults: {
+            /** @description Copy Docker's images, containers and volumes, which needs the base stopped */
+            docker: boolean;
+            /** @description Run ~/.config/studio/on-fork.sh in a terminal of the fork once it is up */
+            script: boolean;
+            /** @description Copy the tools installed with mise use and the global mise config */
+            tools: boolean;
+        };
         ForkInBody: {
+            /** @description Also copy Docker's images, containers and volumes, which needs a stopped sandbox. Omitted, it follows the sandbox's fork defaults. */
+            docker?: boolean;
             /** @description Name of the new sandbox */
             name: string;
+            /** @description Run ~/.config/studio/on-fork.sh in a terminal of the new sandbox once it is up. Omitted, it follows the sandbox's fork defaults. */
+            script?: boolean;
+            /** @description Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults. */
+            tools?: boolean;
         };
         GetMemoryIndexResponse: {
             markdown: string;
@@ -5661,6 +5699,8 @@ export interface components {
             /** Format: int64 */
             dockerMiB: number;
             environmentId: string;
+            /** @description Set on a base: what its forks take unless a fork says otherwise */
+            forkDefaults?: components["schemas"]["ForkDefaults"];
             /** @description The ID of the sandbox this one was forked from, which it can be merged back into */
             forkOf?: string;
             /** Format: int64 */
@@ -6872,6 +6912,8 @@ export interface components {
             /** Format: int64 */
             dockerMiB: number;
             environmentId: string;
+            /** @description Set on a base: what its forks take unless a fork says otherwise */
+            forkDefaults?: components["schemas"]["ForkDefaults"];
             /** @description The ID of the sandbox this one was forked from, which it can be merged back into */
             forkOf?: string;
             /** Format: int64 */
@@ -10738,6 +10780,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setSandboxBase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkDefaults"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    clearSandboxBase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
             };
             /** @description Error */
             default: {

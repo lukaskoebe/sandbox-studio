@@ -21,7 +21,7 @@ func historyOf(t *testing.T, f *checkpointFixture, id string) []store.SandboxEve
 // forkOf forks the sandbox id and waits until the copy has booted.
 func forkOf(t *testing.T, f *checkpointFixture, id, name string) string {
 	t.Helper()
-	answered, err := f.manager.Fork(f.ctx, f.env.ID, id, name)
+	answered, err := f.manager.Fork(f.ctx, f.env.ID, id, name, ForkOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestForkRecordsBothSidesOnSuccessOnly(t *testing.T) {
 	}
 
 	tf.fail("export:"+VMName(f.sandbox), errors.New("injected"))
-	answered, err := f.manager.Fork(f.ctx, f.env.ID, source, "failed-copy")
+	answered, err := f.manager.Fork(f.ctx, f.env.ID, source, "failed-copy", ForkOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

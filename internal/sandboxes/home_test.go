@@ -51,7 +51,7 @@ func TestHomeDiskSize(t *testing.T) {
 		tf.guestBoots = true
 		setHomeMiB(t, f, 6144)
 		tf.setHome(VMName(f.sandbox), "dotfiles")
-		answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+		answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

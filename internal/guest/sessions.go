@@ -66,7 +66,8 @@ func checkStartSession(req agentproto.StartSession) error {
 	if !validSessionName(req.Name) {
 		return errors.New("invalid session name")
 	}
-	if !harnessName.MatchString(req.Harness) {
+	// No harness is a plain terminal running a command of Studio's.
+	if req.Harness != "" && !harnessName.MatchString(req.Harness) {
 		return errors.New("invalid harness name")
 	}
 	if req.Chat != "" && !validSessionName(req.Chat) {
@@ -99,7 +100,7 @@ func checkStartSession(req agentproto.StartSession) error {
 // command runs through a login shell, so it sees the same PATH and tools as a terminal.
 // The session's variables are set by env(1) after the profile has run, so a secret of the
 // same name exported by the profile can't replace them. The same tmux call marks the
-// session as an agent session and keeps its pane after the harness exits, so a harness that
+// session as an agent session, if it runs a harness, and keeps its pane after the harness exits, so a harness that
 // dies right away leaves its output behind: tmux runs the commands of one call before it
 // notices the exit (tmux 3.5a of the image, checked in S7). The options target "=name:", not
 // "=name": set-option's -t is a pane target, and tmux 3.5a answers "no such session" to the
@@ -117,9 +118,10 @@ func startCommand(req agentproto.StartSession) []string {
 		args = append(args, name+"="+req.Env[name])
 	}
 	args = append(args, req.Command...)
-	args = append(args,
-		";", "set-option", "-w", "-t", "="+req.Name+":", "remain-on-exit", "on",
-		";", "set-option", "-t", "="+req.Name+":", agentproto.HarnessOption, req.Harness)
+	args = append(args, ";", "set-option", "-w", "-t", "="+req.Name+":", "remain-on-exit", "on")
+	if req.Harness != "" {
+		args = append(args, ";", "set-option", "-t", "="+req.Name+":", agentproto.HarnessOption, req.Harness)
+	}
 	if req.Chat != "" {
 		args = append(args, ";", "set-option", "-t", "="+req.Name+":", agentproto.ChatOption, req.Chat)
 	}

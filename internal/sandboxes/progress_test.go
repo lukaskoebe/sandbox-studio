@@ -50,6 +50,9 @@ func answerGuest(socket string) error {
 	return nil
 }
 
+// guestSessions has the sessions answerRequest was asked to start.
+var guestSessions = make(chan agentproto.StartSession, 8)
+
 func answerRequest(stream net.Conn) {
 	defer stream.Close()
 	br := bufio.NewReader(stream)
@@ -58,6 +61,12 @@ func answerRequest(stream net.Conn) {
 		return
 	}
 	switch header.Kind {
+	case agentproto.KindStartSession:
+		var req agentproto.StartSession
+		if agentproto.ReadJSONLine(br, &req) == nil {
+			guestSessions <- req
+			_ = agentproto.WriteJSONLine(stream, struct{}{})
+		}
 	case agentproto.KindSessions:
 		_ = agentproto.WriteJSONLine(stream, []agentproto.Session{})
 	case agentproto.KindConfig:

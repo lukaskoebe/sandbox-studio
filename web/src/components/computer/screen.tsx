@@ -15,6 +15,7 @@ import {
   WarningIcon,
   type Icon,
 } from "@phosphor-icons/react"
+import { BaseMark } from "@/components/base-dialog"
 import { BrowserRail, type RailTab } from "@/components/browser-rail"
 import { BrowserWindow, type BrowserReplay } from "@/components/browser-window"
 import { ChangesView } from "@/components/computer/changes"
@@ -543,6 +544,7 @@ function Switcher({
         <span className="truncate font-mono text-title font-semibold">
           {sb.name}
         </span>
+        {sb.forkDefaults && <BaseMark />}
       </span>
     )
   return (
@@ -556,6 +558,7 @@ function Switcher({
           <span className="truncate font-mono text-title font-semibold">
             {sb.name}
           </span>
+          {sb.forkDefaults && <BaseMark />}
           <CaretDownIcon className="size-3 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">

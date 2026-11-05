@@ -176,7 +176,7 @@ func TestSuspendedSandboxRefusesForkAndCheckpoint(t *testing.T) {
 	tf := newTransferFake(f)
 	vm := VMName(f.sandbox)
 	tf.setStatus(vm, runtime.StatusSuspended)
-	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy"); !errors.Is(err, ErrLifecycleState) {
+	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{}); !errors.Is(err, ErrLifecycleState) {
 		t.Fatalf("Fork err = %v", err)
 	}
 	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "cp"); !errors.Is(err, ErrCheckpointState) {

@@ -129,6 +129,7 @@ test("the computer's menu lists its actions", async ({ page, api, env }) => {
   for (const action of [
     "Checkpoint now",
     "Fork",
+    "Use as a base",
     "Connections",
     "Rebase",
     "Export",
@@ -441,4 +442,104 @@ test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
       )
     )
     .toMatchObject({ everyHours: 0, afterTasks: true })
+})
+
+// The fake runtime doesn't copy disks, so a fork is checked up to the request it sends: the Go
+// tests and the real VM run cover the copy.
+test("a computer becomes a base, and new computers and forks start from it", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("base")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
+  const more = screen.getByRole("button", { name: `More for ${name}` })
+
+  await more.click()
+  await page.getByRole("menuitem", { name: "Use as a base" }).click()
+  const setup = page.getByRole("dialog", { name: `Use ${name} as a base` })
+  await setup.getByRole("checkbox", { name: /on-fork\.sh/ }).click()
+  await setup.getByRole("button", { name: "Use as a base" }).click()
+  await expect(setup).toBeHidden()
+  const mark = page.getByText("base", { exact: true })
+  await expect(mark.first()).toBeVisible()
+
+  // Docker needs the base stopped, so the fork dialog holds that choice while it runs.
+  await more.click()
+  await page.getByRole("menuitem", { name: "Fork", exact: true }).click()
+  let fork = page.getByRole("dialog", { name: `Fork ${name}` })
+  const docker = fork.getByRole("checkbox", { name: /Docker/ })
+  await expect(docker).toBeDisabled()
+  await expect(docker).not.toBeChecked()
+  await expect(fork).toContainText(
+    "Stop this computer to include its Docker images."
+  )
+  await expect(fork.getByRole("checkbox", { name: /mise use/ })).toBeChecked()
+  await expect(fork.getByRole("checkbox", { name: /on-fork/ })).toBeChecked()
+  await page.keyboard.press("Escape")
+
+  await page.getByRole("button", { name: "New computer" }).click()
+  await page.getByRole("menuitem", { name: /^New computer/ }).click()
+  const create = page.getByRole("dialog", { name: "New computer" })
+  await expect(create.getByLabel("Teammate")).toBeVisible()
+  await create.getByLabel("Name").fill(`${name}-task`)
+  await create.getByLabel("Start from").click()
+  await page.getByRole("option", { name, exact: true }).click()
+  await expect(create.getByLabel("Teammate")).toBeHidden()
+  await expect(create).toContainText(`Stop ${name} to copy its Docker images.`)
+  await expect(create.getByRole("button", { name: "Create" })).toBeDisabled()
+  await page.keyboard.press("Escape")
+
+  await screen
+    .getByRole("button", { name: `Stop ${name}; its disk is kept` })
+    .click()
+  await expect(
+    screen.getByRole("button", { name: `Start ${name}` })
+  ).toBeVisible()
+
+  // A stopped base can give its Docker images. The request says what the dialog says.
+  await more.click()
+  await page.getByRole("menuitem", { name: "Fork", exact: true }).click()
+  fork = page.getByRole("dialog", { name: `Fork ${name}` })
+  await expect(fork.getByRole("checkbox", { name: /Docker/ })).toBeChecked()
+  await fork.getByRole("checkbox", { name: /mise use/ }).click()
+  const forked = page.waitForRequest(/\/fork$/)
+  await fork.getByRole("button", { name: "Fork", exact: true }).click()
+  expect((await forked).postDataJSON()).toEqual({
+    name: `${name}-fork`,
+    docker: true,
+    tools: false,
+    script: true,
+  })
+  await expect(fork.getByRole("alert")).toContainText(
+    "this runtime cannot copy workspaces"
+  )
+  await page.keyboard.press("Escape")
+
+  // New computer leaves the choices to the base.
+  await page.getByRole("button", { name: "New computer" }).click()
+  await page.getByRole("menuitem", { name: /^New computer/ }).click()
+  await create.getByLabel("Name").fill(`${name}-task`)
+  await create.getByLabel("Start from").click()
+  await page.getByRole("option", { name, exact: true }).click()
+  await expect(create).toContainText("Docker's data")
+  const started = page.waitForRequest(/\/fork$/)
+  await create.getByRole("button", { name: "Create" }).click()
+  expect((await started).postDataJSON()).toEqual({ name: `${name}-task` })
+  await page.keyboard.press("Escape")
+
+  await more.click()
+  await page.getByRole("menuitem", { name: "Base settings" }).click()
+  const settings = page.getByRole("dialog", {
+    name: `Base settings for ${name}`,
+  })
+  await settings.getByRole("button", { name: "Stop using as a base" }).click()
+  await expect(settings).toBeHidden()
+  await expect(mark).toHaveCount(0)
+
+  await page.getByRole("button", { name: "New computer" }).click()
+  await page.getByRole("menuitem", { name: /^New computer/ }).click()
+  await expect(create.getByLabel("Name")).toBeVisible()
+  await expect(create.getByLabel("Start from")).toHaveCount(0)
 })

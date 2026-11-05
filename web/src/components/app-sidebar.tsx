@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { BaseMark } from "@/components/base-dialog"
 import {
   CaretUpDownIcon,
   CheckIcon,
@@ -435,6 +436,7 @@ function ComputerRow({
       >
         <CubeIcon />
         <span className="min-w-0 flex-1 truncate">{sb.name}</span>
+        {sb.forkDefaults && <BaseMark />}
         {waiting > 0 ? (
           <WaitingCount count={waiting} />
         ) : (

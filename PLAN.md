@@ -17,24 +17,10 @@ says.
 
 ## Next
 
-**A fresh sandbox per task, forked from a prepared base** (feedback, decided 2026-11-06). Someone
-keeps a stopped sandbox with their repos, tools and Docker images, forks it per task, and works in
-IntelliJ over SSH. In this order:
-
-1. Docs: "Start session" and the agent in the web's terminal chip are gone; the public git review
-   page doesn't say a rejected push fails the next fetch once.
-2. SSH sessions run a wrapper in `/opt/studio/bin` set with `WithShell`: a command through `bash -l`,
-   an interactive session in the terminal shell at `/workspace`. An existing sandbox gets it on its
-   next rebase.
-3. A fork can copy Docker's data and the mise tools. Docker needs a stopped source: a running one is
-   refused rather than stopped, as a fork has no recovery record to restart it after a crash.
-4. A fork can run `~/.config/studio/on-fork.sh` in a terminal session. It's opt-in, never because the
-   file exists: an agent in the base could write one.
-5. A base is a sandbox with fork defaults on its record. New computer can start from one.
-
-Decided against for now: JetBrains or VS Code hosts in the curated list (a base's home carries the
-backend, so it downloads once, and read-only hosts break tools with their own certificate store),
-a bigger default home (a base's home can be resized and forks inherit it), and copying rules (a
+Nothing is queued. A fresh sandbox per task from a prepared base shipped with these decisions:
+JetBrains and VS Code hosts stay out of the curated list (a base's home carries the backend, so it
+downloads once, and read-only hosts break tools with their own certificate store), the default home
+stays 4 GiB (a base's home can be resized and forks inherit it), and rules aren't copied (a
 teammate-scoped rule already reaches every fork). Add rule copying only if that falls short.
 
 ## Backlog

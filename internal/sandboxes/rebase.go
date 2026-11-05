@@ -216,8 +216,7 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 		}
 	}
 	if docker {
-		limit := &limitWriter{left: int64(target.DockerMiB) << 20, err: ErrDockerTooLarge}
-		if err := copyTree(ctx, rt, ownedVM(sb), ownedVM(target), runtime.TreeDocker, limit, report); err != nil {
+		if err := copyDocker(ctx, rt, ownedVM(sb), ownedVM(target), target.DockerMiB, report); err != nil {
 			return err
 		}
 	}

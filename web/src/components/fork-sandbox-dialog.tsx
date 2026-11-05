@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { WarningIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -69,10 +70,10 @@ export function ForkSandboxDialog({
           sandbox={sandbox}
           pending={pending}
           failure={fork.isError ? errorMessage(fork.error) : undefined}
-          onSubmit={(name) =>
+          onSubmit={(name, options) =>
             fork.mutate({
               params: { path: { env, id: sandbox.id } },
-              body: { name },
+              body: { name, ...options },
             })
           }
           onCancel={() => handleOpenChange(false)}
@@ -93,11 +94,17 @@ function ForkForm({
   pending: boolean
   /** Why the last copy failed. It stays visible until the dialog closes. */
   failure?: string
-  onSubmit: (name: string) => void
+  onSubmit: (name: string, options: ForkChoices) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(() => forkName(sandbox.name))
+  const [choices, setChoices] = useState<ForkChoices>(
+    () => sandbox.forkDefaults ?? { docker: false, tools: false, script: false }
+  )
   const invalid = name !== "" && !namePattern.test(name)
+  // Docker's copy needs the computer stopped, so it's off for as long as it isn't.
+  const dockerBlocked = sandbox.status !== "stopped"
+  const docker = choices.docker && !dockerBlocked
 
   return (
     <form
@@ -105,7 +112,7 @@ function ForkForm({
       onSubmit={(event) => {
         event.preventDefault()
         if (!name || invalid || pending) return
-        onSubmit(name)
+        onSubmit(name, { ...choices, docker })
       }}
     >
       <DialogHeader>
@@ -122,9 +129,14 @@ function ForkForm({
           <dd>/workspace and /home/agent</dd>
           <dt className="text-muted-foreground">Not copied</dt>
           <dd>
-            Docker images, containers and volumes; software installed elsewhere,
-            such as apt packages and tools from{" "}
-            <code className="font-mono">mise use -g</code>
+            {!docker && "Docker images, containers and volumes; "}
+            software installed elsewhere, such as apt packages
+            {!choices.tools && (
+              <>
+                {" "}
+                and tools from <code className="font-mono">mise use -g</code>
+              </>
+            )}
           </dd>
           <dt className="text-muted-foreground">Identity</dt>
           <dd>The fork gets its own identity and its own network approvals.</dd>
@@ -137,6 +149,17 @@ function ForkForm({
           </p>
         )}
       </section>
+
+      <ForkChoiceFields
+        choices={{ ...choices, docker }}
+        dockerNote={
+          dockerBlocked
+            ? "Stop this computer to include its Docker images."
+            : undefined
+        }
+        disabled={pending}
+        onChange={setChoices}
+      />
 
       <Field data-invalid={invalid || undefined}>
         <FieldLabel htmlFor="fork-sandbox-name">Name</FieldLabel>
@@ -182,6 +205,73 @@ function ForkForm({
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+/** What a fork does beyond copying the workspace and the home. */
+export type ForkChoices = {
+  docker: boolean
+  tools: boolean
+  script: boolean
+}
+
+/** The checkboxes for a fork's choices, in the fork dialog and a base's defaults. */
+export function ForkChoiceFields({
+  choices,
+  dockerNote,
+  disabled,
+  onChange,
+}: {
+  choices: ForkChoices
+  /** Why Docker can't be chosen right now. */
+  dockerNote?: string
+  disabled?: boolean
+  onChange: (choices: ForkChoices) => void
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={choices.docker}
+          onCheckedChange={(docker) => onChange({ ...choices, docker })}
+          disabled={disabled || !!dockerNote}
+          className="mt-0.5"
+        />
+        <span>
+          Copy Docker&apos;s images, containers and volumes
+          <span className="block text-muted-foreground">
+            {dockerNote ?? "Takes as long as they are big."}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={choices.tools}
+          onCheckedChange={(tools) => onChange({ ...choices, tools })}
+          disabled={disabled}
+          className="mt-0.5"
+        />
+        <span>
+          Copy the tools installed with{" "}
+          <code className="font-mono">mise use</code>
+        </span>
+      </label>
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={choices.script}
+          onCheckedChange={(script) => onChange({ ...choices, script })}
+          disabled={disabled}
+          className="mt-0.5"
+        />
+        <span>
+          Run <code className="font-mono">~/.config/studio/on-fork.sh</code>
+          <span className="block text-muted-foreground">
+            In a terminal named <code className="font-mono">on-fork</code>, once
+            the new computer is up.
+          </span>
+        </span>
+      </label>
+    </div>
   )
 }
 

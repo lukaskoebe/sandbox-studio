@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A fresh computer per task: **Use as a base** in a computer's **⋯** menu makes it a starting point
+  that **New computer** offers under **Start from**. A base says what its copies take by default,
+  and **Fork** offers the same choices for one copy: Docker's images, containers and volumes, which
+  need the computer stopped; the tools from `mise use`; and running
+  `~/.config/studio/on-fork.sh` in a terminal named `on-fork`, which only happens if you ask for it.
 - An SSH session has the terminal's environment. An interactive one opens your terminal shell at
   `/workspace`, and a command, such as an editor starting its backend, runs through `bash -l` in the
   home, so it has the CA variables, secret placeholders and mise. This applies to sandboxes created

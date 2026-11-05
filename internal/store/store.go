@@ -279,12 +279,22 @@ type Sandbox struct {
 	// Both are empty for sandboxes whose base isn't known yet.
 	BaseImage   string `json:"-"`
 	BaseVersion string `json:"-"`
+	// ForkDefaults makes the sandbox a base, a prepared sandbox new ones start from
+	// (docs/sandboxes.md). A fork doesn't inherit it.
+	ForkDefaults *ForkDefaults `json:"forkDefaults,omitempty" doc:"Set on a base: what its forks take unless a fork says otherwise"`
+}
+
+// ForkDefaults is what forks of a base do beyond copying the workspace and the home.
+type ForkDefaults struct {
+	Docker bool `json:"docker" doc:"Copy Docker's images, containers and volumes, which needs the base stopped"`
+	Tools  bool `json:"tools" doc:"Copy the tools installed with mise use and the global mise config"`
+	Script bool `json:"script" doc:"Run ~/.config/studio/on-fork.sh in a terminal of the fork once it is up"`
 }
 
 // SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib, base_image, base_version, home_mib"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib, base_image, base_version, home_mib, IFNULL(fork_defaults, '')"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest port no
 // other sandbox has and nothing on the host listens on.
@@ -293,8 +303,13 @@ const firstDNSPort = 17100
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created, forkedAt, startedAt int64
+	var forkDefaults string
 	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind,
-		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB, &sb.BaseImage, &sb.BaseVersion, &sb.HomeMiB)
+		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB, &sb.BaseImage, &sb.BaseVersion, &sb.HomeMiB, &forkDefaults)
+	if err == nil && forkDefaults != "" {
+		sb.ForkDefaults = new(ForkDefaults)
+		err = json.Unmarshal([]byte(forkDefaults), sb.ForkDefaults)
+	}
 	sb.CreatedAt = time.Unix(created, 0)
 	if forkedAt != 0 {
 		sb.ForkedAt = time.Unix(forkedAt, 0)
@@ -524,6 +539,31 @@ type SandboxSize struct {
 func (s *Store) SetSandboxResources(ctx context.Context, envID, id string, size SandboxSize) error {
 	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET cpus = ?, memory_mib = ?, max_memory_mib = ?, live_cpus = ?, live_memory_mib = ? WHERE environment_id = ? AND id = ?",
 		size.CPUs, size.MemoryMiB, size.MaxMemoryMiB, size.LiveCPUs, size.LiveMemoryMiB, envID, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetSandboxForkDefaults makes a sandbox a base with these defaults, or with nil an ordinary
+// sandbox again.
+func (s *Store) SetSandboxForkDefaults(ctx context.Context, envID, id string, defaults *ForkDefaults) error {
+	var value any
+	if defaults != nil {
+		data, err := json.Marshal(defaults)
+		if err != nil {
+			return err
+		}
+		value = string(data)
+	}
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET fork_defaults = ? WHERE environment_id = ? AND id = ?", value, envID, id)
 	if err != nil {
 		return err
 	}
