@@ -492,14 +492,26 @@ VM afterwards and never stops it. The session's user is the one the client logs 
 by the config, `root` with `ssh root@…`. A Studio that isn't running fails the connection with
 "Studio is not running at …".
 
+**The shell.** msb's SSH server runs the VM's configured shell, `/bin/sh` by default, which reads
+no profile and starts in `/`. So `runtime.create` sets `/opt/studio/bin/login-shell`, which
+`agentbin.Install` writes next to the agent:
+
+- A command (`ssh host cmd`, and how an editor starts its backend) runs through `bash -l` in the
+  home, so it has the CA variables (`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS` and the others), the
+  secret placeholders and mise (see
+  [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)). It's always bash, as for
+  an agent's session, so someone's zsh setup can't get in the way of an editor.
+- An interactive session starts the terminal shell, which the guest records in
+  `/etc/sandbox-studio/terminal-shell` when it's configured, at `/workspace`.
+
+msb reads the shell from the VM's config, so a sandbox created before this keeps `/bin/sh` until a
+rebase or a disk resize, and there `bash -l` gives the same environment by hand:
+`ssh -t my-app.studio bash -l`. A JVM doesn't read `SSL_CERT_FILE`, so a JDK needs a rule for a
+host Studio intercepts or the CA in its own store, whichever shell started it
+([network](network.md)).
+
 **Limits.** These are msb's SSH server's (msb 0.7.8):
 
-- A session's shell is `/bin/sh`, not a login shell, and it starts in `/`, whatever the user's
-  login shell is. It reads no profile, so it has neither the CA variables (`SSL_CERT_FILE`,
-  `NODE_EXTRA_CA_CERTS` and the others) nor the secret placeholders a terminal has (see
-  [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)). The system CA bundle
-  still includes Studio's CA. For the terminal's environment, run `bash -l`, for example
-  `ssh -t my-app.studio bash -l`.
 - The SFTP subsystem closes its channel without an exit status, so OpenSSH's `scp` (which uses
   SFTP) copies the files and then exits 1. `sftp` doesn't mind. `scp -O` needs `scp` in the
   guest, which the base image doesn't have. The base image has `rsync` from the next base

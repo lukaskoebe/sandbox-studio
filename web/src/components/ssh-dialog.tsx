@@ -88,7 +88,7 @@ export function SSHDialog({
             <CommandRow
               label="Login shell"
               command={`ssh -t ${alias} bash -l`}
-              note="With the terminal's environment, such as the CA variables; plain ssh runs /bin/sh."
+              note="For a computer from before Studio 0.17, which runs /bin/sh without the terminal's environment until a rebase."
             />
             <CommandRow
               label="Copy files"

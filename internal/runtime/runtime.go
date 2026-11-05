@@ -177,6 +177,7 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 		msb.WithMaxMemory(maxMemoryMiB),
 		msb.WithHostname(hostname(labels["studio.sandbox-name"])),
 		msb.WithMounts(mounts),
+		msb.WithShell(loginShellPath),
 		msb.WithVsock(msb.VsockRoute{HostSocket: agentSocket, Port: agentproto.VsockPort}),
 		msb.WithNetwork(network),
 		msb.WithProxy(proxy),
@@ -336,6 +337,10 @@ func (r *Runtime) Boot(ctx context.Context, name string) error {
 
 // AgentPath is the agent's path in the guest, under Options.GuestDir.
 const AgentPath = "/opt/studio/bin/studio-agent"
+
+// loginShellPath is what an SSH session runs, also under Options.GuestDir (agentbin.Install).
+// msb reads it from the VM's config, so a VM keeps the shell it was created with.
+const loginShellPath = "/opt/studio/bin/login-shell"
 
 // boot starts the guest's services. Sandboxes have no init system, so that microsandbox
 // can freeze all of their processes; see guest.Boot.

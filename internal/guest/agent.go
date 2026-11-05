@@ -253,6 +253,9 @@ func (a *Agent) configure(st net.Conn, br *bufio.Reader) error {
 		return agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error()})
 	}
 	a.shell.Store(&cfg.Shell)
+	if _, err := writeIfChanged(terminalShellFile, []byte(a.terminalShell()+"\n")); err != nil {
+		a.log.Warn("writing the terminal shell for SSH sessions", "err", err)
+	}
 	a.markConfigured()
 	return agentproto.WriteJSONLine(st, struct{}{})
 }

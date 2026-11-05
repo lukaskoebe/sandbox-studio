@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- An SSH session has the terminal's environment. An interactive one opens your terminal shell at
+  `/workspace`, and a command, such as an editor starting its backend, runs through `bash -l` in the
+  home, so it has the CA variables, secret placeholders and mise. This applies to sandboxes created
+  from now on; an existing one gets it with its next rebase or disk resize.
 - Diffs in the Changes panel, a review and a message's changes are drawn by `@pierre/diffs`. They show
   what changed inside a line, line numbers, renames and mode changes, keep each file's name in view
   while you scroll, and colour about 300 languages. Scrolling a long diff no longer stalls the page,

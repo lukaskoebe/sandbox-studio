@@ -27,6 +27,9 @@ const (
 	trustedCA   = "/usr/local/share/ca-certificates/sandbox-studio.crt"
 	systemRoots = "/etc/ssl/certs/ca-certificates.crt" // built by update-ca-certificates
 	profileHook = "/etc/profile.d/sandbox-studio-env.sh"
+	// terminalShellFile names the shell an interactive SSH session starts, for the login shell
+	// that agentbin installs.
+	terminalShellFile = ConfigDir + "/terminal-shell"
 )
 
 // toolEnv is how mise behaves for the agent: it trusts the project's mise.toml without

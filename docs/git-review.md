@@ -373,8 +373,9 @@ an agent at once, in the sandbox's chat or terminal it works in.
   line. A footer that stays in view holds Send to, the pull request choice, Reject and
   Approve, with Send without deciding and Ignore in its More menu. A `git.pr` approval has
   no diff and no tabs.
-- **Line comments.** Each line of the review's diff has a comment button (on hover or focus,
-  and always on touch screens).
+- **Line comments.** A line of the review's diff takes a comment from the button on its number
+  while the pointer is over it, or from a click or tap on the number. Neither has a keyboard route
+  yet (`PLAN.md`).
   `web/src/components/review-feedback.tsx` numbers the lines from the hunk headers and folds
   the comments into the note, after the general note: one item per comment with the file, the
   line number and the line's code, then the comment. So they reach the agent by every route,
