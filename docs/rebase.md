@@ -203,10 +203,10 @@ and tmux sessions end. A sandbox without a template moves to the current base im
 fork does. While the copy runs, the copied data takes its space twice on the host. The dialog
 shows each disk's size, and its free space where the guest reported the disk nearly full.
 
-It has not been run against a real VM yet. The Docker archive's whiteouts, FIFOs and xattrs
-are covered by a unit test that runs as a normal user, so with `user.*` xattrs; the
-`trusted.*` ones and block devices need the guest's root, and Docker starting on the copied
-data needs a live run.
+The Docker archive's whiteouts, FIFOs and xattrs are covered by a unit test that runs as a normal
+user, so with `user.*` xattrs; the `trusted.*` ones and block devices need the guest's root. Docker
+starting on the copied data was run live through a fork, see [fork](#fork); a resize's copy itself
+is the same code.
 
 ## Fork
 
@@ -239,6 +239,12 @@ is all it adds, the fork doesn't inherit it, and New computer's "Start from" lis
 posts a fork without options. The TUI and CLI forks send only a name, so they follow the
 defaults too. Rules aren't copied: a teammate-scoped rule or secret reaches every fork, as
 a fork keeps its source's teammate.
+
+Verified on 2026-11-06 with msb 0.7.8 on the v0.16.0 base image, on 1 CPU and 1 GiB: a stopped base
+forked with its defaults gave a fork whose image, stopped container and volume all worked
+(`docker start`, and `docker run` reading the volume), with the mise tree copied, the source still
+stopped and the script's output and exit status in its `on-fork` terminal. A running source answered
+409 when Docker was asked for or defaulted, and copied its tools live when it wasn't.
 
 On success the fork and its source each record a `fork` event in their history, see [lineage](sandboxes.md#lineage).
 

@@ -109,8 +109,9 @@ export function CreateSandboxDialog({
           <DialogHeader>
             <DialogTitle>New computer</DialogTitle>
             <DialogDescription>
-              A Linux VM with Docker, a persistent /workspace and 2 CPUs, 4 GiB
-              memory.
+              {base
+                ? `A copy of ${base.name}, with its own identity and network approvals.`
+                : "A Linux VM with Docker, a persistent /workspace and 2 CPUs, 4 GiB memory."}
             </DialogDescription>
           </DialogHeader>
           <Field data-invalid={invalid || undefined}>

@@ -540,6 +540,13 @@ and `MSB_HOME`, on a minimal Debian image with an `agent` user:
 `ssh -G` reading the generated config is a unit test (`TestOpenSSHReadsTheConfig`). The
 Remote-SSH, Zed and JetBrains clients themselves were not tried.
 
+The login shell was verified on 2026-11-06 with msb 0.7.8 on the v0.16.0 base image, which is older
+than the wrapper since `/opt/studio` comes from the host. A command ran in `/home/agent` with
+`SHELL=/bin/bash`, the CA variables and mise on its `PATH`, and its exit status came back. An
+interactive session opened at `/workspace` with the same variables, in bash and, after the terminal
+setting changed on the running VM, in zsh. `sftp` still connects, at `/`: msb's SFTP server doesn't go
+through the shell, so a client should use absolute paths.
+
 ## Base image
 
 `images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, bash
