@@ -387,3 +387,61 @@ test("a chat says when its sandbox is suspended or stopped, and starts it", asyn
     screen.getByRole("button", { name: "Start", exact: true })
   ).toHaveCount(0)
 })
+
+test("a message's changes show each file's diff", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const teammate = await addTeammate(api, env, "Editor")
+  const id = await api.createSandbox(sandboxName("changes"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const main = page.getByRole("main")
+  await main.getByRole("textbox", { name: "Message" }).fill("Edit the file")
+  await main.getByRole("button", { name: "Send" }).click()
+  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(main).toContainText(done)
+
+  // The scripted agent edits nothing, so the turn comes as if it had.
+  const file = {
+    path: "src/app.go",
+    status: "modified",
+    added: 1,
+    removed: 1,
+  }
+  await page.route(/\/chats\/[^/]+(\?.*)?$/, async (route) => {
+    const r = await route.fetch()
+    const body = await r.json()
+    body.turns.at(-1).changes = { files: [file] }
+    await route.fulfill({ response: r, json: body })
+  })
+  await page.route(/\/turns\/[^/]+\/changes/, (route) =>
+    route.fulfill({
+      json: {
+        files: [
+          {
+            ...file,
+            // A snapshot's diff has no diff --git line, and isn't a rename from a/ to b/.
+            diff: "--- a/src/app.go\n+++ b/src/app.go\n@@ -1,2 +1,2 @@\n package main\n-var old = 1\n+var fresh = 2\n",
+          },
+        ],
+      },
+    })
+  )
+  await page.reload()
+  await main.getByRole("tab", { name: /^Changes/ }).click()
+  await main.getByRole("button", { name: /src\/app\.go/ }).click()
+  const line = main.locator("[data-line]")
+  await expect(line.filter({ hasText: "var fresh = 2" })).toBeVisible()
+  await expect(line.filter({ hasText: "var old = 1" })).toBeVisible()
+  await expect(line).toHaveCount(3)
+  await expect(main.locator("diffs-container")).not.toContainText(
+    "a/src/app.go"
+  )
+})

@@ -7,6 +7,7 @@ import {
   test,
   type Api,
 } from "./fixtures"
+import type { Locator, Page } from "@playwright/test"
 
 /**
  * A forge of kind https on a host of its own, and its upstream repository: a bare repository
@@ -65,7 +66,7 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
 
   const sheet = page.getByRole("dialog")
   await expect(sheet).toContainText("Add a greeting")
-  await expect(sheet).toContainText("+hello from the sandbox")
+  await expect(sheet).toContainText("hello from the sandbox")
   await expect(sheet.getByRole("link", { name: "Open as page" })).toBeVisible()
   await sheet.getByRole("button", { name: "Approve and push" }).click()
   await expect(sheet).toBeHidden()
@@ -85,7 +86,7 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
   await row.getByRole("link").click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/git/reviews/`))
   await expect(page.getByRole("status")).toContainText("This was approved.")
-  await expect(page.getByText("+hello from the sandbox")).toBeVisible()
+  await expect(page.getByText("hello from the sandbox")).toBeVisible()
   await page.getByRole("tab", { name: /^Commits/ }).click()
   await expect(page.getByText("Add a greeting")).toBeVisible()
   // A decided push has no comments to write.
@@ -219,7 +220,7 @@ test("a rewritten branch is reviewed with what it drops and takes a force-push",
     `${first.commit!.slice(0, 10)}Add the coupon field→ ${amended.commit!.slice(0, 10)}`
   )
   await expect(rewrite).toContainText("differ in coupon.txt")
-  await expect(sheet).toContainText("+field v2")
+  await expect(sheet).toContainText("field v2")
   await expect(
     sheet.getByRole("button", { name: "Approve and push" })
   ).toHaveCount(0)
@@ -270,7 +271,7 @@ test("a pending push review opens as a page and is decided there", async ({
 
   const main = page.getByRole("main")
   await expect(main).toContainText("Start the notes")
-  await expect(main).toContainText("+# Notes")
+  await expect(main).toContainText("# Notes")
   await page.getByRole("tab", { name: /^Comments/ }).click()
   await page.getByLabel("Note for the agent").fill("Not this one")
   await page.getByRole("button", { name: "Reject" }).click()
@@ -332,7 +333,7 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
 
   // A line comment, sent to the chat with the rejection.
   let sheet = await review("greeting.txt", "Add a greeting")
-  await sheet.getByRole("button", { name: "Comment on greeting.txt:1" }).click()
+  await commentOn(sheet, sheet.locator("[data-line]").first())
   await sheet
     .getByRole("textbox", { name: "Comment on greeting.txt:1" })
     .fill("Say hello to the world, please")
@@ -450,13 +451,151 @@ test("a long diff is highlighted off the page's thread, and a very long line sta
   await card.getByRole("button", { name: "Review" }).click()
   const sheet = page.getByRole("dialog")
 
-  const line = sheet.locator("pre div.whitespace-pre")
+  const line = sheet.locator("[data-line]")
   const first = line.filter({ hasText: 'func f0() string { return "s0" }' })
   await expect(first).toBeVisible()
-  await expect(first.locator(".tok-keyword").first()).toHaveText("func")
-  await expect(first.locator(".tok-string")).toHaveText('"s0"')
+  await expect(
+    first.locator('span[style*="--code-keyword"]').first()
+  ).toHaveText("func")
+  await expect(first.locator('span[style*="--code-string"]')).toContainText(
+    "s0"
+  )
   const longLine = line.filter({ hasText: "var long" })
   await expect(longLine).toBeVisible()
-  await expect(longLine.locator("[class*=tok-]")).toHaveCount(0)
-  await expect(longLine).toHaveText(long)
+  await expect(longLine.locator('span[style*="--code-"]')).toHaveCount(0)
+  await expect(longLine).toHaveText(long.slice(1))
+  // Only the lines near the view are on the page.
+  expect(await line.count()).toBeLessThan(300)
+})
+
+/** Opens the comment editor of a row. Highlighting redraws a row, which drops the hover's button. */
+async function commentOn(sheet: Locator, row: Locator) {
+  await expect(async () => {
+    await row.hover()
+    await sheet
+      .getByRole("button", { name: "Comment on this line" })
+      .click({ timeout: 1000 })
+  }).toPass()
+}
+
+/** Opens the review of a push whose diff comes as given. */
+async function reviewWithDiff(
+  { page, api, env }: { page: Page; api: Api; env: string },
+  name: string,
+  diff: string
+) {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const id = await api.createSandbox(sandboxName(name))
+  await api.guestReady(id)
+  await api.push(id, {
+    url: forge.url,
+    file: "a.txt",
+    content: "a\n",
+    message: "A change",
+  })
+  await page.route(/\/api\/.*approvals/, async (route) => {
+    if (route.request().method() !== "GET") return route.continue()
+    const r = await route.fetch()
+    const body = (await r.text()).replace(
+      /"diff":"(?:[^"\\]|\\.)*"/g,
+      () => `"diff":${JSON.stringify(diff)}`
+    )
+    await route.fulfill({ response: r, body })
+  })
+  await page.goto(`/e/${env}`)
+  await approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+    .getByRole("button", { name: "Review" })
+    .click()
+  return page.getByRole("dialog")
+}
+
+test("a diff shows Studio's notes and renames, and what it holds stays text", async ({
+  page,
+  api,
+  env,
+}) => {
+  const sheet = await reviewWithDiff(
+    { page, api, env },
+    "diff-notes",
+    [
+      "diff --git a/big.bin b/big.bin",
+      "[big.bin: 900000 bytes, larger than 512 KiB; not shown]",
+      "diff --git a/old.txt b/new.txt",
+      "similarity index 100%",
+      "rename from old.txt",
+      "rename to new.txt",
+      "diff --git a/<img src=x onerror=window.pwned=1>.html b/<img src=x onerror=window.pwned=1>.html",
+      "--- a/<img src=x onerror=window.pwned=1>.html",
+      "+++ b/<img src=x onerror=window.pwned=1>.html",
+      "@@ -1,2 +1,2 @@",
+      "-<b>old</b>",
+      "+<img src=x onerror=window.pwned=1>",
+      " <script>window.pwned=1</script>",
+      "",
+      "[... diff truncated by Sandbox Studio: 3 more files not shown ...]",
+      "",
+    ].join("\n")
+  )
+  await expect(sheet).toContainText("big.bin: 900000 bytes")
+  await expect(sheet).toContainText("new.txt")
+  await expect(sheet).toContainText("3 more files not shown")
+  await expect(
+    sheet.locator("[data-line]").filter({ hasText: "<img src=x" })
+  ).toBeVisible()
+  await expect(
+    sheet.locator("diffs-container img, diffs-container script")
+  ).toHaveCount(0)
+  expect(await page.evaluate(() => "pwned" in window)).toBe(false)
+})
+
+test("a comment lands on its line after a removed --- line, and a draft outlives scrolling away", async ({
+  page,
+  api,
+  env,
+}) => {
+  const body = Array.from({ length: 3000 }, (_, i) => `+line ${i}`)
+  const sheet = await reviewWithDiff(
+    { page, api, env },
+    "diff-comment",
+    [
+      "diff --git a/q.sql b/q.sql",
+      "--- a/q.sql",
+      "+++ b/q.sql",
+      "@@ -1,2 +1,3001 @@",
+      "--- an old comment",
+      " keep",
+      ...body,
+      "",
+    ].join("\n")
+  )
+  const row = sheet.locator("[data-line]").filter({ hasText: /^line 2$/ })
+  await commentOn(sheet, row)
+  const editor = sheet.getByRole("textbox", { name: "Comment on q.sql:4" })
+  await editor.fill("A draft on the fourth line")
+
+  await page.mouse.wheel(0, 20000)
+  await expect(editor).toHaveCount(0)
+  await page.mouse.wheel(0, -20000)
+  await expect(editor).toHaveValue("A draft on the fourth line")
+  await sheet.getByRole("button", { name: "Save comment" }).click()
+  await expect(
+    sheet.getByRole("note", { name: "Comment on q.sql:4" })
+  ).toBeVisible()
+
+  // The list jumps back to a line that left the page.
+  await page.mouse.wheel(0, 20000)
+  await expect(
+    sheet.getByRole("note", { name: "Comment on q.sql:4" })
+  ).toHaveCount(0)
+  await sheet.getByRole("tab", { name: /^Comments/ }).click()
+  await sheet
+    .getByRole("list", { name: "Line comments" })
+    .getByRole("button", { name: /A draft on the fourth line/ })
+    .click()
+  await expect(
+    sheet.getByRole("note", { name: "Comment on q.sql:4" })
+  ).toBeInViewport()
 })

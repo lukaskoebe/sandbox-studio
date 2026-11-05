@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Diffs in the Changes panel, a review and a message's changes are drawn by `@pierre/diffs`. They show
+  what changed inside a line, line numbers, renames and mode changes, keep each file's name in view
+  while you scroll, and colour about 300 languages. Scrolling a long diff no longer stalls the page,
+  and a diff you've opened before shows at once. The first diff after loading Studio takes about
+  twice as long to appear, around half a second, and colouring a large new diff takes about two
+  seconds rather than one. To comment on a line, hover its number and use the button, or
+  click the number. There's no keyboard way to do it yet.
 - Allow once on a browser's card answers the request it showed and other reads. Any other write held
   behind that card asks for itself, so a page can't send a `POST` you never saw on the answer to a
   `GET`.

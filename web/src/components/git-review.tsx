@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
@@ -41,6 +41,7 @@ import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
 import { SectionHeader } from "@/components/section-header"
 import { StatusDot } from "@/components/status-dot"
+import type { DiffViewHandle } from "@/components/diff-view"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
   FeedbackTargetSelect,
@@ -258,7 +259,7 @@ function PushReview({ approval }: { approval: Approval }) {
   const [note, setNote] = useState("")
   const [comments, setComments] = useState<LineComment[]>([])
   const [tab, setTab] = useState<Tab>("changes")
-  const ids = useId()
+  const diffView = useRef<DiffViewHandle>(null)
   const review = git?.review
   const proposal = review?.pullRequest
   const [target, setTarget] = useState<FeedbackTarget>(
@@ -307,16 +308,11 @@ function PushReview({ approval }: { approval: Approval }) {
   const pr = git.pullRequest
   const forced = !pr && !!rv?.forced
   const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
-  const lineId = (i: number) => `${ids}-line-${i}`
   const where = (i: number) => `${lines[i]?.file}:${lines[i]?.line}`
   const jump = (i: number) => {
     setTab("changes")
     // The panel shows on the next frame.
-    requestAnimationFrame(() =>
-      document
-        .getElementById(lineId(i))
-        ?.scrollIntoView({ block: "center", behavior: "smooth" })
-    )
+    requestAnimationFrame(() => diffView.current?.scrollToLine(i))
   }
 
   const origin = (
@@ -528,7 +524,7 @@ function PushReview({ approval }: { approval: Approval }) {
               comments={comments}
               onComment={pending ? setComments : undefined}
               fill
-              lineId={lineId}
+              ref={diffView}
             />
           </TabsContent>
           <TabsContent

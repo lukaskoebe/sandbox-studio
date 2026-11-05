@@ -22,12 +22,19 @@ binary embeds (`//go:embed`) and serves at `/`.
   copies with OSC 52; the terminal writes an OSC 52 clipboard to the browser's only within 2 s
   of the user's own key or pointer press in that terminal, says so with a toast otherwise, and
   refuses reads. A program can still write while the user types in the same terminal. Right-click opens Studio's Copy/Paste menu and never reaches tmux.
-- Editors: CodeMirror (YAML specs, Caddyfiles). Code Studio only shows (Files, diffs) is
+- Editors: CodeMirror (YAML specs, Caddyfiles). What Files and the tool cards only show is
   highlighted by Lezer's parsers without an editor (`src/lib/highlight.ts`): each language's
   parser is its own chunk, loaded when a file of it first shows, and the tokens take the
-  `tok-*` classes in `styles.css`. A diff over 600 lines highlights in a worker
+  `tok-*` classes in `styles.css`. A tool card's diff over 600 lines highlights in a worker
   (`src/lib/highlight.worker.ts`), which sends its tokens back as numbers, and a line over 2000
   characters stays plain. Toasts: sonner.
+- Diffs (the Changes panel, a review, a message's changes): `@pierre/diffs`, in
+  `src/components/diff-view.tsx`, loaded when one first shows. It keeps only the rows in view, in
+  a Shadow DOM, and highlights with Shiki in two workers that stay once started. Its theme's
+  colours are `var(--code-*)`, so a change of style or scheme needs no new highlight, and the
+  rest of the style reaches it through the `--diffs-*` variables on `diffs-container` in
+  `styles.css`. A line over 2000 characters stays plain here too. `parseDiff` in
+  `review-feedback.tsx` stays free of the library, since a comment's quote needs only the lines.
 - Installable app: `public/manifest.webmanifest` (served as `application/manifest+json`)
   with the icons in `public/` (`icon.svg` is the source; the PNGs and `favicon.ico` are
   rendered from it, the maskable one without the rounded corners). There is no service

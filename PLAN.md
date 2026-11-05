@@ -78,13 +78,11 @@ Nothing is queued: the next items come from the backlog or the next feedback rou
   view, so Camoufox (Firefox) would mean replacing agent-browser → [browser](docs/browser.md#stealth-mode)
 
 **Git**
-- Try [`@pierre/diffs`](https://diffs.com) (Apache-2.0, v1.6, React adapter) for the Changes panel
-  and the review diffs, in place of our own rendering (`code-view.tsx`, `lib/highlight*`). It takes
-  a raw patch (`PatchDiff`), virtualises, highlights in a worker pool, has line annotations for
-  review comments and a primitive for conflicts, which fork merges could use. Measure before
-  deciding: the bundle it adds with Shiki, a large diff against today's view, and whether its
-  Shadow DOM takes the Pixel and Quiet styles through its `--diffs-*` variables. Also confirm it
-  calls no outside service: a text scan of its package found none but didn't read every file.
+- Diffs, after moving to [`@pierre/diffs`](https://diffs.com)
+  ([why and what it measured](docs/decisions.md#decisions-log)): a keyboard way to comment on a line
+  (the button shows on hover and the line number takes a click or tap, neither from the keyboard);
+  try it on a real touch screen, in the desktop app's WebKit and in Firefox; ship fewer than its
+  roughly 300 grammars if the 12.6 MB it adds matters. Its conflict primitive could serve fork merges.
 - The host-agent acceptance check: an agent in a sandbox pushes to `git@github.com:…`
   through review, with the key only in the host agent
 - Pull request reviews, what is left: teammates' own forge accounts (a verdict on the user's

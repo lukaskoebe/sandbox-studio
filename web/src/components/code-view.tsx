@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import type { DiffLine } from "@/components/review-feedback"
+import type { DiffLine as FullLine } from "@/components/review-feedback"
 import { highlightLines, languageOf, type Token } from "@/lib/highlight"
 import type {
   EncodedSide,
@@ -74,6 +74,8 @@ const maxTokenLine = 2000
 const showEvery = 200
 
 /** The indexes of each file's lines on its old and new sides, so a side reads as its file does. */
+type DiffLine = Pick<FullLine, "text" | "file">
+
 function fileSides(lines: DiffLine[]) {
   const sides = new Map<string, { old: number[]; new: number[] }>()
   lines.forEach((l, i) => {

@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -200,7 +200,6 @@ function HeadNote({ approval, draft }: { approval: Approval; draft: Draft }) {
 export function ForgeReview({ approval }: { approval: Approval }) {
   const detail = approval.forgeReview
   const draft = detail?.draft
-  const ids = useId()
   const lines = parseDiff(draft?.diff ?? "")
   const placed = (draft?.comments ?? []).map((c) => ({
     c,
@@ -437,7 +436,6 @@ export function ForgeReview({ approval }: { approval: Approval }) {
           comments={comments}
           onComment={pending ? setComments : undefined}
           fill
-          lineId={(i) => `${ids}-line-${i}`}
           commentLabel={draft.teammate ? `${draft.teammate}'s draft` : "Draft"}
         />
         {elsewhere.length > 0 && (

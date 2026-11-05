@@ -391,3 +391,22 @@
     color: var(--code-variable);
   }
 }
+
+/*
+ * The diff view renders in a Shadow DOM. Rules on its host outrank the library's own, and
+ * custom properties cross into it, so Pixel and Quiet reach it from here.
+ */
+diffs-container {
+  color-scheme: light;
+  color: var(--foreground);
+  background-color: var(--background);
+  --diffs-font-family: var(--font-mono);
+  --diffs-header-font-family: var(--control-font);
+  --diffs-font-size: var(--text-caption);
+  --diffs-line-height: 16px;
+  --diffs-bg: var(--background);
+  --diffs-fg: var(--foreground);
+}
+.dark diffs-container {
+  color-scheme: dark;
+}
