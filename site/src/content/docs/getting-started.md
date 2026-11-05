@@ -93,7 +93,7 @@ The guided setup adds the provider, creates a default teammate named Iris for it
 1. In **Settings → AI providers**, sign in with a Claude Pro/Max or ChatGPT subscription, or add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
 2. In Teammates, create a teammate and choose its harness, provider, model, role, and optional working instructions (“soul”).
 3. Create a sandbox and select that teammate. Ownership is fixed when the sandbox is created.
-4. Open the sandbox and select **Start session**. The agent opens in a terminal tab.
+4. Open the teammate and write to it: the conversation runs the agent in its sandbox. To work beside it, open a **New shell** in the sandbox's terminal and start the agent there yourself, or press `T` in the [terminal UI](../tui/).
 
 See [Teammates and providers](../teammates-providers/) for supported combinations, and [Network rules](../network/) for how the first outbound request is handled.
 
