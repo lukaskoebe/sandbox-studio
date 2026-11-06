@@ -75,15 +75,16 @@ func (f *fakeSandboxes) WaitReady(_ context.Context, id string, _ time.Duration)
 // fakeChats starts heartbeat chats in the store, as the chat service does: a sent prompt
 // makes the chat running until the test lets Send return.
 type fakeChats struct {
-	st      *store.Store
-	mu      sync.Mutex
-	created []store.Chat
-	prompts []string
-	deleted []string
-	sendErr error
-	gate    chan struct{} // Send waits on it after the chat is running
-	entered chan struct{} // receives when Send has started a chat
-	onRun   func()        // called as a run's chat is made
+	st        *store.Store
+	mu        sync.Mutex
+	created   []store.Chat
+	prompts   []string
+	deleted   []string
+	sendErr   error
+	createErr error         // a run's chat could not be made
+	gate      chan struct{} // Send waits on it after the chat is running
+	entered   chan struct{} // receives when Send has started a chat
+	onRun     func()        // called as a run's chat is made
 }
 
 func (f *fakeChats) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harness string) (store.Chat, error) {
@@ -99,6 +100,9 @@ func (f *fakeChats) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harne
 func (f *fakeChats) CreateRun(ctx context.Context, sb store.Sandbox, harness, taskID, title string) (store.Chat, error) {
 	if f.onRun != nil {
 		f.onRun()
+	}
+	if f.createErr != nil {
+		return store.Chat{}, f.createErr
 	}
 	c, err := f.st.CreateChat(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harness, TaskID: taskID, Title: title})
 	if err == nil {

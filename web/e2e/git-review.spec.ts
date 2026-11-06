@@ -482,7 +482,7 @@ async function commentOn(sheet: Locator, row: Locator) {
 async function reviewWithDiff(
   { page, api, env }: { page: Page; api: Api; env: string },
   name: string,
-  diff: string
+  diff: string | (() => string)
 ) {
   await api.dismissApprovals()
   const forge = await forgeWithRepo(api, env)
@@ -499,7 +499,7 @@ async function reviewWithDiff(
     const r = await route.fetch()
     const body = (await r.text()).replace(
       /"diff":"(?:[^"\\]|\\.)*"/g,
-      () => `"diff":${JSON.stringify(diff)}`
+      () => `"diff":${JSON.stringify(typeof diff === "string" ? diff : diff())}`
     )
     await route.fulfill({ response: r, body })
   })
@@ -511,6 +511,38 @@ async function reviewWithDiff(
     .click()
   return page.getByRole("dialog")
 }
+
+test("a diff that changes to one of the same length shows the new one", async ({
+  page,
+  api,
+  env,
+}) => {
+  const change = (value: number) =>
+    [
+      "diff --git a/a.txt b/a.txt",
+      "--- a/a.txt",
+      "+++ b/a.txt",
+      "@@ -1 +1 @@",
+      "-v = 0",
+      `+v = ${value}`,
+      "",
+    ].join("\n")
+  let diff = change(1)
+  const sheet = await reviewWithDiff(
+    { page, api, env },
+    "same-length",
+    () => diff
+  )
+  const lines = sheet.locator("[data-line]")
+  await expect(lines.filter({ hasText: "v = 1" })).toBeVisible()
+
+  diff = change(2)
+  // Another request makes the page fetch the approvals again.
+  const other = await api.createSandbox(sandboxName("same-length-other"))
+  await api.connect(other, `refetch-${Date.now()}.example.org`)
+  await expect(lines.filter({ hasText: "v = 2" })).toBeVisible()
+  await expect(lines.filter({ hasText: "v = 1" })).toHaveCount(0)
+})
 
 test("a diff shows Studio's notes and renames, and what it holds stays text", async ({
   page,

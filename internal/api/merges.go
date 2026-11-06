@@ -65,7 +65,7 @@ func (s *Server) registerMerges(api huma.API) {
 		OperationID: "acceptMerge", Method: http.MethodPost,
 		Path: "/api/environments/{env}/merges/{merge}/accept", Tags: []string{"merges"},
 		Summary: "Accept a merge",
-		Description: "Checkpoints the source, copies everything that changed in the scratch sandbox into it, and deletes the scratch sandbox. " +
+		Description: "Copies everything that changed in the scratch sandbox into the source, and deletes the scratch sandbox. It takes no checkpoint, so it can't be undone. " +
 			"The source and the scratch sandbox must run, and no conflicts may be left. If the source changed a path since the merge " +
 			"started, nothing is copied and the answer is 409, naming the paths. It continues if the client disconnects.",
 	}, func(ctx context.Context, in *mergePath) (*mergeOut, error) {

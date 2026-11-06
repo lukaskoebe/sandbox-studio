@@ -581,23 +581,28 @@ func TestOnceLeavesOtherWritesToAskForThemselves(t *testing.T) {
 	get := send(HTTPRequest{Method: "GET", Path: "/c"})
 	other := send(HTTPRequest{Method: "POST", Path: "/b"})
 	override := send(HTTPRequest{Method: "GET", Path: "/d", Override: true})
-	once(pending(5))
+	shownOverride := send(HTTPRequest{Method: "POST", Path: "/a", Override: true})
+	once(pending(6))
 	allowed("the request the card showed", shown)
 	allowed("the same request", again)
 	allowed("another GET", get)
 
-	// The two left ask, one card at a time, as they share a subject.
+	// The three left ask, one card at a time, as they share a subject.
 	select {
 	case r := <-other:
 		t.Fatalf("another POST went on the first answer: %+v", r)
 	case r := <-override:
 		t.Fatalf("a GET that names another method went on the first answer: %+v", r)
+	case r := <-shownOverride:
+		t.Fatalf("the shown request naming another method went on the first answer: %+v", r)
 	case <-time.After(50 * time.Millisecond):
 	}
 	once(pending(1))
 	once(pending(1))
+	once(pending(1))
 	allowed("the other POST, on its own card", other)
 	allowed("the method override, on its own card", override)
+	allowed("the shown request naming another method, on its own card", shownOverride)
 	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 0 {
 		t.Errorf("once made rules: %+v", rules)
 	}

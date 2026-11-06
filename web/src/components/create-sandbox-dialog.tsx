@@ -192,7 +192,7 @@ function baseBlocked(base: Sandbox) {
   if (base.status !== "running" && base.status !== "stopped")
     return `Only a running or stopped computer can be copied, and ${base.name} is ${base.status}.`
   if (base.forkDefaults?.docker && base.status === "running")
-    return `Stop ${base.name} to copy its Docker images.`
+    return `Stop ${base.name} to copy its Docker images. If it's being copied, wait for that to finish.`
 }
 
 /** What starting from a base copies, and what comes with it. */

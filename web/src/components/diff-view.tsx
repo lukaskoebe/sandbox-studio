@@ -191,6 +191,8 @@ export default function DiffView({
 
   // An item keeps its version until its annotations move, so the others don't render again.
   const known = useRef(new Map<number, { key: string; version: number }>())
+  // CodeView keeps an item's old data while its version stands, so the text has to count too.
+  const diffKey = useMemo(() => `${diff.length}-${hash(diff)}`, [diff])
   const items = useMemo(() => {
     const byFile = new Map<number, DiffLineAnnotation<Note>[]>()
     const add = (fileNo: number, a: DiffLineAnnotation<Note>) =>
@@ -216,7 +218,7 @@ export default function DiffView({
     return files.map((fileDiff, fileNo): CodeViewDiffItem<Note> => {
       const annotations = byFile.get(fileNo)
       const key =
-        diff.length +
+        diffKey +
         ":" +
         (annotations ?? [])
           .map((a) => `${a.side}${a.lineNumber}`)
@@ -233,7 +235,7 @@ export default function DiffView({
         version,
       }
     })
-  }, [diff, files, notes, comments, editing, lines])
+  }, [diffKey, files, notes, comments, editing, lines])
 
   useImperativeHandle(
     ref,

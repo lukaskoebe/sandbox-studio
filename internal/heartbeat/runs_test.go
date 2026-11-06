@@ -225,6 +225,17 @@ func TestARunThatCannotStartIsSkippedAtOnce(t *testing.T) {
 	}
 }
 
+func TestARunWhoseChatCannotBeMadeIsLogged(t *testing.T) {
+	f := newFixture(t)
+	f.sandbox(runtime.StatusStopped, false)
+	f.chats.createErr = errors.New("disk full")
+	task := f.due(f.scheduled("CI triage", daily, f.now))
+	runs := f.runs(task)
+	if len(runs) != 1 || runs[0].Outcome != store.RunSkipped || !strings.Contains(runs[0].Reason, "disk full") {
+		t.Fatalf("runs: %+v", runs)
+	}
+}
+
 func TestMissedRunsAndCatchUp(t *testing.T) {
 	f := newFixture(t)
 	f.sandbox(runtime.StatusRunning, true)

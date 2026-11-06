@@ -115,8 +115,9 @@ type HTTPRequest struct {
 	// Logging, CSP reports), which ChromiumService denies.
 	Report bool `json:"-"`
 	// Override is set for a request whose headers name another method, which the upstream may
-	// go by: the method here says nothing about what it does.
-	Override bool `json:"-"`
+	// go by: the method here says nothing about what it does. A card keeps it, so that "Once" can
+	// tell the request it showed from another with the same method and path.
+	Override bool `json:"override,omitempty" doc:"The request's headers name another method, which the upstream may go by"`
 }
 
 // NetworkRequest is the payload of a network approval.
@@ -505,7 +506,7 @@ func onceCovers(a store.Approval, req Request) bool {
 		return true
 	}
 	var shown NetworkRequest
-	if err := json.Unmarshal(a.Payload, &shown); err == nil && shown.Method == req.HTTP.Method && shown.Path == req.HTTP.Path {
+	if err := json.Unmarshal(a.Payload, &shown); err == nil && shown.Method == req.HTTP.Method && shown.Path == req.HTTP.Path && shown.Override == req.HTTP.Override {
 		return true
 	}
 	return req.HTTP.Method == http.MethodGet && !req.HTTP.Override

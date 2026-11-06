@@ -5,6 +5,7 @@ package guest
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -180,7 +181,7 @@ func startHarness(run run, sleep func(time.Duration), req agentproto.StartSessio
 	// once with "command not found".
 	if _, err := run("bash", "-lc", `command -v -- "$1"`, "studio-session", req.Command[0]); err != nil {
 		return harnessError(fmt.Sprintf("%s is not installed in this sandbox: its image predates the agent tools. "+
-			"Rebase it onto the current base: Rebase in the computer menu keeps /workspace and the home.", req.Harness))
+			"Rebase it onto the current base: Rebase in the computer menu keeps /workspace and the home.", cmp.Or(req.Harness, req.Command[0])))
 	}
 	if out, err := run("tmux", startCommand(req)...); err != nil {
 		return fmt.Errorf("tmux: %s", strings.TrimSpace(string(out)))

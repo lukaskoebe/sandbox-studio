@@ -385,9 +385,10 @@ func (m *Manager) RecheckMerge(ctx context.Context, envID, mergeID string) (Merg
 	return m.mergeView(ctx, mg), nil
 }
 
-// AcceptMerge checkpoints the source, replays the scratch sandbox's changes into it and
-// deletes the scratch sandbox. Both must run, and no conflicts may be left. When the source
-// changed a path since the merge started, nothing is replayed: a *MergeReplayError.
+// AcceptMerge replays the scratch sandbox's changes into the source and deletes the scratch
+// sandbox. It takes no checkpoint (docs/decisions.md). Both must run, and no conflicts may be
+// left. When the source changed a path since the merge started, nothing is replayed: a
+// *MergeReplayError.
 func (m *Manager) AcceptMerge(ctx context.Context, envID, mergeID string) (MergeView, error) {
 	r, err := m.agentRunner()
 	if err != nil {

@@ -182,8 +182,7 @@ function MergePage() {
                     >
                       {m.sourceName}
                     </Link>
-                    . A checkpoint taken just before is in its history, to go
-                    back to.
+                    .
                   </span>
                 </p>
               )}
@@ -281,7 +280,7 @@ function MergePage() {
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {confirm === "accept"
-                  ? `Studio checkpoints ${m.sourceName}, copies everything that changed in ${m.scratchName} into it, and deletes ${m.scratchName}. If ${m.sourceName} changed a file since the merge started, nothing is copied.`
+                  ? `Studio copies everything that changed in ${m.scratchName} into ${m.sourceName} and deletes ${m.scratchName}. This can't be undone: no checkpoint is taken. If ${m.sourceName} changed a file since the merge started, nothing is copied.`
                   : `Deletes ${m.scratchName || "the scratch sandbox"} with what was resolved in it. ${m.sourceName} stays as it is.`}
               </AlertDialogDescription>
             </AlertDialogHeader>

@@ -158,7 +158,13 @@ function ForkForm({
             : undefined
         }
         disabled={pending}
-        onChange={setChoices}
+        // What's shown for Docker while it's blocked isn't the choice: that comes back with a stop.
+        onChange={(next) =>
+          setChoices({
+            ...next,
+            docker: dockerBlocked ? choices.docker : next.docker,
+          })
+        }
       />
 
       <Field data-invalid={invalid || undefined}>

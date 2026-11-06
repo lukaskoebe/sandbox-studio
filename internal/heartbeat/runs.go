@@ -227,9 +227,11 @@ func (s *Service) startRun(ctx context.Context, tm store.Teammate, t store.Task,
 			return verdict{gone: true}, nil
 		}
 	}
+	// The schedule has moved by now, so an error must leave a trace in the task's log: returning
+	// it would lose the run without one.
 	c, err := s.Chats.CreateRun(ctx, sb, launch.Harness.Name(), t.ID, runTitle(t, at))
 	if err != nil {
-		return verdict{}, err
+		return skip("the chat could not be made: %v", err), nil
 	}
 	if _, err := s.Chats.Send(ctx, env, c.ID, launch, chat.Prompt{Text: runMessage(t)}); err != nil {
 		_ = s.Chats.Delete(context.WithoutCancel(ctx), env, c.ID)

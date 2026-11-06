@@ -1206,7 +1206,7 @@ export interface paths {
         put?: never;
         /**
          * Accept a merge
-         * @description Checkpoints the source, copies everything that changed in the scratch sandbox into it, and deletes the scratch sandbox. The source and the scratch sandbox must run, and no conflicts may be left. If the source changed a path since the merge started, nothing is copied and the answer is 409, naming the paths. It continues if the client disconnects.
+         * @description Copies everything that changed in the scratch sandbox into the source, and deletes the scratch sandbox. It takes no checkpoint, so it can't be undone. The source and the scratch sandbox must run, and no conflicts may be left. If the source changed a path since the merge started, nothing is copied and the answer is 409, naming the paths. It continues if the client disconnects.
          */
         post: operations["acceptMerge"];
         delete?: never;
@@ -5077,6 +5077,8 @@ export interface components {
             method?: string;
             /** @description A top-level navigation: the page moves to another site */
             navigation?: boolean;
+            /** @description The request's headers name another method, which the upstream may go by */
+            override?: boolean;
             /** @description The request path, without the query */
             path?: string;
             pathPattern?: string;

@@ -77,7 +77,7 @@ Studio makes a scratch copy of the original sandbox, named like `my-app-merge-1`
 - Tools the fork installed with mise, cargo or go are copied if the original lacks them.
 - Caches, ignored files and Docker state are left out.
 
-If there are conflicts, open the scratch sandbox and resolve them, or copy the prompt on the merge page into a chat with its teammate. Run the tests there if you like, then **Check again**. **Accept** takes a checkpoint of the original, so you can go back, copies the result into it and deletes the scratch copy. **Abort** deletes the scratch copy and leaves the original as it was.
+If there are conflicts, open the scratch sandbox and resolve them, or copy the prompt on the merge page into a chat with its teammate. Run the tests there if you like, then **Check again**. **Accept** copies the result into the original and deletes the scratch copy. It can't be undone, as Studio takes no checkpoint first. **Abort** deletes the scratch copy and leaves the original as it was.
 
 A fork made before Studio 0.6 doesn't know what it started from, so every file the two sides hold differently is a conflict.
 
@@ -126,7 +126,7 @@ A base gets a small **base** mark. **New computer** then has a **Start from** fi
 
 A copy keeps the base's template, resources and teammate. It has its own network approvals, so a host you allowed for the base alone isn't allowed for the copy. To allow a host or give a secret to every copy, scope the rule or secret to the teammate.
 
-Each copy is a full copy on your disk, as Studio can't share data between them yet.
+Each copy is a full copy on your disk, as Studio can't share data between them yet. A computer gives one copy at a time, and it shows as running while it does.
 
 ## Export a workspace
 

@@ -16,8 +16,10 @@ var dist embed.FS
 // loginShell is what msb's SSH server runs for a session, as the VM's shell (runtime.create): with
 // no arguments for an interactive session and with -c and a command for any other. Its own default,
 // /bin/sh without a profile, has neither the CA variables, the secret placeholders nor mise. A
-// command gets bash in the home, as sshd would start it, whatever the terminal shell's setup does;
-// an interactive session gets the terminal shell where terminals open.
+// command gets bash in the home, whatever the terminal shell's setup does, but as a login shell,
+// unlike under sshd: that's what gives it the environment, and it means a profile that prints
+// corrupts what a client such as rsync reads. An interactive session gets the terminal shell where
+// terminals open.
 const loginShell = `#!/bin/sh
 if [ ! -x /bin/bash ]; then
 	exec /bin/sh "$@"
