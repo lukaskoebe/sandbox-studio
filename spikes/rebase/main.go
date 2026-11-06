@@ -190,7 +190,7 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	fmt.Printf("ok   fixture written (%d manifest lines)\n", strings.Count(want, "\n"))
 
 	start := time.Now()
-	fork, err := mgr.Fork(ctx, env.ID, src.ID, "fork")
+	fork, err := mgr.Fork(ctx, env.ID, src.ID, "fork", sandboxes.ForkOptions{})
 	if fork.ID != "" {
 		created = append(created, fork.ID)
 	}

@@ -173,7 +173,7 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	}
 	term.Close()
 	fmt.Printf("ok   suspended in %s, terminal stream ended\n", time.Since(paused).Round(time.Millisecond))
-	if _, err := mgr.Fork(ctx, env.ID, sb.ID, "nope"); !errors.Is(err, sandboxes.ErrLifecycleState) {
+	if _, err := mgr.Fork(ctx, env.ID, sb.ID, "nope", sandboxes.ForkOptions{}); !errors.Is(err, sandboxes.ErrLifecycleState) {
 		return fmt.Errorf("fork of a suspended sandbox: %v", err)
 	}
 	if _, err := mgr.Start(ctx, env.ID, sb.ID); !errors.Is(err, sandboxes.ErrLifecycleState) {
