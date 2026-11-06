@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.17.0 — 2026-11-06
 
 - A fresh computer per task: **Use as a base** in a computer's **⋯** menu makes it a starting point
   that **New computer** offers under **Start from**. A base says what its copies take by default,
