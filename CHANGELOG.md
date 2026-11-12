@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.21.0 — 2026-11-12
 
 - A teammate's browser fitted to the view is sharp on a high-density screen: the page gets the
   screen's scale, so its frames have a pixel for each of the screen's.
