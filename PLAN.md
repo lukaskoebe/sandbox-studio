@@ -44,6 +44,15 @@ place over ACP (`session/set_config_option`); the terminal, check-ins and schedu
 the default. Not live-tested: the switch on each real adapter, and Codex with a compatible
 provider, whose adapter only takes models Codex lists.
 
+The third list of 2026-11-12, built on main: a full-length diff shows stacked or split, by a
+switch this browser remembers; Settings → Updates checks for updates on demand, in every mode;
+Files goes to any path of the computer (`/workspace` stays the default, `/` finds a file in the
+Studio app too); a preview behind HTTP basic auth asks in Studio's own dialog over the preview,
+keeping the sign-in in memory per sandbox and port; and a teammate's browser fitted to the view is
+sharp on a high-density screen, as the page gets the screen's scale (within a 4K frame; an older
+guest stays at 1x). A page that isn't fitted is still shown scaled at 1x. Not live-tested in a
+browser VM: that a scale gives frames of that many pixels with the stream's bounds raised.
+
 Measured:
 
 - **Faster Docker copies: nothing to tune in Studio.** A scratch VM (2 vCPUs, 2 GiB)
@@ -60,6 +69,13 @@ Measured:
 
 Needs your call:
 
+- **Mocks of the third list** (artifact Fr3r3okXQqQdZZZH6raxgB): memory with many pages and facts,
+  memory in the teammate's settings (and what else is missing there), a navbar for previews, and
+  the browser's "asleep" view. Each is built once picked.
+- **Files and commands for agents** (concept, artifact ReJo1R59jU3s6QLKpUL1DS): not ghfs (issues
+  only, GitHub only, read-only, token in the VM, closed and paid), but a host-fed `~/forge` folder
+  like `~/memory` and one `studio` command over the same tools MCP serves. Open: the folder's
+  place, whether MCP shrinks later, issues now or later, the command's name.
 - **An AI provider for a computer without a teammate.** A chat needs a teammate today (its soul,
   memory and rules). Either a teammate-less chat on a provider you pick, with no memory, or keep
   pointing to "assign a teammate". The first is the smaller change; I'd wait for a second ask.
