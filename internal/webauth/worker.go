@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -20,7 +21,8 @@ import (
 const (
 	// WorkerParam is the query parameter that carries the capability.
 	WorkerParam = "__studio_sw"
-	// WorkerPatchPath is the script the preview's pages load.
+	// WorkerPatchPath is the script the preview's pages load: the worker patch, and the
+	// bridge to the preview panel's address bar (previewBridge).
 	WorkerPatchPath = "/__studio/preview-sw.js"
 )
 
@@ -94,6 +96,32 @@ var r=c.register;c.register=function(u,o){if(o&&o.type==="module"){try{var x=new
 var d=window.ServiceWorker&&Object.getOwnPropertyDescriptor(ServiceWorker.prototype,"scriptURL");if(d&&d.get){var g=d.get;Object.defineProperty(ServiceWorker.prototype,"scriptURL",{configurable:true,enumerable:d.enumerable,get:function(){return strip(g.call(this))}})}})();
 `
 
+// previewBridge lets the preview panel's address bar follow a framed preview, whose address
+// Studio can't read across origins. It talks only to Studio's own page: the frame's parent, on
+// a loopback host at the preview's port (the frame's ancestor, where the browser names it).
+// It reports the page's path as it loads and on each pushState, replaceState, popstate and
+// hashchange, says when the page starts to leave, and hands a click on a link to another
+// site to Studio, which opens it in a new tab or switches to the sandbox port it names. It
+// takes back, forward and go-to-a-path commands, the path on the preview's own origin.
+const previewBridge = `(function(){if(window.parent===window||window.__studioNav)return;window.__studioNav=1;
+var T="studio-preview-nav",s=location.protocol+"//",q=location.port?":"+location.port:"",ok=[s+"localhost"+q,s+"127.0.0.1"+q,s+"[::1]"+q],a=location.ancestorOrigins;
+if(a&&a.length)ok=ok.indexOf(a[0])>=0?[a[0]]:[];
+function post(m){m.type=T;for(var i=0;i<ok.length;i++)try{parent.postMessage(m,ok[i])}catch(e){}}
+function report(){var n=window.navigation;post({event:"location",path:location.pathname+location.search+location.hash,back:n?n.canGoBack:null,forward:n?n.canGoForward:null})}
+["pushState","replaceState"].forEach(function(k){var f=history[k];history[k]=function(){var r=f.apply(this,arguments);report();return r}});
+addEventListener("popstate",report);addEventListener("hashchange",report);addEventListener("pageshow",report);
+addEventListener("beforeunload",function(){post({event:"loading"})});
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",report);else report();
+addEventListener("click",function(e){if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+var p=e.composedPath?e.composedPath():[e.target],l=null;for(var i=0;i<p.length;i++){var n=p[i];if(n&&(n.tagName==="A"||n.tagName==="AREA")&&n.href){l=n;break}}
+if(!l)return;var t=(l.getAttribute("target")||"").toLowerCase();if(t&&t!=="_self"&&t!=="_top"&&t!=="_parent")return;
+var u;try{u=new URL(l.href,location.href)}catch(x){return}if((u.protocol!=="http:"&&u.protocol!=="https:")||u.origin===location.origin)return;
+e.preventDefault();post({event:"link",href:u.href})});
+addEventListener("message",function(e){var m=e.data;if(e.source!==parent||ok.indexOf(e.origin)<0||!m||m.type!==T)return;
+if(m.cmd==="back")history.back();else if(m.cmd==="forward")history.forward();else if(m.cmd==="hello")report();
+else if(m.cmd==="go"&&typeof m.path==="string"&&m.path.charAt(0)==="/"&&m.path.charAt(1)!=="/"&&m.path.charAt(1)!=="\\"){var u=new URL(m.path,location.origin);if(u.origin===location.origin)location.assign(u.href)}})})();
+`
+
 func (a *Auth) serveWorkerPatch(w http.ResponseWriter, host string) {
 	param, _ := json.Marshal(WorkerParam)
 	token, _ := json.Marshal(a.workerToken(host))
@@ -101,4 +129,5 @@ func (a *Auth) serveWorkerPatch(w http.ResponseWriter, host string) {
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = fmt.Fprintf(w, workerPatch, param, token)
+	_, _ = io.WriteString(w, previewBridge)
 }

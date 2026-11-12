@@ -15,7 +15,7 @@ import (
 // The patch that lets a module service worker in (see webauth.WorkerPatchPath) goes into
 // every page the preview navigates to, as the first thing in its head, so it runs before the
 // app's scripts register their worker.
-var workerPatchTag = []byte(`<script src="` + webauth.WorkerPatchPath + `"></script>`)
+var workerPatchTag = []byte(`<script src="` + webauth.WorkerPatchPath + `?v=2"></script>`)
 
 // maxPatchSearch is how much of a page Studio reads to find where the patch goes.
 const maxPatchSearch = 8 << 10

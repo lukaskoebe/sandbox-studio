@@ -77,6 +77,17 @@ from other local users and from web pages:
   page again. Studio keeps it in memory only, until it stops, and adds it to that preview's
   requests that carry no `Authorization` of their own; one the app refuses is dropped and asked
   again (`DELETE` forgets it). A preview in a tab of its own keeps the browser's dialog.
+- The panel's address bar: Studio can't read a framed preview's address across origins, so the
+  script every preview page loads first (`/__studio/preview-sw.js`, `internal/webauth`) also
+  carries a bridge to the panel. It posts only to Studio's page: the frame's parent, on a
+  loopback host at the preview's port, and the frame's ancestor where the browser names it. It
+  reports the path as a page loads and on pushState, replaceState, popstate and hashchange,
+  says when a page starts to leave (the loading bar), and hands Studio a click on a link to
+  another site instead of following it: Studio opens it in a new tab, or, for `localhost:<port>`
+  or another preview host of the same sandbox, switches the panel to that port. It takes back,
+  forward and go-to-a-path commands from that page only, the path on its own origin. A page
+  without the bridge (not HTML, or before Studio's script) still opens a typed path, with a new
+  login on it.
 - The Vite dev server (`pnpm dev`, `pnpm dev:lan`) proxies `/api` with Studio's origin and
   goes through the same login exchange; it gets no key or bypass.
 

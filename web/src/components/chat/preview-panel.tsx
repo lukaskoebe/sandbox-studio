@@ -1,13 +1,26 @@
 import { useEffect, useRef, useState } from "react"
 import {
   ArrowClockwiseIcon,
-  BroomIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
   ArrowSquareOutIcon,
   BroadcastIcon,
+  BroomIcon,
+  CaretDownIcon,
   LockKeyIcon,
+  LockSimpleIcon,
 } from "@phosphor-icons/react"
 import { Link } from "@tanstack/react-router"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Empty,
   EmptyContent,
@@ -27,6 +40,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
+import type { components } from "@/lib/api/schema.gen"
+import { inApp, openExternal } from "@/lib/desktop"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import {
   onStudioMachine,
@@ -34,11 +49,16 @@ import {
   openPreviewTab,
   previewLoginURL,
 } from "@/lib/previews"
+import { cn, formatAge } from "@/lib/utils"
+
+type PreviewPort = components["schemas"]["PreviewPort"]
 
 /**
  * The sandbox's running app, framed: the ports it listens on, polled every 5 s, and the
  * chosen one in an iframe that reloads when a request ends (docs/design/chat-mode.md §5).
- * Some apps refuse to be framed, so "Open in new tab" is always next to it.
+ * Above it a browser bar locked to the preview: the port is a fixed part of the address that
+ * picks another, and only the path is typed. Some apps refuse to be framed, so "Open in new
+ * tab" is always next to it.
  */
 export function PreviewPanel({
   env,
@@ -67,8 +87,8 @@ export function PreviewPanel({
   const setPicked = onPort ?? setOwn
   // The first port until one is picked, and again if the picked one goes away.
   const port = list.some((p) => p.port === picked) ? picked : list.at(0)?.port
-  // Each reload counts up; a fresh one also clears the preview's storage as it loads.
-  const [nonce, setNonce] = useState({ n: 0, fresh: false })
+  // The page a link to another port of the sandbox goes to on that port.
+  const [landing, setLanding] = useState<{ port: number; path: string }>()
 
   if (list.length === 0) {
     return (
@@ -87,72 +107,100 @@ export function PreviewPanel({
       </Empty>
     )
   }
+  if (!port) return null
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex min-w-0 items-center gap-1">
-        <Select
-          value={String(port)}
-          onValueChange={(v) => v && setPicked(Number(v))}
-          items={Object.fromEntries(
-            list.map((p) => [String(p.port), `Port ${p.port}`])
-          )}
-        >
-          <SelectTrigger size="sm" className="w-32" aria-label="Port">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {list.map((p) => (
-              <SelectItem key={p.port} value={String(p.port)}>
-                Port {p.port}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title="Reload"
-          disabled={!onStudioMachine}
-          onClick={() => setNonce((r) => ({ n: r.n + 1, fresh: false }))}
-        >
-          <ArrowClockwiseIcon />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title={`Reload fresh: ${freshPreviewHint.toLowerCase()}`}
-          aria-label="Reload fresh"
-          disabled={!onStudioMachine}
-          onClick={() => setNonce((r) => ({ n: r.n + 1, fresh: true }))}
-        >
-          <BroomIcon />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => port && void openPreviewTab(env, sandboxId, port)}
-        >
-          <ArrowSquareOutIcon />
-          Open in new tab
-        </Button>
+  const picker = (
+    <PortPicker
+      ports={list}
+      port={port}
+      onPort={(p) => {
+        setLanding(undefined)
+        setPicked(p)
+      }}
+    />
+  )
+  if (!onStudioMachine) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="@container flex min-w-0 items-center gap-1">
+          <div className="flex h-7 items-center rounded-md border">
+            {picker}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => void openPreviewTab(env, sandboxId, port)}
+          >
+            <ArrowSquareOutIcon />
+            Open in new tab
+          </Button>
+        </div>
+        <p className="text-muted-foreground">
+          Previews only open on the computer running Studio.
+        </p>
       </div>
-      {port &&
-        (onStudioMachine ? (
-          <PreviewFrame
-            key={port}
-            env={env}
-            sandboxId={sandboxId}
-            port={port}
-            reloadKey={`${String(reloadKey)}:${nonce.n}${nonce.fresh ? ":fresh" : ""}`}
-          />
-        ) : (
-          <p className="text-muted-foreground">
-            Previews only open on the computer running Studio.
-          </p>
+    )
+  }
+  return (
+    <PreviewFrame
+      key={port}
+      env={env}
+      sandboxId={sandboxId}
+      port={port}
+      ports={list}
+      picker={picker}
+      start={landing?.port === port ? landing.path : undefined}
+      onPort={(p, path) => {
+        setLanding({ port: p, path })
+        setPicked(p)
+      }}
+      reloadKey={String(reloadKey)}
+    />
+  )
+}
+
+/** The fixed part of the preview's address: localhost and the port, which picks another. */
+function PortPicker({
+  ports,
+  port,
+  onPort,
+}: {
+  ports: PreviewPort[]
+  port: number
+  onPort: (port: number) => void
+}) {
+  return (
+    <Select
+      value={String(port)}
+      onValueChange={(v) => v && onPort(Number(v))}
+      items={Object.fromEntries(
+        ports.map((p) => [String(p.port), `Port ${p.port}`])
+      )}
+    >
+      <SelectTrigger
+        size="sm"
+        aria-label="Port"
+        title="This preview's port: pick another"
+        className="h-full shrink-0 gap-1 rounded-none rounded-l-md border-0 border-r bg-transparent px-2 font-mono text-xs text-muted-foreground dark:bg-transparent"
+      >
+        <LockSimpleIcon className="size-3" />
+        <SelectValue>
+          {() => (
+            <span>
+              <span className="hidden @md:inline">localhost</span>:{port}
+            </span>
+          )}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false} align="start">
+        {ports.map((p) => (
+          <SelectItem key={p.port} value={String(p.port)}>
+            Port {p.port}
+          </SelectItem>
         ))}
-    </div>
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -219,15 +267,68 @@ export function PreviewsOff({
 /** How old a shown preview's login gets before it is renewed; its cookies last eight hours. */
 const renewAfter = 60 * 60_000
 
+/** What the preview's pages say through Studio's bridge (internal/webauth previewBridge). */
+type NavMessage = {
+  type?: unknown
+  event?: unknown
+  path?: unknown
+  href?: unknown
+  back?: unknown
+  forward?: unknown
+}
+
+const navType = "studio-preview-nav"
+
+/** A path the preview's open endpoint takes: from the root, without the fragment. */
+function loadPath(path: string) {
+  const bare = path.split("#")[0]
+  return bare.startsWith("/") && !bare.startsWith("//") && bare !== "/"
+    ? bare
+    : undefined
+}
+
+/** A typed path, or a whole address on the preview's own origin, as a path from the root. */
+function typedPath(raw: string, origin: string) {
+  const text = raw.trim()
+  if (!text) return "/"
+  try {
+    const u = new URL(text)
+    if (u.origin === origin) return `${u.pathname}${u.search}${u.hash}`
+  } catch {
+    // Not a whole address: a path.
+  }
+  return text.startsWith("/") ? text : `/${text}`
+}
+
+/** The port a link names on the user's own computer, which is the sandbox's in a preview. */
+function localPort(u: URL) {
+  if (!["localhost", "127.0.0.1", "0.0.0.0", "[::1]"].includes(u.hostname))
+    return undefined
+  return Number(u.port || (u.protocol === "https:" ? 443 : 80))
+}
+
+type Visit = { path: string; at: number }
+
 function PreviewFrame({
   env,
   sandboxId,
   port,
+  ports,
+  picker,
+  start,
+  onPort,
   reloadKey,
 }: {
   env: string
   sandboxId: string
   port: number
+  ports: PreviewPort[]
+  /** The port part of the address. */
+  picker: React.ReactNode
+  /** The page to open first, such as the one a link on another port named. */
+  start?: string
+  /** Shows another port of the sandbox, on a page of it. */
+  onPort: (port: number, path: string) => void
   reloadKey: string
 }) {
   const [src, setSrc] = useState<string>()
@@ -236,43 +337,127 @@ function PreviewFrame({
   const loggedIn = useRef(0)
   const [renewal, setRenewal] = useState<string>()
   const frame = useRef<HTMLIFrameElement>(null)
-  // The app's basic auth challenge, which Studio's proxy hands to this frame, and the page to
-  // open again once signed in.
+  // The app's basic auth challenge, which Studio's proxy hands to this frame.
   const [asked, setAsked] = useState<BasicAuthAsk>()
-  const [again, setAgain] = useState<{ n: number; path?: string }>({ n: 0 })
   // The username last signed in with, offered again when the app refuses the sign-in.
   const [user, setUser] = useState("")
+  // Each load counts up; the page it opens is the one shown, and a fresh one also clears the
+  // preview's storage as it loads.
+  const [load, setLoad] = useState(0)
+  const here = useRef(start ?? "/")
+  const freshNext = useRef(false)
+  // What the page last said through the bridge, and the paths it went to, newest first.
+  const [shown, setShown] = useState(start ?? "/")
+  const [bridged, setBridged] = useState(false)
+  const [history, setHistory] = useState<{
+    back: boolean | null
+    forward: boolean | null
+  }>({ back: null, forward: null })
+  const [visits, setVisits] = useState<Visit[]>([])
+  const [loading, setLoading] = useState(true)
+  const [typed, setTyped] = useState<string>()
+  const origin = src ? new URL(src).origin : ""
+
+  const go = (path: string) => {
+    here.current = path
+    setShown(path)
+    setLoad((n) => n + 1)
+  }
+  const command = (cmd: "back" | "forward" | "go", path?: string) => {
+    frame.current?.contentWindow?.postMessage(
+      { type: navType, cmd, path },
+      origin
+    )
+  }
+  const follow = (href: string) => {
+    let u: URL
+    try {
+      u = new URL(href)
+    } catch {
+      return
+    }
+    const path = `${u.pathname}${u.search}${u.hash}`
+    const sibling =
+      localPort(u) ??
+      ports.find((p) => {
+        try {
+          return new URL(p.url, window.location.href).host === u.host
+        } catch {
+          return false
+        }
+      })?.port
+    if (sibling !== undefined) {
+      if (ports.some((p) => p.port === sibling)) {
+        if (sibling === port) go(path)
+        else onPort(sibling, path)
+      } else {
+        toast(`Port ${sibling} isn't listening in the sandbox.`)
+      }
+      return
+    }
+    if (inApp) openExternal(u.href)
+    else window.open(u.href, "_blank", "noopener,noreferrer")
+    toast(`${u.host} isn't part of this preview. It opened in a new tab.`)
+  }
+  const followRef = useRef(follow)
+  useEffect(() => {
+    followRef.current = follow
+  })
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      const m = e.data as (Partial<BasicAuthAsk> & { type?: unknown }) | null
-      if (
-        e.source !== frame.current?.contentWindow ||
-        m?.type !== "studio-preview-basic-auth"
-      )
+      if (e.source !== frame.current?.contentWindow) return
+      const m = e.data as (Partial<BasicAuthAsk> & NavMessage) | null
+      if (m?.type === "studio-preview-basic-auth") {
+        setAsked({
+          realm: typeof m.realm === "string" ? m.realm : "",
+          failed: m.failed === true,
+          path: typeof m.path === "string" ? m.path : undefined,
+        })
         return
-      setAsked({
-        realm: typeof m.realm === "string" ? m.realm : "",
-        failed: m.failed === true,
-        path: typeof m.path === "string" ? m.path : undefined,
-      })
+      }
+      if (m?.type !== navType) return
+      if (m.event === "location" && typeof m.path === "string") {
+        const path = m.path
+        here.current = path
+        setShown(path)
+        setBridged(true)
+        setHistory({
+          back: typeof m.back === "boolean" ? m.back : null,
+          forward: typeof m.forward === "boolean" ? m.forward : null,
+        })
+        setVisits((v) =>
+          [{ path, at: Date.now() }, ...v.filter((x) => x.path !== path)].slice(
+            0,
+            10
+          )
+        )
+      } else if (m.event === "loading") {
+        setLoading(true)
+      } else if (m.event === "link" && typeof m.href === "string") {
+        followRef.current(m.href)
+      }
     }
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
   }, [])
 
-  // Every load needs a new one-time login URL.
+  // Every load needs a new one-time login URL, and opens the page shown last.
   useEffect(() => {
     let cancelled = false
+    const fresh = freshNext.current
+    freshNext.current = false
+    setLoading(true)
     previewLoginURL(env, sandboxId, port, {
       embed: true,
-      fresh: again.n === 0 && reloadKey.endsWith(":fresh"),
-      path: again.path,
+      fresh,
+      path: loadPath(here.current),
     }).then(
       (url) => {
         if (cancelled) return
         loggedIn.current = Date.now()
         setError(undefined)
+        setBridged(false)
         setSrc(url)
       },
       (err: unknown) => {
@@ -282,7 +467,14 @@ function PreviewFrame({
     return () => {
       cancelled = true
     }
-  }, [env, sandboxId, port, reloadKey, again])
+  }, [env, sandboxId, port, reloadKey, load])
+
+  // A load that never ends, such as a download, doesn't keep the bar going.
+  useEffect(() => {
+    if (!loading) return
+    const timer = setTimeout(() => setLoading(false), 20_000)
+    return () => clearTimeout(timer)
+  }, [loading])
 
   // The preview's cookies last eight hours from its login (docs/api.md). Once the login is an
   // hour old, a hidden frame logs in again, so an app left open keeps working, its service
@@ -306,63 +498,216 @@ function PreviewFrame({
         .finally(() => (busy = false))
     }
     const timer = setInterval(check, 60_000)
-    const shown = () => document.visibilityState === "visible" && check()
-    document.addEventListener("visibilitychange", shown)
+    const visible = () => document.visibilityState === "visible" && check()
+    document.addEventListener("visibilitychange", visible)
     return () => {
       stopped = true
       clearInterval(timer)
-      document.removeEventListener("visibilitychange", shown)
+      document.removeEventListener("visibilitychange", visible)
     }
   }, [env, sandboxId, port, src])
 
-  if (error) {
-    return (
-      <p className="text-muted-foreground">Can't open the preview: {error}</p>
-    )
+  const submit = () => {
+    if (typed === undefined) return
+    const path = typedPath(typed, origin)
+    setTyped(undefined)
+    if (bridged) command("go", path)
+    else go(path)
   }
-  if (!src) return <Spinner className="m-auto" />
+  const others = ports.filter((p) => p.port !== port)
+
   return (
-    <>
-      <div className="relative flex min-h-80 flex-1 flex-col">
-        <iframe
-          ref={frame}
-          key={src}
-          src={src}
-          title={`Preview of port ${port}`}
-          referrerPolicy="no-referrer"
-          className="min-h-80 w-full flex-1 rounded-md bg-white ring-1 ring-foreground/10"
-        />
-        {asked && (
-          <BasicAuthDialog
-            env={env}
-            sandboxId={sandboxId}
-            port={port}
-            asked={asked}
-            user={user}
-            onCancel={() => setAsked(undefined)}
-            onSignedIn={(name) => {
-              const path = asked.path
-              setUser(name)
-              setAsked(undefined)
-              setAgain((a) => ({ n: a.n + 1, path }))
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="@container flex min-w-0 items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back"
+          title="Back"
+          disabled={!bridged || history.back === false}
+          onClick={() => command("back")}
+        >
+          <ArrowLeftIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Forward"
+          title="Forward"
+          disabled={!bridged || history.forward === false}
+          onClick={() => command("forward")}
+        >
+          <ArrowRightIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Reload"
+          title="Reload"
+          onClick={() => setLoad((n) => n + 1)}
+        >
+          <ArrowClockwiseIcon />
+        </Button>
+        <div className="mx-1 flex h-7 min-w-0 flex-1 items-center rounded-md border bg-background focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
+          {picker}
+          <form
+            className="flex min-w-0 flex-1"
+            onSubmit={(e) => {
+              e.preventDefault()
+              submit()
             }}
-          />
-        )}
+          >
+            <input
+              aria-label="Preview path"
+              value={typed ?? shown}
+              spellCheck={false}
+              onFocus={(e) => {
+                setTyped(shown)
+                e.currentTarget.select()
+              }}
+              onBlur={() => setTyped(undefined)}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") e.currentTarget.blur()
+              }}
+              className="h-full min-w-0 flex-1 bg-transparent px-2 font-mono text-xs outline-none"
+            />
+          </form>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Pages visited in this preview"
+                  title="Pages visited in this preview"
+                  className="flex h-full shrink-0 items-center px-1.5 text-muted-foreground hover:text-foreground"
+                />
+              }
+            >
+              <CaretDownIcon className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              {visits.length === 0 && (
+                <DropdownMenuLabel className="font-normal text-muted-foreground">
+                  The pages you visit here show up here.
+                </DropdownMenuLabel>
+              )}
+              {visits.map((v) => (
+                <DropdownMenuItem
+                  key={v.path}
+                  onClick={() => (bridged ? command("go", v.path) : go(v.path))}
+                  className={cn(v.path === shown && "font-medium")}
+                >
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                    {v.path}
+                  </span>
+                  {v.path !== shown && (
+                    <span className="shrink-0 text-caption text-muted-foreground">
+                      {formatAge(new Date(v.at).toISOString())}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+              {others.length > 0 && <DropdownMenuSeparator />}
+              {others.map((p) => (
+                <DropdownMenuItem
+                  key={p.port}
+                  onClick={() => onPort(p.port, "/")}
+                >
+                  <span className="flex-1">Port {p.port}</span>
+                  <span className="text-caption text-muted-foreground">
+                    switch port
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title={`Reload fresh: ${freshPreviewHint.toLowerCase()}`}
+          aria-label="Reload fresh"
+          onClick={() => {
+            freshNext.current = true
+            setLoad((n) => n + 1)
+          }}
+        >
+          <BroomIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Open in new tab"
+          title="Open in new tab"
+          onClick={() =>
+            void openPreviewTab(env, sandboxId, port, false, loadPath(shown))
+          }
+        >
+          <ArrowSquareOutIcon />
+        </Button>
       </div>
-      {renewal && (
-        <iframe
-          hidden
-          src={renewal}
-          title={`Renewing the preview of port ${port}`}
-          referrerPolicy="no-referrer"
-          onLoad={() => setRenewal(undefined)}
-        />
+      {error ? (
+        <p className="text-muted-foreground">Can't open the preview: {error}</p>
+      ) : !src ? (
+        <Spinner className="m-auto" />
+      ) : (
+        <>
+          <div className="relative flex min-h-80 flex-1 flex-col">
+            <div
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden rounded-t-md",
+                !loading && "hidden"
+              )}
+            >
+              <div
+                role="progressbar"
+                aria-label="Loading the page"
+                className="h-full w-1/3 animate-preview-load bg-primary motion-reduce:animate-pulse"
+              />
+            </div>
+            <iframe
+              ref={frame}
+              key={src}
+              src={src}
+              title={`Preview of port ${port}`}
+              referrerPolicy="no-referrer"
+              onLoad={() => setLoading(false)}
+              className="min-h-80 w-full flex-1 rounded-md bg-white ring-1 ring-foreground/10"
+            />
+            {asked && (
+              <BasicAuthDialog
+                env={env}
+                sandboxId={sandboxId}
+                port={port}
+                asked={asked}
+                user={user}
+                onCancel={() => setAsked(undefined)}
+                onSignedIn={(name) => {
+                  setUser(name)
+                  setAsked(undefined)
+                  go(asked.path ?? here.current)
+                }}
+              />
+            )}
+          </div>
+          {renewal && (
+            <iframe
+              hidden
+              src={renewal}
+              title={`Renewing the preview of port ${port}`}
+              referrerPolicy="no-referrer"
+              onLoad={() => setRenewal(undefined)}
+            />
+          )}
+          <p className="text-caption text-muted-foreground">
+            Blank, or says it refused to connect? Some apps can't be shown
+            inside Studio: use Open in new tab.
+          </p>
+        </>
       )}
-      <p className="text-caption text-muted-foreground">
-        Blank, or says it refused to connect? Some apps can't be shown inside
-        Studio: use Open in new tab.
-      </p>
-    </>
+    </div>
   )
 }
 

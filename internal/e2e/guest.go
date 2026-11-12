@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"log/slog"
 	"net"
@@ -516,6 +517,11 @@ const (
 	moduleWorker = `import {answer} from "/sw/answer.js";self.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(clients.claim()));self.addEventListener("fetch",e=>{if(e.request.mode==="navigate")e.respondWith(new Response("<p>"+answer+"</p>",{headers:{"Content-Type":"text/html"}}))})`
 	moduleAnswer = `import {app} from './name.js';export const answer = "cached " + app`
 	moduleName   = `export const app = "module app"`
+	// A page under /nav, for the preview's address bar: a link within the app, a pushState, a
+	// link to another site and one to another port of the sandbox.
+	navPage = `<!doctype html><html><head><title>Nav</title></head><body><h1>Nav page %s</h1>` +
+		`<a href="/nav/two?x=1">Two</a> <button onclick="history.pushState({},'','/nav/pushed')">Push</button> ` +
+		`<a href="https://example.com/docs">Docs</a> <a href="http://localhost:5173/from-link">Other port</a></body></html>`
 )
 
 // serveTCP answers HTTP on the listening ports, as a dev server would: plain text, except for
@@ -543,6 +549,9 @@ func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 				continue
 			}
 			body = "Signed in to " + req.URL.Path + "\n"
+		}
+		if strings.HasPrefix(req.URL.Path, "/nav") {
+			body, typ = fmt.Sprintf(navPage, html.EscapeString(req.URL.Path)), "text/html"
 		}
 		switch req.URL.Path {
 		case "/pwa":

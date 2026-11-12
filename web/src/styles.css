@@ -35,6 +35,16 @@
   --text-title: 0.8125rem;
   --text-caption: 0.6875rem;
   --text-meta: 0.625rem;
+  /* A preview's thin loading bar: a third of the width, sliding across. */
+  --animate-preview-load: preview-load 1.2s ease-in-out infinite;
+  @keyframes preview-load {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
 }
 
 @theme inline {

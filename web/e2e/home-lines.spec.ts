@@ -132,7 +132,7 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     await page.getByRole("button", { name: "Turn on previews" }).click()
     await expect(off).toHaveCount(0)
     await expect(page.getByRole("combobox", { name: "Port" })).toHaveText(
-      /Port (5173|8080|5432)/
+      /localhost:(5173|8080|5432)/
     )
   } finally {
     await api.json("PUT", "/api/system/previews", {

@@ -308,3 +308,105 @@ test("previews: a basic auth sign-in is asked over the preview", async ({
     })
   }
 })
+
+// The preview's address bar follows the page through Studio's bridge: links, pushState and
+// Back. A typed path opens on the preview's own origin; a link to another site opens in a new
+// tab instead of the frame, and one to another port of the sandbox switches the port.
+test("previews: the address bar follows the page and keeps its links in the preview", async ({
+  page,
+  context,
+  api,
+  env,
+}) => {
+  const previews = await api.json<{ enabled: boolean }>(
+    "GET",
+    "/api/system/previews"
+  )
+  await api.json("PUT", "/api/system/previews", { enabled: true })
+  await context.route("https://example.com/**", (route) =>
+    route.fulfill({ contentType: "text/plain", body: "the docs" })
+  )
+  try {
+    const id = await api.createSandbox(sandboxName("navbar"))
+    await api.guestReady(id)
+    await api.json("PUT", `/api/e2e/sandboxes/${id}/ports`, {
+      ports: [3000, 5173],
+    })
+    await page.goto(`/e/${env}/sandboxes/${id}?tab=preview&port=3000`)
+    const port = page.getByRole("combobox", { name: "Port" })
+    await expect(port).toContainText("localhost:3000")
+    const frame = page
+      .locator('iframe[title="Preview of port 3000"]')
+      .contentFrame()
+    await expect(frame.getByText(/Preview of sandbox/)).toBeVisible()
+    const path = page.getByLabel("Preview path")
+    await expect(path).toHaveValue("/")
+
+    // The root is plain text, without the bridge: a typed path loads the frame on it.
+    await path.fill("nav/one")
+    await path.press("Enter")
+    await expect(
+      frame.getByRole("heading", { name: "Nav page /nav/one" })
+    ).toBeVisible()
+    await expect(path).toHaveValue("/nav/one")
+
+    await frame.getByRole("link", { name: "Two" }).click()
+    await expect(path).toHaveValue("/nav/two?x=1")
+    await frame.getByRole("button", { name: "Push" }).click()
+    await expect(path).toHaveValue("/nav/pushed")
+    await page.getByRole("button", { name: "Back", exact: true }).click()
+    await expect(path).toHaveValue("/nav/two?x=1")
+    await page.getByRole("button", { name: "Forward", exact: true }).click()
+    await expect(path).toHaveValue("/nav/pushed")
+
+    // With the bridge a typed path, or a whole address of the preview, goes there in the page.
+    await path.fill("/nav/three")
+    await path.press("Enter")
+    await expect(
+      frame.getByRole("heading", { name: "Nav page /nav/three" })
+    ).toBeVisible()
+    await expect(path).toHaveValue("/nav/three")
+
+    await page
+      .getByRole("button", { name: "Pages visited in this preview" })
+      .click()
+    const visited = page.getByRole("menuitem", { name: /^\/nav\/one/ })
+    await expect(visited).toBeVisible()
+    await expect(
+      page.getByRole("menuitem", { name: /^Port 5173/ })
+    ).toBeVisible()
+    await visited.click()
+    await expect(
+      frame.getByRole("heading", { name: "Nav page /nav/one" })
+    ).toBeVisible()
+
+    const [docs] = await Promise.all([
+      context.waitForEvent("page"),
+      frame.getByRole("link", { name: "Docs" }).click(),
+    ])
+    await expect.poll(() => docs.url()).toBe("https://example.com/docs")
+    await expect(
+      page.getByText(
+        "example.com isn't part of this preview. It opened in a new tab."
+      )
+    ).toBeVisible()
+    await expect(
+      frame.getByRole("heading", { name: "Nav page /nav/one" })
+    ).toBeVisible()
+    await docs.close()
+
+    await frame.getByRole("link", { name: "Other port" }).click()
+    await expect(port).toContainText("localhost:5173")
+    await expect(
+      page
+        .locator('iframe[title="Preview of port 5173"]')
+        .contentFrame()
+        .getByText(/on port 5173, path \/from-link/)
+    ).toBeVisible()
+    await expect(path).toHaveValue("/from-link")
+  } finally {
+    await api.json("PUT", "/api/system/previews", {
+      enabled: previews!.enabled,
+    })
+  }
+})
