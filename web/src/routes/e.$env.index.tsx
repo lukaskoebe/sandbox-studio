@@ -20,6 +20,7 @@ import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { Ident } from "@/components/ident"
 import { SessionLines } from "@/components/session-lines"
 import { SetupCard } from "@/components/setup-card"
+import { OnboardingCard } from "@/components/onboarding-card"
 import { ColumnPage } from "@/components/column-page"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
@@ -74,6 +75,7 @@ function Home() {
       narrow
     >
       <SetupCard env={env} />
+      <OnboardingCard env={env} />
       <NotificationsBanner />
       <PreviewsNotice env={env} />
       <BaseNotice env={env} sandboxes={sandboxes.data ?? []} />

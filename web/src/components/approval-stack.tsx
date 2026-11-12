@@ -31,6 +31,7 @@ import { CredentialIssueDecision } from "@/components/credential-issue"
 import { MemoryShareDecision } from "@/components/memory-sessions"
 import { PermissionDecision } from "@/components/chat/permission-card"
 import { Ident } from "@/components/ident"
+import { ApprovalTip } from "@/components/feature-tip"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import {
   shouldNotify,
@@ -301,12 +302,23 @@ function ApprovalCard({
     .filter(Boolean)
     .join(" · ")
   const summary = kind.summary(approval)
+  const card = useRef<HTMLDivElement>(null)
+  // The first held request and the first push explain themselves (docs/frontend.md#onboarding).
+  const tip = isNetworkApproval(approval)
+    ? "network"
+    : approval.kind === "git.push" || approval.kind === "git.pr"
+      ? "push"
+      : undefined
   return (
     <Card
+      ref={card}
       size="sm"
       className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
       data-testid="approval-card"
     >
+      {tip && (
+        <ApprovalTip env={approval.environmentId} feature={tip} anchor={card} />
+      )}
       <CardHeader>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <KindChip area={kind.area} icon={kind.icon}>

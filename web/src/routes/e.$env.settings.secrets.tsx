@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import {
   CopyIcon,
@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
+import { FeatureTip } from "@/components/feature-tip"
 import { SettingsPage } from "@/components/settings/page"
 import { copyPassword } from "@/components/browser-logins"
 import { SecretDialog } from "@/components/secret-dialog"
@@ -66,6 +67,7 @@ function SecretsPage() {
   const { edit } = Route.useSearch()
   const navigate = Route.useNavigate()
   const [dialog, setDialog] = useState<DialogState>(null)
+  const add = useRef<HTMLButtonElement>(null)
   const secrets = $api.useQuery("get", "/api/environments/{env}/secrets", {
     params: { path: { env } },
   })
@@ -96,10 +98,26 @@ function SecretsPage() {
       <SettingsPage
         title="Secrets"
         actions={
-          <Button size="sm" onClick={() => setDialog({})}>
-            <PlusIcon />
-            Add secret
-          </Button>
+          <>
+            <Button ref={add} size="sm" onClick={() => setDialog({})}>
+              <PlusIcon />
+              Add secret
+            </Button>
+            <FeatureTip
+              env={env}
+              feature="secret"
+              anchor={add}
+              active={!secrets.isPending}
+              when="first visit"
+              title="Keys your teammates use but never read"
+              side="bottom"
+              align="end"
+            >
+              A sandbox sees only a placeholder. Studio swaps the real value in
+              on the way out, and only toward the hosts the secret is bound to.
+              Add one, such as an API key your app needs.
+            </FeatureTip>
+          </>
         }
         intro={
           <>

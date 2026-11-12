@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react"
 import { Link } from "@tanstack/react-router"
+import { FeatureTip } from "@/components/feature-tip"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -1297,7 +1298,18 @@ function Driver({ w }: { w: Win }) {
     >
       {face}
       {said}
+      <TakeTheWheel w={w} />
+    </span>
+  )
+}
+
+/** Take the wheel, with the browser's first-time tip beside it (docs/frontend.md#onboarding). */
+function TakeTheWheel({ w }: { w: Win }) {
+  const button = useRef<HTMLButtonElement>(null)
+  return (
+    <>
       <Button
+        ref={button}
         size="xs"
         variant="ghost"
         aria-label="Take the wheel"
@@ -1310,7 +1322,20 @@ function Driver({ w }: { w: Win }) {
         {/* On a phone the address needs the room more than the words. */}
         <span className="@max-[24rem]/bw:hidden">Take the wheel</span>
       </Button>
-    </span>
+      <FeatureTip
+        env={w.env}
+        feature="browser"
+        anchor={button}
+        active={w.running && !w.session}
+        when="its browser is up"
+        title={`This is ${w.name}'s own browser`}
+        side="bottom"
+        align="end"
+      >
+        You watch it live. Take the wheel to click or log in yourself, then hand
+        it back. A right-click on the page pins a note for {w.name}.
+      </FeatureTip>
+    </>
   )
 }
 

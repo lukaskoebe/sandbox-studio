@@ -43,6 +43,7 @@ export type ProviderKind = Provider["kind"]
 export type Teammate = components["schemas"]["Teammate"]
 export type ImportedEnvironment = components["schemas"]["ImportedEnvironment"]
 export type Setup = components["schemas"]["Setup"]
+export type Onboarding = components["schemas"]["Onboarding"]
 export type Harness = Teammate["harness"]
 
 /** The message of an API problem response, or of any thrown error. */

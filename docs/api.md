@@ -9,7 +9,8 @@
   `web/src/lib/api/schema.gen.ts` with `openapi-typescript`. CI fails if either is stale.
 - Almost everything is under `/api/environments/{env}/...`. Global routes: environments,
   `/api/approvals`, `/api/events`, `/api/health`, `/api/provider-kinds`, `/api/setup`
-  (the guided setup, for the environment named in `?env=`) and `/api/system/*`
+  (the guided setup, for the environment named in `?env=`), `/api/onboarding` (Home's Get to
+  know Studio card and the first-time tips, for `?env=`) and `/api/system/*`
   (doctor, autostart, updates, the previews setting, the host's git identity, its folders for
   a local forge).
 - Streaming endpoints are plain handlers outside huma (`api.go`, `exports.go`, `uploads.go`): SSE at

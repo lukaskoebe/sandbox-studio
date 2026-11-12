@@ -1,4 +1,10 @@
-import { useRef, useState, type ReactNode } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react"
 import {
   ArrowLineLeftIcon,
   ArrowLineRightIcon,
@@ -56,6 +62,8 @@ import { usePreviewSetting } from "@/lib/preview-setting"
 import { useTerminalTheme } from "@/lib/theme"
 import { cn, formatAge } from "@/lib/utils"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { FeatureTip } from "@/components/feature-tip"
+import { useOnboarding } from "@/lib/onboarding"
 
 /**
  * What a screen change asks of the page: another tab, session, review, place in Files, size or
@@ -128,6 +136,7 @@ export function ComputerScreen({
   // to say so (PreviewsOff).
   const previewTab = previews || search.tab === "preview"
   const pending = usePendingApprovals()
+  const previewTabRef = useRef<HTMLButtonElement>(null)
   const reviews = (pending.data ?? []).filter(
     (a) => a.sandboxId === sb.id && isGitApproval(a)
   )
@@ -251,6 +260,7 @@ export function ComputerScreen({
                 return (
                   <button
                     key={t}
+                    ref={t === "preview" ? previewTabRef : undefined}
                     type="button"
                     role="tab"
                     aria-selected={active}
@@ -296,6 +306,15 @@ export function ComputerScreen({
             </div>
           ) : (
             <span className="mx-auto" />
+          )}
+          {on && previews && (
+            <PreviewTip
+              env={env}
+              sandbox={sb}
+              anchor={previewTabRef}
+              open={tab === "preview"}
+              onOpen={() => onChange({ tab: "preview" })}
+            />
           )}
           <div className="flex items-center gap-px">
             <Power env={env} sandbox={sb} />
@@ -757,5 +776,54 @@ function Off({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         </Button>
       )}
     </div>
+  )
+}
+
+/**
+ * The previews' first-time tip, at the Preview tab once the sandbox listens on a port
+ * (docs/frontend.md#onboarding). Opening the tab counts as meeting previews, tip or not.
+ */
+function PreviewTip({
+  env,
+  sandbox,
+  anchor,
+  open,
+  onOpen,
+}: {
+  env: string
+  sandbox: Sandbox
+  anchor: RefObject<HTMLButtonElement | null>
+  open: boolean
+  onOpen: () => void
+}) {
+  const { onboarding, see } = useOnboarding(env)
+  const unseen =
+    !!onboarding && !onboarding.features.find((f) => f.key === "preview")?.seen
+  // The ports are only asked for while the tip may still show.
+  const ports = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/ports",
+    { params: { path: { env, id: sandbox.id } } },
+    { enabled: unseen && !onboarding.tipsOff && !open, refetchInterval: 5000 }
+  )
+  const port = ports.data?.at(0)?.port
+  useEffect(() => {
+    if (open && unseen) see("preview")
+  }, [open, unseen, see])
+  return (
+    <FeatureTip
+      env={env}
+      feature="preview"
+      anchor={anchor}
+      active={!open && port !== undefined}
+      when="first open port"
+      title={`${sandbox.name} serves an app on port ${port}`}
+      side="bottom"
+      align="center"
+      action={{ label: "Open the preview", onClick: onOpen }}
+    >
+      The Preview tab shows it here, with its own address bar. It runs in the
+      sandbox, not on your computer.
+    </FeatureTip>
   )
 }

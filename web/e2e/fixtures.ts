@@ -187,7 +187,7 @@ type StorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>
 
 /**
  * Exchanges a fresh login link for a session cookie. The guided setup is dismissed, so that
- * tests start on the app's pages rather than on /setup.
+ * tests start on the app's pages rather than on /setup, and the onboarding is put away.
  */
 async function logIn(studio: Studio): Promise<StorageState> {
   const ctx = await request.newContext({ baseURL: studio.url })
@@ -201,6 +201,14 @@ async function logIn(studio: Studio): Promise<StorageState> {
     (
       await ctx.put(`/api/setup?env=${envs[0].id}`, {
         data: { steps: {}, dismissed: true },
+      })
+    ).ok()
+  ).toBe(true)
+  // The onboarding's card and tips too; onboarding.spec.ts brings them back.
+  expect(
+    (
+      await ctx.put(`/api/onboarding?env=${envs[0].id}`, {
+        data: { seen: [], dismissed: true, tipsOff: true },
       })
     ).ok()
   ).toBe(true)

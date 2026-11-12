@@ -2966,6 +2966,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The onboarding's progress
+         * @description The first read marks the features that already happened as seen, so a user who used them before the onboarding existed gets no tips for them.
+         */
+        get: operations["getOnboarding"];
+        /**
+         * Record which tips were seen, and whether the card or the tips are put away
+         * @description Replaces the stored progress. An empty seen list with dismissed and tipsOff false shows the tips again.
+         */
+        put: operations["setOnboarding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/provider-kinds": {
         parameters: {
             query?: never;
@@ -5356,6 +5380,32 @@ export interface components {
             /** @description One of the models the sandbox's teammate offers; omitted for its default */
             model?: string;
             text?: string;
+        };
+        Onboarding: {
+            /** @description The user put the card away with Not now */
+            dismissed: boolean;
+            /**
+             * Format: date-time
+             * @description When every feature had happened or been seen
+             */
+            doneAt?: string;
+            features: components["schemas"]["OnboardingFeature"][];
+            /** @description The user stopped the tips */
+            tipsOff: boolean;
+        };
+        OnboardingFeature: {
+            /** @description It happened in the environment: a held request, a push or pull request to review, a browser used, a secret of the user's. Previews leave no record, so they never read happened */
+            happened: boolean;
+            /** @enum {string} */
+            key: "network" | "push" | "browser" | "preview" | "secret";
+            /** @description The user closed its tip, or it happened before the onboarding was first read */
+            seen: boolean;
+        };
+        OnboardingUpdateBody: {
+            dismissed: boolean;
+            /** @description The features whose tips the user closed */
+            seen: ("network" | "push" | "browser" | "preview" | "secret")[] | null;
+            tipsOff: boolean;
         };
         OpenInBody: {
             /** @description The pull request's title; empty keeps the proposed one */
@@ -14776,6 +14826,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getOnboarding: {
+        parameters: {
+            query: {
+                /** @description The environment whose provider, teammate, forge and sandbox steps are checked */
+                env: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setOnboarding: {
+        parameters: {
+            query: {
+                /** @description The environment whose features the answer reports */
+                env: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingUpdateBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
                 };
             };
             /** @description Error */

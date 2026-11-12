@@ -85,7 +85,7 @@ sideways. Its sections:
 
 | Group | Section | Shows |
 |---|---|---|
-| This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, the environment's name, the environment file (export and import), and deleting the environment after its name is typed |
+| This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, "Show tips again" ([onboarding](#onboarding)), the environment's name, the environment file (export and import), and deleting the environment after its name is typed |
 | | Network (`network`) | an intro, the security level, the network rules (filters in the URL: `q`, `scope`, `action`, `origin`, `unused`; sorted by registrable domain, with a heading for a domain with several rules), the curated list and the tracker list ([network](network.md)) |
 | | Secrets (`secrets`) | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
 | | Shared memory (`memory`) | shared memory: pages, facts, conflicts, search, sessions |
@@ -246,6 +246,34 @@ the reading place, and without anchoring, as in Safari and the macOS app, the th
 Links from when a sandbox had a dashboard or a workspace (`/e/$env/sandboxes/$id` and `/work`,
 with `?terminal=`, `?session=`, `?chat=` or `?panel=`) land on the screen with the matching
 tab, on the teammate's page for a teammate's computer.
+
+## Onboarding
+
+Once the setup is over, Home shows **Get to know Studio** under the setup card
+(`components/onboarding-card.tsx`): a first task for a teammate, and five features (network
+approval, pushes and pull requests, the browser, previews and secrets), each ticked off once it
+happened or its tip was closed. A first task is one of two starters, or the user's own,
+for the first sandbox with a teammate (a running one first); **Start with** saves it as the
+draft of a new chat on that sandbox and opens `/chats/new?sandbox=`, where it can be edited
+before it is sent. The Secrets row links to Settings → Secrets. **Not now** puts the card away;
+once all five are done it stays for a day.
+
+Each feature explains itself the first time it happens with a tip beside its control
+(`components/feature-tip.tsx`, a non-modal popover): the first held request's card and the
+first push's or pull request's card, wherever approvals show, the teammate browser's **Take
+the wheel** while the browser runs, the Preview tab while the sandbox listens on a port, and
+**Add secret** on Settings → Secrets. One tip shows at a time (`lib/onboarding.ts` keeps them
+in line); **Got it** closes it for good, **Stop tips** closes all of them, and Settings →
+General's **Show tips again** brings back the tips and the card for what is left. Opening the
+Preview tab counts as seeing previews.
+
+The progress is the global `onboarding.v1` setting, read and replaced with `GET` and `PUT
+/api/onboarding?env=` ([API](api.md)). Whether a feature happened is read from the
+environment (a held connection or request, a `git.push` or `git.pr` approval, a browser action, a secret
+that is neither a provider's key nor a forge's token); previews leave no record, so only their
+tip ticks them off. The first read marks what already happened as seen, so someone who used
+Studio before the onboarding existed gets no tips for it. The e2e login puts the card and
+the tips away; `e2e/onboarding.spec.ts` brings them back.
 
 ## Development
 

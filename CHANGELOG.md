@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- After the setup, Home shows **Get to know Studio**: a first task to give a teammate, which
+  opens a new chat with it to edit, and five features (network approval, pushes and pull
+  requests, the browser, previews and secrets) that tick off as they happen. The first time
+  each one happens, a tip beside it explains it, one at a time; **Got it** closes it, **Stop
+  tips** closes them all, and Settings → General shows them again. Features used before
+  this release get no tip.
 - `studio` in a sandbox runs Studio's tools as shell commands, so an agent can loop over them
   and pipe them through `grep`: `studio pr list`, `studio browser snapshot --full`, `studio
   memory search …`, and `studio call <tool> '<json>'` for any tool. Flags come from the tools'

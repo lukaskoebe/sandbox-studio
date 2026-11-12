@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
@@ -20,6 +20,7 @@ import {
 } from "@/components/approval-decision"
 import { HoldStatus } from "@/components/hold-status"
 import { Ident } from "@/components/ident"
+import { ApprovalTip } from "@/components/feature-tip"
 import { KindChip } from "@/components/kind-chip"
 import {
   Card,
@@ -68,6 +69,7 @@ export function NetworkGroupCard({
     connections && approvals.every((a) => heldFor(a, now) === undefined)
   const lifetime = gaveUp && picked === "once" ? "always" : picked
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const card = useRef<HTMLDivElement>(null)
   const [working, setWorking] = useState<"allow" | "deny">()
   const kind = approvalKind(first)
   const sandbox = approvalSource(first)
@@ -98,10 +100,12 @@ export function NetworkGroupCard({
 
   return (
     <Card
+      ref={card}
       size="sm"
       className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
       data-testid="approval-group"
     >
+      <ApprovalTip env={first.environmentId} feature="network" anchor={card} />
       <CardHeader>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <KindChip area={kind.area} icon={kind.icon}>

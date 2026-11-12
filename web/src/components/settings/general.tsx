@@ -12,6 +12,7 @@ import {
   PaletteIcon,
   PencilSimpleIcon,
   PowerIcon,
+  SparkleIcon,
   StopCircleIcon,
   TerminalIcon,
   TerminalWindowIcon,
@@ -51,6 +52,7 @@ import {
 } from "@/lib/notifications"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { setupOver, useSetup } from "@/lib/setup"
+import { useOnboarding } from "@/lib/onboarding"
 import { setStyleName, useStyleName, type StyleName } from "@/lib/theme"
 import {
   $api,
@@ -74,6 +76,7 @@ export function GeneralSettings({ env }: { env: string }) {
         <PreviewsSection />
         <TerminalShellSection />
         <SetupSection env={env} />
+        <TipsSection env={env} />
         <ShutdownSection />
       </SettingsGroup>
       <SettingsGroup label="This environment">
@@ -969,6 +972,40 @@ function SetupSection({ env }: { env: string }) {
       control={
         <Button size="sm" variant="outline" render={<Link to="/setup" />}>
           Open setup
+        </Button>
+      }
+    />
+  )
+}
+
+/** Brings back the first-time tips and Home's Get to know Studio card (docs/frontend.md#onboarding). */
+function TipsSection({ env }: { env: string }) {
+  const { onboarding, restart, saving } = useOnboarding(env)
+  if (!onboarding) return null
+  const fresh =
+    !onboarding.tipsOff &&
+    !onboarding.dismissed &&
+    onboarding.features.every((f) => !f.seen)
+  return (
+    <SettingRow
+      icon={SparkleIcon}
+      title="Tips"
+      description={
+        onboarding.tipsOff
+          ? "The tips are off. Showing them again also brings back Get to know Studio on Home."
+          : "Network requests, pushes, the browser, previews and secrets each explain themselves the first time they happen."
+      }
+      control={
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={saving || fresh}
+          onClick={() => {
+            restart()
+            toast.success("The tips show again")
+          }}
+        >
+          Show tips again
         </Button>
       }
     />

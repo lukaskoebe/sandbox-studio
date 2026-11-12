@@ -5974,6 +5974,99 @@
         },
         "type": "object"
       },
+      "Onboarding": {
+        "additionalProperties": false,
+        "properties": {
+          "dismissed": {
+            "description": "The user put the card away with Not now",
+            "type": "boolean"
+          },
+          "doneAt": {
+            "description": "When every feature had happened or been seen",
+            "format": "date-time",
+            "type": "string"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/OnboardingFeature"
+            },
+            "type": "array"
+          },
+          "tipsOff": {
+            "description": "The user stopped the tips",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "features",
+          "dismissed",
+          "tipsOff"
+        ],
+        "type": "object"
+      },
+      "OnboardingFeature": {
+        "additionalProperties": false,
+        "properties": {
+          "happened": {
+            "description": "It happened in the environment: a held request, a push or pull request to review, a browser used, a secret of the user's. Previews leave no record, so they never read happened",
+            "type": "boolean"
+          },
+          "key": {
+            "enum": [
+              "network",
+              "push",
+              "browser",
+              "preview",
+              "secret"
+            ],
+            "type": "string"
+          },
+          "seen": {
+            "description": "The user closed its tip, or it happened before the onboarding was first read",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "happened",
+          "seen"
+        ],
+        "type": "object"
+      },
+      "OnboardingUpdateBody": {
+        "additionalProperties": false,
+        "properties": {
+          "dismissed": {
+            "type": "boolean"
+          },
+          "seen": {
+            "description": "The features whose tips the user closed",
+            "items": {
+              "enum": [
+                "network",
+                "push",
+                "browser",
+                "preview",
+                "secret"
+              ],
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "tipsOff": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "seen",
+          "dismissed",
+          "tipsOff"
+        ],
+        "type": "object"
+      },
       "OpenInBody": {
         "additionalProperties": false,
         "properties": {
@@ -23615,6 +23708,104 @@
         },
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/onboarding": {
+      "get": {
+        "description": "The first read marks the features that already happened as seen, so a user who used them before the onboarding existed gets no tips for them.",
+        "operationId": "getOnboarding",
+        "parameters": [
+          {
+            "description": "The environment whose provider, teammate, forge and sandbox steps are checked",
+            "explode": false,
+            "in": "query",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "The environment whose provider, teammate, forge and sandbox steps are checked",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The onboarding's progress",
+        "tags": [
+          "setup"
+        ]
+      },
+      "put": {
+        "description": "Replaces the stored progress. An empty seen list with dismissed and tipsOff false shows the tips again.",
+        "operationId": "setOnboarding",
+        "parameters": [
+          {
+            "description": "The environment whose features the answer reports",
+            "explode": false,
+            "in": "query",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "The environment whose features the answer reports",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingUpdateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record which tips were seen, and whether the card or the tips are put away",
+        "tags": [
+          "setup"
         ]
       }
     },
