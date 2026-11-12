@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ForgeReviewOutcome } from "@/components/forge-review"
+import { ForgeCommentOutcome } from "@/components/forge-comment"
 import { GitOutcome } from "@/components/git-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
@@ -176,6 +177,10 @@ function ActivitySettings() {
                       <div className="whitespace-normal">
                         <ForgeReviewOutcome review={a.forgeReview.review} />
                       </div>
+                    ) : a.forgeComment ? (
+                      <div className="whitespace-normal">
+                        <ForgeCommentOutcome draft={a.forgeComment} />
+                      </div>
                     ) : a.git ? (
                       <div className="whitespace-normal">
                         <GitOutcome git={a.git} />
@@ -212,7 +217,7 @@ function Details({ text }: { text?: string }) {
 function What({ approval: a }: { approval: Approval }) {
   const kind = approvalKind(a)
   const what =
-    a.git || a.forgeReview ? (
+    a.git || a.forgeReview || a.forgeComment ? (
       <Link
         to="/e/$env/git/reviews/$id"
         params={{ env: a.environmentId, id: a.id }}

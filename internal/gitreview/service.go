@@ -34,7 +34,7 @@ const Host = agentproto.GitHost
 const (
 	KindPush = "git.push"
 	KindPR   = "git.pr"
-	// KindReview is in forgereview.go.
+	// KindReview is in forgereview.go, KindComment in forgecomment.go.
 )
 
 // Defaults for Limits.

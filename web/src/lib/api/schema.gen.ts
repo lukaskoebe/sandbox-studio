@@ -3405,6 +3405,8 @@ export interface components {
             /** @description A sandbox's tool asks for credentials made from a secret with a kind */
             credentialIssue?: components["schemas"]["IssuePayload"];
             environmentId: string;
+            /** @description A teammate's comment on a pull request's conversation, and what became of it */
+            forgeComment?: components["schemas"]["CommentDraft"];
             /** @description A teammate's review draft of a pull request, and what became of it */
             forgeReview?: components["schemas"]["ReviewDetail"];
             /** @description Set for git.push and git.pr approvals */
@@ -3752,6 +3754,48 @@ export interface components {
             /** @description The clone in the sandbox, /workspace/<repository name> */
             dir: string;
         };
+        CommentDraft: {
+            /** @description The forge account the comment posts as: the user's token's */
+            account?: string;
+            /** @description The posted comment ends with the line saying the teammate wrote it */
+            attribution?: boolean;
+            /** @description The comment, in Markdown */
+            body: string;
+            forge: string;
+            /** @description The forge's host, which the comment posts to */
+            forgeHost: string;
+            forgeId: string;
+            /** @description The agent's key for this comment, so that asking again doesn't ask twice */
+            idempotencyKey?: string;
+            /** @description The user's note */
+            note?: string;
+            /** Format: int64 */
+            number: number;
+            owner: string;
+            /** @description The posted comment's web URL */
+            postedUrl?: string;
+            repo: string;
+            /** @description Why posting failed */
+            result?: string;
+            /** @description The sandbox's name */
+            sandbox: string;
+            /**
+             * @description Empty until it is decided and, once approved, posted
+             * @enum {string}
+             */
+            state?: "posted" | "discarded" | "failed";
+            /** @description The teammate owning the sandbox; empty for unowned sandboxes */
+            teammate?: string;
+            /** @description The pull request's title */
+            title: string;
+            /** @description The pull request's web URL */
+            url?: string;
+        };
+        CommentEditIn: {
+            /** @description End the comment with a line saying the teammate wrote it */
+            attribution?: boolean;
+            body: string;
+        };
         Commit: {
             author: string;
             body?: string;
@@ -4064,12 +4108,14 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it
              * @enum {string}
              */
             action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site" | "allow_session";
             /** @description For network requests allowed or denied with a rule: the rule covers only the requests of the environment's browser VMs */
             browserOnly?: boolean;
+            /** @description For git.comment approved with allow: the comment as edited, which Studio posts. Omitted posts it as it is */
+            comment?: components["schemas"]["CommentEditIn"];
             /**
              * Format: date-time
              * @description For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires

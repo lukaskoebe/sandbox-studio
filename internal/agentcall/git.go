@@ -108,8 +108,21 @@ var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
 		"idempotency_key": idempotencyKey,
 	})}
 
+// GitPullRequestCommentTool asks to comment on a pull request's conversation.
+var GitPullRequestCommentTool = Tool{agentproto.MethodGitPullRequestComment,
+	"Comments on a pull request's conversation, yours or anyone's, as a reply would: not on a line (git_pull_request_review " +
+		"does that). Nothing is posted yet: the user sees the comment, can edit it, and posts or discards it. The call answers at " +
+		"once with \"awaiting approval\" and the approval ID; approval_status says what became of it.",
+	obj([]string{"repository", "number", "body"}, map[string]any{
+		"forge":           pullRequestRef["forge"],
+		"repository":      pullRequestRef["repository"],
+		"number":          pullRequestRef["number"],
+		"body":            str("The comment, in Markdown", "maxLength", 20000),
+		"idempotency_key": idempotencyKey,
+	})}
+
 // idempotencyKey lets an agent ask again, as after a timeout, without making a second draft.
-var idempotencyKey = str("Any key of yours for this draft, such as a UUID: asking again with the same key answers with the draft it made instead of making another", "maxLength", 200)
+var idempotencyKey = str("Any key of yours for this call, such as a UUID: asking again with the same key answers with what it asked for instead of asking again", "maxLength", 200)
 
 // GitReviewStatusTool reports what became of the newest review drafted for a pull request.
 var GitReviewStatusTool = Tool{agentproto.MethodGitReviewStatus,
@@ -133,7 +146,7 @@ var GitPullRequestChecksTool = Tool{agentproto.MethodGitPullRequestChecks,
 
 func init() {
 	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitPullRequestCreateTool, GitRepositoriesTool, GitPullRequestListTool,
-		GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool, GitPullRequestChecksTool)
+		GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool, GitPullRequestChecksTool, GitPullRequestCommentTool)
 }
 
 // GitCredentialCall routes the git credential helper's question to gitreview. It stays out

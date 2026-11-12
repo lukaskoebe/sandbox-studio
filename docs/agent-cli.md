@@ -71,7 +71,7 @@ number the first answer found.
 
 A call waits for the user when one of these is true:
 
-- The result's `status` is `awaiting approval`, as for `pr create` and `pr review`.
+- The result's `status` is `awaiting approval`, as for `pr create`, `pr review` and `pr comment`.
 - The error starts with "waiting for the user" or says "call again", as for a browser action
   on a site not yet allowed, or for a takeover.
 
@@ -79,12 +79,13 @@ With `--wait` the command keeps asking every 5 seconds:
 
 - `pr create` waits through `git_pull_request_status`.
 - `pr review` waits through `git_pull_request_review_status`.
+- `pr comment`, which has no status tool of its own, waits through `approval_status`.
 - A refusal that only waits is retried as it was.
 
 ### Waiting for the user
 
-An answer that waits for the user names its approval: `approval` in `pr review`'s answer and
-in `pr create`'s `pullRequest`, and on a pending push in `git pushes`. The command's stderr
+An answer that waits for the user names its approval: `approval` in `pr review`'s and `pr
+comment`'s answers and in `pr create`'s `pullRequest`, and on a pending push in `git pushes`. The command's stderr
 then names `studio wait <id>`.
 
 `studio wait <id>` asks `approval_status` every 5 seconds until the approval is settled, then
@@ -104,9 +105,10 @@ as unknown. It's also an MCP tool, for agents without the command.
 Asking again, as after a timeout, doesn't make a second card:
 
 - `pr create` answers with the pushed branch's pull request once one is proposed.
-- `pr review` takes `--idempotency-key <key>`. A call with a key this sandbox drafted a review
-  with answers with that draft's status instead of drafting again, which would replace it. The
-  key is kept in the approval's payload as `idempotencyKey` (`store.ApprovalByKey`).
+- `pr review` and `pr comment` take `--idempotency-key <key>`. A call with a key this sandbox
+  already asked with answers with what that call asked for instead of asking again, which
+  for a review would replace the draft. The key is kept in the approval's payload as
+  `idempotencyKey` (`store.ApprovalByKey`).
 
 ## Browser
 

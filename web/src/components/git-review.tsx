@@ -1,3 +1,8 @@
+import {
+  ForgeComment,
+  ForgeCommentSummary,
+  forgeCommentDescription,
+} from "@/components/forge-comment"
 import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
@@ -162,7 +167,12 @@ function CommitChanges({
 }
 
 export function isGitApproval(a: Approval) {
-  return a.kind === "git.push" || a.kind === "git.pr" || a.kind === "git.review"
+  return (
+    a.kind === "git.push" ||
+    a.kind === "git.pr" ||
+    a.kind === "git.review" ||
+    a.kind === "git.comment"
+  )
 }
 
 function short(sha: string) {
@@ -346,6 +356,8 @@ type Tab = "changes" | "commits" | "comments"
  */
 export function GitReview({ approval }: { approval: Approval }) {
   if (approval.kind === "git.review") return <ForgeReview approval={approval} />
+  if (approval.kind === "git.comment")
+    return <ForgeComment approval={approval} />
   return <PushReview approval={approval} />
 }
 
@@ -906,6 +918,7 @@ function Rewrite({ review: rv }: { review: NonNullable<GitDetail["review"]> }) {
 /** What reviewing a git approval decides, under its title. */
 export function gitReviewDescription(approval: Approval) {
   if (approval.kind === "git.review") return forgeReviewDescription(approval)
+  if (approval.kind === "git.comment") return forgeCommentDescription(approval)
   const git = approval.git
   if (git?.pullRequest)
     return "The push was approved and is on the forge. Approving opens this pull request."
@@ -990,6 +1003,8 @@ export function GitApprovalSummary({
 }) {
   if (approval.kind === "git.review")
     return <ForgeReviewSummary approval={approval} onReview={onReview} />
+  if (approval.kind === "git.comment")
+    return <ForgeCommentSummary approval={approval} onReview={onReview} />
   const rv = approval.git?.review
   return (
     <div className="flex items-center gap-2 text-xs">

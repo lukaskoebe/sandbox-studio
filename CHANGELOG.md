@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A teammate can comment on a pull request's conversation (`studio pr comment <number>
+  --body …`, or the `git_pull_request_comment` tool) on GitHub, GitLab, Forgejo and Gitea.
+  Nothing is posted until you approve it. The card shows the comment, which you can edit, and
+  it posts as your forge account, optionally ending with "Comment by <teammate> (agent)".
+  `studio wait` or `--wait` says what became of it, and an idempotency key keeps a repeated
+  call from asking twice.
 - A teammate's **Default model** and **Also offered in chats** suggest the provider's models
   for every provider, not only an OpenAI-compatible endpoint's: Claude's models (and `sonnet`,
   `opus`, `haiku` on Claude Code) for a Claude subscription or Anthropic key, and OpenAI's for

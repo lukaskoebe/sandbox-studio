@@ -525,6 +525,32 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   review requests for a teammate, and GitLab's batched draft notes (one notification for a
   whole review) ([forge-reviews.md](design/forge-reviews.md)).
 
+## Conversation comments
+
+A teammate can also comment on a pull request's conversation, as a reply would, without a
+review: `git_pull_request_comment(repository, number, body, forge?, idempotency_key?)`
+(`studio pr comment <number> --body …`), in `forgecomment.go`.
+
+- **Asking.** Studio reads the pull request (its title and link), asks the forge for the
+  token's account and creates a `git.comment` approval with the subject
+  `<forge>/<owner>/<repo>#<n>`. The payload (`CommentDraft`) holds the comment, and there is
+  no table of its own. The agent gets "awaiting approval" with the approval's ID at once. A
+  call with an `idempotency_key` this sandbox already asked with answers with that comment.
+  Comments don't replace each other, unlike review drafts.
+- **The card** (`ForgeComment` in `web/src/components/forge-comment.tsx`, in the stack, the
+  review sheet and page) shows the comment's start; the review shows the pull request with
+  its link, the comment in an editable box, the attribution checkbox ("Comment by Ada
+  (agent)", remembered per teammate as for reviews) and "Posts as <account> on <host>",
+  **Discard…** with a note, Ignore, and **Post comment**.
+- **Posting.** Allow with `comment: {body, attribution}` in the decide body posts the edited
+  comment (without it, the comment as it is): `POST /repos/{o}/{r}/issues/{n}/comments` on
+  Forgejo, Gitea and GitHub, and `POST /projects/:id/merge_requests/:iid/notes` on GitLab,
+  whose link is the merge request's with `#note_<id>`. Studio then writes the posted comment,
+  its link (or the forge's refusal) and the user's note into the payload.
+- **The agent learns** the outcome from `approval_status` or `studio wait <id>`
+  (`pr comment --wait` waits the same way): posted with its URL, discarded or dismissed
+  with the note, or failed with the forge's answer. The next prompt has no note about it.
+
 ## CI checks
 
 `git_pull_request_checks(repository, number?, branch?, forge?)` (`studio pr checks`) reads

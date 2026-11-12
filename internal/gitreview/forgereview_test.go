@@ -29,12 +29,13 @@ const prDiff = `diff --git a/web/coupon.ts b/web/coupon.ts
 // reviewForge is a Forgejo stand-in for the pull request API: pull request 42 of acme/web,
 // opened by author, and the reviews posted to it.
 type reviewForge struct {
-	srv    *httptest.Server
-	author string
-	head   string
-	mu     sync.Mutex
-	posted []map[string]any
-	listed []string // the queries of pull request lists
+	srv      *httptest.Server
+	author   string
+	head     string
+	mu       sync.Mutex
+	posted   []map[string]any
+	listed   []string // the queries of pull request lists
+	comments []string // the conversation comments posted
 }
 
 func newReviewForge(t *testing.T) *reviewForge {
@@ -103,6 +104,13 @@ func newReviewForge(t *testing.T) *reviewForge {
 					"created_at": "2026-11-12T09:00:00Z", "updated_at": "2026-11-12T09:04:00Z"},
 				{"context": "ci/lint", "status": "success"},
 			}})
+		case p == "/repos/acme/web/issues/42/comments" && r.Method == http.MethodPost:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.mu.Lock()
+			f.comments = append(f.comments, body["body"].(string))
+			f.mu.Unlock()
+			send(map[string]any{"id": 9, "html_url": "https://forge.example/acme/web/pulls/42#issuecomment-9"})
 		case p == "/repos/acme/web/issues/42/comments":
 			send([]map[string]any{{"user": map[string]string{"login": "bob"}, "body": "LGTM?"}})
 		default:

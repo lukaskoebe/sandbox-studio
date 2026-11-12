@@ -7,13 +7,14 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
 
 // The upstream's Forgejo API: the account e2e-user with the repositories acme/web and acme/api,
 // and on every repository a pull request 1, "Apply coupon codes", opened by someone else.
-// Reviews posted to it are kept for the tests (GET /api/e2e/reviews).
+// Reviews and conversation comments posted to it are kept for the tests (GET /api/e2e/reviews).
 
 const pullDiff = `diff --git a/web/coupon.ts b/web/coupon.ts
 --- a/web/coupon.ts
@@ -130,7 +131,23 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 		p.mu.Unlock()
 		send(map[string]any{"id": n, "html_url": "https://" + repo + "/pulls/1#review"})
 	case "issues/comments":
-		send([]any{})
+		if r.Method != http.MethodPost {
+			send([]any{})
+			break
+		}
+		// A conversation comment is kept with the reviews, as {"comment": body}.
+		var body struct {
+			Body string `json:"body"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		p.mu.Lock()
+		p.posted = append(p.posted, PostedReview{Repo: repo, Body: map[string]any{"comment": body.Body}})
+		n := len(p.posted)
+		p.mu.Unlock()
+		send(map[string]any{"id": n, "html_url": "https://" + repo + "/pulls/1#issuecomment-" + strconv.Itoa(n)})
 	default:
 		return false
 	}

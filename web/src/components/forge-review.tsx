@@ -73,7 +73,7 @@ export function forgeReviewDescription(a: Approval) {
 // The attribution line is a per-teammate choice remembered in this browser.
 const attributionKey = (who: string) => `studio.review-attribution.${who}`
 
-function rememberedAttribution(who: string) {
+export function rememberedAttribution(who: string) {
   try {
     return localStorage.getItem(attributionKey(who)) === "1"
   } catch {
@@ -81,7 +81,7 @@ function rememberedAttribution(who: string) {
   }
 }
 
-function rememberAttribution(who: string, on: boolean) {
+export function rememberAttribution(who: string, on: boolean) {
   try {
     if (on) localStorage.setItem(attributionKey(who), "1")
     else localStorage.removeItem(attributionKey(who))

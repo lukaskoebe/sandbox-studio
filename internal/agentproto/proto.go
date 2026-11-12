@@ -275,6 +275,9 @@ const (
 	// MethodGitPullRequestChecks reads the CI checks of a pull request's head commit
 	// (docs/git-review.md#ci-checks).
 	MethodGitPullRequestChecks = "git_pull_request_checks"
+	// MethodGitPullRequestComment comments on a pull request's conversation, which the user
+	// approves before Studio posts it (docs/git-review.md#conversation-comments).
+	MethodGitPullRequestComment = "git_pull_request_comment"
 	// MethodGitCredential is git's credential helper in the sandbox asking about a host. It
 	// is no MCP tool, and Studio answers it with a hint, never a credential.
 	MethodGitCredential = "git_credential"

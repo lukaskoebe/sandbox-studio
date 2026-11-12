@@ -426,3 +426,29 @@ func TestCLIWaitForAnApproval(t *testing.T) {
 		t.Fatalf("denied: code %d", r.code)
 	}
 }
+
+// A call with no status tool of its own, as pr comment, waits through approval_status.
+func TestCLICommentWaitsThroughApprovalStatus(t *testing.T) {
+	reads := 0
+	f := &fakeCaller{reply: func(method string, raw json.RawMessage) (any, error) {
+		switch method {
+		case agentproto.MethodGitPullRequestComment:
+			return map[string]any{"status": "awaiting approval", "approval": "ap2", "pullRequest": "o/r#9"}, nil
+		case agentproto.MethodApprovalStatus:
+			reads++
+			if reads == 1 {
+				return map[string]any{"approval": "ap2", "status": "pending", "settled": false}, nil
+			}
+			return map[string]any{"approval": "ap2", "status": "approved", "settled": true,
+				"result": map[string]any{"status": "posted", "url": "https://github.com/o/r/pull/9#issuecomment-1"}}, nil
+		}
+		return nil, errors.New("unexpected " + method)
+	}}
+	r := runCLI(t, f, "", nil, "pr", "comment", "9", "--repository", "o/r", "--body", "Ping", "--wait")
+	if r.code != ExitOK || reads != 2 || !strings.Contains(r.stdout, "issuecomment-1") {
+		t.Fatalf("code %d, reads %d, stdout %q, stderr %q", r.code, reads, r.stdout, r.stderr)
+	}
+	if got := params(t, f.calls[0]); got["body"] != "Ping" || got["number"] != float64(9) {
+		t.Fatalf("asked %v", got)
+	}
+}

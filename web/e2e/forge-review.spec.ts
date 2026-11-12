@@ -223,3 +223,67 @@ test("discarding a review posts nothing and keeps the note", async ({
   const posted = (await api.json<Posted[]>("GET", "/api/e2e/reviews")) ?? []
   expect(posted.filter((r) => r.repo === forge.repo)).toEqual([])
 })
+
+test("a teammate's comment on a pull request waits for approval and posts as edited", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgejo(api, env)
+  const name = sandboxName("comment")
+  const sb = await api.createSandbox(name)
+  const asked = await call<{ status: string; approval: string }>(
+    api,
+    sb,
+    "git_pull_request_comment",
+    {
+      forge: forge.name,
+      repository: "acme/web",
+      number: 1,
+      body: "The coupon tests fail on main too.",
+    }
+  )
+  expect(asked.status).toBe("awaiting approval")
+
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "acme/web#1" })
+  await expect(card).toContainText("Comment on acme/web#1: Apply coupon codes")
+  await expect(card).toContainText("The coupon tests fail on main too.")
+  await card.getByRole("button", { name: "Review" }).click()
+  const sheet = page.getByRole("dialog")
+  await expect(sheet).toContainText("Posts as e2e-user")
+  await sheet
+    .getByRole("textbox", { name: "Comment" })
+    .fill("The coupon tests fail on main too; see #40.")
+  await sheet.getByRole("checkbox", { name: /Comment by an agent/ }).click()
+  await sheet.getByRole("button", { name: "Post comment" }).click()
+  await expect(sheet).toBeHidden()
+  await expect(card).toBeHidden()
+
+  const posted = ((await api.json<Posted[]>("GET", "/api/e2e/reviews")) ?? [])
+    .filter((r) => r.repo === forge.repo)
+    .at(-1)!
+  expect(posted.body.comment).toBe(
+    `The coupon tests fail on main too; see #40.\n\n— Comment by an agent in ${name}`
+  )
+  const status = await call<{ settled: boolean; result: { url: string } }>(
+    api,
+    sb,
+    "approval_status",
+    { approval: asked.approval }
+  )
+  expect(status.settled).toBe(true)
+  expect(status.result.url).toContain("#issuecomment-")
+
+  await page.goto(`/e/${env}/settings/activity?kind=git`)
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ hasText: "Comment on acme/web#1" })
+      .getByRole("link", { name: "Comment posted" })
+      .first()
+  ).toBeVisible()
+})

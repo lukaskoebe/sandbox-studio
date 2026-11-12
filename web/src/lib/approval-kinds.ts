@@ -1,6 +1,7 @@
 import {
   BrainIcon,
   ChatCircleDotsIcon,
+  ChatCircleTextIcon,
   CursorClickIcon,
   EyeIcon,
   GitBranchIcon,
@@ -61,6 +62,8 @@ export function plural(n: number, one: string) {
 
 /** What a git approval asks for. */
 export function gitSummary(a: Approval): string {
+  const c = a.forgeComment
+  if (c) return `Comment on ${c.owner}/${c.repo}#${c.number}: ${c.title}`
   const d = a.forgeReview?.draft
   if (d)
     return `Review ${pullRequestName(d)}: ${verdictLabels[d.verdict].toLowerCase()}, ${plural(d.comments?.length ?? 0, "comment")}`
@@ -120,6 +123,13 @@ const kinds: Record<string, ApprovalKind> = {
     title: "Pull request review",
     summary: gitSummary,
     icon: GitPullRequestIcon,
+    area: "git",
+    page: "/e/$env",
+  },
+  "git.comment": {
+    title: "Pull request comment",
+    summary: gitSummary,
+    icon: ChatCircleTextIcon,
     area: "git",
     page: "/e/$env",
   },
@@ -275,6 +285,8 @@ export function approvalSource(a: Approval): string | undefined {
   return (
     a.network?.sandboxName ??
     a.git?.review?.sandbox ??
+    a.forgeComment?.teammate ??
+    a.forgeComment?.sandbox ??
     a.memoryShare?.teammateName ??
     a.browserAction?.sandboxName ??
     a.browserCredential?.sandboxName ??

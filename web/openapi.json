@@ -198,6 +198,10 @@
           "environmentId": {
             "type": "string"
           },
+          "forgeComment": {
+            "$ref": "#/components/schemas/CommentDraft",
+            "description": "A teammate's comment on a pull request's conversation, and what became of it"
+          },
           "forgeReview": {
             "$ref": "#/components/schemas/ReviewDetail",
             "description": "A teammate's review draft of a pull request, and what became of it"
@@ -1226,6 +1230,114 @@
         ],
         "type": "object"
       },
+      "CommentDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "description": "The forge account the comment posts as: the user's token's",
+            "type": "string"
+          },
+          "attribution": {
+            "description": "The posted comment ends with the line saying the teammate wrote it",
+            "type": "boolean"
+          },
+          "body": {
+            "description": "The comment, in Markdown",
+            "type": "string"
+          },
+          "forge": {
+            "type": "string"
+          },
+          "forgeHost": {
+            "description": "The forge's host, which the comment posts to",
+            "type": "string"
+          },
+          "forgeId": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "The agent's key for this comment, so that asking again doesn't ask twice",
+            "type": "string"
+          },
+          "note": {
+            "description": "The user's note",
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "postedUrl": {
+            "description": "The posted comment's web URL",
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "result": {
+            "description": "Why posting failed",
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "The sandbox's name",
+            "type": "string"
+          },
+          "state": {
+            "description": "Empty until it is decided and, once approved, posted",
+            "enum": [
+              "posted",
+              "discarded",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "teammate": {
+            "description": "The teammate owning the sandbox; empty for unowned sandboxes",
+            "type": "string"
+          },
+          "title": {
+            "description": "The pull request's title",
+            "type": "string"
+          },
+          "url": {
+            "description": "The pull request's web URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandbox",
+          "forge",
+          "forgeId",
+          "forgeHost",
+          "owner",
+          "repo",
+          "number",
+          "title",
+          "body"
+        ],
+        "type": "object"
+      },
+      "CommentEditIn": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "description": "End the comment with a line saying the teammate wrote it",
+            "type": "boolean"
+          },
+          "body": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
       "Commit": {
         "additionalProperties": false,
         "properties": {
@@ -2160,7 +2272,7 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it",
+            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it",
             "enum": [
               "allow",
               "deny",
@@ -2175,6 +2287,10 @@
           "browserOnly": {
             "description": "For network requests allowed or denied with a rule: the rule covers only the requests of the environment's browser VMs",
             "type": "boolean"
+          },
+          "comment": {
+            "$ref": "#/components/schemas/CommentEditIn",
+            "description": "For git.comment approved with allow: the comment as edited, which Studio posts. Omitted posts it as it is"
           },
           "expiresAt": {
             "description": "For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires",

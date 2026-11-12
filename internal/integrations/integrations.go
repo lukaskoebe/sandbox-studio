@@ -46,6 +46,16 @@ type Decision struct {
 	// Review, for a git.review approved with allow, is the review as the user edited it.
 	// Nil posts the draft as it is.
 	Review *ReviewEdit
+	// Comment, for a git.comment approved with allow, is the comment as the user edited it.
+	// Nil posts it as it is.
+	Comment *CommentEdit
+}
+
+// CommentEdit is a comment on a pull request's conversation as the user posts it.
+type CommentEdit struct {
+	Body string
+	// Attribution ends the comment with "Comment by <teammate> (agent)".
+	Attribution bool
 }
 
 // ReviewEdit is a pull request review as the user posts it.

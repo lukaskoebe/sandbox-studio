@@ -106,6 +106,7 @@ var commandNames = map[string]struct {
 	agentproto.MethodGitPullRequestReview:       {"pr review", []string{"number"}},
 	agentproto.MethodGitReviewStatus:            {"pr review-status", []string{"number"}},
 	agentproto.MethodGitPullRequestChecks:       {"pr checks", []string{"number"}},
+	agentproto.MethodGitPullRequestComment:      {"pr comment", []string{"number"}},
 	agentproto.MethodSandboxInfo:                {"info", nil},
 	agentproto.MethodApprovalStatus:             {"wait", []string{"approval"}},
 	agentproto.MethodBrowserOpen:                {"browser open", []string{"url"}},
@@ -547,6 +548,15 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 	}
 	if awaiting(result) {
 		follow, params := statusCall(tool, inv.params, result)
+		if id := approvalOf(result); inv.wait && follow == "" && id != "" {
+			// No status tool of its own, as for pr comment: approval_status says.
+			inv.params = map[string]any{"approval": id}
+			if result, err = call(ctx, c, agentproto.MethodApprovalStatus, inv.params); err != nil {
+				fmt.Fprintf(env.Stderr, "studio: %v\n", err)
+				return ExitFailed
+			}
+			return waitResult(ctx, c, agentproto.MethodApprovalStatus, inv, env, result)
+		}
 		if !inv.wait || follow == "" {
 			if code := print(result, inv, tool, env); code != ExitOK {
 				return code
