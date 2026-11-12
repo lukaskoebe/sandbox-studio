@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.20.0 — 2026-11-12
 
 - A diff of several files, in a push's review, a pull request review and a commit, lists its files
   with what happened to each and the lines added and removed, beside the diff when there's room
