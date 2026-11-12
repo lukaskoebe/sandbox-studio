@@ -1,7 +1,6 @@
 package agentcall
 
 import (
-	"context"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -16,7 +15,7 @@ func TestBrowserTools(t *testing.T) {
 		agentproto.MethodBrowserScroll, agentproto.MethodBrowserGetText, agentproto.MethodBrowserScreenshot,
 		agentproto.MethodBrowserWait, agentproto.MethodBrowserBack, agentproto.MethodBrowserFillCredential, agentproto.MethodBrowserClose}
 	names := map[string]bool{}
-	for _, tl := range Tools {
+	for _, tl := range BrowserTools {
 		if names[tl.Name] {
 			t.Errorf("duplicate tool %s", tl.Name)
 		}
@@ -34,15 +33,27 @@ func TestBrowserTools(t *testing.T) {
 			t.Errorf("missing %s", n)
 		}
 	}
-	if !strings.Contains(mcpInstructions, "browser_fill_credential") {
-		t.Error("instructions do not mention the browser")
+	// The browser is the command's only: MCP points to it.
+	for _, tl := range Tools {
+		if strings.HasPrefix(tl.Name, "browser_") {
+			t.Errorf("MCP lists %s", tl.Name)
+		}
+	}
+	if !strings.Contains(mcpInstructions, "studio browser --help") || !strings.Contains(browserHelp, "fill-credential") {
+		t.Error("the instructions do not point to the browser")
+	}
+	// The browser's text names commands, not tools an agent doesn't have.
+	for _, tl := range BrowserTools {
+		if b, _ := json.Marshal(tl); strings.Contains(strings.ReplaceAll(string(b), `"name":"`+tl.Name+`"`, ""), "browser_") {
+			t.Errorf("%s names a browser tool: %s", tl.Name, b)
+		}
 	}
 }
 
 // Every browser tool but browser_open and browser_close takes an optional session. browser_open
 // takes ephemeral, and browser_close needs its session.
 func TestBrowserSessionArguments(t *testing.T) {
-	for _, tl := range Tools {
+	for _, tl := range BrowserTools {
 		if !strings.HasPrefix(tl.Name, "browser_") {
 			continue
 		}
@@ -74,19 +85,5 @@ func TestBrowserSessionArguments(t *testing.T) {
 				t.Errorf("%s takes no optional session", tl.Name)
 			}
 		}
-	}
-}
-
-func TestToolImageResult(t *testing.T) {
-	fc := &fakeCaller{reply: func(method string, params json.RawMessage) (any, error) {
-		return map[string]any{"image": map[string]any{"mimeType": "image/jpeg", "data": "AAAA"}, "text": "the page at https://example.com"}, nil
-	}}
-	r := callTool(context.Background(), fc, rpcRequest{ID: json.RawMessage("1"), Params: json.RawMessage(`{"name":"browser_screenshot","arguments":{}}`)})
-	b, _ := json.Marshal(r.Result)
-	if !strings.Contains(string(b), `{"data":"AAAA","mimeType":"image/jpeg","type":"image"}`) || !strings.Contains(string(b), "https://example.com") {
-		t.Errorf("result %s", b)
-	}
-	if fc.calls[0].Method != agentproto.MethodBrowserScreenshot || string(fc.calls[0].Params) != "{}" {
-		t.Errorf("call %+v", fc.calls)
 	}
 }

@@ -220,7 +220,7 @@ func (s *Service) toolDownloadToWorkspace(ctx context.Context, sb store.Sandbox,
 		return nil, err
 	}
 	if in.Name == "" {
-		return nil, integrations.ToolError("name the download, as browser_downloads lists it")
+		return nil, integrations.ToolError("name the download, as `studio browser downloads` lists it")
 	}
 	if in.Session != "" && !IsEphemeral(in.Session) {
 		return nil, toolError(ErrNoSession)
@@ -264,7 +264,7 @@ func (s *Service) askToCopy(ctx context.Context, st *state, pg *page, sb store.S
 		return err
 	}
 	if !slices.ContainsFunc(files, func(d Download) bool { return d.Name == name }) {
-		return refuse("could not copy %s: there is no such download; browser_downloads lists them", name)
+		return refuse("could not copy %s: there is no such download; `studio browser downloads` lists them", name)
 	}
 	c := &call{s: s, st: st, pg: pg, sb: sb}
 	url, err := c.currentURL(ctx)

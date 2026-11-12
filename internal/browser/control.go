@@ -85,7 +85,7 @@ func (s *Service) toolRequestControl(ctx context.Context, sb store.Sandbox, para
 	s.mu.Unlock()
 	switch {
 	case !driving:
-		return "The user handed the browser back: use it now. Earlier refs are stale, so take a browser_snapshot first.", nil
+		return "The user handed the browser back: use it now. Earlier refs are stale, so run `studio browser snapshot` first.", nil
 	case status == store.StatusDenied:
 		return "The user keeps control of the browser for now. Don't ask again right away: carry on with other work, " +
 			"and use the browser once they hand it back.", nil

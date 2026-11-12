@@ -249,7 +249,7 @@ func (s *Service) loginsFor(ctx context.Context, envID, teammateID, pageURL stri
 	if len(names) == 0 {
 		return ""
 	}
-	return "saved logins for this site, for browser_fill_credential: " + strings.Join(names, ", ") + "\n"
+	return "saved logins for this site, for `studio browser fill-credential`: " + strings.Join(names, ", ") + "\n"
 }
 
 // errDenied ends a credential request the user refused.
@@ -334,7 +334,7 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 	}
 	// A page can change while the user decides, and the ref then names another field.
 	if p.Field != "" && s.fieldPrint(ctx, st, pg, p.Ref) != p.Field {
-		return fail(refuse("the field changed since the request; take a browser_snapshot and ask again"))
+		return fail(refuse("the field changed since the request; run `studio browser snapshot` and ask again"))
 	}
 	sec, err := s.credential(ctx, envID, p.TeammateID, p.SandboxID, p.Credential, cur.URL)
 	if err != nil {

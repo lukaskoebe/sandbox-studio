@@ -61,7 +61,7 @@ func takeSession(method string, params json.RawMessage) (address, json.RawMessag
 			return t, nil, refuse("session must be a string")
 		}
 		if t.session != "" && !sessionPattern.MatchString(t.session) {
-			return t, nil, refuse("session must be an ID from browser_open, like eph-1a2b3c4d")
+			return t, nil, refuse("session must be an ID from `studio browser open --ephemeral`, like eph-1a2b3c4d")
 		}
 		delete(m, "session")
 	}
@@ -85,7 +85,7 @@ func (s *Service) agentPage(st *state, id string, sb store.Sandbox) (*page, erro
 	defer s.mu.Unlock()
 	pg := st.pageFor(id)
 	if pg == nil {
-		return nil, refuse("there is no ephemeral session %s: it was closed, unused for %s, or its browser stopped; open a new one with browser_open(ephemeral: true)", id, or(s.EphemeralIdle, defaultEphemeral))
+		return nil, refuse("there is no ephemeral session %s: it was closed, unused for %s, or its browser stopped; open a new one with `studio browser open --ephemeral`", id, or(s.EphemeralIdle, defaultEphemeral))
 	}
 	if pg.slot > 0 && pg.owner.ID != sb.ID {
 		return nil, refuse("ephemeral session %s belongs to another sandbox", id)
@@ -114,7 +114,7 @@ func (s *Service) reserveEphemeral(st *state, sb store.Sandbox, chat string) (*p
 		st.eph[pg.id] = pg
 		return pg, nil
 	}
-	return nil, refuse("this teammate already has %d ephemeral browser sessions open; browser_close one first", agentproto.MaxBrowserEphemeral)
+	return nil, refuse("this teammate already has %d ephemeral browser sessions open; close one first with `studio browser close --session <id>`", agentproto.MaxBrowserEphemeral)
 }
 
 // dropLocked forgets an ephemeral session and wakes calls waiting for its takeover to end.
@@ -361,7 +361,7 @@ func (c *call) closeSession(ctx context.Context, params json.RawMessage) (any, e
 		return nil, err
 	}
 	if c.pg.slot == 0 {
-		return nil, refuse("browser_close ends an ephemeral session: give its session ID from browser_open. The persistent profile stays open.")
+		return nil, refuse("`studio browser close` ends an ephemeral session: give it the --session that `studio browser open --ephemeral` printed. The persistent profile stays open.")
 	}
 	if err := c.s.closeEphemeral(ctx, c.st, c.pg, "closed by the agent"); err != nil {
 		return nil, userError{fmt.Errorf("the session was closed, but its browser did not confirm: %w", err)}

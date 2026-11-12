@@ -38,7 +38,7 @@ Stream kinds:
 | `browser` | host → guest | agent-browser commands in a browser VM |
 | `forwards` | host → guest | the loopback ports a browser VM forwards to its driving sandbox ([browser](browser.md#localhost)) |
 | `forward` | guest → host | one connection to a forwarded port; after the host's `{}`, raw bytes |
-| `call` | guest → host | hooks, memory tools and browser tools |
+| `call` | guest → host | hooks, the MCP tools and the `studio` command |
 
 Bulk transfers (template layer export, workspace copies) don't use the channel: guest→host
 bulk data over vsock stalls on msb 0.7.7/0.7.8, so they run over msb exec instead (see
@@ -74,7 +74,7 @@ small or move their bytes to msb exec.
 | `connect` (default) | the supervisor | the channel loop |
 | `boot`, `shutdown`, `supervise` | Studio via msb exec | see [sandboxes](sandboxes.md#boot-and-shutdown) |
 | `hook <event> --harness <name>` | the harness | reads the hook JSON on stdin, calls Studio, prints the harness's response |
-| `mcp` | the harness | stdio MCP server with the memory and browser tools |
+| `mcp` | the harness | stdio MCP server with the memory, task and git tools; the browser is `studio browser` |
 | `studio …` (called as `studio`) | the agent, scripts, the user over SSH | the same tools as commands, through the link `/usr/local/bin/studio` that `boot` makes ([agent command](agent-cli.md)) |
 | `claude-acp` | Studio's chat, for a Claude subscription | the chat's ACP agent: runs `claude -p` for its turns ([harnesses](harnesses.md#claude-subscription-chats)) |
 | `claude-permission` | Claude Code, from the chat's plugin | the permission prompt tool of that agent, which asks the shim |

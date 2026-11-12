@@ -105,7 +105,7 @@ func TestPausedCallsSayTheUserHasControl(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := f.call(f.sbAda, agentproto.MethodBrowserScreenshot, `{}`)
-	if err == nil || !strings.Contains(err.Error(), "still has control") || !strings.Contains(err.Error(), "browser_request_control") ||
+	if err == nil || !strings.Contains(err.Error(), "still has control") || !strings.Contains(err.Error(), "studio browser request-control") ||
 		!strings.Contains(err.Error(), "Tell the user") {
 		t.Fatalf("paused call: %v", err)
 	}

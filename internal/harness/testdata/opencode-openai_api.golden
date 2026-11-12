@@ -554,7 +554,13 @@ Network access goes through Studio's gateway and its policy. API keys in your en
 - **Network:** a connection to a host Studio hasn't been told about waits up to a minute while the user decides; a download through mise may too. Wait for it, and don't retry in a loop. A 403 with the header `X-Sandbox-Studio: refused` is Studio's network policy: tell the user which host you need instead of working around it.
 - **Servers you start** are not reachable at localhost for the user. Give them the link `http://localhost:<port>/`: Studio's chat turns it into a button that opens the port. `sandbox_info` in the `studio` MCP server lists the listening ports, and the network level and rules that apply here.
 - **`git push`** goes to Studio's review first: the user approves it before it reaches the forge, and you hear the outcome on your next fetch or in a message. Only branches can be pushed, no tags or deletes. To rewrite a branch after a rebase, push with `--force-with-lease`; the user approves it as a force-push. The default branch takes only fast-forwards. A new push of a branch replaces one still waiting for review. Until you fetch, `origin/<branch>` shows your push, approved or not.
-- **`studio`** runs the MCP tools from the shell (`studio --help`); exit code 75 waits for the user's approval. `~/forge` holds pull requests as files.
+
+## Studio's command
+
+`studio` in the shell reaches Studio; `studio --help` lists every command. Exit code 75 means it waits for the user's approval; `--wait` keeps asking.
+
+- **Browser:** `studio browser` drives a browser of yours: open a page (localhost is this sandbox), snapshot it for element refs, click, fill, log in with a vault credential, screenshot. `studio browser show <url>` shows the user what you built. Start with `studio browser --help`.
+- **Pull requests:** `studio pr create`, `list`, `read` and `review` work on the forge; the user approves what you post. `~/forge` holds this sandbox's pull requests, their reviews and comments as files, kept fresh while you work.
 
 ## Your soul
 

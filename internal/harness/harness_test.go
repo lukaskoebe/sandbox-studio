@@ -272,9 +272,11 @@ func TestInstructionsNameTheSandboxes(t *testing.T) {
 // TestInstructionsStayShort caps the managed block without a soul: every session reads it, so
 // details that change belong behind a tool. Raise the cap only on purpose: 5300 since the
 // Docker disk's line, as agents moved Docker's data-root to /workspace when that disk filled;
-// 5400 since the studio command's line, without which agents don't find it.
+// 5400 since the studio command's line, without which agents don't find it; 6000 since the
+// browser left the MCP server, whose instructions and 18 tool schemas described it: this
+// section is now the only place that says what Studio's command can do.
 func TestInstructionsStayShort(t *testing.T) {
-	const max = 5400
+	const max = 6000
 	p := teammate
 	p.Soul = ""
 	if n := len(instructions(p, Sandbox{Name: "api"}).Content); n > max {

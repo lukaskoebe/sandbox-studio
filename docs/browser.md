@@ -1,7 +1,7 @@
 # Browser broker
 
 Agents browse the web through a real Chromium. It runs in a separate microVM per teammate,
-and Studio is the only client: agents get MCP tools, never CDP. This doc covers the
+and Studio is the only client: agents get the `studio browser` commands, never CDP. This doc covers the
 implementation.
 
 Code:
@@ -10,7 +10,8 @@ Code:
 - `internal/sandboxes/browser.go`: the VM lifecycle.
 - `internal/guest/browser.go`: the guest side, which runs agent-browser.
 - `internal/agentproto/browser.go`: the wire format.
-- `internal/agentcall/browser.go`: the MCP tools.
+- `internal/agentcall/browser.go`: the tools, which `studio browser …` runs
+  ([agent command](agent-cli.md#browser)).
 - `internal/api/browser.go`: the API.
 - `cmd/studio/browser.go`: the wiring.
 - `images/browser`: the image.
@@ -142,12 +143,14 @@ enabled.
 
 ## Tools
 
-`studio-agent mcp` adds these tools. Each one is forwarded over the call channel as a
-`browser_*` method:
+The agent runs them as `studio browser <command>` in its shell; they are not MCP tools (see
+[agent command](agent-cli.md#browser) for why). Each one is forwarded over the call channel as
+a `browser_*` method, and the messages the broker answers with name the commands, as
+`studio browser snapshot`:
 
-- `open(url, ephemeral?)`, `snapshot`, `click(ref)`, `fill(ref, text)`, `type(ref, text)`, `press(key)`,
+- `open(url, ephemeral?)`, `snapshot(full?)`, `click(ref)`, `fill(ref, text)`, `type(ref, text)`, `press(key)`,
   `select(ref, value)`, `scroll(direction, px)`, `get_text(ref?)`
-- `screenshot`, which returns MCP image content
+- `screenshot`, which the command writes to an image file and prints its path
 - `wait(ms | text | url)`, `back`
 - `fill_credential(ref, name)`
 - `close(session)`, which ends an ephemeral session
@@ -664,7 +667,7 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
 - history and screenshot bounds;
 - idle stop;
 - live view relay and input filtering;
-- MCP tool list and image results;
+- the command tools and their text;
 - the API (status, takeover, patterns, approval view, remember, teammate delete);
 - ephemeral sessions: the lifecycle, the limit, idle expiry on a fake clock, close, the VM
   stop, the end of the owning chat or sandbox (`owners_test.go`), ownership, takeover, tool arguments, approval and history marks, and the live view

@@ -7,8 +7,12 @@
   memory search …`, and `studio call <tool> '<json>'` for any tool. Flags come from the tools'
   arguments, a pull request command takes the forge, repository and branch from the checkout,
   a screenshot goes to a file, `--json` prints JSON, and exit code 75 means it waits for the
-  user's approval (`--wait` keeps asking). The MCP tools stay as they are. A sandbox gets the
-  command when it starts.
+  user's approval (`--wait` keeps asking). A sandbox gets the command when it starts.
+- The browser is a command only: agents drive it with `studio browser …` (`studio browser
+  --help` explains it), and the MCP server no longer lists browser tools. Over many pages an
+  agent loops and greps in its shell, which came out about 3.5× cheaper in a test. The
+  managed instructions gain a **Studio's command** section saying what the browser and the
+  pull request commands do, and the browser's messages name the commands.
 - `~/forge` holds the pull requests of a sandbox's repositories as read-only files, on GitHub,
   GitLab, Forgejo, Gitea and Codeberg: `pulls.md` per repository with the open ones and those
   closed in the last week, and a folder per pull request of the sandbox's own branches or one

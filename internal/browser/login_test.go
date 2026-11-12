@@ -32,7 +32,7 @@ func TestBrowserLoginIsOfferedAndFilled(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, _ := snap.(string)
-	if !strings.Contains(text, `saved logins for this site, for browser_fill_credential: EXAMPLE_COM (username "ada@example.com")`) ||
+	if !strings.Contains(text, "saved logins for this site, for `studio browser fill-credential`: EXAMPLE_COM (username \"ada@example.com\")") ||
 		strings.Contains(text, "BOB_SHOP") || strings.Contains(text, "ada-password") {
 		t.Errorf("snapshot:\n%s", text)
 	}

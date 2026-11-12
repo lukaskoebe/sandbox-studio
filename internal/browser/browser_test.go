@@ -1279,7 +1279,7 @@ func TestHandbackTellsTheAgentWhatTheUserDid(t *testing.T) {
 	}
 	res := drive("https://example.org/settings")
 	note, _, _ := strings.Cut(res, "\n\n")
-	for _, want := range []string{"the user took over this browser for less than a minute", "it was on https://example.org/settings", "take a browser_snapshot"} {
+	for _, want := range []string{"the user took over this browser for less than a minute", "it was on https://example.org/settings", "run `studio browser snapshot`"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("first call after handback lacks %q: %q", want, note)
 		}

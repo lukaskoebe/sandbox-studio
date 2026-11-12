@@ -137,7 +137,7 @@ func (s *Service) callTool(ctx context.Context, t tool, st *state, pg *page, sb 
 		if errors.As(err, &lost) {
 			s.log().Warn("browser reply lost", "tool", method, "sandbox", sandboxID, "err", Scrub(err.Error(), secrets))
 			return nil, errors.New(method + " failed: the browser's reply did not arrive (" + Scrub(err.Error(), secrets) +
-				"). Take a browser_snapshot to see the page before you act on it.")
+				"). Run `studio browser snapshot` to see the page before you act on it.")
 		}
 		var ue userError
 		if errors.As(err, &ue) || errors.Is(err, ErrPaused) || errors.Is(err, context.DeadlineExceeded) {
@@ -205,9 +205,9 @@ func (c *call) pageAfterLostReply(ctx context.Context) (string, error) {
 // whether the page answered, and at is its address then.
 func lostMessage(tool string, cause error, known bool, at string) string {
 	if !known {
-		return fmt.Sprintf("%s: the browser's reply did not arrive (%v), and the page could not be checked. Take a browser_snapshot before you act on it.", tool, cause)
+		return fmt.Sprintf("%s: the browser's reply did not arrive (%v), and the page could not be checked. Run `studio browser snapshot` before you act on it.", tool, cause)
 	}
-	return fmt.Sprintf("%s: the browser's reply did not arrive (%v). The page is at %s, and the command may have run. Take a browser_snapshot before you act on the page.", tool, cause, at)
+	return fmt.Sprintf("%s: the browser's reply did not arrive (%v). The page is at %s, and the command may have run. Run `studio browser snapshot` before you act on the page.", tool, cause, at)
 }
 
 // scrub removes the credentials filled into the current page from s.
@@ -223,13 +223,13 @@ var refPattern = regexp.MustCompile(`^@?(e[0-9]{1,6})$`)
 func (c *call) element(ref string) (string, refInfo, error) {
 	m := refPattern.FindStringSubmatch(strings.TrimSpace(ref))
 	if m == nil {
-		return "", refInfo{}, refuse("ref must look like e12, from browser_snapshot")
+		return "", refInfo{}, refuse("ref must look like e12, from `studio browser snapshot`")
 	}
 	c.s.mu.Lock()
 	info, ok := c.pg.refs[m[1]]
 	c.s.mu.Unlock()
 	if !ok {
-		return "", refInfo{}, refuse("unknown ref %s: take a browser_snapshot of the current page first", m[1])
+		return "", refInfo{}, refuse("unknown ref %s: run `studio browser snapshot` on the current page first", m[1])
 	}
 	return m[1], info, nil
 }
@@ -303,7 +303,7 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 	}
 	r := Request{Action: action, Origin: Origin(url), Role: info.Role, Label: info.Name, Sensitive: info.Sensitive}
 	if r.Origin == "" {
-		return nil, refuse("the page is not a web page (%s); browser_open one first", clip(url, 100))
+		return nil, refuse("the page is not a web page (%s); open one first with `studio browser open`", clip(url, 100))
 	}
 	if err := c.authorize(ctx, r, url, text); err != nil {
 		return nil, err
@@ -320,7 +320,7 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 		var lost lostReply
 		if errors.As(err, &lost) {
 			at, rerr := c.pageAfterLostReply(ctx)
-			err = errors.New(c.scrub(lostMessage("browser_"+action, err, rerr == nil, at)))
+			err = errors.New(c.scrub(lostMessage("studio browser "+strings.ReplaceAll(action, "_", "-"), err, rerr == nil, at)))
 		}
 		e.outcome, e.detail = "failed", err.Error()
 		c.s.record(ctx, c.st, c.pg, e)
@@ -328,7 +328,7 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 	}
 	after, _ := c.currentURL(ctx)
 	c.s.record(ctx, c.st, c.pg, e)
-	return fmt.Sprintf("done; the page is at %s. Take a browser_snapshot to see it.", after), nil
+	return fmt.Sprintf("done; the page is at %s. Run `studio browser snapshot` to see it.", after), nil
 }
 
 // decode reads a tool's arguments. Unknown fields are refused: a call has no say in
@@ -385,7 +385,7 @@ func (c *call) open(ctx context.Context, params json.RawMessage) (any, error) {
 		}
 		opened = true
 		return map[string]string{"session": pg.id, "result": res,
-			"note": "Pass this session to the other browser tools to use it; without it they drive your persistent profile. browser_close it when you are done; nothing it stores is kept."}, nil
+			"note": "Pass it as --session to the other browser commands to use it; without it they drive your persistent profile. Close it with `studio browser close --session <id>` when you are done; nothing it stores is kept."}, nil
 	}
 	return c.openPage(ctx, in.URL, origin)
 }
@@ -409,9 +409,9 @@ func (c *call) openPage(ctx context.Context, url, origin string) (string, error)
 		if rerr == nil && Origin(at) == origin {
 			e.outcome, e.detail = "ok", "the reply did not arrive, so there is no screenshot"
 			c.s.record(ctx, c.st, c.pg, e)
-			return c.scrub(fmt.Sprintf("opened %s, but its reply did not arrive (%v), so there is no screenshot or title. The page is at %s. Take a browser_snapshot to see the page.", url, err, at)), nil
+			return c.scrub(fmt.Sprintf("opened %s, but its reply did not arrive (%v), so there is no screenshot or title. The page is at %s. Run `studio browser snapshot` to see the page.", url, err, at)), nil
 		}
-		msg := c.scrub(lostMessage("browser_open", err, rerr == nil, at))
+		msg := c.scrub(lostMessage("studio browser open", err, rerr == nil, at))
 		e.outcome, e.detail = "failed", msg
 		c.s.record(ctx, c.st, c.pg, e)
 		return "", userError{errors.New(msg)}
@@ -423,7 +423,7 @@ func (c *call) openPage(ctx context.Context, url, origin string) (string, error)
 	if err := json.Unmarshal(data, &v); err != nil {
 		e.outcome, e.detail = "failed", "the reply was not understood"
 		c.s.record(ctx, c.st, c.pg, e)
-		return "", userError{errors.New("the browser's reply to browser_open was not understood")}
+		return "", userError{errors.New("the browser's reply to open was not understood")}
 	}
 	c.s.mu.Lock()
 	c.pg.navigated(v.URL)
@@ -431,7 +431,7 @@ func (c *call) openPage(ctx context.Context, url, origin string) (string, error)
 	c.s.mu.Unlock()
 	e.detail = v.Title
 	c.s.record(ctx, c.st, c.pg, e)
-	return Scrub(fmt.Sprintf("opened %s (%s). Take a browser_snapshot to see the page.", v.URL, v.Title), secrets), nil
+	return Scrub(fmt.Sprintf("opened %s (%s). Run `studio browser snapshot` to see the page.", v.URL, v.Title), secrets), nil
 }
 
 // sessionNote marks approval subjects of an ephemeral session.
@@ -682,7 +682,7 @@ func (c *call) screenshot(ctx context.Context, params json.RawMessage) (any, err
 	visible := c.pg.visible
 	c.s.mu.Unlock()
 	if visible {
-		return nil, refuse("a credential Studio filled may be visible on this page, so screenshots are off until the page changes; use browser_snapshot")
+		return nil, refuse("a credential Studio filled may be visible on this page, so screenshots are off until the page changes; use `studio browser snapshot`")
 	}
 	url, _ := c.currentURL(ctx)
 	if err := c.authorize(ctx, Request{Action: "screenshot", Origin: Origin(url)}, url, ""); err != nil {

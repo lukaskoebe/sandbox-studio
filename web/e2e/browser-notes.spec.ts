@@ -243,7 +243,7 @@ test("notes go as text alone to an agent that can't take images", async ({
     "A note names the element under it where Studio could tell"
   )
   expect(text).toContain(
-    "your browser_snapshot names its elements the same way"
+    "`studio browser snapshot` names its elements the same way"
   )
   spot(text, String.raw`1\. button "Sign in" \(#sign-in\), at`, "Press this")
   const [x2, y2] = spot(text, String.raw`2\. At`, "Empty here")

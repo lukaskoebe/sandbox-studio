@@ -78,7 +78,7 @@ func TestCommandArgsAreSchemaProperties(t *testing.T) {
 	}
 	for name := range commandNames {
 		found := false
-		for _, tool := range Tools {
+		for _, tool := range commandTools() {
 			found = found || tool.Name == name
 		}
 		if !found {
@@ -335,7 +335,7 @@ func TestCLIHelp(t *testing.T) {
 	// A group lists its commands, the way agents look for them.
 	for _, args := range [][]string{{"browser", "--help"}, {"help", "browser"}} {
 		if r := runCLI(t, &fakeCaller{}, "", nil, args...); r.code != ExitOK || !strings.Contains(r.stdout, "browser snapshot") ||
-			!strings.Contains(r.stdout, "unless full") || strings.Contains(r.stdout, "memory search") {
+			!strings.Contains(r.stdout, "unless --full") || strings.Contains(r.stdout, "memory search") {
 			t.Errorf("%v: %d\n%s", args, r.code, r.stdout)
 		}
 	}

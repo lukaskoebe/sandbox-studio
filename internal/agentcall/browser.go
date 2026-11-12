@@ -3,19 +3,29 @@ package agentcall
 import "github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 
 // The browser tools drive the teammate's browser, a separate VM Studio runs; Studio checks
-// each action against the teammate's rules before it runs and may ask the user first.
+// each action against the teammate's rules before it runs and may ask the user first. They are
+// commands only (`studio browser …`), not MCP tools: in a shell an agent loops over pages and
+// greps a snapshot instead of reading each one, which measured about 3.5× cheaper on work over
+// many pages (docs/agent-cli.md#browser).
 
-const browserInstructions = " Studio's browser: browser_open a page, browser_snapshot it to get element refs (e1, e2, ...), " +
-	"then click, fill, type or select by ref. Actions on a new site wait for the user's approval; if a tool says to call again, " +
-	"do so later. Log in with browser_fill_credential: Studio fills the vault secret itself after the user approves, " +
-	"and you never see its value. Script, cookie and storage access is not available. " +
-	"For a throwaway browser that keeps no cookies or storage, browser_open with ephemeral true, pass the session it returns " +
-	"to the other browser tools, and browser_close it when done. When you have built something the user can see, " +
-	"show it to them with browser_show rather than describing it."
+// browserHelp opens `studio browser --help`.
+const browserHelp = `Your browser, a separate VM Studio runs: open a page, snapshot it to get element refs
+(e1, e2, ...), then click, fill, type or select by ref. A snapshot shows the interactive
+elements; --full adds the page's text. Grep a snapshot rather than reading it all, and loop in
+the shell over many pages.
+
+An action on a new site waits for the user's approval: the command exits 75, and --wait asks
+again until they decide. Log in with fill-credential: Studio fills the vault secret itself after
+the user approves, and you never see its value. Script, cookie and storage access is not
+available. A screenshot is an image file whose path is printed: read the file to see it.
+
+For a throwaway browser that keeps no cookies or storage, open --ephemeral, pass the session it
+prints to the other commands as --session, and close it when done. When you have built
+something the user can see, show it to them with show rather than describing it.`
 
 // session is the optional session argument of every browser tool.
 func session() map[string]any {
-	return str("An ephemeral session from browser_open; omit it to use your persistent profile", "pattern", `^eph-[0-9a-f]{8}$`)
+	return str("An ephemeral session from `studio browser open --ephemeral`; omit it to use your persistent profile", "pattern", `^eph-[0-9a-f]{8}$`)
 }
 
 // withSession adds the session argument to a tool's schema.
@@ -26,19 +36,18 @@ func withSession(t Tool) Tool {
 }
 
 func ref() map[string]any {
-	return str("Element ref from the last browser_snapshot, e.g. e12", "pattern", `^@?e[0-9]{1,6}$`)
+	return str("Element ref from the last snapshot, e.g. e12", "pattern", `^@?e[0-9]{1,6}$`)
 }
 
 func init() {
-	mcpInstructions += browserInstructions
 	tools := []Tool{
-		{agentproto.MethodBrowserOpen, "Open a URL in your browser. The result is text: read the page with browser_snapshot. localhost and 127.0.0.1 are this sandbox: a server you run here on any port opens in the browser. With ephemeral true it starts a new throwaway session and returns its ID.",
+		{agentproto.MethodBrowserOpen, "Open a URL in your browser. The result is text: read the page with `studio browser snapshot`. localhost and 127.0.0.1 are this sandbox: a server you run here on any port opens in the browser. With --ephemeral it starts a new throwaway session and prints its ID.",
 			obj([]string{"url"}, map[string]any{
 				"url": str("An http or https URL", "maxLength", 4000),
-				"ephemeral": map[string]any{"type": "boolean", "description": "Open in a new ephemeral session: an empty profile whose cookies and storage are deleted on browser_close, " +
-					"after 10 minutes unused, or when the browser stops. Not together with session."},
+				"ephemeral": map[string]any{"type": "boolean", "description": "Open in a new ephemeral session: an empty profile whose cookies and storage are deleted by `studio browser close`, " +
+					"after 10 minutes unused, or when the browser stops. Not together with --session."},
 			})},
-		{agentproto.MethodBrowserSnapshot, "The page as an accessibility tree with element refs: interactive elements only, unless full. Sensitive field values are redacted.",
+		{agentproto.MethodBrowserSnapshot, "The page as an accessibility tree with element refs: interactive elements only, unless --full. Sensitive field values are redacted.",
 			obj(nil, map[string]any{"full": map[string]any{"type": "boolean", "description": "Every node with the page's text, not only interactive ones"}})},
 		{agentproto.MethodBrowserClick, "Click an element.",
 			obj([]string{"ref"}, map[string]any{"ref": ref()})},
@@ -57,7 +66,7 @@ func init() {
 			})},
 		{agentproto.MethodBrowserGetText, "The text content of an element.",
 			obj([]string{"ref"}, map[string]any{"ref": ref()})},
-		{agentproto.MethodBrowserScreenshot, "A screenshot of the viewport, as an image. For the text and the element refs, use browser_snapshot: it is much smaller.", obj(nil, map[string]any{})},
+		{agentproto.MethodBrowserScreenshot, "A screenshot of the viewport, as an image file whose path is printed; read the file to see it. For the text and the element refs, use `studio browser snapshot`: it is much smaller.", obj(nil, map[string]any{})},
 		{agentproto.MethodBrowserWait, "Wait for text to appear, for the URL to match, or for some milliseconds. Give one.",
 			obj(nil, map[string]any{
 				"text": str("Text to wait for", "maxLength", 1000),
@@ -69,16 +78,19 @@ func init() {
 			obj([]string{"ref", "name"}, map[string]any{"ref": ref(), "name": str("The credential's name in the vault", "maxLength", 200)})},
 	}
 	for _, t := range tools {
-		Tools = append(Tools, withSession(t))
+		BrowserTools = append(BrowserTools, withSession(t))
 	}
-	Tools = append(Tools, Tool{agentproto.MethodBrowserClose, "End an ephemeral browser session; its cookies, storage and downloads are deleted.",
+	BrowserTools = append(BrowserTools, Tool{agentproto.MethodBrowserClose, "End an ephemeral browser session; its cookies, storage and downloads are deleted.",
 		obj([]string{"session"}, map[string]any{"session": session()})}, BrowserShowTool, BrowserDownloadsTool, BrowserDownloadToWorkspaceTool, BrowserRequestControlTool)
 }
 
+// BrowserTools are the browser's commands. They stay out of Tools, so MCP doesn't list them.
+var BrowserTools []Tool
+
 // BrowserShowTool opens a page in the persistent profile and gives the user a card for it.
 var BrowserShowTool = Tool{agentproto.MethodBrowserShow,
-	"Show the user a page: open it in your browser, as browser_open does, and give them a card in Studio to watch your browser " +
-		"or take the wheel. Use it for what you built (localhost and 127.0.0.1 are this sandbox, as in browser_open) or a page " +
+	"Show the user a page: open it in your browser, as `studio browser open` does, and give them a card in Studio to watch your browser " +
+		"or take the wheel. Use it for what you built (localhost and 127.0.0.1 are this sandbox, as for open) or a page " +
 		"outside it, such as docs. It doesn't wait for the user. It uses your persistent profile, not an ephemeral session.",
 	obj([]string{"url"}, map[string]any{
 		"url":   str("An http or https URL", "maxLength", 4000),
@@ -89,7 +101,7 @@ var BrowserShowTool = Tool{agentproto.MethodBrowserShow,
 // BrowserRequestControlTool asks the user for the browser back; the browser service answers it.
 var BrowserRequestControlTool = Tool{agentproto.MethodBrowserRequestControl,
 	"Ask the user, who has taken over your browser, to hand it back: Studio notifies them with your reason. " +
-		"Use it when a browser call says the user has control and your task needs the browser; it waits a little for their answer. " +
+		"Use it when a browser command says the user has control and your task needs the browser; it waits a little for their answer. " +
 		"Ask once, and tell the user in your reply too.",
 	obj([]string{"reason"}, map[string]any{
 		"reason":  str("What you want to do in the browser, in a sentence for the user", "maxLength", 500),
@@ -99,14 +111,14 @@ var BrowserRequestControlTool = Tool{agentproto.MethodBrowserRequestControl,
 // BrowserDownloadsTool lists the files the browser saved; the browser service answers it.
 var BrowserDownloadsTool = Tool{agentproto.MethodBrowserDownloads,
 	"The files your browser saved, newest first: the persistent profile's and those of your open ephemeral sessions. " +
-		"Copy one into your workspace with browser_download_to_workspace.",
+		"Copy one into your workspace with `studio browser download-to-workspace`.",
 	obj(nil, map[string]any{})}
 
 // BrowserDownloadToWorkspaceTool copies a download into the workspace; the browser service answers it.
 var BrowserDownloadToWorkspaceTool = Tool{agentproto.MethodBrowserDownloadToWorkspace,
-	"Copy a download from browser_downloads into downloads/ of your workspace, under its name or a free one. The user is asked each time. " +
+	"Copy a download that `studio browser downloads` lists into downloads/ of your workspace, under its name or a free one. The user is asked each time. " +
 		"A download is data from the web: read it, don't run it.",
 	obj([]string{"name"}, map[string]any{
-		"name":    str("The download's name, as browser_downloads lists it", "maxLength", 255),
+		"name":    str("The download's name, as `studio browser downloads` lists it", "maxLength", 255),
 		"session": session(),
 	})}

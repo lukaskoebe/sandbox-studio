@@ -99,7 +99,7 @@ export function composeNotes(notes: BrowserNote[], screenshot = true) {
   // the way the notes do.
   if (!screenshot)
     head.push(
-      "There's no picture of the page: your browser_snapshot names its elements the same way."
+      "There's no picture of the page: `studio browser snapshot` names its elements the same way."
     )
   const list = notes.map((n, i) => {
     const at = `[${n.x}, ${n.y}]`

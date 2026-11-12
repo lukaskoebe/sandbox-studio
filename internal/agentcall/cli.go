@@ -117,6 +117,11 @@ var commandNames = map[string]struct {
 	agentproto.MethodBrowserRequestControl:      {"browser request-control", []string{"reason"}},
 }
 
+// commandTools are the tools the command runs: the MCP tools, the browser's, and its own.
+func commandTools() []Tool {
+	return slices.Concat(Tools, BrowserTools, []Tool{ForgeSyncCall})
+}
+
 // ForgeSyncCall asks Studio to fetch ~/forge again now. It is the command's only, and stays out
 // of Tools, so MCP doesn't list it.
 var ForgeSyncCall = Tool{agentproto.MethodForgeSync,
@@ -125,7 +130,7 @@ var ForgeSyncCall = Tool{agentproto.MethodForgeSync,
 
 // commands are the subcommands, one per tool and the command's own.
 func commands() []command {
-	tools := append(slices.Clone(Tools), ForgeSyncCall)
+	tools := commandTools()
 	out := make([]command, 0, len(tools))
 	for _, t := range tools {
 		c := command{tool: t}
@@ -259,8 +264,8 @@ func runCall(ctx context.Context, c Caller, args []string, env CLIEnv) int {
 		}
 	}
 	name := pos[0]
-	if !slices.ContainsFunc(Tools, func(t Tool) bool { return t.Name == name }) && name != agentproto.MethodForgeSync {
-		fmt.Fprintf(env.Stderr, "studio call: unknown tool %q; `studio tools` lists them\n", name)
+	if !slices.ContainsFunc(commandTools(), func(t Tool) bool { return t.Name == name }) {
+		fmt.Fprintf(env.Stderr, "studio call: unknown tool %q; `studio <command> --help` names a command's tool\n", name)
 		return ExitUsage
 	}
 	return invoke(ctx, c, name, inv, env)
@@ -775,11 +780,12 @@ func scalar(v json.Token, indent int) string {
 // printHelp lists the commands by group.
 func printHelp(w io.Writer, cmds []command) {
 	fmt.Fprint(w, `studio: Sandbox Studio's tools as commands. Each one calls Studio, which decides what this
-sandbox's teammate may do; an action that needs the user's approval asks them as the MCP tool does.
+sandbox's teammate may do; an action that needs the user's approval asks them first.
 
 Usage:
   studio <command> [arguments] [--flags]   flags are the tool's arguments: studio <command> --help
-  studio call <tool> '<json>'              any tool by its MCP name; - reads the JSON from stdin
+  studio <group> --help                    a group's commands; studio browser --help explains the browser
+  studio call <tool> '<json>'              any tool by its name; - reads the JSON from stdin
 
 Output is plain text; --json prints the result as JSON for jq. An image, as a screenshot, goes to
 a file (-o to name it) whose path is printed. A --<flag>-file reads a text argument from a file,
@@ -816,7 +822,13 @@ func groupCommands(cmds []command, group string) []command {
 	return out
 }
 
+// groupHelp opens a group's help.
+var groupHelp = map[string]string{"browser": browserHelp}
+
 func printGroupHelp(w io.Writer, group string, cmds []command) {
+	if h := groupHelp[group]; h != "" {
+		fmt.Fprintf(w, "%s\n\n", h)
+	}
 	fmt.Fprintf(w, "studio %s commands; studio %s <command> --help shows a command's flags:\n\n", group, group)
 	width := 0
 	for _, c := range cmds {
@@ -865,7 +877,7 @@ func firstSentence(s string) string {
 
 // printCommandHelp shows a command's tool, what it does, and its flags.
 func printCommandHelp(w io.Writer, c command) {
-	fmt.Fprintf(w, "studio %s   (the MCP tool %s)\n\n%s\n", usageLine(c), c.tool.Name, c.tool.Description)
+	fmt.Fprintf(w, "studio %s   (tool %s, for studio call)\n\n%s\n", usageLine(c), c.tool.Name, c.tool.Description)
 	props, _ := c.tool.InputSchema["properties"].(map[string]any)
 	required, _ := c.tool.InputSchema["required"].([]string)
 	keys := make([]string, 0, len(props))

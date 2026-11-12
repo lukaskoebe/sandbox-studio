@@ -265,8 +265,8 @@ func TestBrowserToolArguments(t *testing.T) {
 		{agentproto.MethodBrowserSnapshot, `{"session":7}`, "session must be a string"},
 		{agentproto.MethodBrowserSnapshot, `{"ephemeral":true}`, "bad arguments"},
 		{agentproto.MethodBrowserSnapshot, `{"session":"eph-0000000f"}`, "there is no ephemeral session"},
-		{agentproto.MethodBrowserClose, `{}`, "give its session ID"},
-		{agentproto.MethodBrowserClose, `{"session":""}`, "give its session ID"},
+		{agentproto.MethodBrowserClose, `{}`, "give it the --session"},
+		{agentproto.MethodBrowserClose, `{"session":""}`, "give it the --session"},
 		{agentproto.MethodBrowserClose, `{"session":"` + id + `","extra":1}`, "bad arguments"},
 	} {
 		if _, err := f.call(f.sbAda, c.method, c.params); err == nil || !strings.Contains(err.Error(), c.want) {

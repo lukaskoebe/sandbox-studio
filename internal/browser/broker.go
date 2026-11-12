@@ -37,7 +37,7 @@ var (
 	ErrNoCalls    = errors.New("browser calls come from agent sandboxes only")
 	ErrPaused     = errors.New("the user took over the browser and still has control of it, so your browser calls are paused. " +
 		"Tell the user what you want to do in the browser and that they still have control; they hand it back with Hand back on the Browser page. " +
-		"browser_request_control asks them with a notification. Call again once they have handed it back")
+		"`studio browser request-control` asks them with a notification. Call again once they have handed it back")
 	ErrNotLive    = errors.New("the browser is not running")
 	ErrNoTakeover = errors.New("take over the browser before navigating")
 	ErrBadURL     = errors.New("url must be an absolute http or https URL with a host, no userinfo, and at most 4000 characters")
@@ -358,7 +358,7 @@ func (s *Service) exec(ctx context.Context, st *state, pg *page, cmd agentproto.
 			s.mu.Lock()
 			s.dropLocked(st, pg)
 			s.mu.Unlock()
-			return nil, nil, refuse("ephemeral session %s ended with its browser; open a new one with browser_open", pg.id)
+			return nil, nil, refuse("ephemeral session %s ended with its browser; open a new one with `studio browser open --ephemeral`", pg.id)
 		}
 		return nil, nil, lostReply{errors.New(Scrub(err.Error(), secrets))}
 	}

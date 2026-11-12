@@ -63,7 +63,7 @@ func (t *userTurn) note(now time.Time, at string, pages bool) string {
 	if at != "" {
 		b.WriteString(" The page is now " + at + ".")
 	}
-	b.WriteString(" What they clicked or typed is not recorded; earlier refs are stale, so take a browser_snapshot before you act on the page.")
+	b.WriteString(" What they clicked or typed is not recorded; earlier refs are stale, so run `studio browser snapshot` before you act on the page.")
 	return b.String()
 }
 

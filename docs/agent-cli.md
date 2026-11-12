@@ -5,8 +5,8 @@ script, pipe and loop over them in its shell, and the user can run them over SSH
 is in the [data as files artifact](https://claude.ai/artifact/ReJo1R59jU3s6QLKpUL1DS); this
 page is what was built.
 
-The MCP server stays as it is: every tool is still there, and `studio` adds commands next to
-it rather than replacing it.
+The MCP server keeps the memory, task, git and pull request tools, and `studio` runs them too.
+The browser is the exception: it is a command only (see [Browser](#browser)).
 
 ## How it runs
 
@@ -78,6 +78,36 @@ With `--wait` the command keeps asking every 5 seconds:
 
 There are no approval IDs and no `studio wait <id>` command. Those would need a host API that
 names pending approvals to the guest, which is left for later.
+
+## Browser
+
+`studio browser …` drives the teammate's browser; the MCP server has no browser tools. Its
+instructions point to `studio browser --help`, which explains the browser before listing its
+commands, and the managed instructions have a **Studio's command** section that names what
+the browser and the pull request commands do, since an agent no longer learns them from a tool
+list. The messages the broker answers with name the commands (`run studio browser snapshot`).
+
+Why a command: an A/B run on 2026-11-12 (Claude Code with Sonnet, two runs per task and
+arm, both arms against the same browser backend) compared the MCP tools with the command.
+
+| Task | MCP | Command |
+|---|---|---|
+| Count failed rows over 9 pages | 2/2 right, 21 turns, $0.206 | 2/2 right, 6 turns, $0.059 |
+| Fill a 6-field form | 2/2 right, 13.5 turns, $0.064 | 2/2 right, 8.5 turns, $0.063 |
+| Read 12 values from a 200-row page | 2/2 right, 6 turns, $0.064 | 1/2 right, 7 turns, $0.070 |
+
+- Over many pages the agent wrote one shell loop that grepped each snapshot, and only the
+  counts reached its context: 3.5× cheaper and twice as fast.
+- Forms and one large page came out even. The wrong answer was a `paste` pipeline with the
+  wrong column count, not the command.
+- Agents first looked for `studio browser --help`, which failed then; it now lists the browser's
+  commands, and `snapshot`'s help says that `--full` adds the page's text.
+- Claude Code loads MCP schemas only when a tool is needed, so there the schemas cost little.
+  Codex and OpenCode load them all, about 2,300 tokens of browser schemas per request, which the
+  command saves.
+
+A screenshot is written to a file whose path is printed; each harness reads images from a file
+(Claude Code's and OpenCode's read tool, Codex's image viewer).
 
 ## ~/forge
 
