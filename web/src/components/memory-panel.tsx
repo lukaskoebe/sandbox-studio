@@ -756,7 +756,7 @@ function ReaderHeader({
           className="size-4 shrink-0 text-muted-foreground"
         />
       )}
-      <h2 className="min-w-0 font-heading text-base font-semibold text-balance">
+      <h2 className="min-w-0 font-heading text-sm font-semibold text-balance">
         {title}
       </h2>
       {chips}
