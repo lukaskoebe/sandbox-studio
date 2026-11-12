@@ -15,8 +15,14 @@ import {
 } from "@pierre/diffs/react"
 import { getOrCreateWorkerPoolSingleton } from "@pierre/diffs/worker"
 import DiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker"
-import { ChatCircleTextIcon, XIcon } from "@phosphor-icons/react"
+import {
+  ChatCircleTextIcon,
+  ColumnsIcon,
+  RowsIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
   commentWhere,
@@ -24,6 +30,7 @@ import {
   type DiffLine,
   type LineComment,
 } from "@/components/review-feedback"
+import { setDiffStyle, useDiffStyle, type DiffStyle } from "@/lib/diff-style"
 import { cn } from "@/lib/utils"
 
 /**
@@ -197,10 +204,13 @@ export type DiffViewProps = {
   commentLabel?: string
   /** Whether a comment can cover several lines, chosen by dragging over their numbers. */
   ranges?: boolean
+  /** Whether it offers stacked or split lines; full-length diffs always do. */
+  layouts?: boolean
   ref?: Ref<DiffViewHandle>
 }
 
-/** A unified diff, windowed and highlighted in workers, with comments under its lines. */
+/** A diff, windowed and highlighted in workers, with comments under its lines: stacked, or
+ * side by side when full-length and asked. */
 export default function DiffView({
   diff,
   comments,
@@ -208,9 +218,13 @@ export default function DiffView({
   fill,
   commentLabel,
   ranges = true,
+  layouts = fill,
   ref,
 }: DiffViewProps) {
   const lines = parseDiff(diff)
+  // A small diff, as in a card, stays a single column.
+  const picked = useDiffStyle()
+  const style = layouts ? picked : "unified"
   const [editing, setEditing] = useState<Editing>()
   const view = useRef<CodeViewHandle<Note, undefined>>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -325,7 +339,7 @@ export default function DiffView({
   const options = useMemo<CodeViewReactOptions<Note, undefined>>(
     () => ({
       theme: "studio",
-      diffStyle: "unified",
+      diffStyle: style,
       overflow: "scroll",
       lineDiffType: "word",
       tokenizeMaxLineLength: maxTokenLine,
@@ -360,7 +374,7 @@ export default function DiffView({
             }
           : undefined,
     }),
-    [fill, commentable, selectable, indexes, comments]
+    [fill, style, commentable, selectable, indexes, comments]
   )
 
   const set = (i: number, text?: string, start?: number) => {
@@ -409,159 +423,191 @@ export default function DiffView({
           )}
         >
           {overview && <FileOverview files={files} onPick={jumpToFile} />}
-          <div
-            ref={box}
-            className={cn(
-              "diff-view min-w-0 overflow-hidden rounded-md ring-1 ring-foreground/10"
-            )}
-          >
-            <CodeView<Note, undefined>
-              ref={view}
-              items={items}
+          <div className="grid min-w-0 content-start gap-1.5">
+            {layouts && <StyleSwitch style={style} />}
+            <div
+              ref={box}
               className={cn(
-                "overflow-auto",
-                fill ? "max-h-[70dvh]" : "max-h-[60vh]"
+                "diff-view min-w-0 overflow-hidden rounded-md ring-1 ring-foreground/10"
               )}
-              options={options}
-              renderGutterUtility={
-                onComment
-                  ? (hovered, item) => (
-                      <CommentButton
-                        hovered={hovered}
-                        onPick={(range) => {
-                          const e = rangeOf(item.id, range)
-                          if (!e) return
-                          open(e)
-                          // What the comment covers stays marked while it's written.
-                          if (selectable)
-                            view.current?.setSelectedLines({
-                              id: item.id,
-                              range,
-                            })
+            >
+              <CodeView<Note, undefined>
+                ref={view}
+                items={items}
+                className={cn(
+                  "overflow-auto",
+                  fill ? "max-h-[70dvh]" : "max-h-[60vh]"
+                )}
+                options={options}
+                renderGutterUtility={
+                  onComment
+                    ? (hovered, item) => (
+                        <CommentButton
+                          hovered={hovered}
+                          onPick={(range) => {
+                            const e = rangeOf(item.id, range)
+                            if (!e) return
+                            open(e)
+                            // What the comment covers stays marked while it's written.
+                            if (selectable)
+                              view.current?.setSelectedLines({
+                                id: item.id,
+                                range,
+                              })
+                          }}
+                          onDrag={
+                            selectable
+                              ? (range) =>
+                                  view.current?.setSelectedLines({
+                                    id: item.id,
+                                    range,
+                                  })
+                              : undefined
+                          }
+                          selection={() => {
+                            const sel = selectable
+                              ? view.current?.getSelectedLines()
+                              : null
+                            return sel?.id === item.id ? sel.range : undefined
+                          }}
+                        />
+                      )
+                    : undefined
+                }
+                renderAnnotation={(...[annotation]) => {
+                  const note = annotation.metadata
+                  if (note.text !== undefined)
+                    return (
+                      <p className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
+                        {note.text}
+                      </p>
+                    )
+                  const i = note.comment
+                  const comment = comments.find((c) => c.index === i)
+                  if (editing?.index === i) {
+                    if (
+                      draft.current?.index !== i ||
+                      draft.current.start !== editing.start
+                    )
+                      draft.current = {
+                        index: i,
+                        start: editing.start,
+                        text:
+                          draft.current?.index === i
+                            ? draft.current.text
+                            : (comment?.text ?? ""),
+                        focused: false,
+                      }
+                    const d = draft.current
+                    const where = commentWhere(lines, {
+                      index: i,
+                      start: d.start,
+                      text: "",
+                    })
+                    return (
+                      <CommentEditor
+                        where={where}
+                        initial={d.text}
+                        focus={!d.focused}
+                        onFocused={() => (d.focused = true)}
+                        onChange={(text) => (d.text = text)}
+                        onSave={(text) => {
+                          set(i, text.trim(), d.start)
+                          close()
                         }}
-                        onDrag={
-                          selectable
-                            ? (range) =>
-                                view.current?.setSelectedLines({
-                                  id: item.id,
-                                  range,
-                                })
-                            : undefined
-                        }
-                        selection={() => {
-                          const sel = selectable
-                            ? view.current?.getSelectedLines()
-                            : null
-                          return sel?.id === item.id ? sel.range : undefined
-                        }}
+                        onCancel={close}
                       />
                     )
-                  : undefined
-              }
-              renderAnnotation={(...[annotation]) => {
-                const note = annotation.metadata
-                if (note.text !== undefined)
+                  }
+                  if (!comment) return null
+                  const where = commentWhere(lines, comment)
+                  const l = lines[i]
                   return (
-                    <p className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
-                      {note.text}
-                    </p>
-                  )
-                const i = note.comment
-                const comment = comments.find((c) => c.index === i)
-                if (editing?.index === i) {
-                  if (
-                    draft.current?.index !== i ||
-                    draft.current.start !== editing.start
-                  )
-                    draft.current = {
-                      index: i,
-                      start: editing.start,
-                      text:
-                        draft.current?.index === i
-                          ? draft.current.text
-                          : (comment?.text ?? ""),
-                      focused: false,
-                    }
-                  const d = draft.current
-                  const where = commentWhere(lines, {
-                    index: i,
-                    start: d.start,
-                    text: "",
-                  })
-                  return (
-                    <CommentEditor
-                      where={where}
-                      initial={d.text}
-                      focus={!d.focused}
-                      onFocused={() => (d.focused = true)}
-                      onChange={(text) => (d.text = text)}
-                      onSave={(text) => {
-                        set(i, text.trim(), d.start)
-                        close()
-                      }}
-                      onCancel={close}
-                    />
-                  )
-                }
-                if (!comment) return null
-                const where = commentWhere(lines, comment)
-                const l = lines[i]
-                return (
-                  <div
-                    role="note"
-                    aria-label={`Comment on ${where}`}
-                    className="mx-2 my-1 flex items-start gap-2 rounded-md bg-background px-2 py-1.5 font-sans text-xs whitespace-normal ring-1 ring-foreground/10"
-                  >
-                    <ChatCircleTextIcon className="mt-0.5 shrink-0 text-muted-foreground" />
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 text-left"
-                      title="Edit the comment"
-                      onClick={() => open({ index: i, start: comment.start })}
+                    <div
+                      role="note"
+                      aria-label={`Comment on ${where}`}
+                      className="mx-2 my-1 flex items-start gap-2 rounded-md bg-background px-2 py-1.5 font-sans text-xs whitespace-normal ring-1 ring-foreground/10"
                     >
-                      {(commentLabel || comment.start !== undefined) && (
-                        <span className="block text-caption text-muted-foreground">
-                          {[
-                            commentLabel,
-                            comment.start !== undefined
-                              ? `lines ${lines[comment.start]?.line}–${l.line}`
-                              : `line ${l.line}`,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      )}
-                      {comment.text}
-                    </button>
-                    {onComment && (
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        aria-label="Remove the comment"
-                        onClick={() => set(i)}
+                      <ChatCircleTextIcon className="mt-0.5 shrink-0 text-muted-foreground" />
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        title="Edit the comment"
+                        onClick={() => open({ index: i, start: comment.start })}
                       >
-                        <XIcon />
-                      </Button>
-                    )}
-                  </div>
-                )
-              }}
-              renderCodeViewFooter={
-                footer.length
-                  ? () => (
-                      <div className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
-                        {footer.map((text) => (
-                          <p key={text}>{text}</p>
-                        ))}
-                      </div>
-                    )
-                  : undefined
-              }
-            />
+                        {(commentLabel || comment.start !== undefined) && (
+                          <span className="block text-caption text-muted-foreground">
+                            {[
+                              commentLabel,
+                              comment.start !== undefined
+                                ? `lines ${lines[comment.start]?.line}–${l.line}`
+                                : `line ${l.line}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        )}
+                        {comment.text}
+                      </button>
+                      {onComment && (
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label="Remove the comment"
+                          onClick={() => set(i)}
+                        >
+                          <XIcon />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                }}
+                renderCodeViewFooter={
+                  footer.length
+                    ? () => (
+                        <div className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
+                          {footer.map((text) => (
+                            <p key={text}>{text}</p>
+                          ))}
+                        </div>
+                      )
+                    : undefined
+                }
+              />
+            </div>
           </div>
         </div>
       </div>
     </WorkerPoolContext.Provider>
+  )
+}
+
+/** Stacked lines or old and new side by side, for every full-length diff in this browser. */
+function StyleSwitch({ style }: { style: DiffStyle }) {
+  return (
+    <ToggleGroup
+      aria-label="Diff layout"
+      variant="outline"
+      size="sm"
+      spacing={0}
+      className="justify-self-end"
+      value={[style]}
+      onValueChange={(v) => {
+        if (v[0] === "unified" || v[0] === "split") setDiffStyle(v[0])
+      }}
+    >
+      <ToggleGroupItem value="unified" title="Old and new lines in one column">
+        <RowsIcon />
+        Stacked
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="split"
+        title="Old lines on the left, new on the right"
+      >
+        <ColumnsIcon />
+        Split
+      </ToggleGroupItem>
+    </ToggleGroup>
   )
 }
 
@@ -671,9 +717,13 @@ function lineAt(x: number, y: number, inside: HTMLElement) {
   if (!hit) return undefined
   return {
     line: Number(hit.dataset.columnNumber ?? hit.dataset.line),
-    side: hit.dataset.lineType?.includes("deletion")
-      ? ("deletions" as const)
-      : ("additions" as const),
+    // An unchanged line in a split diff's old column is on the old side.
+    side:
+      hit.dataset.lineType?.includes("deletion") ||
+      (!hit.dataset.lineType?.includes("addition") &&
+        hit.closest("[data-deletions]"))
+        ? ("deletions" as const)
+        : ("additions" as const),
   }
 }
 

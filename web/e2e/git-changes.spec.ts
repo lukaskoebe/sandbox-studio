@@ -41,6 +41,17 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
     .getByRole("button", { name: /main\.go/ })
     .click()
   await expect(area("Not staged")).toContainText("hello, shop")
+  // The diff shows stacked until Split is picked, which stays picked in this browser.
+  const lines = area("Not staged").locator("pre[data-diff-type]")
+  await expect(lines).toHaveAttribute("data-diff-type", "single")
+  const layout = area("Not staged").getByRole("group", { name: "Diff layout" })
+  await layout.getByRole("button", { name: "Split" }).click()
+  await expect(lines).toHaveAttribute("data-diff-type", "split")
+  expect(
+    await page.evaluate(() => localStorage.getItem("studio.diff.style"))
+  ).toBe("split")
+  await layout.getByRole("button", { name: "Stacked" }).click()
+  await expect(lines).toHaveAttribute("data-diff-type", "single")
   await area("Not staged")
     .getByRole("button", { name: "Open in Files" })
     .click()

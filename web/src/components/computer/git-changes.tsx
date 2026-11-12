@@ -310,7 +310,7 @@ function ChangeDiff({
   if (!diff.data.diff.trim()) return note("No lines changed.")
   return (
     <div className="grid min-w-0 gap-1.5">
-      <UnifiedDiff diff={diff.data.diff} />
+      <UnifiedDiff diff={diff.data.diff} layouts />
       {diff.data.truncated &&
         note("The rest of this diff is too long to show.")}
     </div>

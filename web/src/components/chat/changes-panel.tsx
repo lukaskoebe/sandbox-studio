@@ -215,7 +215,7 @@ function FileDiff({
   if (f.diff) {
     return (
       <div className="grid gap-1.5">
-        <UnifiedDiff diff={f.diff} />
+        <UnifiedDiff diff={f.diff} layouts />
         {f.truncated && note("The rest of this change is too long to show.")}
       </div>
     )

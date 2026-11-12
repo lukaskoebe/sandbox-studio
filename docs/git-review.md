@@ -384,6 +384,11 @@ an agent at once, in the sandbox's chat or terminal it works in.
   line. A footer that stays in view holds Send to, the pull request choice, Reject and
   Approve, with Send without deciding and Ignore in its More menu. A `git.pr` approval has
   no diff and no tabs.
+- **Stacked or split.** A full-length diff (the review's Changes tab, a commit's diff, the
+  Changes tab of the screen and the thread's changes) shows its lines stacked, old above new,
+  or split, old beside new. The switch above the diff is remembered per browser
+  (`studio.diff.style` in `localStorage`, `web/src/lib/diff-style.ts`); short diffs, like a
+  chat's tool calls, stay stacked.
 - **Line comments.** A line of the review's diff takes a comment from the button on its number
   while the pointer is over it, or from a click or tap on the number. A comment covers several
   lines when you drag over their numbers (or press the button and drag), or click one and

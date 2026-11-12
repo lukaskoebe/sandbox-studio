@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A full-length diff shows its lines **Stacked** or **Split**, old beside new. The switch above
+  the diff is remembered in this browser.
+
 ## v0.20.0 — 2026-11-12
 
 - A diff of several files, in a push's review, a pull request review and a commit, lists its files

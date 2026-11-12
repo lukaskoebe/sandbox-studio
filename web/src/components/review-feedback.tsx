@@ -154,6 +154,7 @@ export function UnifiedDiff({
   fill,
   commentLabel,
   ranges,
+  layouts,
   ref,
 }: {
   diff: string
@@ -165,6 +166,8 @@ export function UnifiedDiff({
   commentLabel?: string
   /** Whether a comment can cover several lines; on unless the comments go where it can't. */
   ranges?: boolean
+  /** Whether it offers stacked or split lines; full-length diffs always do. */
+  layouts?: boolean
   /** For a list of comments that jumps to them. */
   ref?: Ref<DiffViewHandle>
 }) {
@@ -182,6 +185,7 @@ export function UnifiedDiff({
         fill={fill}
         commentLabel={commentLabel}
         ranges={ranges}
+        layouts={layouts}
         ref={ref}
       />
     </Suspense>

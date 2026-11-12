@@ -636,6 +636,64 @@ test("a comment lands on its line after a removed --- line, and a draft outlives
   ).toBeInViewport()
 })
 
+// Split shows old beside new; an unchanged line's old number takes a comment on its new line.
+test("a split diff comments on an unchanged line from either side", async ({
+  page,
+  api,
+  env,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("studio.diff.style", "split")
+  )
+  const sheet = await reviewWithDiff(
+    { page, api, env },
+    "diff-split",
+    [
+      "diff --git a/q.txt b/q.txt",
+      "--- a/q.txt",
+      "+++ b/q.txt",
+      "@@ -1,3 +1,4 @@",
+      " a",
+      "-b",
+      "+B",
+      "+B2",
+      " c",
+      "",
+    ].join("\n")
+  )
+  await expect(sheet.locator("pre[data-diff-type]")).toHaveAttribute(
+    "data-diff-type",
+    "split"
+  )
+  // c is line 3 on the old side and line 4 on the new.
+  const old = sheet
+    .locator("[data-deletions] [data-column-number]")
+    .filter({ hasText: /^3$/ })
+  await old.click()
+  await expect(
+    sheet.getByRole("textbox", { name: "Comment on q.txt:4" })
+  ).toBeVisible()
+  await sheet.getByRole("button", { name: "Cancel" }).click()
+
+  // Dragging from the comment button of a to the old c covers a to c.
+  const a = sheet
+    .locator("[data-deletions] [data-line]")
+    .filter({ hasText: /^a$/ })
+  await a.hover()
+  const button = sheet.getByRole("button", { name: "Comment on this line" })
+  const from = (await button.boundingBox())!
+  const to = (await old.boundingBox())!
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 5,
+  })
+  await page.mouse.up()
+  await expect(
+    sheet.getByRole("textbox", { name: "Comment on q.txt:1–4" })
+  ).toBeVisible()
+})
+
 // A push to the branch a repository on this computer has checked out: the card offers to
 // update the checked-out files too, ticked, and approving it moves the working copy along.
 test("a push to a checked-out branch of a local repository updates its files", async ({
