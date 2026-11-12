@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.19.0 — 2026-11-12
 
 - An agent can propose a pull request for a branch it pushed, with its own title and description,
   through the `git_pull_request_create` tool. You open or decline it on the same card a push's
