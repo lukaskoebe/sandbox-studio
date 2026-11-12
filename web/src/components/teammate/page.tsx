@@ -155,7 +155,7 @@ export function TeammatePage({
   const profile = (view: ProfileView | undefined, section?: string) =>
     onSearch({
       profile: view,
-      open: view === "settings" ? section : undefined,
+      open: view === "settings" || view === "memory" ? section : undefined,
       from: view === "settings" ? search.from : undefined,
     })
 

@@ -9,11 +9,13 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
+  ArrowLeftIcon,
   BookOpenIcon,
   BrainIcon,
   CaretRightIcon,
   ChatCircleDotsIcon,
   ClockCounterClockwiseIcon,
+  ClockIcon,
   CoinsIcon,
   DotsThreeIcon,
   DownloadSimpleIcon,
@@ -68,6 +70,7 @@ import { SectionHeader } from "@/components/section-header"
 import {
   FactDialog,
   PageDialog,
+  factKinds,
   invalidateMemory,
   type MemoryFact,
   type MemoryHit,
@@ -92,16 +95,83 @@ const docsURL = "https://lukaskoebe.github.io/sandbox-studio/memory/"
 /** How many rows a list shows before "Show all". */
 const listLimit = 30
 
+/**
+ * What the reader shows, in the URL as ?open=: what needs the user, what changed this week,
+ * the sessions, one page, or the facts of a kind that sit on no page.
+ */
 type View =
-  { kind: "list" } | { kind: "page"; id: string } | { kind: "sessions" }
+  | { kind: "needs" }
+  | { kind: "week" }
+  | { kind: "sessions" }
+  | { kind: "page"; id: string }
+  | { kind: "facts"; group: FactGroup }
+
+const factGroups = [
+  { key: "preference", title: "Preferences", kinds: ["preference"] },
+  { key: "decision", title: "Decisions", kinds: ["decision"] },
+  { key: "procedure", title: "Procedures", kinds: ["procedure"] },
+  { key: "other", title: "Facts and events", kinds: ["fact", "event"] },
+] as const satisfies readonly {
+  key: string
+  title: string
+  kinds: readonly MemoryFact["kind"][]
+}[]
+type FactGroup = (typeof factGroups)[number]["key"]
+
+const pageFolds: { kind: MemoryPage["kind"]; title: string }[] = [
+  { kind: "project", title: "Projects" },
+  { kind: "person", title: "People" },
+  { kind: "topic", title: "Topics" },
+  { kind: "procedure", title: "Procedures" },
+  { kind: "teammate-self", title: "About itself" },
+]
+
+function parseView(open?: string): View | undefined {
+  if (open === "needs" || open === "week" || open === "sessions")
+    return { kind: open }
+  if (open?.startsWith("page:") && open.length > 5)
+    return { kind: "page", id: open.slice(5) }
+  const group = factGroups.find((g) => open === `facts:${g.key}`)
+  return group ? { kind: "facts", group: group.key } : undefined
+}
+
+function viewKey(v: View) {
+  switch (v.kind) {
+    case "page":
+      return `page:${v.id}`
+    case "facts":
+      return `facts:${v.group}`
+    default:
+      return v.kind
+  }
+}
+
+const week = 7 * 24 * 60 * 60_000
+
+/** Whether a fact still holds: neither retracted nor replaced. */
+function holds(f: MemoryFact) {
+  return f.status === "active" || f.status === "disputed"
+}
 
 /**
- * One scope's memory in one place: what needs the user, the core pages, the pages, the facts
- * and the sessions that used them, every row alike, with one search on top. A page opens in
- * place, with its [[links]], what links to it and its timeline.
+ * One scope's memory as an index and a reader, like the Files tab: on the left what needs the
+ * user, this week, the pages folded by kind and the facts that sit on no page; on the right
+ * the one picked, a page with its [[links]], its facts, what links to it and its timeline.
+ * The filter narrows the index; Enter searches. The open view is `open`, which the host keeps
+ * in its URL; on a narrow screen the index comes first and a view opens over it.
  */
-export function MemoryPanel({ env, scope }: { env: string; scope: string }) {
-  const [view, setView] = useState<View>({ kind: "list" })
+export function MemoryPanel({
+  env,
+  scope,
+  open,
+  onOpen,
+}: {
+  env: string
+  scope: string
+  /** The open view, as the URL holds it. */
+  open?: string
+  onOpen: (open: string | undefined) => void
+}) {
   const [pageDialog, setPageDialog] = useState<{
     page?: MemoryPage
     slug?: string
@@ -111,6 +181,8 @@ export function MemoryPanel({ env, scope }: { env: string; scope: string }) {
   )
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [conflict, setConflict] = useState<string>()
+  const [draft, setDraft] = useState("")
+  const [query, setQuery] = useState("")
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
@@ -118,53 +190,76 @@ export function MemoryPanel({ env, scope }: { env: string; scope: string }) {
   const teammate = scope.startsWith("teammate:")
     ? scope.slice("teammate:".length)
     : undefined
+  const view = parseView(open)
+  const searching = query !== "" && query === draft.trim()
+  const show = (v: View | undefined) => {
+    setQuery("")
+    onOpen(v && viewKey(v))
+  }
 
   const ctx: PanelContext = {
     env,
     scope,
     teammate,
     names,
-    open: (id) => setView({ kind: "page", id }),
-    back: () => setView({ kind: "list" }),
+    view,
+    open: (id) => show({ kind: "page", id }),
+    show,
+    back: () => {
+      if (searching) setQuery("")
+      else onOpen(undefined)
+    },
     newPage: (slug) => setPageDialog({ slug }),
     editPage: (page) => setPageDialog({ page }),
     editFact: (fact) => setFactDialog({ fact }),
     newFact: () => setFactDialog({}),
     confirm: setConfirm,
     resolve: setConflict,
-    sessions: () => setView({ kind: "sessions" }),
   }
+  // Something is open: on a narrow screen the reader takes the place of the index.
+  const reading = searching || view !== undefined
 
   return (
-    <div className="min-w-0 space-y-5">
-      {view.kind === "page" ? (
-        <PageView key={view.id} ctx={ctx} id={view.id} />
-      ) : view.kind === "sessions" ? (
-        <div className="space-y-4">
-          <Crumbs ctx={ctx} here="Sessions" />
-          <MemorySessionsTab env={env} teammate={teammate} names={names} />
+    <div className="@container min-w-0 space-y-4">
+      <PanelHeader ctx={ctx} />
+      <div className="@2xl:grid @2xl:grid-cols-[15rem_minmax(0,1fr)] @2xl:items-start @2xl:gap-6">
+        <Index
+          ctx={ctx}
+          draft={draft}
+          setDraft={setDraft}
+          onSearch={() => setQuery(draft.trim())}
+          onClear={() => {
+            setDraft("")
+            setQuery("")
+          }}
+          className={cn(reading && "hidden @2xl:grid")}
+        />
+        <div className={cn("min-w-0", !reading && "hidden @2xl:block")}>
+          {searching ? (
+            <SearchResults ctx={ctx} query={query} />
+          ) : (
+            <Reader ctx={ctx} />
+          )}
         </div>
-      ) : (
-        <Overview ctx={ctx} />
-      )}
+      </div>
       <PageDialog
         env={env}
         scope={scope}
         page={pageDialog?.page}
         slug={pageDialog?.slug}
         open={pageDialog !== null}
-        onOpenChange={(open) => {
-          if (!open) setPageDialog(null)
+        onOpenChange={(on) => {
+          if (!on) setPageDialog(null)
         }}
-        onSaved={(page) => setView({ kind: "page", id: page.id })}
+        onSaved={(page) => show({ kind: "page", id: page.id })}
       />
       <FactDialog
         env={env}
         scope={scope}
         fact={factDialog?.fact}
         open={factDialog !== null}
-        onOpenChange={(open) => {
-          if (!open) setFactDialog(null)
+        onOpenChange={(on) => {
+          if (!on) setFactDialog(null)
         }}
       />
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
@@ -190,7 +285,11 @@ type PanelContext = {
   scope: string
   teammate?: string
   names: Map<string, string>
+  /** The open view; none shows the first that has something in it. */
+  view?: View
   open: (pageId: string) => void
+  show: (view: View | undefined) => void
+  /** Back to the index: closes the search, or the open view. */
   back: () => void
   newPage: (slug?: string) => void
   editPage: (page: MemoryPage) => void
@@ -198,24 +297,79 @@ type PanelContext = {
   editFact: (fact: MemoryFact) => void
   confirm: (c: Confirm) => void
   resolve: (conflictId: string) => void
-  sessions: () => void
 }
 
-// --- the overview -------------------------------------------------------------------------
+/** What waits for the user: open conflicts and suggestions. */
+function useNeedsYou(env: string, scope: string) {
+  const conflicts = $api.useQuery(
+    "get",
+    "/api/environments/{env}/memory/conflicts",
+    { params: { path: { env }, query: { scope } } }
+  )
+  const suggestions = $api.useQuery(
+    "get",
+    "/api/environments/{env}/memory/suggestions",
+    { params: { path: { env }, query: { scope } } }
+  )
+  return {
+    conflicts: (conflicts.data ?? []).filter((c) => c.status === "open"),
+    suggestions: suggestions.data ?? [],
+  }
+}
 
-function Overview({ ctx }: { ctx: PanelContext }) {
-  const { env, scope, teammate } = ctx
-  const [draft, setDraft] = useState("")
-  const [query, setQuery] = useState("")
-  const search = useRef<HTMLInputElement>(null)
+/** The scope's pages and facts, and which facts sit on no page. */
+function useScopeMemory(env: string, scope: string) {
   const pages = $api.useQuery("get", "/api/environments/{env}/memory/pages", {
     params: { path: { env }, query: { scope } },
   })
   const facts = $api.useQuery("get", "/api/environments/{env}/memory/facts", {
     params: { path: { env }, query: { scope } },
   })
+  const allPages = pages.data ?? []
+  const slugs = new Map(allPages.map((p) => [p.slug, p.id]))
+  const allFacts = facts.data ?? []
+  const loose = allFacts.filter((f) => {
+    const slug = factPageSlug(f)
+    return !slug || !slugs.has(slug)
+  })
+  return {
+    pending: pages.isPending || facts.isPending,
+    pages: allPages,
+    facts: allFacts,
+    loose,
+    slugs,
+  }
+}
 
-  // "/" jumps to the search, as in the rest of Studio's lists.
+// --- the index ---------------------------------------------------------------------------
+
+function Index({
+  ctx,
+  draft,
+  setDraft,
+  onSearch,
+  onClear,
+  className,
+}: {
+  ctx: PanelContext
+  draft: string
+  setDraft: (s: string) => void
+  onSearch: () => void
+  onClear: () => void
+  className?: string
+}) {
+  const { env, scope, teammate, view } = ctx
+  const search = useRef<HTMLInputElement>(null)
+  const [folds, setFolds] = useState<Record<string, boolean>>({})
+  const mem = useScopeMemory(env, scope)
+  const needs = useNeedsYou(env, scope)
+  const sessions = $api.useQuery(
+    "get",
+    "/api/environments/{env}/memory/sessions",
+    { params: { path: { env }, query: { teammate } } }
+  )
+
+  // "/" jumps to the filter, as in the rest of Studio's lists.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
@@ -235,38 +389,52 @@ function Overview({ ctx }: { ctx: PanelContext }) {
   }, [])
 
   const filter = draft.trim().toLowerCase()
-  const searching = query !== "" && query === draft.trim()
-  const allPages = pages.data ?? []
-  const shownPages = allPages.filter(
+  const pages = mem.pages.filter(
     (p) =>
       !filter ||
       p.title.toLowerCase().includes(filter) ||
       p.slug.includes(filter) ||
       p.compiled.toLowerCase().includes(filter)
   )
-  const shownFacts = (facts.data ?? []).filter(
-    (f) => !filter || f.text.toLowerCase().includes(filter)
+  const loose = mem.loose.filter(
+    (f) => holds(f) && (!filter || f.text.toLowerCase().includes(filter))
   )
-  const slugs = new Map(allPages.map((p) => [p.slug, p.id]))
+  const since = Date.now() - week
+  const thisWeek = mem.facts.filter(
+    (f) => holds(f) && new Date(f.createdAt).getTime() >= since
+  ).length
+  const waiting = needs.conflicts.length + needs.suggestions.length
+  const openPage =
+    view?.kind === "page" ? mem.pages.find((p) => p.id === view.id) : undefined
+  // Few pages show unfolded; the kind of the open page always does.
+  const unfolded = (kind: string) =>
+    filter !== "" ||
+    (folds[kind] ?? (mem.pages.length <= 12 || openPage?.kind === kind))
 
   return (
-    <>
-      <PanelHeader ctx={ctx} />
+    <nav
+      aria-label="Memory index"
+      className={cn(
+        "grid min-w-0 gap-3 @2xl:sticky @2xl:top-0 @2xl:max-h-[calc(100dvh-10rem)] @2xl:overflow-y-auto",
+        className
+      )}
+    >
       <form
         className="relative"
         onSubmit={(e) => {
           e.preventDefault()
-          setQuery(draft.trim())
+          if (draft.trim()) onSearch()
         }}
       >
         <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={search}
           className="pr-8 pl-8"
-          placeholder={
+          placeholder="Filter, Enter searches"
+          title={
             teammate
-              ? "Filter, or press Enter to search this memory and shared memory"
-              : "Filter, or press Enter to search shared memory"
+              ? "Filter the index, or press Enter to search this memory and shared memory"
+              : "Filter the index, or press Enter to search shared memory"
           }
           aria-label="Search memory"
           maxLength={500}
@@ -275,8 +443,7 @@ function Overview({ ctx }: { ctx: PanelContext }) {
           onKeyDown={(e) => {
             if (e.key === "Escape" && draft) {
               e.stopPropagation()
-              setDraft("")
-              setQuery("")
+              onClear()
             }
           }}
         />
@@ -285,10 +452,7 @@ function Overview({ ctx }: { ctx: PanelContext }) {
             type="button"
             className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             aria-label="Clear the search"
-            onClick={() => {
-              setDraft("")
-              setQuery("")
-            }}
+            onClick={onClear}
           >
             <XIcon className="size-3.5" />
           </button>
@@ -299,29 +463,432 @@ function Overview({ ctx }: { ctx: PanelContext }) {
         )}
       </form>
 
-      {searching ? (
-        <SearchResults ctx={ctx} query={query} />
+      {!filter && (
+        <IndexList>
+          <IndexRow
+            icon={WarningIcon}
+            label="Needs you"
+            count={waiting}
+            warn={waiting > 0}
+            active={view?.kind === "needs"}
+            onClick={() => ctx.show({ kind: "needs" })}
+          />
+          <IndexRow
+            icon={ClockIcon}
+            label="This week"
+            count={thisWeek}
+            active={view?.kind === "week"}
+            onClick={() => ctx.show({ kind: "week" })}
+          />
+          <IndexRow
+            icon={ChatCircleDotsIcon}
+            label="Sessions"
+            count={sessions.data?.length}
+            active={view?.kind === "sessions"}
+            onClick={() => ctx.show({ kind: "sessions" })}
+          />
+        </IndexList>
+      )}
+
+      <section aria-label="Pages" className="grid gap-0.5">
+        <IndexLabel
+          title="Pages"
+          count={mem.pending ? undefined : pages.length}
+          action={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="New page"
+              title="New page"
+              onClick={() => ctx.newPage()}
+            >
+              <PlusIcon />
+            </Button>
+          }
+        />
+        {mem.pending ? (
+          <Spinner className="mx-auto my-2 block" />
+        ) : pages.length === 0 ? (
+          <p className="px-2 text-caption text-muted-foreground">
+            {filter
+              ? "No page matches. Enter searches."
+              : "No pages yet. A page holds what's known about a project, a person or a topic."}
+          </p>
+        ) : (
+          pageFolds.map(({ kind, title }) => {
+            const list = pages.filter((p) => p.kind === kind)
+            if (list.length === 0) return null
+            const on = unfolded(kind)
+            return (
+              <div key={kind} className="grid gap-0.5">
+                <IndexRow
+                  fold={on}
+                  label={title}
+                  count={list.length}
+                  onClick={() => setFolds({ ...folds, [kind]: !on })}
+                />
+                {on &&
+                  list.map((p) => (
+                    <IndexRow
+                      key={p.id}
+                      indent
+                      icon={p.alwaysLoad ? PushPinIcon : undefined}
+                      label={p.title}
+                      title={p.slug}
+                      count={p.counts?.facts}
+                      active={view?.kind === "page" && view.id === p.id}
+                      onClick={() => ctx.open(p.id)}
+                    />
+                  ))}
+              </div>
+            )
+          })
+        )}
+      </section>
+
+      <section aria-label="Facts on no page" className="grid gap-0.5">
+        <IndexLabel
+          title="Facts on no page"
+          count={mem.pending ? undefined : loose.length}
+          action={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Add fact"
+              title="Add fact"
+              onClick={ctx.newFact}
+            >
+              <PlusIcon />
+            </Button>
+          }
+        />
+        {factGroups.map((g) => {
+          const n = loose.filter((f) =>
+            (g.kinds as readonly string[]).includes(f.kind)
+          ).length
+          // Procedures mostly have pages of their own; the group shows when some don't.
+          if (g.key === "procedure" && n === 0) return null
+          return (
+            <IndexRow
+              key={g.key}
+              label={g.title}
+              count={n}
+              active={view?.kind === "facts" && view.group === g.key}
+              onClick={() => ctx.show({ kind: "facts", group: g.key })}
+            />
+          )
+        })}
+      </section>
+    </nav>
+  )
+}
+
+function IndexList({ children }: { children: ReactNode }) {
+  return <div className="grid gap-0.5">{children}</div>
+}
+
+function IndexLabel({
+  title,
+  count,
+  action,
+}: {
+  title: string
+  count?: number
+  action?: ReactNode
+}) {
+  return (
+    <h3 className="flex h-6 items-center gap-1.5 px-2 section-label text-muted-foreground">
+      {title}{" "}
+      {count !== undefined && (
+        <span className="font-mono text-meta font-normal tracking-normal">
+          {count}
+        </span>
+      )}
+      {action && <span className="ml-auto">{action}</span>}
+    </h3>
+  )
+}
+
+/** One row of the index: a view, a page, or a fold of pages of one kind. */
+function IndexRow({
+  icon: IconComp,
+  label,
+  title,
+  count,
+  warn,
+  active,
+  indent,
+  fold,
+  onClick,
+}: {
+  icon?: Icon
+  label: string
+  title?: string
+  count?: number
+  warn?: boolean
+  active?: boolean
+  indent?: boolean
+  /** A fold: whether it is open. */
+  fold?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-current={active ? "true" : undefined}
+      aria-expanded={fold}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-7 min-w-0 items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-muted",
+        indent && "ml-4",
+        active && "bg-muted font-medium"
+      )}
+    >
+      {fold !== undefined ? (
+        <CaretRightIcon
+          aria-hidden
+          className={cn(
+            "size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none",
+            fold && "rotate-90"
+          )}
+        />
+      ) : (
+        IconComp && (
+          <IconComp
+            aria-hidden
+            className={cn(
+              "size-3.5 shrink-0",
+              warn
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground"
+            )}
+          />
+        )
+      )}
+      <span className="min-w-0 flex-1 truncate">{label}</span>{" "}
+      {count !== undefined && (
+        <span
+          className={cn(
+            "shrink-0 font-mono text-meta",
+            warn
+              ? "bg-amber-500/15 px-1 text-amber-700 dark:text-amber-400"
+              : "text-muted-foreground"
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// --- the reader --------------------------------------------------------------------------
+
+/** The open view; with none, what needs the user, else this week. */
+function Reader({ ctx }: { ctx: PanelContext }) {
+  const needs = useNeedsYou(ctx.env, ctx.scope)
+  const view =
+    ctx.view ??
+    ({
+      kind:
+        needs.conflicts.length + needs.suggestions.length > 0
+          ? "needs"
+          : "week",
+    } as const)
+  switch (view.kind) {
+    case "page":
+      return <PageView key={view.id} ctx={ctx} id={view.id} />
+    case "facts":
+      return <LooseFacts key={view.group} ctx={ctx} group={view.group} />
+    case "sessions":
+      return (
+        <div className="space-y-4">
+          <ReaderHeader ctx={ctx} title="Sessions" />
+          <MemorySessionsTab
+            env={ctx.env}
+            teammate={ctx.teammate}
+            names={ctx.names}
+          />
+        </div>
+      )
+    case "week":
+      return <ThisWeek ctx={ctx} />
+    default:
+      return (
+        <div className="space-y-5">
+          <ReaderHeader ctx={ctx} title="Needs you" />
+          <NeedsYou ctx={ctx} />
+          <LooseEnds ctx={ctx} />
+        </div>
+      )
+  }
+}
+
+/** The reader's title, with the way back to the index on a narrow screen. */
+function ReaderHeader({
+  ctx,
+  title,
+  icon: IconComp,
+  chips,
+  actions,
+}: {
+  ctx: PanelContext
+  title: ReactNode
+  icon?: Icon
+  chips?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-2">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="-ml-1.5 @2xl:hidden"
+        aria-label="Back to the memory index"
+        onClick={ctx.back}
+      >
+        <ArrowLeftIcon />
+      </Button>
+      {IconComp && (
+        <IconComp
+          aria-hidden
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+      )}
+      <h2 className="min-w-0 font-heading text-base font-semibold text-balance">
+        {title}
+      </h2>
+      {chips}
+      {actions && (
+        <div className="ml-auto flex items-center gap-1">{actions}</div>
+      )}
+    </div>
+  )
+}
+
+/** What changed in the last 7 days: pages updated and facts learned, newest first. */
+function ThisWeek({ ctx }: { ctx: PanelContext }) {
+  const mem = useScopeMemory(ctx.env, ctx.scope)
+  const [all, setAll] = useState(false)
+  const since = Date.now() - week
+  const pages = mem.pages
+    .filter((p) => new Date(p.updatedAt).getTime() >= since)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const facts = mem.facts
+    .filter((f) => holds(f) && new Date(f.createdAt).getTime() >= since)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const shown = all ? facts : facts.slice(0, listLimit)
+  return (
+    <div className="space-y-5">
+      <ReaderHeader ctx={ctx} title="This week" />
+      {mem.pending ? (
+        <Spinner className="mx-auto block" />
       ) : (
         <>
-          {!filter && <NeedsYou ctx={ctx} />}
-          {!filter && <LooseEnds ctx={ctx} />}
-          <PageSections
-            ctx={ctx}
-            pending={pages.isPending}
-            pages={shownPages}
-            filtered={filter !== ""}
-          />
-          <FactSection
-            ctx={ctx}
-            pending={facts.isPending}
-            facts={shownFacts}
-            slugs={slugs}
-            filtered={filter !== ""}
-          />
-          {!filter && <SessionsRow ctx={ctx} />}
+          {pages.length > 0 && (
+            <section className="space-y-2">
+              <SectionHeader
+                title="Pages updated"
+                icon={NotebookIcon}
+                area="memory"
+                count={pages.length}
+              />
+              <Rows>
+                {pages.map((p) => (
+                  <Row
+                    key={p.id}
+                    icon={p.alwaysLoad ? PushPinIcon : NotebookIcon}
+                    onOpen={() => ctx.open(p.id)}
+                    text={<span className="font-medium">{p.title}</span>}
+                    meta={
+                      <>
+                        <Ident>{p.slug}</Ident> · {p.kind} · updated{" "}
+                        {formatAge(p.updatedAt)}
+                      </>
+                    }
+                  />
+                ))}
+              </Rows>
+            </section>
+          )}
+          <section className="space-y-2">
+            <SectionHeader
+              title="New facts"
+              icon={BrainIcon}
+              area="memory"
+              count={facts.length}
+            />
+            <Rows
+              more={facts.length - shown.length}
+              onMore={() => setAll(true)}
+            >
+              {facts.length === 0 && (
+                <EmptyRow>
+                  Nothing new this week. Facts are short statements:
+                  preferences, decisions, procedures and events.
+                </EmptyRow>
+              )}
+              {shown.map((f) => (
+                <FactRow key={f.id} ctx={ctx} fact={f} slugs={mem.slugs} />
+              ))}
+            </Rows>
+          </section>
         </>
       )}
-    </>
+    </div>
+  )
+}
+
+/** The facts of one kind that sit on no page. */
+function LooseFacts({ ctx, group }: { ctx: PanelContext; group: FactGroup }) {
+  const mem = useScopeMemory(ctx.env, ctx.scope)
+  const [all, setAll] = useState(false)
+  const [old, setOld] = useState(false)
+  const g = factGroups.find((x) => x.key === group)!
+  const kinds: readonly string[] = g.kinds
+  const facts = mem.loose
+    .filter((f) => kinds.includes(f.kind))
+    .sort((a, b) => b.observedAt.localeCompare(a.observedAt))
+  const live = facts.filter(holds)
+  const past = facts.length - live.length
+  const list = old ? facts : live
+  const shown = all ? list : list.slice(0, listLimit)
+  return (
+    <div className="space-y-4">
+      <ReaderHeader
+        ctx={ctx}
+        title={g.title}
+        icon={BrainIcon}
+        actions={
+          <>
+            {past > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setOld(!old)}>
+                {old ? "Hide" : "Show"} {past} retracted or replaced
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={ctx.newFact}>
+              <PlusIcon />
+              Add fact
+            </Button>
+          </>
+        }
+      />
+      <p className="text-caption text-muted-foreground">
+        Facts about no project, person or topic with a page. One whose subject
+        gets a page later moves there.
+      </p>
+      {mem.pending ? (
+        <Spinner className="mx-auto block" />
+      ) : (
+        <Rows more={list.length - shown.length} onMore={() => setAll(true)}>
+          {shown.length === 0 && <EmptyRow>None.</EmptyRow>}
+          {shown.map((f) => (
+            <FactRow key={f.id} ctx={ctx} fact={f} slugs={mem.slugs} />
+          ))}
+        </Rows>
+      )}
+    </div>
   )
 }
 
@@ -700,114 +1267,6 @@ function WantedSlug({ slug }: { slug: string }) {
   )
 }
 
-/** Core pages, then the other pages. */
-function PageSections({
-  ctx,
-  pending,
-  pages,
-  filtered,
-}: {
-  ctx: PanelContext
-  pending: boolean
-  pages: MemoryPage[]
-  filtered: boolean
-}) {
-  const [all, setAll] = useState(false)
-  const core = pages.filter((p) => p.alwaysLoad)
-  const rest = pages.filter((p) => !p.alwaysLoad)
-  const shown = all || filtered ? rest : rest.slice(0, listLimit)
-  return (
-    <>
-      {core.length > 0 && (
-        <section className="space-y-2">
-          <SectionHeader
-            title="Core"
-            icon={PushPinIcon}
-            area="memory"
-            count={core.length}
-          />
-          <Rows>
-            {core.map((p) => (
-              <PageRow key={p.id} ctx={ctx} page={p} />
-            ))}
-          </Rows>
-        </section>
-      )}
-      <section className="space-y-2">
-        <SectionHeader
-          title="Pages"
-          icon={NotebookIcon}
-          area="memory"
-          count={pending ? undefined : rest.length}
-          actions={
-            <Button size="sm" variant="outline" onClick={() => ctx.newPage()}>
-              <PlusIcon />
-              New page
-            </Button>
-          }
-        />
-        {pending ? (
-          <Spinner className="mx-auto block" />
-        ) : (
-          <Rows more={rest.length - shown.length} onMore={() => setAll(true)}>
-            {shown.length === 0 && (
-              <EmptyRow>
-                {filtered
-                  ? "No page matches. Press Enter to search."
-                  : "No pages yet. A page holds what's known about a project, a person or a topic, links to other pages with [[slug]], and keeps a timeline."}
-              </EmptyRow>
-            )}
-            {shown.map((p) => (
-              <PageRow key={p.id} ctx={ctx} page={p} />
-            ))}
-          </Rows>
-        )}
-      </section>
-    </>
-  )
-}
-
-function PageRow({ ctx, page: p }: { ctx: PanelContext; page: MemoryPage }) {
-  const summary = firstSentence(p.compiled)
-  const meta = [
-    p.kind,
-    p.counts && p.counts.facts > 0 && plural(p.counts.facts, "fact"),
-    p.counts && p.counts.linkedFrom > 0 && `linked from ${p.counts.linkedFrom}`,
-    authorOf(p, ctx.names),
-    `updated ${formatAge(p.updatedAt)}`,
-  ].filter(Boolean)
-  return (
-    <Row
-      icon={p.alwaysLoad ? PushPinIcon : NotebookIcon}
-      onOpen={() => ctx.open(p.id)}
-      text={
-        <>
-          <span className="font-medium">{p.title}</span>
-          {summary && <span className="text-foreground/80">: {summary}</span>}
-        </>
-      }
-      meta={
-        <>
-          <Ident>{p.slug}</Ident> · {meta.join(" · ")}
-        </>
-      }
-      actions={
-        <>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Edit page"
-            onClick={() => ctx.editPage(p)}
-          >
-            <PencilSimpleIcon />
-          </Button>
-          <PageMenu ctx={ctx} page={p} />
-        </>
-      }
-    />
-  )
-}
-
 function PageMenu({ ctx, page: p }: { ctx: PanelContext; page: MemoryPage }) {
   const { env } = ctx
   const queryClient = useQueryClient()
@@ -867,68 +1326,6 @@ function PageMenu({ ctx, page: p }: { ctx: PanelContext; page: MemoryPage }) {
         Delete page
       </DropdownMenuItem>
     </RowMenu>
-  )
-}
-
-function FactSection({
-  ctx,
-  pending,
-  facts,
-  slugs,
-  filtered,
-}: {
-  ctx: PanelContext
-  pending: boolean
-  facts: MemoryFact[]
-  slugs: Map<string, string>
-  filtered: boolean
-}) {
-  const [all, setAll] = useState(false)
-  const [old, setOld] = useState(false)
-  const current = facts.filter(
-    (f) => f.status === "active" || f.status === "disputed"
-  )
-  const past = facts.length - current.length
-  const list = old ? facts : current
-  const shown = all || filtered ? list : list.slice(0, listLimit)
-  return (
-    <section className="space-y-2">
-      <SectionHeader
-        title="Facts"
-        icon={BrainIcon}
-        area="memory"
-        count={pending ? undefined : current.length}
-        actions={
-          <>
-            {past > 0 && (
-              <Button size="sm" variant="ghost" onClick={() => setOld(!old)}>
-                {old ? "Hide" : "Show"} {past} retracted or replaced
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={ctx.newFact}>
-              <PlusIcon />
-              Add fact
-            </Button>
-          </>
-        }
-      />
-      {pending ? (
-        <Spinner className="mx-auto block" />
-      ) : (
-        <Rows more={list.length - shown.length} onMore={() => setAll(true)}>
-          {shown.length === 0 && (
-            <EmptyRow>
-              {filtered
-                ? "No fact matches. Press Enter to search."
-                : "No facts yet. Facts are short statements: preferences, decisions, procedures and events."}
-            </EmptyRow>
-          )}
-          {shown.map((f) => (
-            <FactRow key={f.id} ctx={ctx} fact={f} slugs={slugs} />
-          ))}
-        </Rows>
-      )}
-    </section>
   )
 }
 
@@ -1060,32 +1457,6 @@ function FactMenu({ ctx, fact: f }: { ctx: PanelContext; fact: MemoryFact }) {
   )
 }
 
-function SessionsRow({ ctx }: { ctx: PanelContext }) {
-  const sessions = $api.useQuery(
-    "get",
-    "/api/environments/{env}/memory/sessions",
-    { params: { path: { env: ctx.env }, query: { teammate: ctx.teammate } } }
-  )
-  return (
-    <Rows>
-      <Row
-        icon={ChatCircleDotsIcon}
-        onOpen={ctx.sessions}
-        text={
-          <span className="font-medium">
-            Sessions{" "}
-            <span className="font-mono text-caption font-normal text-muted-foreground">
-              {sessions.data?.length}
-            </span>
-          </span>
-        }
-        meta="What memory gave each session, and what it learned"
-        actions={<CaretRightIcon className="size-3.5 text-muted-foreground" />}
-      />
-    </Rows>
-  )
-}
-
 function SearchResults({ ctx, query }: { ctx: PanelContext; query: string }) {
   const [includeSuperseded, setIncludeSuperseded] = useState(false)
   const hits = $api.useQuery("get", "/api/environments/{env}/memory/search", {
@@ -1100,12 +1471,18 @@ function SearchResults({ ctx, query }: { ctx: PanelContext; query: string }) {
     },
   })
   return (
-    <section className="space-y-2">
-      <SectionHeader
+    <section className="space-y-3">
+      <ReaderHeader
+        ctx={ctx}
         title="Search results"
         icon={MagnifyingGlassIcon}
-        area="memory"
-        count={hits.data?.length}
+        chips={
+          hits.data && (
+            <span className="font-mono text-meta text-muted-foreground">
+              {hits.data.length}
+            </span>
+          )
+        }
         actions={
           <Button
             size="sm"
@@ -1164,42 +1541,16 @@ function HitRow({ ctx, hit: h }: { ctx: PanelContext; hit: MemoryHit }) {
 
 // --- a page --------------------------------------------------------------------------------
 
-function Crumbs({
-  ctx,
-  here,
-  actions,
-}: {
-  ctx: PanelContext
-  here: ReactNode
-  actions?: ReactNode
-}) {
-  return (
-    <div className="flex min-h-7 items-center gap-2 text-xs">
-      {/* On one baseline: "Memory" and a slug are in different fonts, which centred boxes
-          put at different heights where the fonts' metrics differ. */}
-      <div className="flex min-w-0 items-baseline gap-2">
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground"
-          onClick={ctx.back}
-        >
-          Memory
-        </button>
-        <span className="text-muted-foreground">/</span>
-        <span className="min-w-0 truncate">{here}</span>
-      </div>
-      {actions && (
-        <div className="ml-auto flex items-center gap-1">{actions}</div>
-      )}
-    </div>
-  )
-}
+/** How many of a page's facts show before "Show N more". */
+const pageFactLimit = 10
 
 function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
   const { env } = ctx
   const queryClient = useQueryClient()
   const [entry, setEntry] = useState("")
   const [adding, setAdding] = useState(false)
+  const [chip, setChip] = useState<MemoryFact["kind"] | "all" | "past">("all")
+  const [all, setAll] = useState(false)
   const page = $api.useQuery(
     "get",
     "/api/environments/{env}/memory/pages/{id}",
@@ -1240,18 +1591,28 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
   if (page.error)
     return (
       <div className="space-y-4">
-        <Crumbs ctx={ctx} here="Page" />
+        <ReaderHeader ctx={ctx} title="Page" />
         <p className="text-destructive">{errorMessage(page.error)}</p>
       </div>
     )
   if (!page.data) return <Spinner className="mx-auto block" />
   const p = page.data
   const links = new Map((p.links ?? []).map((l) => [l.target, l]))
-  const own = (facts.data ?? []).filter(
-    (f) =>
-      factPageSlug(f) === p.slug &&
-      (f.status === "active" || f.status === "disputed")
-  )
+  const onPage = (facts.data ?? [])
+    .filter((f) => factPageSlug(f) === p.slug)
+    .sort((a, b) => b.observedAt.localeCompare(a.observedAt))
+  const live = onPage.filter(holds)
+  const past = onPage.filter((f) => !holds(f))
+  const byKind = factKinds
+    .map((k) => ({ kind: k, n: live.filter((f) => f.kind === k).length }))
+    .filter((k) => k.n > 0)
+  const list =
+    chip === "all"
+      ? live
+      : chip === "past"
+        ? past
+        : live.filter((f) => f.kind === chip)
+  const shown = all ? list : list.slice(0, pageFactLimit)
   const linkedFrom = p.linkedFrom ?? []
   const renderLink = (target: string, label: string) => {
     const l = links.get(target)
@@ -1283,12 +1644,10 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
     return <span className="font-mono text-[0.9em]">{label}</span>
   }
   const meta = [
-    `${p.kind} page`,
     p.scope !== ctx.scope && scopeName(p.scope, ctx.names),
     authorOf(p, ctx.names),
-    own.length > 0 && plural(own.length, "fact"),
     `updated ${formatAge(p.updatedAt)}`,
-    p.alwaysLoad && "core: loads into every session",
+    p.alwaysLoad && "loads into every session",
   ].filter(Boolean)
   const owner =
     p.scope === sharedScope
@@ -1299,31 +1658,33 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
   return (
     <WikiLinks.Provider value={renderLink}>
       <article className="space-y-5">
-        <Crumbs
-          ctx={ctx}
-          here={
-            <span title={p.slug} className="font-mono">
-              {p.slug}
-            </span>
-          }
-          actions={
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => ctx.editPage(p)}
-              >
-                <PencilSimpleIcon />
-                Edit
-              </Button>
-              <PageMenu ctx={ctx} page={p} />
-            </>
-          }
-        />
         <header className="space-y-1">
-          <h2 className="font-heading text-lg font-semibold">{p.title}</h2>
+          <ReaderHeader
+            ctx={ctx}
+            title={p.title}
+            icon={p.alwaysLoad ? PushPinIcon : NotebookIcon}
+            chips={
+              <>
+                <Tag>{p.kind}</Tag>
+                {p.alwaysLoad && <Tag>core</Tag>}
+              </>
+            }
+            actions={
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => ctx.editPage(p)}
+                >
+                  <PencilSimpleIcon />
+                  Edit
+                </Button>
+                <PageMenu ctx={ctx} page={p} />
+              </>
+            }
+          />
           <p className="text-caption text-muted-foreground">
-            {meta.join(" · ")}
+            <Ident>{p.slug}</Ident> · {meta.join(" · ")}
           </p>
         </header>
         {p.compiled.trim() ? (
@@ -1335,16 +1696,48 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
           </p>
         )}
 
-        {own.length > 0 && (
+        {onPage.length > 0 && (
           <section className="space-y-2">
             <SectionHeader
               title="Facts"
               icon={BrainIcon}
               area="memory"
-              count={own.length}
+              count={live.length}
             />
-            <Rows>
-              {own.map((f) => (
+            {(byKind.length > 1 || past.length > 0) && (
+              <div
+                role="group"
+                aria-label="Facts by kind"
+                className="flex flex-wrap gap-1.5"
+              >
+                <KindChip
+                  on={chip === "all"}
+                  label="All"
+                  n={live.length}
+                  onClick={() => setChip("all")}
+                />
+                {byKind.map((k) => (
+                  <KindChip
+                    key={k.kind}
+                    on={chip === k.kind}
+                    label={factKindLabels[k.kind]}
+                    n={k.n}
+                    onClick={() => setChip(k.kind)}
+                  />
+                ))}
+                {past.length > 0 && (
+                  <KindChip
+                    on={chip === "past"}
+                    label="Retracted or replaced"
+                    n={past.length}
+                    onClick={() => setChip("past")}
+                  />
+                )}
+              </div>
+            )}
+            <Rows more={list.length - shown.length} onMore={() => setAll(true)}>
+              {shown.length === 0 && <EmptyRow>None.</EmptyRow>}
+              {shown.map((f) => (
                 <FactRow key={f.id} ctx={ctx} fact={f} hidePage />
               ))}
             </Rows>
@@ -1427,6 +1820,40 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
         </p>
       </article>
     </WikiLinks.Provider>
+  )
+}
+
+const factKindLabels: Record<MemoryFact["kind"], string> = {
+  preference: "Preferences",
+  decision: "Decisions",
+  fact: "Facts",
+  procedure: "Procedures",
+  event: "Events",
+}
+
+function KindChip({
+  on,
+  label,
+  n,
+  onClick,
+}: {
+  on: boolean
+  label: string
+  n: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-caption text-muted-foreground hover:text-foreground",
+        on && "border-foreground/20 bg-muted font-medium text-foreground"
+      )}
+    >
+      {label} <span className="font-mono text-meta">{n}</span>
+    </button>
   )
 }
 
@@ -1678,20 +2105,5 @@ function factPageSlug(f: MemoryFact) {
     if (s) return s
   }
   if (f.attribute) return entitySlug(f.attribute.split(".")[0])
-  return ""
-}
-
-/** The first sentence of a page's compiled truth, without markdown marks and [[ ]]. */
-function firstSentence(md: string) {
-  for (const raw of md.split("\n")) {
-    const line = raw
-      .trim()
-      .replace(/^(#+|[-*+]|\d+[.)]|>)\s+/, "")
-      .replace(/\[\[([^[\]|\n]+)(?:\|([^[\]\n]+))?\]\]/g, (_, t, l) => l ?? t)
-      .replace(/[*_`]/g, "")
-    if (!line || raw.trim().startsWith("#")) continue
-    const end = line.search(/[.!?](\s|$)/)
-    return end < 0 ? line : line.slice(0, end + 1)
-  }
   return ""
 }

@@ -135,29 +135,41 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 
 Settings → Shared memory shows the [quality](#quality) numbers and the memory panel
 (`web/src/components/memory-panel.tsx`); a teammate's profile shows the same panel for its own
-scope in its Memory sheet. The panel is one page of rows that all look alike: an icon, the
-text, a meta line and actions.
+scope in its Memory sheet. The panel is an index and a reader, like the Files tab: the index
+on the left stays a few dozen rows however many facts there are, and the reader on the right
+shows the one picked. Its rows all look alike: an icon, the text, a meta line and actions.
 
 - The header has the scope's counts and core usage, **Dream now**, and a menu with Export and
   Import ([Export and import](#export-and-import)), the dream history, the extraction cost and
   a link to these docs.
-- One search box on top (`/` focuses it) filters the pages and facts as you type; Enter runs
-  the ranked search and shows each hit with its `why`.
-- **Needs you**: open conflicts (Resolve… opens the sheet with both facts side by side,
-  sources, tiers and timeline; each conflict also has its own page,
-  `/e/$env/memory/conflicts/$id`) and open [suggestions](#suggestions), with Promote or Make
-  core, and Dismiss.
-- **Loose ends**: the scope's [lint](#links) findings, three at first; a wanted page or an
-  entity without a page has Create page, with the slug filled in.
-- **Core**, **Pages** (the first sentence of the compiled truth, slug, kind, facts, linked
-  from, author, age) and **Facts** (kind, source, age, the page that records it, a tag when
-  not active; retracted and replaced facts behind a toggle). A row's ⋯ menu edits, promotes
-  a teammate fact to shared, retracts and deletes.
-- **Sessions** opens the sessions and what memory did in each.
+- The index's filter (`/` focuses it) narrows the pages and the facts on no page as you type;
+  Enter runs the ranked search and shows each hit with its `why` in the reader.
+- **Needs you** (its count in amber when there are some): open conflicts (Resolve… opens the
+  sheet with both facts side by side, sources, tiers and timeline; each conflict also has its
+  own page, `/e/$env/memory/conflicts/$id`) and open [suggestions](#suggestions), with
+  Promote or Make core, and Dismiss; then **Loose ends**, the scope's [lint](#links)
+  findings, three at first, where a wanted page or an entity without a page has Create page,
+  with the slug filled in.
+- **This week**: pages updated and facts learned in the last 7 days, newest first.
+- **Sessions**: the sessions and what memory did in each.
+- **Pages**, folded by kind (projects, people, topics, procedures, the teammate's own),
+  each with its fact count and a pin when it is core. Up to 12 pages show unfolded; the kind
+  of the open page always does. **+** makes a new page.
+- **Facts on no page**: facts whose subject has no page, as Preferences, Decisions,
+  Procedures (only when there are some) and Facts and events. **+** adds a fact.
 
-A page opens in the panel: its compiled truth as markdown, where `[[slug]]` opens the linked
-page and a wanted page reads "(no page yet)" and creates it; the facts it records; Linked from;
-the timeline with a field to add an entry; and the page's path in the sandboxes' folder.
+With nothing picked, the reader shows Needs you when something waits, else This week. The
+open view is in the URL as `?open=` (`needs`, `week`, `sessions`, `page:<id>`,
+`facts:<preference|decision|procedure|other>`), on Settings → Shared memory and in a
+teammate's Memory sheet alike, so back and a link both work. Below about 42rem of width the
+index is the first screen and a view opens over it with a back arrow.
+
+A page opens in the reader: its title with its kind and core tags, Edit and its ⋯ menu; its
+compiled truth as markdown, where `[[slug]]` opens the linked page and a wanted page reads
+"(no page yet)" and creates it; the facts it records, newest first, ten at first with "Show
+N more", with chips by kind and one for the retracted or replaced; Linked from; the timeline
+with a field to add an entry; and the page's path in the sandboxes' folder. A fact's ⋯ menu
+edits, promotes a teammate fact to shared, retracts and deletes.
 `memory.conflict` approvals show in the approval stack with the same sheet.
 
 ## Links

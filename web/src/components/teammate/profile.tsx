@@ -429,7 +429,7 @@ export function ProfileSheet({
   env: string
   teammate: Teammate
   view?: ProfileView
-  /** The settings card that is open. */
+  /** The settings row that is open, or the memory's page or group. */
   section?: string
   fromSetup?: boolean
   onOpen: Open
@@ -485,7 +485,12 @@ export function ProfileSheet({
                 />
               )}
               {shown === "memory" && (
-                <TeammateMemory env={env} id={teammate.id} />
+                <TeammateMemory
+                  env={env}
+                  id={teammate.id}
+                  open={section}
+                  onOpen={(s) => onOpen("memory", s)}
+                />
               )}
               {shown === "settings" && (
                 <TeammateSettings
