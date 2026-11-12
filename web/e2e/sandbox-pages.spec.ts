@@ -64,7 +64,7 @@ test("the terminal's tabs open, switch, rename and close sessions", async ({
   const second = sessions.getByRole("tab", { name: "workspace 2" })
   await expect(second).toHaveAttribute("aria-selected", "true")
   await expect(
-    screen.getByRole("tab", { name: /^Terminal/ }).getByLabel("2 sessions")
+    screen.getByRole("tab", { name: "Terminal, 2 sessions" })
   ).toBeVisible()
 
   await sessions.getByRole("tab", { name: "workspace", exact: true }).click()

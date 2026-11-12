@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { GitBranchIcon } from "@phosphor-icons/react"
+import { ArrowLeftIcon, GitBranchIcon } from "@phosphor-icons/react"
 import { ChangesPanel } from "@/components/chat/changes-panel"
 import { requestLabel } from "@/components/chat/chat-thread"
 import { FilesPanel } from "@/components/chat/files-panel"
+import {
+  GitChanges,
+  gitChangedPaths,
+  type useGitStatus,
+} from "@/components/computer/git-changes"
 import { GitReview, gitReviewDescription } from "@/components/git-review"
+import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import type { Approval, Sandbox } from "@/lib/api/client"
@@ -14,13 +20,53 @@ import {
   type ChatItem,
   type ChatTurn,
 } from "@/lib/chats"
-import { cn } from "@/lib/utils"
 
-type View = { kind: "review"; id: string } | { kind: "changes" | "files" }
+export type ScreenThread = {
+  chat: Chat
+  turns: ChatTurn[]
+  items: ChatItem[]
+  turnId?: string
+  onTurn: (id: string) => void
+}
+
+/** The turns of a thread that changed files, newest first. */
+function useChangedTurns(thread?: ScreenThread) {
+  return useMemo(
+    () =>
+      (thread?.turns ?? [])
+        .filter((t) => t.endedAt && changeCount(t) > 0)
+        .reverse(),
+    [thread?.turns]
+  )
+}
+
+const gitPaths = [
+  "/api/environments/{env}/sandboxes/{id}/git",
+  "/api/environments/{env}/sandboxes/{id}/git/diff",
+]
+const filesPaths = [
+  "/api/environments/{env}/sandboxes/{id}/files",
+  "/api/environments/{env}/sandboxes/{id}/files/content",
+]
+
+/** Files may change whenever a request ends: the tab asks again then. */
+function useRefreshOnTurnEnd(
+  thread: ScreenThread | undefined,
+  paths: string[]
+) {
+  const queryClient = useQueryClient()
+  const ended = (thread?.turns ?? []).filter((t) => t.endedAt).length
+  useEffect(() => {
+    for (const path of paths)
+      void queryClient.invalidateQueries({ queryKey: ["get", path] })
+  }, [ended, paths, queryClient])
+}
 
 /**
- * The screen's Changes tab: a push that waits for review comes first, with its diff and the
- * decision; then what the open thread changed, request by request; then the computer's files.
+ * The screen's Changes tab, git's view of the computer (mock A): the pushes that wait for
+ * review first, each opening its diff and the decision; then each repository of /workspace
+ * with its branch and what is staged, not staged and untracked; then what the open thread's
+ * requests changed.
  */
 export function ChangesView({
   env,
@@ -28,9 +74,8 @@ export function ChangesView({
   reviews,
   review,
   onReview,
-  files = "",
-  file,
-  onFiles,
+  git,
+  onOpenFile,
   thread,
 }: {
   env: string
@@ -40,164 +85,159 @@ export function ChangesView({
   /** The review a link names. */
   review?: string
   onReview: (id: string | undefined) => void
+  git: ReturnType<typeof useGitStatus>
+  /** Shows a file in the Files tab, relative to /workspace. */
+  onOpenFile: (path: string) => void
+  thread?: ScreenThread
+}) {
+  const changedTurns = useChangedTurns(thread)
+  const [picked, setPicked] = useState<string>()
+  const open = review ?? picked
+  const approval = reviews.find((a) => a.id === open)
+  const pick = (id: string | undefined) => {
+    setPicked(id)
+    onReview(id)
+  }
+  // The tab decides the review in view, so the floating stack leaves its card out.
+  useClaimApprovals(approval ? [approval.id] : [])
+  useRefreshOnTurnEnd(thread, gitPaths)
+  const turn =
+    changedTurns.find((t) => t.id === thread?.turnId) ?? changedTurns.at(0)
+
+  if (approval) {
+    return (
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
+        <div className="grid gap-3 text-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="justify-self-start text-muted-foreground"
+            onClick={() => pick(undefined)}
+          >
+            <ArrowLeftIcon />
+            Changes
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {gitReviewDescription(approval)}
+          </p>
+          <GitReview key={approval.id} approval={approval} />
+        </div>
+      </ScrollArea>
+    )
+  }
+  const heading = "text-caption font-medium text-muted-foreground"
+  return (
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
+      <div className="grid min-w-0 gap-5 text-xs">
+        {reviews.length > 0 && (
+          <section aria-label="Waiting for you" className="grid min-w-0 gap-2">
+            <h2 className={heading}>Waiting for you</h2>
+            <ul className="grid min-w-0 gap-1">
+              {reviews.map((a) => {
+                const branch =
+                  a.git?.review?.branch ?? a.git?.pullRequest?.head ?? "push"
+                return (
+                  <li
+                    key={a.id}
+                    className="flex min-w-0 items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5"
+                  >
+                    <span className="size-1.5 shrink-0 rounded-full bg-(--st-waiting)" />
+                    <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
+                    <span className="min-w-0 flex-1 truncate">
+                      Push to <span className="font-mono">{branch}</span>
+                    </span>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      aria-label={`Review the push to ${branch}`}
+                      onClick={() => pick(a.id)}
+                    >
+                      Review
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
+        <section aria-label="Git" className="grid min-w-0 gap-2">
+          <GitChanges
+            env={env}
+            sandboxId={sb.id}
+            status={git}
+            onOpenFile={onOpenFile}
+          />
+        </section>
+        {thread && (
+          <section aria-label="This thread" className="grid min-w-0 gap-2">
+            <h2 className={heading}>This thread</h2>
+            {changedTurns.length > 0 ? (
+              <ChangesPanel
+                env={env}
+                chatId={thread.chat.id}
+                turns={changedTurns}
+                turnId={turn?.id}
+                onTurnChange={thread.onTurn}
+                label={(t) => requestLabel(thread.items, t)}
+              />
+            ) : (
+              <p className="text-muted-foreground">
+                Its requests haven't changed any files yet.
+              </p>
+            )}
+          </section>
+        )}
+      </div>
+    </ScrollArea>
+  )
+}
+
+/**
+ * The screen's Files tab: the computer's files, the ones git reports changed and the ones the
+ * thread's request changed marked.
+ */
+export function FilesView({
+  env,
+  sandbox: sb,
+  files = "",
+  file,
+  onFiles,
+  git,
+  thread,
+}: {
+  env: string
+  sandbox: Sandbox
   /** The folder Files shows, from the URL; "" or undefined for /workspace. */
   files?: string
   /** The file Files shows, from the URL. */
   file?: string
   /** Moves Files to a folder or file: a step in the browser's history. */
   onFiles: (dir: string, file?: string) => void
-  thread?: {
-    chat: Chat
-    turns: ChatTurn[]
-    items: ChatItem[]
-    turnId?: string
-    onTurn: (id: string) => void
-  }
+  git: ReturnType<typeof useGitStatus>
+  thread?: ScreenThread
 }) {
-  const queryClient = useQueryClient()
-  const changedTurns = useMemo(
-    () =>
-      (thread?.turns ?? [])
-        .filter((t) => t.endedAt && changeCount(t) > 0)
-        .reverse(),
-    [thread?.turns]
-  )
-  const [picked, setPicked] = useState<View>()
-  // A move in Files, or Back to an earlier place in it, shows Files.
-  const place = file ?? `${files}/`
-  const [shownPlace, setShownPlace] = useState(place)
-  if (shownPlace !== place) {
-    setShownPlace(place)
-    if (picked?.kind !== "files") setPicked({ kind: "files" })
-  }
-  const view: View =
-    review && reviews.some((a) => a.id === review)
-      ? { kind: "review", id: review }
-      : ((picked?.kind === "review" && !reviews.some((a) => a.id === picked.id)
-          ? undefined
-          : picked) ??
-        (reviews[0]
-          ? { kind: "review", id: reviews[0].id }
-          : file || files
-            ? { kind: "files" }
-            : changedTurns.length > 0
-              ? { kind: "changes" }
-              : { kind: "files" }))
-  const pick = (v: View) => {
-    setPicked(v)
-    onReview(v.kind === "review" ? v.id : undefined)
-  }
-  // The tab decides the review in view, so the floating stack leaves its card out.
-  useClaimApprovals(view.kind === "review" ? [view.id] : [])
-
+  const changedTurns = useChangedTurns(thread)
   const turn =
     changedTurns.find((t) => t.id === thread?.turnId) ?? changedTurns.at(0)
+  const repos = git.data?.repos
   const changed = useMemo(
-    () => new Set((turn?.changes?.files ?? []).map((f) => f.path)),
-    [turn]
+    () =>
+      new Set([
+        ...(turn?.changes?.files ?? []).map((f) => f.path),
+        ...gitChangedPaths(repos),
+      ]),
+    [turn, repos]
   )
-  // Files may change whenever a request ends.
-  const ended = (thread?.turns ?? []).filter((t) => t.endedAt).length
-  useEffect(() => {
-    for (const path of [
-      "/api/environments/{env}/sandboxes/{id}/files",
-      "/api/environments/{env}/sandboxes/{id}/files/content",
-    ])
-      void queryClient.invalidateQueries({ queryKey: ["get", path] })
-  }, [ended, queryClient])
-
-  const approval =
-    view.kind === "review" ? reviews.find((a) => a.id === view.id) : undefined
-  const chip = (on: boolean) =>
-    cn(
-      "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs",
-      on
-        ? "border-foreground/20 bg-muted font-medium text-foreground"
-        : "text-muted-foreground hover:text-foreground"
-    )
-
+  useRefreshOnTurnEnd(thread, filesPaths)
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b px-3 py-2">
-        {reviews.map((a) => {
-          const branch =
-            a.git?.review?.branch ?? a.git?.pullRequest?.head ?? "push"
-          return (
-            <button
-              key={a.id}
-              type="button"
-              aria-pressed={view.kind === "review" && view.id === a.id}
-              className={chip(view.kind === "review" && view.id === a.id)}
-              onClick={() => pick({ kind: "review", id: a.id })}
-            >
-              <GitBranchIcon className="size-3.5 text-(--acc-git)" />
-              Push to <span className="font-mono">{branch}</span>
-              <span
-                aria-label="waiting for you"
-                className="size-1.5 rounded-full bg-(--st-waiting)"
-              />
-            </button>
-          )
-        })}
-        {thread && (
-          <button
-            type="button"
-            aria-pressed={view.kind === "changes"}
-            className={chip(view.kind === "changes")}
-            onClick={() => pick({ kind: "changes" })}
-          >
-            In this thread
-            {changedTurns.length > 0 && (
-              <span className="font-mono text-meta text-muted-foreground">
-                {changedTurns.length}
-              </span>
-            )}
-          </button>
-        )}
-        <button
-          type="button"
-          aria-pressed={view.kind === "files"}
-          className={chip(view.kind === "files")}
-          onClick={() => pick({ kind: "files" })}
-        >
-          Files
-        </button>
-      </div>
-      {!approval && view.kind === "files" ? (
-        <FilesPanel
-          env={env}
-          sandboxId={sb.id}
-          dir={file ? file.split("/").slice(0, -1).join("/") : files}
-          file={file}
-          onOpen={onFiles}
-          changed={changed}
-          className="p-3 md:p-4"
-        />
-      ) : (
-        <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
-          {approval ? (
-            <div className="grid gap-3 text-xs">
-              <p className="text-xs text-muted-foreground">
-                {gitReviewDescription(approval)}
-              </p>
-              <GitReview key={approval.id} approval={approval} />
-            </div>
-          ) : view.kind === "changes" && thread ? (
-            <ChangesPanel
-              env={env}
-              chatId={thread.chat.id}
-              turns={changedTurns}
-              turnId={turn?.id}
-              onTurnChange={thread.onTurn}
-              label={(t) => requestLabel(thread.items, t)}
-            />
-          ) : view.kind === "changes" ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">
-              Open a thread to see what it changed.
-            </p>
-          ) : null}
-        </ScrollArea>
-      )}
-    </div>
+    <FilesPanel
+      env={env}
+      sandboxId={sb.id}
+      dir={file ? file.split("/").slice(0, -1).join("/") : files}
+      file={file}
+      onOpen={onFiles}
+      changed={changed}
+      className="p-3 md:p-4"
+    />
   )
 }

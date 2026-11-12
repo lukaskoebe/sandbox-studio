@@ -87,7 +87,53 @@ const (
 	// files git knows, tracked or untracked but not ignored; elsewhere every file, past the
 	// folders of dependencies and caches.
 	FilesIndex = "index"
+	// FilesGit lists the git repositories of /workspace as git sees them: each one's branch
+	// and what is staged, not staged and untracked in it (FilesReply.Repos).
+	FilesGit = "git"
+	// FilesGitDiff is one file's diff in one of them: Path is the repository, File the file
+	// in it, From its old name when it was renamed, and Area which change of it.
+	FilesGitDiff = "git-diff"
 )
+
+// The areas of a git change: the index, the working tree, and files git doesn't track.
+const (
+	GitStaged    = "staged"
+	GitUnstaged  = "unstaged"
+	GitUntracked = "untracked"
+)
+
+// Git limits.
+const (
+	MaxGitRepos   = 50
+	MaxGitChanges = 1000      // of one repository
+	MaxGitDiff    = 512 << 10 // bytes of one diff
+)
+
+// GitRepo is a repository of /workspace as git status sees it.
+type GitRepo struct {
+	Path     string `json:"path" doc:"Relative to /workspace; empty for /workspace itself"`
+	Branch   string `json:"branch,omitempty" doc:"Empty when HEAD is detached"`
+	Head     string `json:"head,omitempty" doc:"The commit checked out; empty before the first"`
+	Upstream string `json:"upstream,omitempty" doc:"The branch it tracks, such as origin/main"`
+	Ahead    int    `json:"ahead" doc:"Commits it has that its upstream doesn't"`
+	Behind   int    `json:"behind" doc:"Commits its upstream has that it doesn't"`
+	// Changes are in git status's order: by path, each area apart.
+	Changes   []GitChange `json:"changes"`
+	Truncated bool        `json:"truncated,omitempty" doc:"More than 1,000 changes"`
+	Error     string      `json:"error,omitempty" doc:"Why git couldn't read it"`
+}
+
+// GitChange is one file's change in one area of a repository. A file staged and then changed
+// again is in both areas.
+type GitChange struct {
+	Path    string `json:"path" doc:"Relative to the repository"`
+	Area    string `json:"area" enum:"staged,unstaged,untracked"`
+	Status  string `json:"status" enum:"added,modified,deleted,renamed,conflicted"`
+	From    string `json:"from,omitempty" doc:"The old path of a renamed file"`
+	Added   int    `json:"added" doc:"Lines added; 0 for an untracked file"`
+	Removed int    `json:"removed" doc:"Lines removed"`
+	Binary  bool   `json:"binary,omitempty"`
+}
 
 // File limits.
 const (
@@ -105,6 +151,10 @@ type FilesRequest struct {
 	// Root is the folder Path is relative to: FilesRootTmp for /tmp, else /workspace. A guest
 	// that knows roots says so in FilesReply.Root.
 	Root string `json:"root,omitempty"`
+	// File, From and Area name a FilesGitDiff's change.
+	File string `json:"file,omitempty"`
+	From string `json:"from,omitempty"`
+	Area string `json:"area,omitempty"`
 }
 
 // FilesRootTmp roots a FilesRequest at /tmp.
@@ -128,6 +178,10 @@ type FilesReply struct {
 	// Index: the files' paths, and those git reports changed.
 	Paths   []string `json:"paths,omitempty"`
 	Changed []string `json:"changed,omitempty"`
+	// Git: the repositories, and Truncated past MaxGitRepos. GitDiff: the diff, and Truncated
+	// when it was cut at MaxGitDiff.
+	Repos []GitRepo `json:"repos,omitempty"`
+	Diff  string    `json:"diff,omitempty"`
 	// Read.
 	Size     int64  `json:"size,omitempty"`
 	MimeType string `json:"mimeType,omitempty"`

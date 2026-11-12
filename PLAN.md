@@ -33,16 +33,16 @@ range of lines, and each commit's own diff in a push's review. A Docker disk rea
 it was past 95%: the guest counted only the user's blocks, while Docker's daemon writes as root;
 it counts root's now, and Home's notice gives the advice for the disk that is full.
 
-Mocks for the rest await a pick (artifact QpwsQ47TkZgVksDpD4Yzji):
+The user picked A of both mocks (artifact QpwsQ47TkZgVksDpD4Yzji). Built: the screen's **Files**
+tab, and **Changes** as git's view per repository (branch, ahead, staged, not staged, untracked,
+each opening its diff; read-only), after the pushes waiting and before what the thread changed.
+Previews in the Studio app's window said "Open this preview from Sandbox Studio.": WebKit keeps
+no cookie in a cross-site frame over http, so the app frames the preview's keyed host
+(`<port>-<id>-<key>.localhost`), which the user agreed to.
 
-- **The Changes tab.** A: split into **Files** and **Changes**, where Changes is git's view per
-  repository (branch, ahead, staged, not staged, untracked, each opening its diff; read-only), then
-  pushes waiting and what the thread changed. B: one tab renamed **Code** with a rail.
-  Recommended: A.
-- **Several models per teammate.** A: a default model and the models also offered in chats, with
+- **Several models per teammate**, A: a default model and the models also offered in chats, with
   a picker in the composer; a thread keeps its model, switched in place over ACP where the agent
-  can. B: every model of the provider, no list. Recommended: A; check ACP's session model on each
-  harness first.
+  can. Check ACP's session model on each harness first.
 
 Measured:
 

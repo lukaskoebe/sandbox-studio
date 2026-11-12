@@ -10,8 +10,7 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
   const id = await api.createSandbox(name)
   await page.goto(`/e/${env}/sandboxes/${id}`)
   const screen = page.getByRole("region", { name: `${name}'s screen` })
-  await screen.getByRole("tab", { name: "Changes" }).click()
-  await screen.getByRole("button", { name: "Files", exact: true }).click()
+  await screen.getByRole("tab", { name: "Files" }).click()
 
   // With no file open, the view beside the tree is empty: the tree lists the folders.
   const tree = screen.getByRole("tree", { name: "Workspace" })
@@ -100,10 +99,11 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
   await expect(code).toContainText("shop with coupons")
 
   // Go files are Go, Markdown is Markdown.
-  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&file=main.go`)
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=files&file=main.go`)
   await expect(
     screen.locator("pre .tok-keyword", { hasText: "package" })
   ).toBeVisible()
+  // A link from before Files had a tab of its own still opens the file there.
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&file=README.md`)
   await expect(
     screen.locator("pre .tok-keyword", { hasText: "Webshop" })
@@ -119,8 +119,7 @@ test("Files browses /tmp from the path's root, without uploads or mentions there
   const id = await api.createSandbox(name)
   await page.goto(`/e/${env}/sandboxes/${id}`)
   const screen = page.getByRole("region", { name: `${name}'s screen` })
-  await screen.getByRole("tab", { name: "Changes" }).click()
-  await screen.getByRole("button", { name: "Files", exact: true }).click()
+  await screen.getByRole("tab", { name: "Files" }).click()
   const path = screen.getByRole("navigation", { name: "Path" })
   await path.getByRole("button", { name: "Root: /workspace" }).click()
   await page.getByRole("menuitemradio", { name: "/tmp" }).click()

@@ -3,7 +3,13 @@
  * which terminal session, which push review, the folder or file Files shows, and whether it is
  * folded or takes the page. The teammate's page and a plain sandbox's page read the same params.
  */
-export const screenTabs = ["terminal", "browser", "preview", "changes"] as const
+export const screenTabs = [
+  "terminal",
+  "browser",
+  "preview",
+  "files",
+  "changes",
+] as const
 export type ScreenTab = (typeof screenTabs)[number]
 
 export type ScreenSearch = {
@@ -35,15 +41,19 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   const panel = text(s.panel)
   const file = text(s.file)
   const files = file ? undefined : text(s.files)
+  // Files was part of Changes: an older link to a file in it opens Files.
+  const named = screenTabs.find((t) => t === s.tab)
   const tab =
-    screenTabs.find((t) => t === s.tab) ??
-    (review || panel === "files" || file || files
+    (named === "changes" && !review && (file || files) ? "files" : named) ??
+    (review
       ? "changes"
-      : panel === "browser"
-        ? "browser"
-        : term
-          ? "terminal"
-          : undefined)
+      : panel === "files" || file || files
+        ? "files"
+        : panel === "browser"
+          ? "browser"
+          : term
+            ? "terminal"
+            : undefined)
   return {
     ...(tab ? { tab } : {}),
     ...(term ? { term } : {}),

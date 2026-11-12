@@ -354,13 +354,42 @@ func (s *Server) registerChats(api huma.API) {
 	}, func(ctx context.Context, in *indexIn) (*struct{ Body FileIndex }, error) {
 		r, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesIndex})
 		if err != nil {
-			// A guest from before the index doesn't know the op.
-			if strings.Contains(err.Error(), "unknown files op") {
-				return nil, huma.Error409Conflict("restart the sandbox to mention its files: its agent is from an older Studio")
-			}
-			return nil, err
+			return nil, olderGuest(err, "mention its files")
 		}
 		return &struct{ Body FileIndex }{FileIndex{Paths: orEmpty(r.Paths), Changed: orEmpty(r.Changed), Truncated: r.Truncated}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "gitStatus", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/git", Tags: []string{"chats"},
+		Description: "The git repositories of the sandbox's workspace as git sees them: each one's branch, how far it is ahead " +
+			"of and behind its upstream, and what is staged, not staged and untracked in it with the lines added and removed. " +
+			"Read-only. At most 50 repositories and 1,000 changes each.",
+	}, func(ctx context.Context, in *indexIn) (*struct{ Body GitStatus }, error) {
+		r, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesGit})
+		if err != nil {
+			return nil, olderGuest(err, "see its git changes")
+		}
+		return &struct{ Body GitStatus }{GitStatus{Repos: orEmpty(r.Repos), Truncated: r.Truncated}}, nil
+	})
+
+	type gitDiffIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Repo string `query:"repo" maxLength:"4096" doc:"The repository, relative to /workspace; empty for /workspace itself"`
+		Path string `query:"path" required:"true" maxLength:"4096" doc:"The file, relative to the repository"`
+		From string `query:"from" maxLength:"4096" doc:"The old path of a renamed file"`
+		Area string `query:"area" required:"true" enum:"staged,unstaged,untracked"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "gitDiff", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/git/diff", Tags: []string{"chats"},
+		Description: "One change's unified diff in a repository of the sandbox's workspace: what is staged (git diff --cached), " +
+			"not staged (git diff) or a file git doesn't track. At most 512 KiB.",
+	}, func(ctx context.Context, in *gitDiffIn) (*struct{ Body GitDiff }, error) {
+		r, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesGitDiff, Path: in.Repo, File: in.Path, From: in.From, Area: in.Area})
+		if err != nil {
+			return nil, olderGuest(err, "see its git changes")
+		}
+		return &struct{ Body GitDiff }{GitDiff{Diff: r.Diff, Truncated: r.Truncated}}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -432,6 +461,27 @@ type FileIndex struct {
 	Paths     []string `json:"paths" doc:"Relative to /workspace"`
 	Changed   []string `json:"changed" doc:"Those git reports changed or untracked"`
 	Truncated bool     `json:"truncated,omitempty" doc:"More than 20,000 paths"`
+}
+
+// GitStatus is the git repositories of a sandbox's workspace.
+type GitStatus struct {
+	Repos     []agentproto.GitRepo `json:"repos"`
+	Truncated bool                 `json:"truncated,omitempty" doc:"More than 50 repositories"`
+}
+
+// GitDiff is one change's diff.
+type GitDiff struct {
+	Diff      string `json:"diff" doc:"A unified diff; empty when there is no change"`
+	Truncated bool   `json:"truncated,omitempty" doc:"Cut at 512 KiB"`
+}
+
+// olderGuest says what a guest from before an op it doesn't know needs, so that the user can
+// do what: a restart, which brings this Studio's agent.
+func olderGuest(err error, what string) error {
+	if strings.Contains(err.Error(), "unknown files op") {
+		return huma.Error409Conflict("restart the sandbox to " + what + ": its agent is from an older Studio")
+	}
+	return err
 }
 
 // FileContent is a file of a sandbox's workspace.

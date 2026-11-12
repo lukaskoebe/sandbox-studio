@@ -12,6 +12,11 @@
 - A nearly full Docker disk counts the space Docker's daemon may still use: the blocks ext4 keeps
   for root. It read 0 B free while Docker had a twentieth of the disk left. And Home's notice of a
   full disk gives the advice for that disk, not always the home disk's.
+- The screen has a **Files** tab of its own, and **Changes** shows what git sees: the pushes
+  waiting for you first, then each repository in `/workspace` with its branch, how far it is
+  ahead of what it tracks, and its staged, unstaged and untracked files, each opening its diff
+  and Open in Files; then what the thread's requests changed. It's read-only: committing stays
+  the agent's. The tab counts the changed files (`GET …/sandboxes/{id}/git`, `…/git/diff`).
 - Previews work in the Studio app's window. They all said "Open this preview from Sandbox
   Studio.": the app's webview keeps no cookie for a framed preview. There the screen frames the
   preview on a host that carries its key, `<port>-<id>-<key>.localhost`, which needs no cookie.

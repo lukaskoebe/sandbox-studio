@@ -6,6 +6,7 @@ import {
   ArrowsOutSimpleIcon,
   BrowserIcon,
   CaretDownIcon,
+  FolderIcon,
   GitDiffIcon,
   GitForkIcon,
   MonitorIcon,
@@ -18,7 +19,8 @@ import {
 import { BaseMark } from "@/components/base-dialog"
 import { BrowserRail, type RailTab } from "@/components/browser-rail"
 import { BrowserWindow, type BrowserReplay } from "@/components/browser-window"
-import { ChangesView } from "@/components/computer/changes"
+import { ChangesView, FilesView } from "@/components/computer/changes"
+import { gitChangeCount, useGitStatus } from "@/components/computer/git-changes"
 import { ComputerMenu } from "@/components/computer/computer-menu"
 import { Terminals } from "@/components/computer/terminals"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
@@ -67,6 +69,7 @@ const tabMeta: Record<ScreenTab, { label: string; icon: Icon }> = {
   terminal: { label: "Terminal", icon: TerminalWindowIcon },
   browser: { label: "Browser", icon: BrowserIcon },
   preview: { label: "Preview", icon: MonitorIcon },
+  files: { label: "Files", icon: FolderIcon },
   changes: { label: "Changes", icon: GitDiffIcon },
 }
 
@@ -136,6 +139,7 @@ export function ComputerScreen({
     "terminal",
     ...(owner ? (["browser"] as const) : []),
     ...(previewTab ? (["preview"] as const) : []),
+    "files",
     "changes",
   ]
   const on = p === "ready"
@@ -152,8 +156,14 @@ export function ComputerScreen({
     { params: { path: { env, id: sb.id } } },
     { refetchInterval: 5000, enabled: on }
   )
+  // git's view of the computer: Changes counts its changed files, and Files marks them.
+  const git = useGitStatus(env, sb.id, {
+    enabled: on,
+    shown: tab === "changes" || tab === "files",
+  })
   const counts: Partial<Record<ScreenTab, number>> = {
     terminal: on ? (terminals.data?.length ?? 0) : 0,
+    changes: on ? gitChangeCount(git.data?.repos) : 0,
   }
   const dots: Partial<Record<ScreenTab, boolean>> = {
     changes: reviews.length > 0,
@@ -235,12 +245,20 @@ export function ComputerScreen({
               {shown.map((t) => {
                 const M = tabMeta[t]
                 const active = t === tab
+                const count = counts[t] ?? 0
+                const counted = count > (t === "terminal" ? 1 : 0)
                 return (
                   <button
                     key={t}
                     type="button"
                     role="tab"
                     aria-selected={active}
+                    // The tab keeps its name where a narrow screen shows only its icon.
+                    aria-label={
+                      counted
+                        ? `${M.label}, ${count} ${t === "terminal" ? "sessions" : "changed"}`
+                        : M.label
+                    }
                     onClick={() => onChange({ tab: t })}
                     title={M.label}
                     className={cn(
@@ -260,12 +278,9 @@ export function ComputerScreen({
                     >
                       {M.label}
                     </span>
-                    {(counts[t] ?? 0) > 1 && (
-                      <span
-                        aria-label={`${counts[t]} sessions`}
-                        className="rounded-sm border px-1 font-mono text-meta leading-3.5 font-normal text-muted-foreground"
-                      >
-                        {counts[t]}
+                    {counted && (
+                      <span className="rounded-sm border px-1 font-mono text-meta leading-3.5 font-normal text-muted-foreground">
+                        {count}
                       </span>
                     )}
                     {dots[t] && (
@@ -397,6 +412,19 @@ export function ComputerScreen({
                   )}
                 </div>
               )}
+              {tab === "files" && (
+                <FilesView
+                  env={env}
+                  sandbox={sb}
+                  files={search.files}
+                  file={search.file}
+                  onFiles={(dir, file) =>
+                    onChange({ files: dir || undefined, file, push: true })
+                  }
+                  git={git}
+                  thread={thread}
+                />
+              )}
               {tab === "changes" && (
                 <ChangesView
                   env={env}
@@ -404,10 +432,14 @@ export function ComputerScreen({
                   reviews={reviews}
                   review={search.review}
                   onReview={(review) => onChange({ review })}
-                  files={search.files}
-                  file={search.file}
-                  onFiles={(dir, file) =>
-                    onChange({ files: dir || undefined, file, push: true })
+                  git={git}
+                  onOpenFile={(file) =>
+                    onChange({
+                      tab: "files",
+                      file,
+                      files: undefined,
+                      push: true,
+                    })
                   }
                   thread={thread}
                 />

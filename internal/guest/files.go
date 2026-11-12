@@ -27,8 +27,17 @@ func (a *Agent) files(st net.Conn, br *bufio.Reader) error {
 	if err := readBody(br, 64<<10, &req); err != nil {
 		return replyError(st, err)
 	}
-	if req.Op == agentproto.FilesIndex {
+	switch req.Op {
+	case agentproto.FilesIndex:
 		return agentproto.WriteJSONLine(st, index(context.Background(), Workdir, a.git))
+	case agentproto.FilesGit:
+		return agentproto.WriteJSONLine(st, gitStatus(context.Background(), Workdir, a.git))
+	case agentproto.FilesGitDiff:
+		reply, err := gitDiff(context.Background(), Workdir, req, a.git)
+		if err != nil {
+			return replyError(st, err)
+		}
+		return agentproto.WriteJSONLine(st, reply)
 	}
 	dir := Workdir
 	switch req.Root {

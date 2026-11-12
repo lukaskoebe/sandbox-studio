@@ -4060,6 +4060,58 @@
         ],
         "type": "object"
       },
+      "GitChange": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "description": "Lines added; 0 for an untracked file",
+            "format": "int64",
+            "type": "integer"
+          },
+          "area": {
+            "enum": [
+              "staged",
+              "unstaged",
+              "untracked"
+            ],
+            "type": "string"
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "from": {
+            "description": "The old path of a renamed file",
+            "type": "string"
+          },
+          "path": {
+            "description": "Relative to the repository",
+            "type": "string"
+          },
+          "removed": {
+            "description": "Lines removed",
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "added",
+              "modified",
+              "deleted",
+              "renamed",
+              "conflicted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "area",
+          "status",
+          "added",
+          "removed"
+        ],
+        "type": "object"
+      },
       "GitCredentialPayload": {
         "additionalProperties": false,
         "properties": {
@@ -4119,6 +4171,23 @@
         },
         "required": [
           "push"
+        ],
+        "type": "object"
+      },
+      "GitDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "diff": {
+            "description": "A unified diff; empty when there is no change",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "Cut at 512 KiB",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "diff"
         ],
         "type": "object"
       },
@@ -4241,6 +4310,61 @@
         ],
         "type": "object"
       },
+      "GitRepo": {
+        "additionalProperties": false,
+        "properties": {
+          "ahead": {
+            "description": "Commits it has that its upstream doesn't",
+            "format": "int64",
+            "type": "integer"
+          },
+          "behind": {
+            "description": "Commits its upstream has that it doesn't",
+            "format": "int64",
+            "type": "integer"
+          },
+          "branch": {
+            "description": "Empty when HEAD is detached",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/GitChange"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Why git couldn't read it",
+            "type": "string"
+          },
+          "head": {
+            "description": "The commit checked out; empty before the first",
+            "type": "string"
+          },
+          "path": {
+            "description": "Relative to /workspace; empty for /workspace itself",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "More than 1,000 changes",
+            "type": "boolean"
+          },
+          "upstream": {
+            "description": "The branch it tracks, such as origin/main",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "ahead",
+          "behind",
+          "changes"
+        ],
+        "type": "object"
+      },
       "GitReview": {
         "additionalProperties": false,
         "properties": {
@@ -4321,6 +4445,28 @@
           "state",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "GitStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/GitRepo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "truncated": {
+            "description": "More than 50 repositories",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repos"
         ],
         "type": "object"
       },
@@ -18565,6 +18711,160 @@
         "summary": "Copy a sandbox into a new one",
         "tags": [
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/git": {
+      "get": {
+        "description": "The git repositories of the sandbox's workspace as git sees them: each one's branch, how far it is ahead of and behind its upstream, and what is staged, not staged and untracked in it with the lines added and removed. Read-only. At most 50 repositories and 1,000 changes each.",
+        "operationId": "gitStatus",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/git/diff": {
+      "get": {
+        "description": "One change's unified diff in a repository of the sandbox's workspace: what is staged (git diff --cached), not staged (git diff) or a file git doesn't track. At most 512 KiB.",
+        "operationId": "gitDiff",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The repository, relative to /workspace; empty for /workspace itself",
+            "explode": false,
+            "in": "query",
+            "name": "repo",
+            "schema": {
+              "description": "The repository, relative to /workspace; empty for /workspace itself",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The file, relative to the repository",
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "The file, relative to the repository",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The old path of a renamed file",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "The old path of a renamed file",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "area",
+            "required": true,
+            "schema": {
+              "enum": [
+                "staged",
+                "unstaged",
+                "untracked"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitDiff"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
         ]
       }
     },

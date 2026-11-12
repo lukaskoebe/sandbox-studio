@@ -1823,6 +1823,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/git": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The git repositories of the sandbox's workspace as git sees them: each one's branch, how far it is ahead of and behind its upstream, and what is staged, not staged and untracked in it with the lines added and removed. Read-only. At most 50 repositories and 1,000 changes each. */
+        get: operations["gitStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/git/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One change's unified diff in a repository of the sandbox's workspace: what is staged (git diff --cached), not staged (git diff) or a file git doesn't track. At most 512 KiB. */
+        get: operations["gitDiff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/lineage": {
         parameters: {
             query?: never;
@@ -4632,6 +4666,27 @@ export interface components {
         GetSecretValueResponse: {
             value: string;
         };
+        GitChange: {
+            /**
+             * Format: int64
+             * @description Lines added; 0 for an untracked file
+             */
+            added: number;
+            /** @enum {string} */
+            area: "staged" | "unstaged" | "untracked";
+            binary?: boolean;
+            /** @description The old path of a renamed file */
+            from?: string;
+            /** @description Relative to the repository */
+            path: string;
+            /**
+             * Format: int64
+             * @description Lines removed
+             */
+            removed: number;
+            /** @enum {string} */
+            status: "added" | "modified" | "deleted" | "renamed" | "conflicted";
+        };
         GitCredentialPayload: {
             /** @description The host git asked credentials for, with its port when git named one */
             host: string;
@@ -4653,6 +4708,12 @@ export interface components {
             push: components["schemas"]["GitPush"];
             /** @description Set for git.push approvals */
             review?: components["schemas"]["PushReview"];
+        };
+        GitDiff: {
+            /** @description A unified diff; empty when there is no change */
+            diff: string;
+            /** @description Cut at 512 KiB */
+            truncated?: boolean;
         };
         GitIdentity: {
             /** @description user.email; empty if it is not set */
@@ -4690,6 +4751,31 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        GitRepo: {
+            /**
+             * Format: int64
+             * @description Commits it has that its upstream doesn't
+             */
+            ahead: number;
+            /**
+             * Format: int64
+             * @description Commits its upstream has that it doesn't
+             */
+            behind: number;
+            /** @description Empty when HEAD is detached */
+            branch?: string;
+            changes: components["schemas"]["GitChange"][] | null;
+            /** @description Why git couldn't read it */
+            error?: string;
+            /** @description The commit checked out; empty before the first */
+            head?: string;
+            /** @description Relative to /workspace; empty for /workspace itself */
+            path: string;
+            /** @description More than 1,000 changes */
+            truncated?: boolean;
+            /** @description The branch it tracks, such as origin/main */
+            upstream?: string;
+        };
         GitReview: {
             approvalId: string;
             /** Format: date-time */
@@ -4715,6 +4801,11 @@ export interface components {
             updatedAt: string;
             /** @description The posted review's web URL */
             url?: string;
+        };
+        GitStatus: {
+            repos: components["schemas"]["GitRepo"][] | null;
+            /** @description More than 50 repositories */
+            truncated?: boolean;
         };
         GoBrowserInBody: {
             /** @description An ephemeral session's ID; empty for the persistent profile */
@@ -11713,6 +11804,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    gitStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    gitDiff: {
+        parameters: {
+            query: {
+                /** @description The repository, relative to /workspace; empty for /workspace itself */
+                repo?: string;
+                /** @description The file, relative to the repository */
+                path: string;
+                /** @description The old path of a renamed file */
+                from?: string;
+                area: "staged" | "unstaged" | "untracked";
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitDiff"];
                 };
             };
             /** @description Error */

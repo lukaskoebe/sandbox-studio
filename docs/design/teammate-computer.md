@@ -68,7 +68,9 @@ A computer that is creating shows its progress on the screen.
 - `components/computer/computer-menu.tsx`: from `sandbox-options-menu.tsx`, `sandbox-details.tsx`
   and `sandbox-usage.tsx`.
 - `components/computer/terminals.tsx`: the session state and the chip, from `sandbox-workspace.tsx`.
-- `components/computer/changes.tsx`: the Changes tab, a waiting push's review over the files.
+- `components/computer/changes.tsx`: the Files tab, and the Changes tab: waiting pushes, git's
+  view of each repository (`git-changes.tsx`), and what the thread changed. Files was a chip of
+  Changes until the feedback of 2026-11-12 split them.
 - `components/teammate/page.tsx`, `home.tsx` (cards, events, waiting, composer), `thread.tsx`,
   `header.tsx` and `profile.tsx` with its `tasks.tsx`, `memory.tsx` and `settings.tsx`.
 - `components/column-page.tsx`: the title row and centred column of Home and every settings

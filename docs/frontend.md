@@ -165,8 +165,8 @@ settings card) and `from=setup`. Esc closes the profile or a menu first, then le
 The screen (`components/computer/screen.tsx`) is the same for a teammate's computer and for one
 without a teammate, which has it at full width. Its bezel has the computer's name, a switcher
 between the owner's computers with forks under the one they came from and Another computer;
-the tabs Terminal, Browser (a teammate's own browser), Preview (while previews are on) and
-Changes, each with a dot while something on it waits for you; power (Stop, Start or Resume);
+the tabs Terminal, Browser (a teammate's own browser), Preview (while previews are on), Files
+and Changes, each with a dot while something on it waits for you; power (Stop, Start or Resume);
 ⋯; enlarge (a teammate's page on a wide screen) and fold. Under it the display:
 
 - Terminal: the computer's tmux sessions as a strip of tabs (`components/computer/terminals.tsx`),
@@ -181,7 +181,15 @@ Changes, each with a dot while something on it waits for you; power (Stop, Start
   with its Activity and Sites beside it, or over it on a narrow screen, from the toolbar's
   clock or the site info's All sites.
 - Preview: the framed app with a port chip, Open in a new tab and Open fresh.
-- Changes: a waiting push's review over the files and changes of the open thread.
+- Files: the computer's files (`chat/files-panel.tsx`), marking those git reports changed and
+  those the thread's request changed.
+- Changes: git's view of the computer, read-only (`computer/changes.tsx`, `git-changes.tsx`):
+  the pushes waiting for review first, each opening its review with a way back; then each
+  repository of `/workspace` with its branch, ↑ ahead and ↓ behind its upstream, and its Staged,
+  Not staged and Untracked files, each opening its diff and Open in Files; then This thread,
+  what the thread's requests changed. The tab counts the changed files. git status is asked every
+  10 seconds while Files or Changes shows, every 30 otherwise, and when a request ends.
+  `?tab=changes&file=…` from before Files had a tab opens Files.
 
 The computer's ⋯ (`components/computer/computer-menu.tsx`) has its name and ID, template, size
 and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkpoint now,

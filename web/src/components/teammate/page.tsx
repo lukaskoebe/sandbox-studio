@@ -225,7 +225,7 @@ export function TeammatePage({
             }
             onOpenFile={(file) =>
               screen({
-                tab: "changes",
+                tab: "files",
                 file,
                 files: undefined,
                 computer: thread?.sandboxId,
