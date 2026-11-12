@@ -153,9 +153,15 @@ settings card) and `from=setup`. Esc closes the profile or a menu first, then le
   computers and its settings; each opens as a sheet. **Settings** at the end of the header opens
   the settings sheet at once. The sheet uses the card's rows, an icon, the label, what it is
   set to and a caret, each opening to its fields underneath, under the card's section labels:
-  Profile (identity, agent, git identity, approvals, soul), Routine and access (check-ins, new
-  hosts, browser, secrets: its own, its sandboxes' and the environment's it inherits, with
-  which replaces which; Add secret preselects the teammate's scope), then delete. A setting has
+  Profile (identity, agent, git identity, approvals, soul), Knowledge (memory: its pages,
+  facts, facts this week and last dream, Open its memory, Add a fact, Dream now, and the
+  switches for learning from chats and dreaming every night; tasks: open and scheduled, the
+  first four, Open its tasks; `components/teammate/knowledge.tsx`), Routine and access
+  (check-ins, new hosts, network rules: its own and its computers', the environment's folded,
+  each linking to Settings → Network, browser, secrets: its own, its sandboxes' and the
+  environment's it inherits, with which replaces which; Add secret preselects the teammate's
+  scope; copy to another environment), then delete. Memory or tasks opened from a row show a
+  back arrow to that row. A setting has
   the same name on the card and in the sheet. `?open=` names the open row, which a row of the
   card opens and scrolls to (`components/disclosure-row.tsx`). One bar, "Unsaved changes · Discard · Save",
   saves the changes of every row, check-ins included, and shows only while there are some;

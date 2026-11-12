@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import {
+  ArrowLeftIcon,
   CaretRightIcon,
   ClockIcon,
   CopyIcon,
@@ -438,6 +439,9 @@ export function ProfileSheet({
   const open = view !== undefined && view !== "card"
   if (open && view !== shown) setShown(view)
   const meta = shown ? sheets[shown] : undefined
+  // Memory or tasks opened from a settings row lead back to that row.
+  const [back, setBack] = useState<string>()
+  if (back !== undefined && !open) setBack(undefined)
 
   return (
     <Sheet open={open} onOpenChange={(on) => !on && onOpen(undefined)}>
@@ -452,6 +456,17 @@ export function ProfileSheet({
           <>
             <SheetHeader className="border-b px-5 py-4">
               <SheetTitle className="flex items-center gap-2.5 text-sm">
+                {back !== undefined && shown !== "settings" && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="-ml-1.5"
+                    aria-label={`Back to ${teammate.name}'s settings`}
+                    onClick={() => onOpen("settings", back)}
+                  >
+                    <ArrowLeftIcon />
+                  </Button>
+                )}
                 <TeammateAvatar
                   name={teammate.name}
                   avatar={teammate.avatar}
@@ -478,6 +493,10 @@ export function ProfileSheet({
                   id={teammate.id}
                   open={section}
                   onOpen={(s) => onOpen("settings", s)}
+                  onView={(v) => {
+                    setBack(v)
+                    onOpen(v)
+                  }}
                   fromSetup={fromSetup}
                 />
               )}

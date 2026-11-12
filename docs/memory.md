@@ -322,6 +322,12 @@ answer (`{}`) and exits 0.
   A session that is one of the sandbox's chats sends nothing: Studio extracts the chat
   itself (below), since its ACP agent never ends a session the way a terminal does.
 
+A teammate's *Learn from its chats* switch (Knowledge → Memory in its settings, `PUT
+teammates/{id}/memory`, migration `064_teammate_memory.sql`) turns extraction off for its
+sessions and chats alike: the delta is accepted and logged as skipped, not counted with the
+failed runs. Facts it is asked to remember (the `remember` tool) and the ones the user adds
+still land.
+
 Every injection and write goes to the session log (migration `015_memory_sessions.sql`)
 with the item, its score and why: the search explanation plus the threshold it passed, or
 the extraction's model, tokens, cost and any rejection.
@@ -419,7 +425,9 @@ Code: `internal/agentmem/dream.go` (the job) and `internal/memory/consolidate.go
 finished run, a scope with new facts after 03:00 local time that has not run since, and
 any interrupted run. Automatic runs of one scope are at least an hour apart. "Dream now"
 (`POST dream`) starts one at once. One dream per scope runs at a time (an in-process lock
-plus a unique index on running rows).
+plus a unique index on running rows). A teammate whose *Dream every night* switch is off
+gets no automatic runs, on either trigger; one already running finishes, and Dream now still
+works.
 
 **A run** covers the facts created between the end of the last finished run and now (both
 ends included); a teammate's run also takes new shared facts.

@@ -129,6 +129,12 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 		done("extraction skipped: " + reason)
 		return nil
 	}
+	if !c.teammate.MemoryLearn {
+		// Turned off, not a failure: logged, but not counted with the skipped runs.
+		why.Skipped = "learning is off for the teammate"
+		done("extraction skipped: " + why.Skipped)
+		return nil
+	}
 	if c.teammate.ProviderID == "" {
 		return skip("the teammate has no provider")
 	}

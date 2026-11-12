@@ -4,9 +4,13 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   BrowserIcon,
+  CheckSquareIcon,
   ClockIcon,
+  CopyIcon,
   GlobeIcon,
   KeyIcon,
+  ListChecksIcon,
+  SparkleIcon,
   TrashIcon,
   type Icon,
 } from "@phosphor-icons/react"
@@ -35,26 +39,38 @@ import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
 import { TeammateHeartbeat } from "@/components/teammate-heartbeat"
 import { TeammateSecrets } from "@/components/teammate-secrets"
+import {
+  CopyTeammate,
+  MemorySummary,
+  RulesSummary,
+  TaskSummary,
+  TeammateKnowledge,
+  TeammateRules,
+  TeammateTaskList,
+} from "@/components/teammate/knowledge"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 import { heartbeatSentence } from "@/lib/tasks"
 
 /**
  * A teammate's settings as rows in the profile card's look, each with its current value, that
  * open one at a time: who it is, which agent it runs, the git identity it commits with, its
- * approvals and soul; then its check-ins, what it does about new hosts, its browser and
- * secrets. The open row is in the URL: ?open=checkins.
+ * approvals and soul; what it knows and works on; then its check-ins, what it does about new
+ * hosts, the rules it has, its browser and secrets. The open row is in the URL: ?open=checkins.
  */
 export function TeammateSettings({
   env,
   id,
   open,
   onOpen: setOpen,
+  onView,
   fromSetup,
 }: {
   env: string
   id: string
   open?: string
   onOpen: (section: string | undefined) => void
+  /** Turns the sheet into the teammate's memory or tasks. */
+  onView: (view: "memory" | "tasks") => void
   /** Opened from the setup steps, which it links back to. */
   fromSetup?: boolean
 }) {
@@ -96,6 +112,36 @@ export function TeammateSettings({
             sections={{ open, onOpen: setOpen }}
           />
         </DisclosureGroup>
+        <DisclosureGroup title="Knowledge">
+          <DisclosureRow
+            {...row(
+              "memory",
+              SparkleIcon,
+              "Memory",
+              <MemorySummary env={env} id={id} />
+            )}
+          >
+            <TeammateKnowledge
+              env={env}
+              teammate={teammate}
+              onMemory={() => onView("memory")}
+            />
+          </DisclosureRow>
+          <DisclosureRow
+            {...row(
+              "tasks",
+              CheckSquareIcon,
+              "Tasks",
+              <TaskSummary env={env} id={id} />
+            )}
+          >
+            <TeammateTaskList
+              env={env}
+              teammate={teammate}
+              onTasks={() => onView("tasks")}
+            />
+          </DisclosureRow>
+        </DisclosureGroup>
         <DisclosureGroup title="Routine and access">
           <DisclosureRow
             {...row(
@@ -123,6 +169,16 @@ export function TeammateSettings({
           </DisclosureRow>
           <DisclosureRow
             {...row(
+              "rules",
+              ListChecksIcon,
+              "Network rules",
+              <RulesSummary env={env} id={id} />
+            )}
+          >
+            <TeammateRules env={env} id={id} />
+          </DisclosureRow>
+          <DisclosureRow
+            {...row(
               "browser",
               BrowserIcon,
               "Browser",
@@ -140,6 +196,16 @@ export function TeammateSettings({
             )}
           >
             <TeammateSecrets env={env} teammate={teammate} />
+          </DisclosureRow>
+          <DisclosureRow
+            {...row(
+              "copy",
+              CopyIcon,
+              "Copy to another environment",
+              "Its profile, without its memory or sandboxes"
+            )}
+          >
+            <CopyTeammate env={env} teammate={teammate} />
           </DisclosureRow>
         </DisclosureGroup>
         <div className="pt-3">

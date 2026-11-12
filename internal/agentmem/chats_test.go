@@ -105,6 +105,31 @@ func TestChatExtraction(t *testing.T) {
 	}
 }
 
+// A teammate that doesn't learn from its chats reads none: the chat's turns are passed over,
+// and aren't read later when learning is on again.
+func TestChatExtractionOff(t *testing.T) {
+	f := newFixture(t)
+	off := false
+	if _, err := f.st.SetTeammateMemory(f.ctx, f.env, f.ada.ID, &off, nil); err != nil {
+		t.Fatal(err)
+	}
+	c := f.newChat("acp-off")
+	f.llm.reply = `{"facts": [], "summary": ""}`
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if f.llm.n() != 0 {
+		t.Fatalf("llm calls with learning off: %d", f.llm.n())
+	}
+	on := true
+	if _, err := f.st.SetTeammateMemory(f.ctx, f.env, f.ada.ID, &on, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil || f.llm.n() != 0 {
+		t.Fatalf("the turns from while it was off were read: %v, %d calls", err, f.llm.n())
+	}
+}
+
 func TestChatExtractionWaitsForMore(t *testing.T) {
 	f := newFixture(t)
 	start := time.Now().Add(time.Hour) // the store's times are the wall clock's; the chat is idle by now

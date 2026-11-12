@@ -320,6 +320,10 @@ type Teammate struct {
 	// BrowserSharePages tells the teammate's agents, after the user hands the browser back,
 	// which pages it was on while the user drove (docs/browser.md).
 	BrowserSharePages bool `json:"browserSharePages" doc:"After the user hands the browser back, agents hear which pages it was on while the user drove"`
+	// MemoryLearn extracts facts from the teammate's chats and sessions into its memory.
+	MemoryLearn bool `json:"memoryLearn" doc:"Facts are learned from the teammate's chats and sessions; off, its memory only grows by facts it saves itself or you add"`
+	// MemoryDream consolidates the teammate's memory every night and after many new facts.
+	MemoryDream bool `json:"memoryDream" doc:"The teammate's memory is consolidated every night and after 25 new facts; Dream now works either way"`
 	// Heartbeat is the check-in schedule; nil while it is off.
 	Heartbeat *Heartbeat `json:"heartbeat,omitempty"`
 	// HeartbeatAt is the last check-in of any outcome, which the schedule counts from.
@@ -327,14 +331,14 @@ type Teammate struct {
 }
 
 // teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, models, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth, browser_share_pages, use_host_git_identity"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, models, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth, browser_share_pages, use_host_git_identity, memory_learn, memory_dream"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
 	var created, updated, beat int64
 	var every, from, to int
 	var models string
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &models, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth, &p.BrowserSharePages, &p.UseHostGitIdentity)
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &models, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth, &p.BrowserSharePages, &p.UseHostGitIdentity, &p.MemoryLearn, &p.MemoryDream)
 	p.Models = []string{}
 	if err == nil {
 		err = json.Unmarshal([]byte(models), &p.Models)
@@ -397,6 +401,19 @@ func (p Teammate) Offers(model string) bool {
 // browser picks it up with its next command.
 func (s *Store) SetTeammateBrowserStealth(ctx context.Context, envID, id string, on bool) (Teammate, error) {
 	res, err := s.db.ExecContext(ctx, "UPDATE teammates SET browser_stealth = ?, updated_at = ? WHERE environment_id = ? AND id = ?", on, now(), envID, id)
+	if err != nil {
+		return Teammate{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Teammate{}, ErrNotFound
+	}
+	return s.Teammate(ctx, envID, id)
+}
+
+// SetTeammateMemory sets what the teammate's memory does on its own; a nil switch stays.
+func (s *Store) SetTeammateMemory(ctx context.Context, envID, id string, learn, dream *bool) (Teammate, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET memory_learn = COALESCE(?, memory_learn), memory_dream = COALESCE(?, memory_dream),
+		updated_at = ? WHERE environment_id = ? AND id = ?`, learn, dream, now(), envID, id)
 	if err != nil {
 		return Teammate{}, err
 	}

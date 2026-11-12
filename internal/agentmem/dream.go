@@ -1130,8 +1130,11 @@ func (s *Service) dueDreams(ctx context.Context) ([]dueDream, error) {
 			return nil, err
 		}
 		scopes := []string{memory.SharedScope}
+		// A teammate whose dreams are off gets none on its own; one already running finishes.
+		resting := map[string]bool{}
 		for _, p := range teammates {
 			scopes = append(scopes, memory.TeammateScope(p.ID))
+			resting[memory.TeammateScope(p.ID)] = !p.MemoryDream
 		}
 		for _, scope := range scopes {
 			var running int
@@ -1147,7 +1150,7 @@ func (s *Service) dueDreams(ctx context.Context) ([]dueDream, error) {
 				out = append(out, dueDream{e.ID, scope, ""})
 				continue
 			}
-			if lastStart.Valid && now.Sub(time.Unix(lastStart.Int64, 0)) < autoDreamGap {
+			if resting[scope] || lastStart.Valid && now.Sub(time.Unix(lastStart.Int64, 0)) < autoDreamGap {
 				continue
 			}
 			n, err := s.Memory.CountFactsSince(ctx, e.ID, scope, time.Unix(lastEnd.Int64, 0))

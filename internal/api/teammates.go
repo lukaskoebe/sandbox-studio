@@ -335,6 +335,29 @@ func (s *Server) registerTeammates(api huma.API) {
 		return &struct{ Body store.Teammate }{p}, nil
 	})
 
+	type setMemoryIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Teammate ID"`
+		Body struct {
+			Learn *bool `json:"learn,omitempty" doc:"Learn facts from its chats and sessions"`
+			Dream *bool `json:"dream,omitempty" doc:"Dream every night and after 25 new facts"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setTeammateMemory", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{id}/memory", Tags: []string{"teammates"},
+		Description: "Sets what the teammate's memory does on its own (docs/memory.md): learning from its chats and sessions, and dreaming. A switch left out stays.",
+	}, func(ctx context.Context, in *setMemoryIn) (*struct{ Body store.Teammate }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		t, err := s.Store.SetTeammateMemory(ctx, in.Env, in.ID, in.Body.Learn, in.Body.Dream)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{t}, nil
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteTeammate", Method: http.MethodDelete, Path: "/api/environments/{env}/teammates/{id}", Tags: []string{"teammates"},
 		DefaultStatus: http.StatusNoContent,

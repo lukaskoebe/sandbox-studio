@@ -453,6 +453,17 @@ func TestDueDreams(t *testing.T) {
 		t.Fatalf("due at 01:00: %v", got)
 	}
 	f.now = time.Date(2026, 10, 10, 4, 0, 0, 0, time.Local)
+	// A teammate whose dreams are off gets none on its own, neither after facts nor nightly.
+	off, on := false, true
+	if _, err := f.st.SetTeammateMemory(f.ctx, f.env, f.ada.ID, nil, &off); err != nil {
+		t.Fatal(err)
+	}
+	if got := due(); len(got) != 1 || got[memory.SharedScope] != TriggerNightly {
+		t.Fatalf("due at 04:00 with Ada's dreams off: %v", got)
+	}
+	if _, err := f.st.SetTeammateMemory(f.ctx, f.env, f.ada.ID, nil, &on); err != nil {
+		t.Fatal(err)
+	}
 	if got := due(); len(got) != 2 || got[ada] != TriggerFacts || got[memory.SharedScope] != TriggerNightly {
 		t.Fatalf("due at 04:00: %v", got)
 	}

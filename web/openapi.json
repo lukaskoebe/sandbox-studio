@@ -9289,6 +9289,20 @@
         ],
         "type": "object"
       },
+      "SetMemoryInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "dream": {
+            "description": "Dream every night and after 25 new facts",
+            "type": "boolean"
+          },
+          "learn": {
+            "description": "Learn facts from its chats and sessions",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "SetPrivateHostsInBody": {
         "additionalProperties": false,
         "properties": {
@@ -10019,6 +10033,14 @@
           "id": {
             "type": "string"
           },
+          "memoryDream": {
+            "description": "The teammate's memory is consolidated every night and after 25 new facts; Dream now works either way",
+            "type": "boolean"
+          },
+          "memoryLearn": {
+            "description": "Facts are learned from the teammate's chats and sessions; off, its memory only grows by facts it saves itself or you add",
+            "type": "boolean"
+          },
           "model": {
             "description": "The default model: new chats, the terminal, check-ins and scheduled runs use it. Empty lets the harness pick",
             "type": "string"
@@ -10086,7 +10108,9 @@
           "updatedAt",
           "securityLevel",
           "browserStealth",
-          "browserSharePages"
+          "browserSharePages",
+          "memoryLearn",
+          "memoryDream"
         ],
         "type": "object"
       },
@@ -21520,6 +21544,69 @@
                     "array",
                     "null"
                   ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/memory": {
+      "put": {
+        "description": "Sets what the teammate's memory does on its own (docs/memory.md): learning from its chats and sessions, and dreaming. A switch left out stays.",
+        "operationId": "setTeammateMemory",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMemoryInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
                 }
               }
             },

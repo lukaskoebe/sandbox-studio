@@ -2457,6 +2457,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{id}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets what the teammate's memory does on its own (docs/memory.md): learning from its chats and sessions, and dreaming. A switch left out stays. */
+        put: operations["setTeammateMemory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{id}/security-level": {
         parameters: {
             query?: never;
@@ -6498,6 +6515,12 @@ export interface components {
              */
             level: "locked" | "guarded" | "assisted" | "open";
         };
+        SetMemoryInBody: {
+            /** @description Dream every night and after 25 new facts */
+            dream?: boolean;
+            /** @description Learn facts from its chats and sessions */
+            learn?: boolean;
+        };
         SetPrivateHostsInBody: {
             /** @description The whole list, which replaces the current one */
             hosts: components["schemas"]["PrivateHostInput"][] | null;
@@ -6758,6 +6781,10 @@ export interface components {
             harness: "opencode" | "claude" | "codex";
             heartbeat?: components["schemas"]["Heartbeat"];
             id: string;
+            /** @description The teammate's memory is consolidated every night and after 25 new facts; Dream now works either way */
+            memoryDream: boolean;
+            /** @description Facts are learned from the teammate's chats and sessions; off, its memory only grows by facts it saves itself or you add */
+            memoryLearn: boolean;
             /** @description The default model: new chats, the terminal, check-ins and scheduled runs use it. Empty lets the harness pick */
             model: string;
             /** @description The models also offered in chats, besides the default */
@@ -13527,6 +13554,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Beat"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setTeammateMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMemoryInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
                 };
             };
             /** @description Error */

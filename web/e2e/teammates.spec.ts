@@ -322,3 +322,73 @@ test("a computer pinned beside a chat says the chat works elsewhere", async ({
   await page.getByRole("button", { name: `on ${shop} · Show` }).click()
   await expect(onShop).toBeVisible()
 })
+
+test("a teammate's settings show what it knows and works on, its own rules, and turn its memory's learning and dreaming off", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("Knowing")
+  const id = await addTeammate(api, env, name)
+  const scope = `teammate:${id}`
+  await api.json("POST", `/api/environments/${env}/memory/facts`, {
+    scope,
+    kind: "fact",
+    text: "The staging database is reset every Monday",
+  })
+  await api.json("POST", `/api/environments/${env}/teammates/${id}/tasks`, {
+    title: "Rotate the staging keys",
+  })
+  const host = `api-${Math.random().toString(36).slice(2, 8)}.test`
+  await api.json("POST", `/api/environments/${env}/rules`, {
+    host,
+    action: "allow",
+    teammateId: id,
+  })
+  const teammate = () =>
+    api.json<{ memoryLearn: boolean; memoryDream: boolean }>(
+      "GET",
+      `/api/environments/${env}/teammates/${id}`
+    )
+
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings`)
+  const memoryRow = page.getByRole("button", { name: /^Memory/ })
+  await expect(memoryRow).toContainText("1 fact")
+  await expect(page.getByRole("button", { name: /^Tasks/ })).toContainText(
+    "1 open"
+  )
+  await expect(
+    page.getByRole("button", { name: /^Network rules/ })
+  ).toContainText(/1 its own · \d+ from the environment/)
+
+  await memoryRow.click()
+  const memory = page.locator("#teammate-memory-panel")
+  await expect(memory).toContainText("1fact")
+  await memory.getByRole("button", { name: "Add a fact" }).click()
+  await memory
+    .getByLabel("A fact to remember")
+    .fill("Releases go out on Thursdays")
+  await memory.getByRole("button", { name: "Remember" }).click()
+  await expect(memoryRow).toContainText("2 facts")
+
+  await memory.getByRole("checkbox", { name: /Learn from its chats/ }).click()
+  await expect.poll(async () => (await teammate())!.memoryLearn).toBe(false)
+  await memory.getByRole("checkbox", { name: /Dream every night/ }).click()
+  await expect.poll(async () => (await teammate())!.memoryDream).toBe(false)
+  await expect(
+    memory.getByRole("checkbox", { name: /Learn from its chats/ })
+  ).not.toBeChecked()
+
+  // The memory opens in the sheet, and its back arrow leads to the row.
+  await memory.getByRole("button", { name: `Open ${name}'s memory` }).click()
+  await expect(page).toHaveURL(/profile=memory/)
+  await page.getByRole("button", { name: `Back to ${name}'s settings` }).click()
+  await expect(page).toHaveURL(/profile=settings/)
+  await expect(page).toHaveURL(/open=memory/)
+  await expect(page.locator("#teammate-memory-panel")).toBeVisible()
+
+  await page.getByRole("button", { name: /^Network rules/ }).click()
+  const rules = page.locator("#teammate-rules-panel")
+  await rules.getByRole("link", { name: new RegExp(host) }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/network\\?rule=`))
+})
