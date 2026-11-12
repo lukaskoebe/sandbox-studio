@@ -67,7 +67,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an environment
+         * @description Deletes the environment with everything in it: its computers with their VMs, disks and checkpoints, templates, teammates, providers, secrets, rules, forges, chats, memory and history. It can't be undone. The last environment can't be deleted, nor one whose computers are busy, or with a template build or an import running: that answers 409.
+         */
+        delete: operations["deleteEnvironment"];
         options?: never;
         head?: never;
         /** @description Renames the environment. Its ID, and so its sandboxes and links, stay the same. */
@@ -7183,6 +7187,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Environment"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

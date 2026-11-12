@@ -52,7 +52,12 @@ Non-goals:
   providers, secrets, rules, teammates, sandboxes, memory, approvals and forges. Nothing is
   shared between environments, and each has its own TLS CA. The UI shows one environment at
   a time (`/e/$env/...`), with a switcher in the sidebar. A fresh install gets one
-  environment called "Default".
+  environment called "Default". Settings → General renames one (`PATCH /api/environments/{env}`)
+  and deletes one after its name is typed (`DELETE /api/environments/{env}`): Studio takes the
+  lock of each of its sandboxes, of every kind, refuses with 409 while one is busy, an import
+  runs or a template builds, then removes their VMs, checkpoints, terminals and egress,
+  the environment's template artifacts, and its rows in one transaction (the CA, the sealed
+  secrets, memory, chats and approvals included). The last environment can't be deleted.
 - **Teammate.** A named agent identity: name, role, soul (markdown), harness, provider,
   model and git identity, plus a private memory scope. A teammate owns sandboxes and one
   browser VM. See [teammates](teammates.md).

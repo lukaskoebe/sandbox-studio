@@ -5,6 +5,8 @@ description: Keep work, personal projects, and their access policies separate.
 
 An environment is a separate workspace inside Studio. Use the switcher at the top of the sidebar to move between environments or create another one. To rename one, change its name under **Settings → General**; its sandboxes and links stay as they are.
 
+To delete one, use **Delete…** on the same page and type its name. Studio stops and removes its computers with their disks, and deletes its templates, teammates, chats, memory, providers, secrets and rules. It can't be undone, so export the environment first if you may want its configuration back. While a computer is busy, an import runs or a template builds, Studio refuses and says why. The last environment can't be deleted.
+
 Each environment has its own:
 
 - sandboxes and templates;

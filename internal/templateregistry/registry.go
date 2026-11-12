@@ -348,6 +348,24 @@ func (r *Registry) remove(ctx context.Context, env, id string) error {
 	return r.st.DeleteTemplate(ctx, env, id)
 }
 
+// DeleteEnvironment removes the image files of every template of an environment, which is
+// being deleted; the store deletes the records. A failure leaves the records, so the
+// environment stays and the delete can be tried again.
+func (r *Registry) DeleteEnvironment(ctx context.Context, env string) error {
+	if !validID(env) {
+		return store.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.noSymlinks(env); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return r.root.RemoveAll(env)
+}
+
 // Reconcile runs at startup, before receives or HTTP requests. Incomplete
 // publications are discarded rather than presenting a partly committed image.
 func (r *Registry) Reconcile(ctx context.Context) error {

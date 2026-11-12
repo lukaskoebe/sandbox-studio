@@ -14,6 +14,10 @@
   apply from its next start. The home is copied or kept as it is, harness history and logins
   included, as the dialogs say. In the API, a fork takes `teammateId` and
   `PUT …/sandboxes/{id}/teammate` changes the owner.
+- **Settings → General** deletes an environment after you type its name: its computers with their
+  disks, templates, teammates, chats, memory, providers, secrets and rules. Studio refuses while
+  one of its computers is busy, and the last environment can't be deleted
+  (`DELETE /api/environments/{env}`).
 
 ## v0.18.0 — 2026-11-12
 

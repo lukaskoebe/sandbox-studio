@@ -587,7 +587,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go agentMem.RunDreams(ctx) // nightly, after enough new facts, and interrupted runs
 
 	mux := http.NewServeMux()
-	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Records: records, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
+	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Templates: registry, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Records: records, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
 		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins, Reach: gw, HostGit: api.HostGitIdentity,
 		HostLogins: hostLogins(p.Data), ModelsClient: modelsClient()}
 	// Heartbeats give teammates with open tasks their check-ins, and run scheduled tasks at their

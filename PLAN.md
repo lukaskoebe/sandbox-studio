@@ -17,14 +17,15 @@ says.
 
 ## Next
 
-The feedback round of 2026-11-12. Its obvious fixes are in the changelog's next release: a new
+The feedback round of 2026-11-12. Its obvious fixes were released in v0.18.0: a new
 environment opening at once, renaming environments, `/tmp` in Files, terminal links, rebases keeping
 the tools and optionally Docker, git's setup on computers without a teammate, the diff view's
 scrolling, the last computer remembered, and the catalog's fix text on every lifecycle action.
 Since then: the `git_pull_request_create` tool, pushes to a checked-out branch of a local
-repository, which update its files, and a teammate per copy of a base, with the owner changeable
-while a computer is stopped. Why Docker's images went on a rebase: they live on the Docker
-disk, which a new generation got empty from its template; **Keep Docker's images** now copies them.
+repository, which update its files, a teammate per copy of a base, with the owner changeable
+while a computer is stopped, and deleting an environment after typing its name. Why Docker's
+images went on a rebase: they live on the Docker disk, which a new generation got empty from its
+template; **Keep Docker's images** now copies them.
 
 To build, in this order:
 
@@ -33,15 +34,12 @@ To build, in this order:
    script that appends a per-preview capability to `navigator.serviceWorker.register` URLs; the gate
    accepts it only with `Service-Worker: script` and `Sec-Fetch-Dest: serviceworker`, and strips it
    before proxying. Check whether a module worker's static imports need it too.
-2. **Deleting an environment**, after typing its name: Studio stops and removes its computers,
-   disks, templates, CA, vault entries and terminals; the store cascades the rest. The last
-   environment can't be deleted, nor one with an operation running.
-3. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
+2. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
    against about 2 for `docker save` and `docker load` over SSH. Measure where the time goes with a
    1–2 GB image first (this host has 6 GB of disk free): the zstd level, the import's writeback
    every 32 MiB, the size pre-walk and the exec stdin chunks. Then tune the copy, or copy the stopped
    source's Docker disk image on the host instead, which a Docker fork already requires.
-4. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
+3. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
    is hard to find. Mocks first, as asked, for you to pick from.
 
 Needs your call:

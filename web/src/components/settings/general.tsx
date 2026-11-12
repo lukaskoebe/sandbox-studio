@@ -14,6 +14,7 @@ import {
   StopCircleIcon,
   TerminalIcon,
   TerminalWindowIcon,
+  TrashIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
@@ -77,6 +78,7 @@ export function GeneralSettings({ env }: { env: string }) {
       <SettingsGroup label="This environment">
         <EnvironmentNameSection key={env} env={env} />
         <EnvironmentFilesSection env={env} />
+        <EnvironmentDeleteSection key={`delete-${env}`} env={env} />
       </SettingsGroup>
       <SettingsGroup label="This browser">
         <StyleSection />
@@ -159,6 +161,112 @@ function EnvironmentNameSection({ env }: { env: string }) {
         </form>
       }
     />
+  )
+}
+
+/**
+ * Deletes this environment with everything in it, after its name is typed. The server refuses
+ * the last environment and one with an operation running.
+ */
+function EnvironmentDeleteSection({ env }: { env: string }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const list = $api.useQuery("get", "/api/environments")
+  const environments = list.data ?? []
+  const current = environments.find((e) => e.id === env)
+  const next = environments.find((e) => e.id !== env)
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState("")
+  const remove = $api.useMutation("delete", "/api/environments/{env}", {
+    onSuccess: async () => {
+      setOpen(false)
+      toast.success(`Deleted ${current?.name ?? "the environment"}`)
+      if (next) await navigate({ to: "/e/$env", params: { env: next.id } })
+      await queryClient.invalidateQueries({
+        queryKey: ["get", "/api/environments"],
+      })
+    },
+    onError: (err) =>
+      toast.error("Could not delete the environment", {
+        description: errorMessage(err),
+      }),
+  })
+  const name = current?.name ?? ""
+  const confirmed = name !== "" && typed.trim() === name
+  return (
+    <SettingRow
+      icon={TrashIcon}
+      title="Delete environment"
+      description={
+        next
+          ? "Removes its computers and their disks, templates, teammates, providers, secrets and rules. It can't be undone."
+          : "The only environment can't be deleted. Create another first."
+      }
+      control={
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={!next || !current}
+          onClick={() => {
+            setTyped("")
+            setOpen(true)
+          }}
+        >
+          Delete…
+        </Button>
+      }
+    >
+      {open && (
+        <Dialog open onOpenChange={(o) => !remove.isPending && setOpen(o)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete {name}?</DialogTitle>
+              <DialogDescription>
+                Studio stops and removes this environment's computers with their
+                disks, and deletes its templates, teammates, chats, providers,
+                secrets and rules. Export it first to keep its configuration.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              className="grid gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (confirmed) remove.mutate({ params: { path: { env } } })
+              }}
+            >
+              <label className="text-xs" htmlFor="delete-environment-name">
+                Type <Ident>{name}</Ident> to confirm
+              </label>
+              <Input
+                id="delete-environment-name"
+                autoComplete="off"
+                value={typed}
+                disabled={remove.isPending}
+                onChange={(e) => setTyped(e.target.value)}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={remove.isPending}
+                  onClick={() => setOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={!confirmed || remove.isPending}
+                >
+                  {remove.isPending && <Spinner />}
+                  Delete environment
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+    </SettingRow>
   )
 }
 

@@ -11387,6 +11387,41 @@
       }
     },
     "/api/environments/{env}": {
+      "delete": {
+        "description": "Deletes the environment with everything in it: its computers with their VMs, disks and checkpoints, templates, teammates, providers, secrets, rules, forges, chats, memory and history. It can't be undone. The last environment can't be deleted, nor one whose computers are busy, or with a template build or an import running: that answers 409.",
+        "operationId": "deleteEnvironment",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete an environment",
+        "tags": [
+          "environments"
+        ]
+      },
       "patch": {
         "description": "Renames the environment. Its ID, and so its sandboxes and links, stay the same.",
         "operationId": "renameEnvironment",

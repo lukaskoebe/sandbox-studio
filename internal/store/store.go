@@ -226,6 +226,40 @@ func (s *Store) RenameEnvironment(ctx context.Context, id, name string) (Environ
 	return s.Environment(ctx, id)
 }
 
+// DeleteEnvironment removes an environment and everything recorded for it. The caller has
+// removed its VMs and template images first. Most tables cascade from the environment, but
+// templates and build jobs restrict it, and sandboxes, teammates, providers, secrets and
+// forges point at each other without cascading, so the rows go in an order that leaves no
+// restricted reference behind, with the other checks deferred to the commit.
+func (s *Store) DeleteEnvironment(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "PRAGMA defer_foreign_keys = ON"); err != nil {
+		return err
+	}
+	for _, q := range []string{
+		"DELETE FROM rebases WHERE environment_id = ?",
+		"DELETE FROM sandboxes WHERE environment_id = ?",
+		"DELETE FROM build_jobs WHERE environment_id = ?",
+		"DELETE FROM templates WHERE environment_id = ?",
+	} {
+		if _, err := tx.ExecContext(ctx, q, id); err != nil {
+			return fmt.Errorf("%s: %w", q, err)
+		}
+	}
+	res, err := tx.ExecContext(ctx, "DELETE FROM environments WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
 // Environments lists environments by creation time.
 func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT "+environmentCols+" FROM environments ORDER BY created_at, name")

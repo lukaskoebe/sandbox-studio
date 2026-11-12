@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -79,6 +80,14 @@ type Server struct {
 	Reach interface {
 		Unreachable(context.Context, store.Rule) string
 	}
+	// Templates removes an environment's template images when it is deleted; nil has none
+	// to remove.
+	Templates interface {
+		DeleteEnvironment(ctx context.Context, env string) error
+	}
+	// deleting runs one environment delete at a time, so two can't both see a second
+	// environment and leave none.
+	deleting sync.Mutex
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -208,6 +217,51 @@ func (s *Server) registerEnvironments(api huma.API) {
 		env, err := s.Store.RenameEnvironment(ctx, in.Env, name)
 		return &struct{ Body store.Environment }{env}, apiError(err)
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "deleteEnvironment", Method: http.MethodDelete, Path: "/api/environments/{env}", Tags: []string{"environments"},
+		Summary: "Delete an environment",
+		Description: "Deletes the environment with everything in it: its computers with their VMs, disks and checkpoints, templates, teammates, providers, " +
+			"secrets, rules, forges, chats, memory and history. It can't be undone. The last environment can't be deleted, nor one whose computers are busy, " +
+			"or with a template build or an import running: that answers 409.",
+		DefaultStatus: http.StatusNoContent,
+	}, func(ctx context.Context, in *struct {
+		Env string `path:"env" doc:"Environment ID"`
+	}) (*struct{}, error) {
+		return nil, s.deleteEnvironment(context.WithoutCancel(ctx), in.Env)
+	})
+}
+
+// deleteEnvironment removes an environment's computers, then its template images and records.
+func (s *Server) deleteEnvironment(ctx context.Context, envID string) error {
+	s.deleting.Lock()
+	defer s.deleting.Unlock()
+	if _, err := s.Store.Environment(ctx, envID); err != nil {
+		return apiError(err)
+	}
+	envs, err := s.Store.Environments(ctx)
+	if err != nil {
+		return err
+	}
+	if len(envs) <= 1 {
+		return huma.Error409Conflict("the last environment can't be deleted; create another first")
+	}
+	err = s.Sandboxes.DeleteEnvironment(ctx, envID, func(ctx context.Context) error {
+		if s.Templates != nil {
+			if err := s.Templates.DeleteEnvironment(ctx, envID); err != nil {
+				return err
+			}
+		}
+		return s.Store.DeleteEnvironment(ctx, envID)
+	})
+	if errors.Is(err, sandboxes.ErrBusy) {
+		return huma.Error409Conflict(err.Error())
+	}
+	if err != nil {
+		return apiError(err)
+	}
+	s.Log.Info("environment deleted", "environment", envID)
+	return nil
 }
 
 // --- sandboxes ------------------------------------------------------------------------

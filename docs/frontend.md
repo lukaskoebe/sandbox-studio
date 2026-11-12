@@ -75,7 +75,7 @@ sideways. Its sections:
 
 | Group | Section | Shows |
 |---|---|---|
-| This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
+| This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, the environment's name, the environment file (export and import), and deleting the environment after its name is typed |
 | | Network (`network`) | an intro, the security level, the network rules (filters in the URL: `q`, `scope`, `action`, `origin`, `unused`; sorted by registrable domain, with a heading for a domain with several rules), the curated list and the tracker list ([network](network.md)) |
 | | Secrets (`secrets`) | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
 | | Shared memory (`memory`) | shared memory: pages, facts, conflicts, search, sessions |

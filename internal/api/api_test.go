@@ -140,3 +140,22 @@ func TestSandboxTeammateMustBeTheEnvironments(t *testing.T) {
 		}
 	}
 }
+
+// The success path needs a sandbox manager; the e2e suite runs it.
+func TestDeleteEnvironmentKeepsTheLastOne(t *testing.T) {
+	h, s := newTestServer(t)
+	only, err := s.Store.CreateEnvironment(context.Background(), "only")
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "http://localhost:7878/api/environments/"
+	if rec := do(h, "DELETE", url+"missing", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("a missing environment: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "DELETE", url+only.ID, ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "last environment") {
+		t.Errorf("the last environment: %d %s", rec.Code, rec.Body)
+	}
+	if _, err := s.Store.Environment(context.Background(), only.ID); err != nil {
+		t.Fatalf("the last environment went: %v", err)
+	}
+}
