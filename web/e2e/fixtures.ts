@@ -111,7 +111,11 @@ export class Api {
   async guestReady(id: string) {
     await expect
       .poll(async () => {
-        const s = await this.guest(id)
+        // A sandbox just created may not have its fake guest yet: 404 until it does.
+        const res = await this.request.get(`/api/e2e/sandboxes/${id}`)
+        if (res.status() === 404) return false
+        expect(res.ok(), await res.text()).toBe(true)
+        const s = (await res.json()) as GuestState
         return s.connected && s.ca
       })
       .toBe(true)

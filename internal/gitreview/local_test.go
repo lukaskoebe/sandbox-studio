@@ -146,8 +146,12 @@ func TestLocalForgeEndToEnd(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(proj, "agent.txt")); err != nil || strings.ReplaceAll(string(b), "\r\n", "\n") != "from the agent\n" {
 		t.Fatalf("the working copy's agent.txt = %q %v", b, err)
 	}
-	if out := must(run(proj, "status", "--porcelain")); out != "" {
-		t.Fatalf("the working copy has changes after the push: %s", out)
+	// Status as the user's git sees it, with the config Studio's push ran with: Windows' system
+	// config sets core.autocrlf, which the test's own git leaves out.
+	status := exec.Command("git", "-C", proj, "status", "--porcelain")
+	status.Env = gitEnv("")
+	if out, err := status.CombinedOutput(); err != nil || len(out) != 0 {
+		t.Fatalf("the working copy has changes after the push: %s %v", out, err)
 	}
 
 	// With changes of its own in the copy, git refuses to update it, and nothing is lost.

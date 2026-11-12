@@ -689,6 +689,8 @@ test("a push to a checked-out branch of a local repository updates its files", a
     })
     await expect(update).toBeChecked()
     await expect(sheet).toContainText("main is checked out in the repository")
+    // The diff is the last part of the sheet to load; once it shows, the sheet has settled.
+    await expect(sheet).toContainText("from the sandbox")
     await sheet.getByRole("button", { name: "Approve and push" }).click()
     await expect(sheet).toBeHidden()
 
