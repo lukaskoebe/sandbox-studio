@@ -587,7 +587,8 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go agentMem.RunDreams(ctx) // nightly, after enough new facts, and interrupted runs
 
 	mux := http.NewServeMux()
-	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Templates: registry, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Records: records, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
+	previewLogins := preview.NewLogins()
+	apiServer := &api.Server{PreviewLogins: previewLogins, Store: st, Sandboxes: mgr, Builds: builds, Templates: registry, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Records: records, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
 		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins, Reach: gw, HostGit: api.HostGitIdentity,
 		HostLogins: hostLogins(p.Data), ModelsClient: modelsClient()}
 	// Heartbeats give teammates with open tasks their check-ins, and run scheduled tasks at their
@@ -600,7 +601,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
 	registerControl(mux, st, engine, gw)
-	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mgr.CountPreview, mux)))
+	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mgr.CountPreview, previewLogins, mux)))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up
 	// the shutdown.

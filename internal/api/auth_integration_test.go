@@ -34,7 +34,7 @@ func TestAuthenticatedPreviewFlow(t *testing.T) {
 		}
 		return (&net.Dialer{}).DialContext(ctx, "tcp", strings.TrimPrefix(guest.URL, "http://"))
 	}
-	h := Guard(s.Auth.Middleware(preview.Route(dial, nil, apiHandler)))
+	h := Guard(s.Auth.Middleware(preview.Route(dial, nil, nil, apiHandler)))
 	token := s.Auth.IssueLogin()
 	body, _ := json.Marshal(map[string]string{"token": token})
 	request := func(method, target, body, origin string, cookies ...*http.Cookie) *httptest.ResponseRecorder {

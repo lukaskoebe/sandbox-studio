@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
@@ -57,7 +58,7 @@ func TestRoute(t *testing.T) {
 	count := func(id string, port, status int) {
 		counted = append(counted, fmt.Sprintf("%s:%d %d", id, port, status))
 	}
-	h := Route(dial, count, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := Route(dial, count, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "studio")
 	}))
 
@@ -85,7 +86,7 @@ func TestRoute(t *testing.T) {
 	}
 
 	// A port nothing answers on is a 502, which Home's lines count as an error.
-	h = Route(func(context.Context, string, int) (net.Conn, error) { return nil, io.EOF }, count, http.NotFoundHandler())
+	h = Route(func(context.Context, string, int) (net.Conn, error) { return nil, io.EOF }, count, nil, http.NotFoundHandler())
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "http://8080-sb1.localhost:7878/", nil))
 	if fmt.Sprint(counted) != "[sb1:5173 200 sb1:8080 502]" {
 		t.Fatalf("counted %v", counted)
@@ -108,7 +109,7 @@ func TestRouteCookieBoundary(t *testing.T) {
 
 	h := Route(func(ctx context.Context, _ string, _ int) (net.Conn, error) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
-	}, nil, http.NotFoundHandler())
+	}, nil, nil, http.NotFoundHandler())
 	req := httptest.NewRequest("GET", "http://3000-sb1.localhost:7878/", nil)
 	req.Header.Set("Cookie", webauth.SessionCookie+"=studio; app=kept; "+webauth.PreviewCookie+"=ticket; "+webauth.PreviewFrameCookie+"=ticket")
 	rec := httptest.NewRecorder()
@@ -151,7 +152,7 @@ func TestRouteFiltersUpgradeResponseCookies(t *testing.T) {
 	counted := make(chan int, 1)
 	proxy := httptest.NewServer(Route(func(ctx context.Context, _ string, _ int) (net.Conn, error) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
-	}, func(_ string, _, status int) { counted <- status }, http.NotFoundHandler()))
+	}, func(_ string, _, status int) { counted <- status }, nil, http.NotFoundHandler()))
 	defer proxy.Close()
 	_, studioPort, err := net.SplitHostPort(proxy.Listener.Addr().String())
 	if err != nil {
@@ -218,7 +219,7 @@ func TestRouteGuardsServiceWorkers(t *testing.T) {
 	dial := func(ctx context.Context, id string, port int) (net.Conn, error) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
 	}
-	h := Route(dial, nil, http.NotFoundHandler())
+	h := Route(dial, nil, nil, http.NotFoundHandler())
 
 	req := httptest.NewRequest("GET", "http://5173-sb1.localhost:7878/sw.js", nil)
 	req.Header.Set("Service-Worker", "script")
@@ -237,5 +238,58 @@ func TestRouteGuardsServiceWorkers(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if body := rec.Body.String(); body != "self.v=1" {
 		t.Fatalf("plain script: %q", body)
+	}
+}
+
+// A framed page's basic auth challenge asks Studio instead of the browser; the sign-in given
+// there goes with each request until the app refuses it. A tab of its own keeps the challenge.
+func TestRouteBasicAuth(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if u, p, _ := r.BasicAuth(); u != "dev" || p != "secret" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Stag</script>ing", charset="UTF-8"`)
+			w.Header().Set("X-Frame-Options", "DENY")
+			http.Error(w, "no", http.StatusUnauthorized)
+			return
+		}
+		_, _ = io.WriteString(w, "in")
+	}))
+	defer upstream.Close()
+	dial := func(ctx context.Context, id string, port int) (net.Conn, error) {
+		return net.Dial("tcp", upstream.Listener.Addr().String())
+	}
+	logins := NewLogins()
+	h := Route(dial, nil, logins, http.NotFoundHandler())
+	get := func(dest string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "http://5173-sb1.localhost:7878/", nil)
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Dest", dest)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := get("iframe")
+	body := rec.Body.String()
+	if rec.Code != http.StatusUnauthorized || rec.Header().Get("WWW-Authenticate") != "" || rec.Header().Get("X-Frame-Options") != "" ||
+		!strings.Contains(body, `"realm":"Stag\u003c/script\u003eing"`) || !strings.Contains(body, `"failed":false`) {
+		t.Fatalf("framed challenge: %d %v %s", rec.Code, rec.Header(), body)
+	}
+	if rec := get("document"); rec.Header().Get("WWW-Authenticate") == "" {
+		t.Fatalf("a tab of its own lost the challenge: %v", rec.Header())
+	}
+
+	logins.Set("sb1", 5173, "dev", "secret")
+	if rec := get("iframe"); rec.Code != http.StatusOK || rec.Body.String() != "in" {
+		t.Fatalf("signed in: %d %s", rec.Code, rec.Body)
+	}
+	logins.Set("sb1", 5173, "dev", "wrong")
+	if rec := get("iframe"); !strings.Contains(rec.Body.String(), `"failed":true`) {
+		t.Fatalf("refused sign-in: %s", rec.Body)
+	}
+	if _, ok := logins.get("sb1", 5173); ok {
+		t.Fatal("a refused sign-in was kept")
+	}
+	if c, ok := basicRealm([]string{`Bearer realm="x"`, `basic realm=staging`}); !ok || c != "staging" {
+		t.Fatalf("realm %q %v", c, ok)
 	}
 }

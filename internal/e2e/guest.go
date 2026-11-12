@@ -519,7 +519,7 @@ const (
 )
 
 // serveTCP answers HTTP on the listening ports, as a dev server would: plain text, except for
-// /pwa and its service worker.
+// /pwa and its service worker, and /private, which asks for HTTP basic auth as e2e/e2e.
 func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 	g.mu.Lock()
 	listening := slices.Contains(g.ports, port)
@@ -534,6 +534,16 @@ func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 		}
 		io.Copy(io.Discard, req.Body)
 		body, typ := fmt.Sprintf("Preview of sandbox %s on port %d, path %s\n", g.id, port, req.URL.Path), "text/plain"
+		if strings.HasPrefix(req.URL.Path, "/private") {
+			if user, pass, _ := req.BasicAuth(); user != "e2e" || pass != "e2e" {
+				body := "who are you?"
+				if _, err := fmt.Fprintf(st, "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Staging\"\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(body), body); err != nil {
+					return err
+				}
+				continue
+			}
+			body = "Signed in to " + req.URL.Path + "\n"
+		}
 		switch req.URL.Path {
 		case "/pwa":
 			body, typ = pwaPage, "text/html"

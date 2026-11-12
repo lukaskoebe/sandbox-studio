@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A preview behind HTTP basic auth asks for the sign-in in Studio's own dialog over the preview
+  instead of the browser's over all of Studio, then opens the page again. Studio keeps the
+  sign-in in memory until it stops and sends it to that preview only.
 - **Files** browses the whole computer: the path's root goes to `/workspace`, `/tmp` or `/`,
   and **Go to a path** (or a click beside the path) opens any folder or file typed. A folder
   the sandbox's user can't read isn't listed. `/` goes to Go to file also in the Studio app,

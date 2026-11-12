@@ -262,3 +262,49 @@ test("previews: the screen offers them once Settings turns them on", async ({
     await api.json("PUT", "/api/system/previews", { enabled: false })
   }
 })
+
+// An app behind HTTP basic auth asks in Studio's own dialog over the preview, not the browser's
+// over all of Studio, and opens the page it was on once signed in.
+test("previews: a basic auth sign-in is asked over the preview", async ({
+  page,
+  api,
+  env,
+}) => {
+  const previews = await api.json<{ enabled: boolean }>(
+    "GET",
+    "/api/system/previews"
+  )
+  await api.json("PUT", "/api/system/previews", { enabled: true })
+  try {
+    const id = await api.createSandbox(sandboxName("basic"))
+    await api.guestReady(id)
+    let native = 0
+    page.on("dialog", () => native++)
+    await page.goto(`/e/${env}/sandboxes/${id}?tab=preview`)
+    const element = page.locator('iframe[title="Preview of port 3000"]')
+    await expect(
+      element.contentFrame().getByText(/Preview of sandbox/)
+    ).toBeVisible()
+    const frame = (await (await element.elementHandle()).contentFrame())!
+    await frame.goto(`${new URL(frame.url()).origin}/private/area?x=1`)
+
+    const dialog = page.getByRole("dialog", { name: "Sign in to port 3000" })
+    await expect(dialog).toContainText("“Staging”")
+    await dialog.getByLabel("Username").fill("e2e")
+    await dialog.getByLabel("Password").fill("wrong")
+    await dialog.getByRole("button", { name: "Sign in" }).click()
+    await expect(dialog).toContainText("It didn’t take that sign-in")
+    await expect(dialog.getByLabel("Username")).toHaveValue("e2e")
+    await dialog.getByLabel("Password").fill("e2e")
+    await dialog.getByRole("button", { name: "Sign in" }).click()
+    await expect(dialog).toBeHidden()
+    await expect(
+      element.contentFrame().getByText("Signed in to /private/area")
+    ).toBeVisible()
+    expect(native).toBe(0)
+  } finally {
+    await api.json("PUT", "/api/system/previews", {
+      enabled: previews!.enabled,
+    })
+  }
+})

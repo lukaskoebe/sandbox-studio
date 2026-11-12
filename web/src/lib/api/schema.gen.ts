@@ -1967,6 +1967,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/previews/{port}/basic-auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sign in to a preview that asks for HTTP basic auth: Studio adds the sign-in to the preview's requests until it stops, or until the app refuses it */
+        put: operations["signInPreview"];
+        post?: never;
+        /** Forget a preview's basic auth sign-in */
+        delete: operations["signOutPreview"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/previews/{port}/open": {
         parameters: {
             query?: never;
@@ -6578,6 +6596,10 @@ export interface components {
             realm?: string;
             /** @description The host refused the login Studio sent */
             refused: boolean;
+        };
+        SignInPreviewRequest: {
+            password: string;
+            username: string;
         };
         Source: {
             authorTeammate?: string;
@@ -12154,6 +12176,78 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PreviewPort"][] | null;
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    signInPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+                /** @description Preview port */
+                port: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    signOutPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+                /** @description Preview port */
+                port: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

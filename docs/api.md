@@ -69,6 +69,14 @@ from other local users and from web pages:
   an empty page instead of the preview. An app left open keeps working past the eight hours,
   its service worker's fetches included, without being reloaded. The panel checks every
   minute, which catches up after the computer slept, and when its tab shows again.
+- An app behind HTTP basic auth: a framed page's challenge (`401` with a `Basic`
+  `WWW-Authenticate`, `Sec-Fetch-Dest: iframe`) reaches the browser as a page without the
+  challenge, which posts its realm and path to the frame's parent, so the browser shows no
+  dialog over all of Studio (`internal/preview/basicauth.go`). The panel asks in its own dialog
+  over the preview, sends the sign-in with `PUT …/previews/{port}/basic-auth`, and opens the
+  page again. Studio keeps it in memory only, until it stops, and adds it to that preview's
+  requests that carry no `Authorization` of their own; one the app refuses is dropped and asked
+  again (`DELETE` forgets it). A preview in a tab of its own keeps the browser's dialog.
 - The Vite dev server (`pnpm dev`, `pnpm dev:lan`) proxies `/api` with Studio's origin and
   goes through the same login exchange; it gets no key or bypass.
 

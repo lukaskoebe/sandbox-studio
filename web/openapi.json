@@ -9582,6 +9582,24 @@
         ],
         "type": "object"
       },
+      "SignInPreviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
       "Source": {
         "additionalProperties": false,
         "properties": {
@@ -19319,6 +19337,132 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "previews"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/previews/{port}/basic-auth": {
+      "delete": {
+        "operationId": "signOutPreview",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Preview port",
+            "in": "path",
+            "name": "port",
+            "required": true,
+            "schema": {
+              "description": "Preview port",
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Forget a preview's basic auth sign-in",
+        "tags": [
+          "previews"
+        ]
+      },
+      "put": {
+        "operationId": "signInPreview",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Preview port",
+            "in": "path",
+            "name": "port",
+            "required": true,
+            "schema": {
+              "description": "Preview port",
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sign in to a preview that asks for HTTP basic auth: Studio adds the sign-in to the preview's requests until it stops, or until the app refuses it",
         "tags": [
           "previews"
         ]

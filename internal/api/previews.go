@@ -100,4 +100,60 @@ func (s *Server) registerPreviews(api huma.API) {
 		u.RawQuery = query.Encode()
 		return &struct{ Body previewOpenBody }{Body: previewOpenBody{URL: u.String()}}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "signInPreview", Method: http.MethodPut,
+		Path:    "/api/environments/{env}/sandboxes/{id}/previews/{port}/basic-auth",
+		Tags:    []string{"previews"},
+		Summary: "Sign in to a preview that asks for HTTP basic auth: Studio adds the sign-in to the preview's requests until it stops, or until the app refuses it",
+	}, func(ctx context.Context, in *struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Port int    `path:"port" doc:"Preview port" minimum:"1" maximum:"65535"`
+		Body struct {
+			Username string `json:"username" maxLength:"1024"`
+			Password string `json:"password" maxLength:"4096"`
+		}
+	}) (*struct{}, error) {
+		if err := s.previewLoginsFor(ctx, previewPort{in.Env, in.ID, in.Port}); err != nil {
+			return nil, err
+		}
+		if strings.Contains(in.Body.Username, ":") {
+			return nil, huma.Error422UnprocessableEntity("a basic auth username can't hold a colon")
+		}
+		s.PreviewLogins.Set(in.ID, in.Port, in.Body.Username, in.Body.Password)
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "signOutPreview", Method: http.MethodDelete,
+		Path:    "/api/environments/{env}/sandboxes/{id}/previews/{port}/basic-auth",
+		Tags:    []string{"previews"},
+		Summary: "Forget a preview's basic auth sign-in",
+	}, func(ctx context.Context, in *previewPort) (*struct{}, error) {
+		if err := s.previewLoginsFor(ctx, *in); err != nil {
+			return nil, err
+		}
+		s.PreviewLogins.Forget(in.ID, in.Port)
+		return nil, nil
+	})
+}
+
+// previewPort names a sandbox's preview.
+type previewPort struct {
+	Env  string `path:"env" doc:"Environment ID"`
+	ID   string `path:"id" doc:"Sandbox ID"`
+	Port int    `path:"port" doc:"Preview port" minimum:"1" maximum:"65535"`
+}
+
+// previewLoginsFor checks that the preview's sandbox is the environment's and that Studio keeps
+// sign-ins.
+func (s *Server) previewLoginsFor(ctx context.Context, p previewPort) error {
+	if _, err := s.publicSandbox(ctx, p.Env, p.ID); err != nil {
+		return apiError(err)
+	}
+	if s.PreviewLogins == nil {
+		return huma.Error503ServiceUnavailable("preview sign-ins are unavailable")
+	}
+	return nil
 }

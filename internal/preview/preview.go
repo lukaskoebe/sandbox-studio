@@ -63,8 +63,8 @@ func keyed(hostport string) bool {
 type CountFunc func(sandboxID string, port, status int)
 
 // Route sends preview hosts to a proxy and everything else to next. count, if set, is told
-// of each request a preview answered.
-func Route(dial DialFunc, count CountFunc, next http.Handler) http.Handler {
+// of each request a preview answered. logins are the basic auth sign-ins given in Studio.
+func Route(dial DialFunc, count CountFunc, logins *Logins, next http.Handler) http.Handler {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			id, port, _ := Parse(pr.In.Host)
@@ -78,10 +78,26 @@ func Route(dial DialFunc, count CountFunc, next http.Handler) http.Handler {
 				pr.Out.Header.Del("Accept-Encoding")
 			}
 			stripStudioCookies(pr.Out.Header)
+			if c, ok := logins.get(id, port); ok && pr.Out.Header.Get("Authorization") == "" {
+				pr.Out.SetBasicAuth(c.user, c.pass)
+			}
 			pr.SetXForwarded()
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			filterGuestCookies(resp.Header)
+			if resp.StatusCode == http.StatusUnauthorized {
+				// The sign-in given in Studio was refused: Studio asks again.
+				id, port, _ := Parse(resp.Request.Host)
+				c, ok := logins.get(id, port)
+				user, pass, sent := resp.Request.BasicAuth()
+				refused := ok && sent && (login{user, pass}) == c
+				if refused {
+					logins.forgetIf(id, port, c)
+				}
+				if askInStudio(resp, refused) {
+					return nil
+				}
+			}
 			if keyed(resp.Request.Host) && resp.Header.Get("Referrer-Policy") == "" {
 				// The host is the preview's key: it goes to no other site in a Referer.
 				resp.Header.Set("Referrer-Policy", "same-origin")

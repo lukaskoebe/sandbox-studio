@@ -29,6 +29,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/preview"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
@@ -52,11 +53,13 @@ type Server struct {
 	Records   *gateway.Recorder // recordings of intercepted traffic; nil answers 503
 	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
 	Auth      *webauth.Auth
-	Memory    *memory.Service
-	AgentMem  *agentmem.Service // memory in agent sessions; its endpoints answer 503 without it
-	Log       *slog.Logger
-	Addr      string       // the address Studio listens on, used to build preview URLs
-	Guest     SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
+	// PreviewLogins are the basic auth sign-ins given for previews; nil answers 503.
+	PreviewLogins *preview.Logins
+	Memory        *memory.Service
+	AgentMem      *agentmem.Service // memory in agent sessions; its endpoints answer 503 without it
+	Log           *slog.Logger
+	Addr          string       // the address Studio listens on, used to build preview URLs
+	Guest         SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
 	// Integrations settle the approvals they raise; Git is the git review remote among them.
 	Integrations integrations.Set
 	Git          *gitreview.Service

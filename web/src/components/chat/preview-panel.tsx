@@ -4,6 +4,7 @@ import {
   BroomIcon,
   ArrowSquareOutIcon,
   BroadcastIcon,
+  LockKeyIcon,
 } from "@phosphor-icons/react"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
@@ -22,8 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
-import { $api, errorMessage } from "@/lib/api/client"
+import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import {
   onStudioMachine,
@@ -232,13 +235,39 @@ function PreviewFrame({
   // When the frame last logged in, and the hidden frame of a renewal while it loads.
   const loggedIn = useRef(0)
   const [renewal, setRenewal] = useState<string>()
+  const frame = useRef<HTMLIFrameElement>(null)
+  // The app's basic auth challenge, which Studio's proxy hands to this frame, and the page to
+  // open again once signed in.
+  const [asked, setAsked] = useState<BasicAuthAsk>()
+  const [again, setAgain] = useState<{ n: number; path?: string }>({ n: 0 })
+  // The username last signed in with, offered again when the app refuses the sign-in.
+  const [user, setUser] = useState("")
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const m = e.data as (Partial<BasicAuthAsk> & { type?: unknown }) | null
+      if (
+        e.source !== frame.current?.contentWindow ||
+        m?.type !== "studio-preview-basic-auth"
+      )
+        return
+      setAsked({
+        realm: typeof m.realm === "string" ? m.realm : "",
+        failed: m.failed === true,
+        path: typeof m.path === "string" ? m.path : undefined,
+      })
+    }
+    window.addEventListener("message", onMessage)
+    return () => window.removeEventListener("message", onMessage)
+  }, [])
 
   // Every load needs a new one-time login URL.
   useEffect(() => {
     let cancelled = false
     previewLoginURL(env, sandboxId, port, {
       embed: true,
-      fresh: reloadKey.endsWith(":fresh"),
+      fresh: again.n === 0 && reloadKey.endsWith(":fresh"),
+      path: again.path,
     }).then(
       (url) => {
         if (cancelled) return
@@ -253,7 +282,7 @@ function PreviewFrame({
     return () => {
       cancelled = true
     }
-  }, [env, sandboxId, port, reloadKey])
+  }, [env, sandboxId, port, reloadKey, again])
 
   // The preview's cookies last eight hours from its login (docs/api.md). Once the login is an
   // hour old, a hidden frame logs in again, so an app left open keeps working, its service
@@ -294,13 +323,32 @@ function PreviewFrame({
   if (!src) return <Spinner className="m-auto" />
   return (
     <>
-      <iframe
-        key={src}
-        src={src}
-        title={`Preview of port ${port}`}
-        referrerPolicy="no-referrer"
-        className="min-h-80 w-full flex-1 rounded-md bg-white ring-1 ring-foreground/10"
-      />
+      <div className="relative flex min-h-80 flex-1 flex-col">
+        <iframe
+          ref={frame}
+          key={src}
+          src={src}
+          title={`Preview of port ${port}`}
+          referrerPolicy="no-referrer"
+          className="min-h-80 w-full flex-1 rounded-md bg-white ring-1 ring-foreground/10"
+        />
+        {asked && (
+          <BasicAuthDialog
+            env={env}
+            sandboxId={sandboxId}
+            port={port}
+            asked={asked}
+            user={user}
+            onCancel={() => setAsked(undefined)}
+            onSignedIn={(name) => {
+              const path = asked.path
+              setUser(name)
+              setAsked(undefined)
+              setAgain((a) => ({ n: a.n + 1, path }))
+            }}
+          />
+        )}
+      </div>
       {renewal && (
         <iframe
           hidden
@@ -315,5 +363,129 @@ function PreviewFrame({
         Studio: use Open in new tab.
       </p>
     </>
+  )
+}
+
+type BasicAuthAsk = { realm: string; failed: boolean; path?: string }
+
+/**
+ * Studio's own sign-in for a preview that asks for HTTP basic auth, over the preview alone, in
+ * place of the browser's dialog over all of Studio. Studio keeps the sign-in until it stops and
+ * sends it with this preview's requests only.
+ */
+function BasicAuthDialog({
+  env,
+  sandboxId,
+  port,
+  asked,
+  user,
+  onCancel,
+  onSignedIn,
+}: {
+  env: string
+  sandboxId: string
+  port: number
+  asked: BasicAuthAsk
+  /** The username to start from. */
+  user: string
+  onCancel: () => void
+  onSignedIn: (username: string) => void
+}) {
+  const [username, setUsername] = useState(user)
+  const [password, setPassword] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+  const submit = async () => {
+    setBusy(true)
+    setError(undefined)
+    const res = await fetchClient.PUT(
+      "/api/environments/{env}/sandboxes/{id}/previews/{port}/basic-auth",
+      {
+        params: { path: { env, id: sandboxId, port } },
+        body: { username, password },
+      }
+    )
+    setBusy(false)
+    if (res.error) setError(errorMessage(res.error))
+    else onSignedIn(username)
+  }
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center rounded-md bg-background/70 p-4 backdrop-blur-[2px]">
+      <form
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="preview-sign-in-title"
+        className="grid w-full max-w-80 gap-3 rounded-lg bg-popover p-4 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void submit()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onCancel()
+        }}
+      >
+        <div className="grid gap-1">
+          <h3
+            id="preview-sign-in-title"
+            className="flex items-center gap-1.5 font-heading text-sm font-medium"
+          >
+            <LockKeyIcon className="size-4 text-muted-foreground" />
+            Sign in to port {port}
+          </h3>
+          <p className="text-caption text-muted-foreground">
+            {asked.realm ? (
+              <>
+                The app asks for a username and password for{" "}
+                <span className="font-medium text-foreground">
+                  “{asked.realm}”
+                </span>
+                .
+              </>
+            ) : (
+              "The app asks for a username and password."
+            )}
+          </p>
+          {asked.failed && (
+            <p className="text-caption text-destructive">
+              It didn’t take that sign-in. Try again.
+            </p>
+          )}
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="preview-sign-in-user">Username</Label>
+          <Input
+            id="preview-sign-in-user"
+            autoFocus={!user}
+            autoComplete="off"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="preview-sign-in-password">Password</Label>
+          <Input
+            id="preview-sign-in-password"
+            autoFocus={!!user}
+            type="password"
+            autoComplete="off"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {error && <p className="text-caption text-destructive">{error}</p>}
+        <p className="text-caption text-muted-foreground">
+          Studio sends it only to this preview, and forgets it when it stops.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={busy || !username}>
+            {busy && <Spinner />}
+            Sign in
+          </Button>
+        </div>
+      </form>
+    </div>
   )
 }
