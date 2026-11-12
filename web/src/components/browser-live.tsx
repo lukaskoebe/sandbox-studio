@@ -372,7 +372,10 @@ export function BrowserLive({
         !stopped && activeSocket === ws && socket.current === ws
       ws.onopen = () => {
         if (!isCurrent()) return
-        ws.send(JSON.stringify({ type: "config", maxFps: 10 }))
+        // One frame in flight: agent-browser sends the next only once this view acks the last
+        // it decoded, so frames never queue on the channel and a frame shows the page as it is
+        // now, at as many frames a second as the channel carries, up to 30.
+        ws.send(JSON.stringify({ type: "config", maxFps: 30, pacing: "ack" }))
       }
       ws.onmessage = (ev) => {
         if (!isCurrent()) return
@@ -403,8 +406,12 @@ export function BrowserLive({
         const frameNumber = ++frameSerial
         const framePageURL = activePageURLRef.current
         const seq = parsed.seq
-        if (typeof seq === "number")
-          ws.send(JSON.stringify({ type: "ack", seq }))
+        // Acked once decoded, not on arrival: with ack pacing that is what holds the next
+        // frame back until this one can be shown.
+        const ack = () => {
+          if (typeof seq === "number" && isCurrent())
+            ws.send(JSON.stringify({ type: "ack", seq }))
+        }
         // The metadata is applied when this frame is painted, not when it arrives.
         const metadataValue = parsed.metadata
         const img = new Image()
@@ -444,7 +451,9 @@ export function BrowserLive({
           setHasRenderedFrame(true)
           setState("live")
         }
+        img.onerror = ack
         img.onload = () => {
+          ack()
           if (!frozenRef.current || !drawnFrame.current) return paint()
           heldFrame.current = paint
           heldView.current = {
@@ -509,7 +518,7 @@ export function BrowserLive({
     setKeyboardShown(false)
   }, [controlsOpen, automaticKeyboardControls, clearMobileBuffer])
 
-  const send = (msg: object) => {
+  const sendNow = (msg: object) => {
     const ws = socket.current
     if (
       !canDrive ||
@@ -519,6 +528,40 @@ export function BrowserLive({
       return false
     ws.send(JSON.stringify(msg))
     return true
+  }
+  // Moves and wheel turns go out at most once an animation frame: the newest move, and the
+  // wheel's deltas added up, so a fast drag or a trackpad's burst of wheel events doesn't fill
+  // the channel, and the last move is never dropped. Anything else sends them first, so the
+  // page gets the events in order.
+  const coalesced = useRef<{
+    move?: Record<string, unknown>
+    wheel?: Record<string, unknown>
+    frame?: number
+  }>({})
+  const flushInput = () => {
+    const p = coalesced.current
+    if (p.frame !== undefined) cancelAnimationFrame(p.frame)
+    const { move, wheel } = p
+    coalesced.current = {}
+    if (move) sendNow(move)
+    if (wheel) sendNow(wheel)
+  }
+  const queueInput = (kind: "move" | "wheel", msg: Record<string, unknown>) => {
+    const p = coalesced.current
+    const prev = p[kind]
+    if (kind === "wheel" && prev)
+      msg = {
+        ...msg,
+        deltaX: (prev.deltaX as number) + (msg.deltaX as number),
+        deltaY: (prev.deltaY as number) + (msg.deltaY as number),
+      }
+    p[kind] = msg
+    if (p.frame === undefined) p.frame = requestAnimationFrame(flushInput)
+    return true
+  }
+  const send = (msg: object) => {
+    flushInput()
+    return sendNow(msg)
   }
   // CDP modifier bits: Alt 1, Control 2, Meta 4, Shift 8.
   const modifiers = (e: React.MouseEvent | React.KeyboardEvent) =>
@@ -546,18 +589,19 @@ export function BrowserLive({
     extra = {}
   ) => {
     const at = pagePoint(e, clamp)
-    return (
-      !!at &&
-      send({
-        type: "input_mouse",
-        eventType,
-        ...at,
-        button,
-        clickCount: eventType === "mouseMoved" ? 0 : Math.max(1, e.detail),
-        modifiers: modifiers(e),
-        ...extra,
-      })
-    )
+    if (!at || !canDrive) return false
+    const msg = {
+      type: "input_mouse",
+      eventType,
+      ...at,
+      button,
+      clickCount: eventType === "mouseMoved" ? 0 : Math.max(1, e.detail),
+      modifiers: modifiers(e),
+      ...extra,
+    }
+    if (eventType === "mouseMoved") return queueInput("move", msg)
+    if (eventType === "mouseWheel") return queueInput("wheel", msg)
+    return send(msg)
   }
   // Ends a press that was sent. Its release clamps to the frame, so the page is not left pressed
   // when the pointer has been dragged out of the canvas. Returns whether the release was sent.
@@ -586,7 +630,6 @@ export function BrowserLive({
       () => capture.current.confirm(id, false)
     )
   }
-  const lastMove = useRef(0)
   const keyboardEvent = (
     eventType: "keyDown" | "keyUp",
     key: string,
@@ -866,8 +909,8 @@ export function BrowserLive({
       nativeEvent.inputType === "deleteContentBackward" ||
       nativeEvent.inputType === "deleteContentForward"
     ) {
-      const pendingInput = pendingDeletionInput.current > 0
-      if (pendingInput) {
+      const expected = pendingDeletionInput.current > 0
+      if (expected) {
         pendingDeletionInput.current -= 1
         if (!pendingDeletionInput.current && deletionInputTimer.current) {
           clearTimeout(deletionInputTimer.current)
@@ -876,7 +919,7 @@ export function BrowserLive({
       }
       const pairedWithKeydown = pendingDeletionKeydown.current
       pendingDeletionKeydown.current = false
-      if (!pendingInput && !pairedWithKeydown)
+      if (!expected && !pairedWithKeydown)
         sendDeletion(nativeEvent.inputType === "deleteContentBackward")
       primeMobileInput(input)
       return
@@ -885,8 +928,8 @@ export function BrowserLive({
       nativeEvent.inputType === "insertLineBreak" ||
       nativeEvent.inputType === "insertParagraph"
     ) {
-      const pendingInput = pendingEnterInput.current > 0
-      if (pendingInput) {
+      const expected = pendingEnterInput.current > 0
+      if (expected) {
         pendingEnterInput.current -= 1
         if (!pendingEnterInput.current && enterInputTimer.current) {
           clearTimeout(enterInputTimer.current)
@@ -895,7 +938,7 @@ export function BrowserLive({
       }
       const pairedWithKeydown = pendingEnterKeydown.current
       pendingEnterKeydown.current = false
-      if (!pendingInput && !pairedWithKeydown) sendEnter()
+      if (!expected && !pairedWithKeydown) sendEnter()
       primeMobileInput(input)
       return
     }
@@ -1045,9 +1088,6 @@ export function BrowserLive({
           }}
           onPointerMove={(e) => {
             if (!e.isPrimary) return
-            const now = performance.now()
-            if (now - lastMove.current < 50) return
-            lastMove.current = now
             const held = heldButton.current
             mouse("mouseMoved", e, held ?? "none", held !== undefined)
           }}

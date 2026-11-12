@@ -13,6 +13,10 @@
   agent loops and greps in its shell, which came out about 3.5× cheaper in a test. The
   managed instructions gain a **Studio's command** section saying what the browser and the
   pull request commands do, and the browser's messages name the commands.
+- Taking over the browser feels smoother: the live view asks for up to 30 frames a second, one
+  in flight at a time, so a slow link drops stale frames instead of queueing them, and it
+  acknowledges a frame once it is drawn. Mouse moves and wheel turns go once per screen
+  refresh, the wheel summed, instead of every move up to 20 a second.
 - `~/forge` holds the pull requests of a sandbox's repositories as read-only files, on GitHub,
   GitLab, Forgejo, Gitea and Codeberg: `pulls.md` per repository with the open ones and those
   closed in the last week, and a folder per pull request of the sandbox's own branches or one
