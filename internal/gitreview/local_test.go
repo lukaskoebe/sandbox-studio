@@ -142,7 +142,8 @@ func TestLocalForgeEndToEnd(t *testing.T) {
 	if err != nil || p.State != store.PushPushed || !strings.Contains(p.Result, "updated the files checked out") {
 		t.Fatalf("push again: %+v %v", p, err)
 	}
-	if b, err := os.ReadFile(filepath.Join(proj, "agent.txt")); err != nil || string(b) != "from the agent\n" {
+	// Git checks the file out with the working copy's line endings: CRLF on Windows.
+	if b, err := os.ReadFile(filepath.Join(proj, "agent.txt")); err != nil || strings.ReplaceAll(string(b), "\r\n", "\n") != "from the agent\n" {
 		t.Fatalf("the working copy's agent.txt = %q %v", b, err)
 	}
 	if out := must(run(proj, "status", "--porcelain")); out != "" {
