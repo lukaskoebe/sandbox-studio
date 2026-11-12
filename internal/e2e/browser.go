@@ -717,16 +717,20 @@ func (b *browserVM) screencast(ctx context.Context, c *websocket.Conn, t *tab) {
 			}
 			b.mu.Lock()
 			var m struct {
-				Type string `json:"type"`
+				Type   string `json:"type"`
+				MaxFPS *int   `json:"maxFps"`
+				Pacing string `json:"pacing"`
 			}
 			json.Unmarshal(data, &m)
+			// A config without fields is Studio's nudge, which agent-browser ignores.
+			config := m.Type == "config" && (m.MaxFPS != nil || m.Pacing != "")
 			if strings.HasPrefix(m.Type, "input_") {
 				b.inputs = append(b.inputs, json.RawMessage(bytes.Clone(data)))
 				if len(b.inputs) > maxInputs {
 					b.inputs = b.inputs[len(b.inputs)-maxInputs:]
 				}
 			}
-			if t.input(data) || m.Type == "config" {
+			if t.input(data) || config {
 				t.changed()
 			}
 			b.mu.Unlock()

@@ -16,10 +16,12 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
-// The live view relays frames from the VM's stream and input to it only while the user drives.
+// The live view relays frames from the VM's stream and input to it only while the user drives,
+// and nudges the stream all along.
 func TestRelay(t *testing.T) {
 	f := newFixture(t)
 	got := make(chan string, 16)
+	nudged := make(chan struct{}, 1)
 	guest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Origin") != "" {
 			t.Error("the relay sent an Origin header")
@@ -43,6 +45,13 @@ func TestRelay(t *testing.T) {
 			_, data, err := c.Read(r.Context())
 			if err != nil {
 				return
+			}
+			if string(data) == string(nudgeMessage) {
+				select {
+				case nudged <- struct{}{}:
+				default:
+				}
+				continue
 			}
 			got <- string(data)
 		}
@@ -116,6 +125,11 @@ func TestRelay(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("input did not pass while the user drives")
+	}
+	select {
+	case <-nudged:
+	case <-ctx.Done():
+		t.Fatal("the relay never nudged the stream")
 	}
 }
 

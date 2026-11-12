@@ -65,7 +65,8 @@ const near = (a: PageSize, b: PageSize) =>
  * screen's scale, while `enabled`: once the room settles, and again when the frames still have
  * another size a while later, as after the browser restarts. Only a window in use asks again,
  * so two views of one browser don't take turns. onFit answers with the scale the page got,
- * which a browser that can't take a scale leaves at 1, so it isn't asked again for more.
+ * which a browser that can't take a scale leaves at 1, so it isn't asked again for more; nor is
+ * one whose frames still have fewer pixels than the page by then.
  */
 export function useFitPage({
   room,
@@ -147,6 +148,18 @@ export function useFitPage({
         return () => clearTimeout(t)
       }
       if (!document.hasFocus()) return
+      // The frames have the page's size but fewer pixels than asked for, though the page took
+      // the scale: that is what this browser's screencast sends, so asking again won't help.
+      if (
+        frame &&
+        Math.abs(frame.width - size.width) <= 1 &&
+        Math.abs(frame.height - size.height) <= 1 &&
+        (frame.scale ?? 1) < (size.scale ?? 1)
+      ) {
+        asked.current = { ...last, scale: frame.scale }
+        setSize((s) => (s === size ? { ...s, scale: frame.scale } : s))
+        return
+      }
     }
     asked.current = { ...size, at: Date.now() }
     void onFitRef.current(size).then((scale) => {

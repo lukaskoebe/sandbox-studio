@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Taking over the browser no longer leaves the page a step behind. A scroll or click on a
+  photo-heavy page sometimes didn't show for 3 s or more, until the mouse moved again: a frame
+  over 256 KiB could stop part-way from the browser's VM until Studio sent something back.
+  Studio now nudges the stream every 100 ms while you watch. In a measurement, no scroll took
+  longer than a few hundred milliseconds to show.
 - `studio wait <id>` waits for the user's decision on something an agent asked to approve, and
   says what became of it: the push pushed, the pull request opened, the review posted, or
   failed with the forge's answer. It exits 0 when that went through and 1 otherwise.

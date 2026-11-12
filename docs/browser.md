@@ -370,6 +370,22 @@ clears the local input buffer.
     while the user drives.
   - Messages are re-encoded from an allow-listed shape, so nothing else reaches the
     stream.
+  - **The nudge.** While it relays, and while `Frame` reads, Studio sends the stream
+    `{"type":"config"}` every 100 ms (`streamNudge`), which agent-browser ignores. A message
+    from the guest over 256 KiB, a JPEG over about 190 KB, can stop part-way over msb's vsock
+    until something goes from the host to the guest. A scroll with nothing after it then
+    showed 3 s or more late, until the next input or ack. Measured on a real browser VM
+    (2026-11-13, MDN, a Commons gallery and Commons photo search):
+    - **Stuck frames:** no frame of 256 KiB or less stuck, out of 3,474. Above that, 2–28%
+      stuck. Photo pages at 1920×1080 send about 350 KB a frame, and 2 to 9 of 20 single
+      scrolls didn't show within 3 s.
+    - **With the nudge:** no single scroll timed out and no frame stuck. A scroll's first frame
+      came in a median of 186 ms, p95 under 300 ms, on the photo pages.
+    - **The yamux window:** a 16 MiB window made it worse. Fewer window updates go back to the
+      guest, so 11 to 16 of 20 scrolls timed out. The window stays at 256 KiB.
+    - **Pacing:** ack pacing gives 23–28 fps at 1920×1080, as many as Chromium in the 2-vCPU
+      VM makes, and 32–42 fps at 1280×800. Push pacing at 10 fps capped them. Ack and push had
+      the same latency on loopback.
 - **Frame.** `GET .../browser/frame` (`?session=` an ephemeral session's ID) is the session's
   latest screencast frame as a JPEG, which the TUI draws in Home's detail pane. While a live
   view watches, it is the frame the relay saw last, if under 2 s old. Otherwise Studio opens
@@ -456,7 +472,10 @@ clears the local input buffer.
   `AGENT_BROWSER_STREAM_MAX_WIDTH/HEIGHT` at 3840×2160: without them the screencast is bound by
   the page's CSS width and would scale 2x frames back down. The view compares frames by the page
   size in their metadata and their pixels per CSS pixel, and asks again when the window moves
-  to a screen of another density. The page reports that `devicePixelRatio` too, as on a
+  to a screen of another density. Measured on a real VM (2026-11-13), the page took scale 2
+  (`devicePixelRatio` 2) but its frames still came at its CSS size. So when frames have the
+  page's size but fewer pixels 5 s after asking, the view takes their scale as what it gets
+  rather than asking again every 5 s. The page reports that `devicePixelRatio` too, as on a
   high-density laptop. The agent's own screenshots also have those pixels while it lasts, and a
   page that isn't fitted stays at 1x, scaled to the view.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata

@@ -30,6 +30,32 @@ const (
 	maxClientMessage = 16 << 10
 )
 
+// streamNudge is how often Studio sends the guest's stream a message that changes nothing
+// while it reads frames. A message of more than 256 KiB from the guest (a JPEG over about
+// 190 KB, as a photo-heavy page at 1920x1080 sends) can stop part-way over msb's vsock until
+// something goes the other way; without it, a scroll and then nothing showed seconds late.
+// Measured in docs/browser.md#live-view.
+var streamNudge = 100 * time.Millisecond
+
+// nudgeMessage is a config without fields, which agent-browser ignores.
+var nudgeMessage = []byte(`{"type":"config"}`)
+
+// nudge writes nudgeMessage to the guest every streamNudge until ctx ends or a write fails.
+func nudge(ctx context.Context, guest *websocket.Conn) {
+	t := time.NewTicker(streamNudge)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		if guest.Write(ctx, websocket.MessageText, nudgeMessage) != nil {
+			return
+		}
+	}
+}
+
 // Relay bridges the UI's live-view socket and a session of the teammate's browser ("" for
 // the persistent profile) until either ends.
 func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, client *websocket.Conn) error {
@@ -51,7 +77,11 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		nudge(ctx, guest)
+	}()
 	go func() {
 		defer wg.Done()
 		defer cancel()
@@ -200,6 +230,7 @@ func (s *Service) Frame(ctx context.Context, envID, teammateID, session string) 
 	}
 	defer guest.CloseNow()
 	guest.SetReadLimit(maxGuestMessage)
+	go nudge(ctx, guest)
 	for {
 		typ, data, err := guest.Read(ctx)
 		if err != nil {
