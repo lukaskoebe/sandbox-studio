@@ -209,7 +209,9 @@ test("Files goes to any path typed, a folder or a file, and / finds a file from 
   await expect(page.getByText("Can't open /nowhere")).toBeVisible()
 
   // / reaches Go to file also when nothing has the focus.
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur())
+  await page.evaluate(() =>
+    (document.activeElement as HTMLElement | null)?.blur()
+  )
   await page.keyboard.press("/")
   await expect(
     screen.getByRole("combobox", { name: /Go to file/ })
