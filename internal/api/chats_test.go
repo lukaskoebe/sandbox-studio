@@ -60,6 +60,9 @@ func (g *chatGuest) Snapshot(_ context.Context, _ string, req agentproto.Snapsho
 
 func (g *chatGuest) Files(_ context.Context, _ string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 	switch {
+	case req.Root == agentproto.FilesRootFS:
+		// A guest from before the whole computer's root.
+		return agentproto.FilesReply{}, errors.New("unknown files root")
 	case req.Op == agentproto.FilesList && req.Path == "":
 		return agentproto.FilesReply{Entries: []agentproto.FileEntry{{Name: "src", Type: "dir"}, {Name: "a.txt", Type: "file", Size: 2}}}, nil
 	case req.Op == agentproto.FilesRead && req.Path == "a.txt":
@@ -270,6 +273,9 @@ func TestChatUndoAndFiles(t *testing.T) {
 		if rec := do(h, "GET", files+q, ""); rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("%s: %d %s", q, rec.Code, rec.Body)
 		}
+	}
+	if rec := do(h, "GET", files+"?root=fs", ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "restart the sandbox") {
+		t.Fatalf("older guest: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, "GET", envBase+"/sandboxes/nope/files", ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("missing sandbox: %d", rec.Code)

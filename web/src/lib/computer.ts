@@ -41,10 +41,10 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   const panel = text(s.panel)
   const file = text(s.file)
   const files = file ? undefined : text(s.files)
-  // Files was part of Changes: an older link to a file in it opens Files.
+  // The place in Files stays in the URL while another tab shows, so a tab named wins over it.
   const named = screenTabs.find((t) => t === s.tab)
   const tab =
-    (named === "changes" && !review && (file || files) ? "files" : named) ??
+    named ??
     (review
       ? "changes"
       : panel === "files" || file || files

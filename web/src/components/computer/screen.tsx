@@ -55,6 +55,7 @@ import type { ScreenSearch, ScreenTab } from "@/lib/computer"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { useTerminalTheme } from "@/lib/theme"
 import { cn, formatAge } from "@/lib/utils"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 /**
  * What a screen change asks of the page: another tab, session, review, place in Files, size or
@@ -370,79 +371,94 @@ export function ComputerScreen({
             <>
               {/* Terminals stay mounted while another tab shows. */}
               {on && (
-                <Terminals
-                  key={sb.id}
-                  env={env}
-                  sandbox={sb}
-                  term={search.term}
-                  visible={tab === "terminal"}
-                  suspended={false}
-                  onTerm={(term) => onChange({ tab: "terminal", term })}
-                />
+                <ErrorBoundary
+                  label="the terminals"
+                  className={tab === "terminal" ? undefined : "hidden"}
+                >
+                  <Terminals
+                    key={sb.id}
+                    env={env}
+                    sandbox={sb}
+                    term={search.term}
+                    visible={tab === "terminal"}
+                    suspended={false}
+                    onTerm={(term) => onChange({ tab: "terminal", term })}
+                  />
+                </ErrorBoundary>
               )}
               {tab === "browser" && owner && (
-                <BrowserTab
-                  key={owner.id}
-                  env={env}
-                  owner={owner}
-                  rail={rail}
-                  onRail={setRail}
-                  replay={replay}
-                  onReplay={setReplay}
-                />
+                <ErrorBoundary label="the browser" resetKey={owner.id}>
+                  <BrowserTab
+                    key={owner.id}
+                    env={env}
+                    owner={owner}
+                    rail={rail}
+                    onRail={setRail}
+                    replay={replay}
+                    onReplay={setReplay}
+                  />
+                </ErrorBoundary>
               )}
               {tab === "preview" && (
-                <div className="flex min-h-0 flex-1 flex-col p-3">
-                  {previews ? (
-                    <PreviewPanel
-                      env={env}
-                      sandboxId={sb.id}
-                      reloadKey={thread?.turns.filter((t) => t.endedAt).length}
-                      port={search.port}
-                      onPort={(port) => onChange({ port })}
-                    />
-                  ) : (
-                    previewSetting.loaded && (
-                      <PreviewsOff
+                <ErrorBoundary label="the preview" resetKey={search.port}>
+                  <div className="flex min-h-0 flex-1 flex-col p-3">
+                    {previews ? (
+                      <PreviewPanel
                         env={env}
                         sandboxId={sb.id}
+                        reloadKey={
+                          thread?.turns.filter((t) => t.endedAt).length
+                        }
                         port={search.port}
+                        onPort={(port) => onChange({ port })}
                       />
-                    )
-                  )}
-                </div>
+                    ) : (
+                      previewSetting.loaded && (
+                        <PreviewsOff
+                          env={env}
+                          sandboxId={sb.id}
+                          port={search.port}
+                        />
+                      )
+                    )}
+                  </div>
+                </ErrorBoundary>
               )}
               {tab === "files" && (
-                <FilesView
-                  env={env}
-                  sandbox={sb}
-                  files={search.files}
-                  file={search.file}
-                  onFiles={(dir, file) =>
-                    onChange({ files: dir || undefined, file, push: true })
-                  }
-                  git={git}
-                  thread={thread}
-                />
+                <ErrorBoundary label="the files" resetKey={search.file}>
+                  <FilesView
+                    env={env}
+                    sandbox={sb}
+                    files={search.files}
+                    file={search.file}
+                    onFiles={(dir, file) =>
+                      onChange({ files: dir || undefined, file, push: true })
+                    }
+                    git={git}
+                    thread={thread}
+                  />
+                </ErrorBoundary>
               )}
               {tab === "changes" && (
-                <ChangesView
-                  env={env}
-                  sandbox={sb}
-                  reviews={reviews}
-                  review={search.review}
-                  onReview={(review) => onChange({ review })}
-                  git={git}
-                  onOpenFile={(file) =>
-                    onChange({
-                      tab: "files",
-                      file,
-                      files: undefined,
-                      push: true,
-                    })
-                  }
-                  thread={thread}
-                />
+                <ErrorBoundary label="the changes" resetKey={search.review}>
+                  <ChangesView
+                    env={env}
+                    sandbox={sb}
+                    reviews={reviews}
+                    review={search.review}
+                    onReview={(review) => onChange({ review })}
+                    git={git}
+                    onOpenFile={(file) =>
+                      onChange({
+                        tab: "files",
+                        file,
+                        files: undefined,
+                        push: true,
+                      })
+                    }
+                    thread={thread}
+                  />
+                </ErrorBoundary>
               )}
             </>
           )}

@@ -38,6 +38,14 @@ func spa(app fs.FS) http.Handler {
 			files.ServeHTTP(w, r)
 			return
 		}
+		if strings.HasPrefix(name, "assets/") {
+			// A page from before an update asks for its version's files, which are gone. index.html
+			// in their place would fail as "'text/html' is not a valid JavaScript MIME type";
+			// a 404 says what happened, and the page offers a reload (web's ErrorBoundary).
+			w.Header().Set("Cache-Control", "no-cache")
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFileFS(w, r, app, "index.html")
 	})

@@ -103,8 +103,11 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
   await expect(
     screen.locator("pre .tok-keyword", { hasText: "package" })
   ).toBeVisible()
-  // A link from before Files had a tab of its own still opens the file there.
+  // Files keeps its place in the URL while Changes shows, and shows it again.
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&file=README.md`)
+  const changes = screen.getByRole("tab", { name: /^Changes/ })
+  await expect(changes).toHaveAttribute("aria-selected", "true")
+  await screen.getByRole("tab", { name: "Files" }).click()
   await expect(
     screen.locator("pre .tok-keyword", { hasText: "Webshop" })
   ).toBeVisible()

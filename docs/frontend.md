@@ -38,6 +38,13 @@ binary embeds (`//go:embed`) and serves at `/`.
   range use the library's line selection; the comment button, which lies over the numbers,
   drags a range itself, finding the line under the pointer in the diff's shadow root. `parseDiff` in
   `review-feedback.tsx` stays free of the library, since a comment's quote needs only the lines.
+- Errors: a part that fails shows `ErrorNotice` (`src/components/error-boundary.tsx`) in its
+  place and the rest of Studio stays. Each screen tab and each diff has its own
+  `ErrorBoundary`, and a route that fails shows `RouteError` (the router's
+  `defaultErrorComponent`; a page that draws the window bar draws it on its error page too). A
+  chunk that doesn't load, as after an update when the page asks for its old version's files,
+  offers only Reload, since trying again asks for the same file. The server answers a missing
+  `/assets/` file with a 404, never `index.html`.
 - Installable app: `public/manifest.webmanifest` (served as `application/manifest+json`)
   with the icons in `public/` (`icon.svg` is the source; the PNGs and `favicon.ico` are
   rendered from it, the maskable one without the rounded corners). There is no service

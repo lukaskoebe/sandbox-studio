@@ -17,6 +17,8 @@ func TestSPA(t *testing.T) {
 		{"/", "index", "no-cache"},
 		{"/teammates/ada", "index", "no-cache"},
 		{"/assets/app.js", "console.log", "immutable"},
+		// A file of an older version is gone, not a page.
+		{"/assets/old-1234.js", "404 page not found", "no-cache"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", tc.path, nil))

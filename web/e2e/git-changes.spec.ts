@@ -70,4 +70,48 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
     .getByRole("button", { name: /notes\.txt/ })
     .click()
   await expect(area("Untracked")).toContainText("Ask about free shipping.")
+
+  // The Changes tab returns to Changes too, though Files keeps its file in the URL.
+  await area("Untracked").getByRole("button", { name: "Open in Files" }).click()
+  await expect(page).toHaveURL(/file=notes\.txt/)
+  await tab.click()
+  await expect(tab).toHaveAttribute("aria-selected", "true")
+  await area("Staged")
+    .getByRole("button", { name: /coupon\.test\.ts/ })
+    .click()
+  await expect(
+    area("Staged").locator("pre[data-diff-type]").first()
+  ).toBeVisible()
+})
+
+test("A part of Studio that fails to load says so in its place, and the rest stays", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("gitload")
+  const id = await api.createSandbox(name)
+  await api.guestReady(id)
+  // As after an update: the page asks for a file of the version it loaded with, which is gone.
+  await page.route(/\/assets\/diff-view-[^/]+\.js$/, (route) =>
+    route.fulfill({ status: 404, body: "404 page not found" })
+  )
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  const notStaged = screen.getByRole("list", {
+    name: "Not staged",
+    exact: true,
+  })
+  await notStaged.getByRole("button", { name: /main\.go/ }).click()
+  const notice = notStaged.getByRole("alert")
+  await expect(notice).toContainText("Couldn't show the changes")
+  await expect(notice).toContainText("Studio was updated")
+  await expect(notice.getByRole("button", { name: "Reload" })).toBeVisible()
+  await expect(notice.getByRole("button", { name: "Try again" })).toHaveCount(0)
+  // The rest of the screen still works.
+  await screen.getByRole("tab", { name: "Files" }).click()
+  await expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
 })

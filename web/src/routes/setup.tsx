@@ -5,6 +5,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { $api } from "@/lib/api/client"
 import { lastEnvironment } from "@/lib/environment"
 import { setupSteps, type SetupKey } from "@/lib/setup"
+import { RouteError } from "@/components/route-error"
 
 // The guided setup. It sits outside an environment's layout: it works on the
 // environment last opened here, or the first one.
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/setup")({
     const step = setupSteps.find((st) => st.key === s.step)?.key
     return step ? { step } : {}
   },
+  // The page draws the window's bar, so its error page does too.
+  errorComponent: (props) => <RouteError {...props} bar />,
   component: SetupPage,
 })
 

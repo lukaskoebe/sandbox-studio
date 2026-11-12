@@ -561,7 +561,7 @@ type GitDiff struct {
 // olderGuest says what a guest from before an op it doesn't know needs, so that the user can
 // do what: a restart, which brings this Studio's agent.
 func olderGuest(err error, what string) error {
-	if strings.Contains(err.Error(), "unknown files op") {
+	if msg := err.Error(); strings.Contains(msg, "unknown files op") || strings.Contains(msg, "unknown files root") {
 		return huma.Error409Conflict("restart the sandbox to " + what + ": its agent is from an older Studio")
 	}
 	return err
@@ -596,6 +596,9 @@ func (s *Server) workspaceFiles(ctx context.Context, envID, id string, req agent
 		return reply, nil
 	case errors.Is(err, agentchan.ErrNotConnected), ctx.Err() != nil:
 		return reply, apiError(err)
+	case strings.Contains(err.Error(), "unknown files root"):
+		// A guest from before the whole computer's root knows /workspace and /tmp only.
+		return reply, olderGuest(err, "browse outside /workspace")
 	}
 	return reply, huma.Error422UnprocessableEntity(err.Error())
 }

@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router"
 import { WindowBar } from "@/components/window-bar"
 import { $api } from "@/lib/api/client"
 import { lastEnvironment } from "@/lib/environment"
+import { RouteError } from "@/components/route-error"
 
 // Studio always has at least one environment; open the last one used here, or the first.
 export const Route = createFileRoute("/")({
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/")({
     if (env)
       throw redirect({ to: "/e/$env", params: { env: env.id }, replace: true })
   },
+  // The page draws the window's bar, so its error page does too.
+  errorComponent: (props) => <RouteError {...props} bar />,
   component: () => (
     <>
       <WindowBar />

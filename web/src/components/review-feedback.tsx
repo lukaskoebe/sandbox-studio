@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 /** A diff line, with the file and line number a comment on it refers to. */
 export type DiffLine = {
@@ -173,22 +174,24 @@ export function UnifiedDiff({
 }) {
   if (!diff) return <p className="text-xs text-muted-foreground">No changes.</p>
   return (
-    <Suspense
-      fallback={
-        <p className="text-xs text-muted-foreground">Loading the changes…</p>
-      }
-    >
-      <DiffView
-        diff={diff}
-        comments={comments}
-        onComment={onComment}
-        fill={fill}
-        commentLabel={commentLabel}
-        ranges={ranges}
-        layouts={layouts}
-        ref={ref}
-      />
-    </Suspense>
+    <ErrorBoundary label="the changes" resetKey={diff} className="flex-none">
+      <Suspense
+        fallback={
+          <p className="text-xs text-muted-foreground">Loading the changes…</p>
+        }
+      >
+        <DiffView
+          diff={diff}
+          comments={comments}
+          onComment={onComment}
+          fill={fill}
+          commentLabel={commentLabel}
+          ranges={ranges}
+          layouts={layouts}
+          ref={ref}
+        />
+      </Suspense>
+    </ErrorBoundary>
   )
 }
 

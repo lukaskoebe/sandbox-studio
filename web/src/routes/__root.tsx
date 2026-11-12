@@ -9,9 +9,12 @@ import { WindowBar, WindowEdges } from "@/components/window-bar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { useEvents } from "@/hooks/use-events"
+import { RouteError } from "@/components/route-error"
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   {
+    // The page draws the window's bar, so its error page does too.
+    errorComponent: (props) => <RouteError {...props} bar />,
     component: RootLayout,
     notFoundComponent: () => (
       <>

@@ -20,6 +20,14 @@
   filter narrows it and Enter searches. A page shows its facts newest first, ten at first,
   with chips by kind. The open page or group is in the URL (`?open=`), and on a narrow screen
   the index comes first, with a back arrow from a page.
+- A part of Studio that fails shows what went wrong in its place, and the rest stays, instead of
+  a blank window. A part that didn't load because Studio was updated since the window opened,
+  such as the diff view, says so and offers **Reload**. A missing file under `/assets/` is a
+  404 now, not the app's page.
+- The **Changes** tab opens again after **Open in Files**; before, it showed Files again until
+  the window was reloaded.
+- Files on a sandbox whose agent is from before Studio could browse `/` says to restart the
+  sandbox, instead of "unknown files root".
 
 ## v0.21.0 — 2026-11-12
 

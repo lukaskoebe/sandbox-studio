@@ -13,6 +13,7 @@ import { $api } from "@/lib/api/client"
 import { rememberEnvironment } from "@/lib/environment"
 import { setupOnFirstLoad } from "@/lib/setup"
 import { useVisualViewportHeight } from "@/hooks/use-visual-viewport-height"
+import { RouteError } from "@/components/route-error"
 
 export const Route = createFileRoute("/e/$env")({
   // ?settings=<section> opened the settings dialog that the Settings page replaced; old links
@@ -37,6 +38,8 @@ export const Route = createFileRoute("/e/$env")({
     if (await setupOnFirstLoad(context.queryClient, params.env))
       throw redirect({ to: "/setup" })
   },
+  // The page draws the window's bar, so its error page does too.
+  errorComponent: (props) => <RouteError {...props} bar />,
   component: EnvironmentLayout,
 })
 
