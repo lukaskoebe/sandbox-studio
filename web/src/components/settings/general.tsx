@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowCircleUpIcon,
+  ArrowClockwiseIcon,
   BellIcon,
   BroadcastIcon,
   DownloadSimpleIcon,
@@ -777,6 +778,21 @@ function UpdatesSection() {
         description: errorMessage(err),
       }),
   })
+  const check = $api.useMutation("post", "/api/system/updates/check", {
+    onSuccess: (data) => {
+      queryClient.setQueryData(["get", "/api/system/updates"], data)
+      if (!data.error && !data.available)
+        toast.success("Studio is up to date", {
+          description: data.latest
+            ? `${data.latest} is the newest release.`
+            : undefined,
+        })
+    },
+    onError: (err) =>
+      toast.error("Could not check for updates", {
+        description: errorMessage(err),
+      }),
+  })
   const st = state.data
   const modes = st?.canInstall
     ? updateModes
@@ -811,11 +827,20 @@ function UpdatesSection() {
       }
     >
       {st && (
-        <p className="text-muted-foreground">
-          Running <span className="font-mono">{st.current}</span>
-          {st.enabled && st.checkedAt && (
-            <> · checked {formatAge(st.checkedAt)}</>
-          )}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+          <span>
+            Running <span className="font-mono">{st.current}</span>
+            {st.checkedAt && <> · checked {formatAge(st.checkedAt)}</>}
+          </span>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={check.isPending || installing(st)}
+            onClick={() => check.mutate({})}
+          >
+            {check.isPending ? <Spinner /> : <ArrowClockwiseIcon />}
+            Check for updates
+          </Button>
         </p>
       )}
       {st && !st.canInstall && (
@@ -824,7 +849,7 @@ function UpdatesSection() {
             "This Studio can't install releases itself, like a development build. Install them with install.sh or from the release page."}
         </p>
       )}
-      {st?.enabled && st.error && (
+      {st?.error && (
         <p className="text-destructive">Last check failed: {st.error}</p>
       )}
       {st?.available && !installing(st) && (

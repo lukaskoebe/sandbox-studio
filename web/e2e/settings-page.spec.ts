@@ -291,3 +291,36 @@ test("Shut down asks first, then says Studio has stopped", async ({
   await expect(page.getByText("Studio has stopped")).toBeVisible()
   expect(asked).toBe(1)
 })
+
+test("Check for updates asks now and says what it found", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}/settings/updates`)
+  const check = page.getByRole("button", { name: "Check for updates" })
+  // The e2e Studio is a development build, which never asks GitHub.
+  await check.click()
+  await expect(
+    page.getByText("a development build doesn't check for releases")
+  ).toBeVisible()
+
+  // What a release build hears back, without reaching GitHub.
+  const state = (await (
+    await page.request.get("/api/system/updates")
+  ).json()) as Record<string, unknown>
+  let found: Record<string, unknown> = {
+    ...state,
+    latest: state.current,
+    checkedAt: new Date(),
+  }
+  await page.route("**/api/system/updates/check", (route) =>
+    route.fulfill({ json: found })
+  )
+  await check.click()
+  await expect(page.getByText("Studio is up to date")).toBeVisible()
+  found = { ...found, latest: "v99.0.0", available: true }
+  await check.click()
+  const updates = page.getByRole("group", { name: "Updates" })
+  await expect(updates.getByText("Update available")).toBeVisible()
+  await expect(updates.getByText("v99.0.0")).toBeVisible()
+})

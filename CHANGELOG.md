@@ -4,6 +4,8 @@
 
 - A full-length diff shows its lines **Stacked** or **Split**, old beside new. The switch above
   the diff is remembered in this browser.
+- **Settings → Updates** has **Check for updates**: it asks GitHub now, in every mode, and says
+  whether Studio is up to date (`POST /api/system/updates/check`).
 
 ## v0.20.0 — 2026-11-12
 

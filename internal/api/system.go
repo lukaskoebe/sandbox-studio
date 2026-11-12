@@ -177,6 +177,20 @@ func (s *Server) registerSystem(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "checkUpdates", Method: http.MethodPost, Path: "/api/system/updates/check", Tags: []string{"system"},
+		Summary: "Check for updates: ask GitHub for the newest release now, whatever the update mode and however recent the last check. A failed check is the state's error; in the install mode a newer release starts installing",
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body UpdateState }, error) {
+		if s.System.Updates == nil {
+			return nil, huma.Error503ServiceUnavailable("the update check is not available")
+		}
+		st, err := s.System.Updates.CheckNow(ctx)
+		if errors.Is(err, updates.ErrDevelopmentBuild) {
+			return nil, huma.Error409Conflict(err.Error())
+		}
+		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "installUpdate", Method: http.MethodPost, Path: "/api/system/updates/install", Tags: []string{"system"},
 		Summary: "Update now: check for a newer release and install it, whatever the update mode. Studio restarts into it once no chat, template build or sign-in is running, or right away with restart; with an install under way, restart ends its wait",
 	}, func(ctx context.Context, in *struct {

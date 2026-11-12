@@ -68,6 +68,8 @@ type saved struct {
 	CheckedAt *time.Time `json:"checkedAt,omitempty"`
 	Error     string     `json:"error,omitempty"`
 	Assets    []Asset    `json:"assets,omitempty"`
+	// Asked is a last check the user asked for, which shows its result also while off.
+	Asked bool `json:"asked,omitempty"`
 }
 
 // mode is the saved mode. Without a row it is "tell"; a row from before the modes is "tell" if
@@ -122,7 +124,7 @@ func (c *Checker) SetMode(ctx context.Context, mode string) (State, error) {
 	c.mu.Lock()
 	s, err := c.load(ctx)
 	if err == nil {
-		s.Mode, s.Enabled = mode, mode != ModeOff
+		s.Mode, s.Enabled, s.Asked = mode, mode != ModeOff, false
 		err = c.save(ctx, s)
 	}
 	c.mu.Unlock()
@@ -159,27 +161,71 @@ func (c *Checker) CheckIfDue(ctx context.Context) (State, error) {
 	}
 	now := c.now()
 	if s.CheckedAt == nil || now.Sub(*s.CheckedAt) >= Interval || !now.After(*s.CheckedAt) {
-		rel, err := c.fetch(ctx)
-		s.CheckedAt = &now
-		if err != nil {
-			s.Error = err.Error()
-		} else {
-			s.Latest, s.URL, s.Assets, s.Error = rel.Tag, rel.URL, rel.Assets, ""
-		}
-		if err := c.save(ctx, s); err != nil {
+		if _, err := c.check(ctx, &s); err != nil {
 			return c.view(s), err
 		}
-		if v := c.view(s); v.Available && c.Log != nil {
-			c.Log.Info("a Studio update is available", "current", c.Current, "latest", rel.Tag, "url", rel.URL)
-		}
 	}
+	return c.installIfAsked(s), nil
+}
+
+// CheckNow is the user's Check for updates: it checks GitHub right away, whatever the mode and
+// however recent the last check, and in the "install" mode starts installing a newer release
+// as a due check would. A failed check is in the state's Error, not the returned error. A
+// development build never sees an update (Newer), so it doesn't ask (ErrDevelopmentBuild).
+func (c *Checker) CheckNow(ctx context.Context) (State, error) {
+	if !releaseBuild(c.Current) {
+		st, err := c.State(ctx)
+		if err == nil {
+			err = ErrDevelopmentBuild
+		}
+		return st, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s, err := c.load(ctx)
+	if err != nil {
+		return c.view(s), err
+	}
+	s.Asked = true
+	if _, err := c.check(ctx, &s); err != nil {
+		return c.view(s), err
+	}
+	return c.installIfAsked(s), nil
+}
+
+// check fetches the newest release into s and saves it, with the fetch's failure in s.Error.
+// It returns the fetch's error and fails only when saving does.
+func (c *Checker) check(ctx context.Context, s *saved) (fetchErr error, err error) {
+	now := c.now()
+	rel, fetchErr := c.fetch(ctx)
+	s.CheckedAt = &now
+	if fetchErr != nil {
+		s.Error = fetchErr.Error()
+	} else {
+		s.Latest, s.URL, s.Assets, s.Error = rel.Tag, rel.URL, rel.Assets, ""
+	}
+	if err := c.save(ctx, *s); err != nil {
+		return fetchErr, err
+	}
+	if v := c.view(*s); fetchErr == nil && v.Available && c.Log != nil {
+		c.Log.Info("a Studio update is available", "current", c.Current, "latest", rel.Tag, "url", rel.URL)
+	}
+	return fetchErr, nil
+}
+
+// installIfAsked starts installing a newer release s knows of in the "install" mode, unless an
+// install is under way, and returns the state to show.
+func (c *Checker) installIfAsked(s saved) State {
 	v := c.view(s)
 	if s.Mode == ModeInstall && v.Available && c.Installer != nil {
 		c.Installer.Start(Release{Tag: s.Latest, URL: s.URL, Assets: s.Assets})
 		v = c.view(s)
 	}
-	return v, nil
+	return v
 }
+
+// ErrDevelopmentBuild is Check for updates on a development build, which never sees an update.
+var ErrDevelopmentBuild = errors.New("a development build doesn't check for releases")
 
 // ErrUpToDate is Update now when GitHub has no newer release.
 var ErrUpToDate = errors.New("Studio is up to date")
@@ -207,19 +253,13 @@ func (c *Checker) InstallNow(ctx context.Context, restart bool) (State, error) {
 	if err != nil {
 		return c.view(s), err
 	}
-	now := c.now()
-	rel, err := c.fetch(ctx)
-	s.CheckedAt = &now
+	s.Asked = true
+	ferr, err := c.check(ctx, &s)
 	if err != nil {
-		s.Error = err.Error()
-	} else {
-		s.Latest, s.URL, s.Assets, s.Error = rel.Tag, rel.URL, rel.Assets, ""
+		return c.view(s), err
 	}
-	if serr := c.save(ctx, s); serr != nil {
-		return c.view(s), serr
-	}
-	if err != nil {
-		return c.view(s), fmt.Errorf("check for a release: %w", err)
+	if ferr != nil {
+		return c.view(s), fmt.Errorf("check for a release: %w", ferr)
 	}
 	if !Newer(s.Latest, c.Current) {
 		return c.view(s), ErrUpToDate
@@ -317,11 +357,16 @@ func (c *Checker) fetch(ctx context.Context) (Release, error) {
 
 func (c *Checker) view(s saved) State {
 	st := State{Mode: s.Mode, Enabled: s.Mode != ModeOff, Current: c.Current, Latest: s.Latest, URL: s.URL, CheckedAt: s.CheckedAt,
-		Error: s.Error, CanInstall: c.Installer != nil}
+		CanInstall: c.Installer != nil}
+	// A checker that is off keeps the last result but shows it only if the user asked for it.
+	shown := st.Enabled || s.Asked
+	if shown {
+		st.Error = s.Error
+	}
 	if c.Installer == nil {
 		st.CannotInstall = c.CannotInstall
 	}
-	st.Available = st.Enabled && Newer(s.Latest, c.Current)
+	st.Available = shown && Newer(s.Latest, c.Current)
 	if c.Installer != nil {
 		st.Install = c.Installer.Progress()
 	}

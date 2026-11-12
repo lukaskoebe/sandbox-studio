@@ -24118,6 +24118,37 @@
         ]
       }
     },
+    "/api/system/updates/check": {
+      "post": {
+        "operationId": "checkUpdates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateState"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Check for updates: ask GitHub for the newest release now, whatever the update mode and however recent the last check. A failed check is the state's error; in the install mode a newer release starts installing",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/system/updates/install": {
       "post": {
         "operationId": "installUpdate",

@@ -138,3 +138,31 @@ func TestNewer(t *testing.T) {
 		}
 	}
 }
+
+// Check for updates asks GitHub right away, whatever the mode and however recent the last
+// check, and keeps a failed check in the state. A development build doesn't ask.
+func TestCheckNow(t *testing.T) {
+	srv, hits := fakeGitHub(t, "v1.1.0")
+	ctx := context.Background()
+	c := &Checker{Settings: memSettings{settingKey: []byte(`{"mode":"off"}`)}, Client: srv.Client(), URL: srv.URL, Current: "v1.0.0"}
+	for i := 1; i <= 2; i++ {
+		st, err := c.CheckNow(ctx)
+		if err != nil || hits.Load() != int32(i) || !st.Available || st.Latest != "v1.1.0" || st.CheckedAt == nil {
+			t.Fatalf("check %d: %+v %v hits=%d", i, st, err, hits.Load())
+		}
+	}
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "rate limited", http.StatusForbidden)
+	})
+	if st, err := c.CheckNow(ctx); err != nil || st.Error == "" {
+		t.Fatalf("failed check: %+v %v", st, err)
+	}
+	// Turning the check off again hides what the user asked for.
+	if st, err := c.SetMode(ctx, ModeOff); err != nil || st.Error != "" || st.Available {
+		t.Fatalf("off again: %+v %v", st, err)
+	}
+	dev := &Checker{Settings: memSettings{}, Client: srv.Client(), URL: srv.URL, Current: "v1.0.0-3-gabc1234"}
+	if st, err := dev.CheckNow(ctx); err != ErrDevelopmentBuild || st.CheckedAt != nil {
+		t.Fatalf("development build: %+v %v", st, err)
+	}
+}

@@ -1,7 +1,7 @@
 # Updates
 
 `internal/updates` checks GitHub for a newer release and, if the user chose so, installs it.
-The setting is under **Settings → General → Updates** (`PUT /api/system/updates`):
+The setting is under **Settings → Updates** (`PUT /api/system/updates`):
 
 | Mode | What Studio does |
 |---|---|
@@ -28,6 +28,12 @@ asks GitHub right away, answers 409 if Studio is up to date or can't install, an
 release again at once although its install failed less than a day ago, which the `install`
 mode waits out. While an install waits for idle, **Restart now** (`{"restart": true}`) ends the
 wait (`Installer.Hurry`), cutting off what runs.
+
+**Check for updates** beside the running version (`POST /api/system/updates/check`,
+`Checker.CheckNow`) asks GitHub right away, in every mode and however recent the last check,
+and in the `install` mode starts installing what it finds. A failed check is the state's
+`error`, not a failed request. While the mode is `off`, the result of a check the user asked
+for shows until the mode changes (`asked` in the saved row). A development build answers 409.
 
 1. **Download.** Only a release that isn't a pre-release and is newer than the running one.
    The archive for this OS and architecture (`sandbox-studio_<tag>_<os>_<arch>.tar.gz`, `.zip`

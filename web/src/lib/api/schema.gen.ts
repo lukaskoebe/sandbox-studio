@@ -3219,6 +3219,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/updates/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check for updates: ask GitHub for the newest release now, whatever the update mode and however recent the last check. A failed check is the state's error; in the install mode a newer release starts installing */
+        post: operations["checkUpdates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/updates/install": {
         parameters: {
             query?: never;
@@ -15243,6 +15260,35 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateModeInBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateState"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    checkUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
