@@ -16,6 +16,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -99,10 +100,12 @@ type tab struct {
 	// where the launch size reports the window's height (windowH).
 	w, h    int
 	resized bool
+	// scale is the device pixels per CSS pixel set viewport gave: the frames have as many.
+	scale float64
 }
 
 func newTab() *tab {
-	return &tab{history: []string{"about:blank"}, values: map[string]string{}, watchers: map[chan struct{}]struct{}{}, w: viewW, h: viewH}
+	return &tab{history: []string{"about:blank"}, values: map[string]string{}, watchers: map[chan struct{}]struct{}{}, w: viewW, h: viewH, scale: 1}
 }
 
 func (t *tab) url() string { return t.history[t.at] }
@@ -354,11 +357,15 @@ func (t *tab) answer(args []string) (any, bool, error) {
 	case "set":
 		w, errW := strconv.Atoi(arg(2))
 		h, errH := strconv.Atoi(arg(3))
-		if arg(1) != "viewport" || errW != nil || errH != nil || w < 1 || h < 1 || w > 4000 || h > 4000 {
+		scale, errS := 1.0, error(nil)
+		if len(args) > 4 {
+			scale, errS = strconv.ParseFloat(arg(4), 64)
+		}
+		if arg(1) != "viewport" || errW != nil || errH != nil || errS != nil || w < 1 || h < 1 || w > 4000 || h > 4000 || scale < 1 || scale > 4 {
 			return nil, false, fmt.Errorf("unknown set %q", arg(1))
 		}
-		t.w, t.h, t.resized = w, h, true
-		return map[string]any{"width": w, "height": h, "deviceScaleFactor": 1, "mobile": false}, true, nil
+		t.w, t.h, t.scale, t.resized = w, h, scale, true
+		return map[string]any{"width": w, "height": h, "deviceScaleFactor": scale, "mobile": false}, true, nil
 	case agentproto.BrowserElementAt:
 		// The guest evaluates its own script for this; eval answers with its result.
 		x, errX := strconv.ParseFloat(arg(1), 64)
@@ -401,8 +408,24 @@ func (t *tab) render() []byte {
 		}
 	}
 	var b bytes.Buffer
-	jpeg.Encode(&b, img, &jpeg.Options{Quality: 60})
+	jpeg.Encode(&b, scaled(img, t.scale), &jpeg.Options{Quality: 60})
 	return b.Bytes()
+}
+
+// scaled is img with scale device pixels to each of its pixels, as a page at that scale is
+// captured.
+func scaled(img *image.RGBA, scale float64) image.Image {
+	if scale == 1 {
+		return img
+	}
+	b := img.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, int(math.Round(float64(b.Dx())*scale)), int(math.Round(float64(b.Dy())*scale))))
+	for y := range out.Rect.Dy() {
+		for x := range out.Rect.Dx() {
+			out.SetRGBA(x, y, img.RGBAAt(min(b.Dx()-1, int(float64(x)/scale)), min(b.Dy()-1, int(float64(y)/scale))))
+		}
+	}
+	return out
 }
 
 // input applies one live-view input message to the tab. It reports whether the page changed.
@@ -761,6 +784,7 @@ type BrowserSession struct {
 	Focus    string            `json:"focus,omitempty"`
 	Watchers int               `json:"watchers"`
 	Viewport [2]int            `json:"viewport"` // width, height
+	Scale    float64           `json:"scale"`    // device pixels per CSS pixel
 }
 
 // BrowserState reports the guest's browser; ok is false before its first browser stream.
@@ -784,7 +808,7 @@ func (g *Guest) BrowserState() (BrowserState, bool) {
 		}
 		out.Sessions = append(out.Sessions, BrowserSession{Slot: slot, URL: t.url(), Title: t.title(),
 			History: append([]string{}, t.history...), At: t.at, Values: values, Focus: t.focus, Watchers: len(t.watchers),
-			Viewport: [2]int{t.w, t.h}})
+			Viewport: [2]int{t.w, t.h}, Scale: t.scale})
 	}
 	return out, true
 }

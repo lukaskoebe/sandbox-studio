@@ -71,6 +71,9 @@ func TestCheckBrowserArgs(t *testing.T) {
 		{"screenshot", "/tmp/x.jpg", "--screenshot-format", "jpeg", "--screenshot-quality", "60"},
 		{"batch"},
 		{"set", "viewport", "1024", "640"},
+		{"set", "viewport", "1024", "640", "2"},
+		{"set", "viewport", "1024", "640", "1.25"},
+		{"set", "viewport", "1024", "640", "4"},
 	}
 	for _, args := range ok {
 		if err := checkBrowserArgs(args, false); err != nil {
@@ -98,7 +101,11 @@ func TestCheckBrowserArgs(t *testing.T) {
 		{"set", "credentials", "u", "p"},
 		{"set", "headers", "{}"},
 		{"set", "viewport", "1024"},
-		{"set", "viewport", "1024", "640", "3"},
+		{"set", "viewport", "1024", "640", "0.5"},
+		{"set", "viewport", "1024", "640", "4.5"},
+		{"set", "viewport", "1024", "640", "1.125"},
+		{"set", "viewport", "1024", "640", "1e1"},
+		{"set", "viewport", "1024", "640", "2", "true"},
 		{"set", "viewport", "-1", "640"},
 		{"set", "viewport", "0x10", "640"},
 		{"set", "viewport", "1024", "99999"},

@@ -435,8 +435,22 @@ clears the local input buffer.
   the view asks again, but only from the window in use, so two views of one browser don't take
   turns: the last to resize or be focused wins. Notes hold the size. Turning it off asks for
   agent-browser's own 1280×720. Agents get the page at whatever size it has, as a user's
-  window would give them. The guest allows `set` only as `set viewport <width> <height>`,
-  outside a batch.
+  window would give them. The guest allows `set` only as `set viewport <width> <height>
+  [scale]`, outside a batch.
+- **The screen's scale.** A page shown at one CSS pixel to one is still blurred on a screen of
+  two device pixels to a CSS pixel when its frames are at 1x. So the fit also sends the
+  screen's `devicePixelRatio` as `scale`, and the page gets that device scale factor: its
+  frames have a pixel for each of the screen's, and the canvas holds them at the page's size
+  in CSS pixels. Studio keeps a frame within 3840×2160 pixels, so a large page gets less, and
+  rounds down to hundredths. The reply says which scale the page got (`{scale}`). A guest agent
+  from before scales refuses one, and Studio sets the size alone, so the reply says 1 and the
+  view doesn't ask for more. The guest starts agent-browser with
+  `AGENT_BROWSER_STREAM_MAX_WIDTH/HEIGHT` at 3840×2160: without them the screencast is bound by
+  the page's CSS width and would scale 2x frames back down. The view compares frames by the page
+  size in their metadata and their pixels per CSS pixel, and asks again when the window moves
+  to a screen of another density. The page reports that `devicePixelRatio` too, as on a
+  high-density laptop. The agent's own screenshots also have those pixels while it lasts, and a
+  page that isn't fitted stays at 1x, scaled to the view.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
   (device width, offset and page scale), its shape, and the letterbox of the canvas. The
   page's height comes from the frame's shape, not the metadata: agent-browser 0.39 reports
@@ -661,8 +675,9 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
   (`internal/browser`);
 - the channel's write limit: a 740 KB reply through the guest's yamux session, with every
   write under 16 KiB (`internal/guest`, `TestChannelWritesStayBounded`);
-- fitting the page: the guest's `set viewport` check, `Resize` (bounds, sessions, nothing
-  logged), and the fake browser's frames following the size in `e2e/browser.spec.ts`;
+- fitting the page: the guest's `set viewport` check, `Resize` (bounds, scales and their 4K
+  limit, the older guest's refusal, sessions, nothing logged), and the fake browser's frames
+  following the size and the scale in `e2e/browser.spec.ts`;
 - localhost: the guest's listeners and their relay, the reserved and taken ports
   (`internal/guest`), and a page on a forwarded port through the Hub, the broker and the fake
   guests, with a port that stopped and refused forwards (`internal/e2e`,
@@ -747,7 +762,8 @@ in that loop; a browser VM is.
   clicks known targets at several viewport sizes and zoom levels.
 - Fitting the page in a browser VM: that agent-browser 0.39's `set viewport` (device metrics
   and `Browser.setContentsSize`) gives frames of exactly the asked size, in the plain and the
-  stealth Chromium, and that a size up to 3840×2160 isn't cut by the window's screen.
+  stealth Chromium, and that a size up to 3840×2160 isn't cut by the window's screen; and that
+  a scale gives frames of that many pixels with the stream's bounds raised.
 
 ## Limitations
 

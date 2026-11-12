@@ -299,7 +299,12 @@ export function BrowserWindow({
   // A failed fit leaves the page as it was; the view asks again when its frames say so.
   const resize = $api.useMutation("put", `${statusPath}/viewport`)
   const fitPage = (size: PageSize) =>
-    resize.mutate({ params: { path }, body: { ...size, session: sessionID } })
+    resize
+      .mutateAsync({ params: { path }, body: { ...size, session: sessionID } })
+      .then(
+        (got) => got.scale,
+        () => undefined
+      )
   const changeFit = (on: boolean) => {
     setFit(on)
     setFitPreferred(on)

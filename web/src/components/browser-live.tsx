@@ -144,7 +144,7 @@ export function BrowserLive({
    * size, less the controls under the frame, so the page shows at one pixel to one.
    */
   fitRoom?: HTMLElement | null
-  onFit?: (size: PageSize) => void
+  onFit?: (size: PageSize) => Promise<number | undefined>
   /** Whether the page has a password field at a point, in CSS pixels of its viewport. */
   passwordField?: (at: { x: number; y: number }) => Promise<boolean>
   /**
@@ -216,7 +216,7 @@ export function BrowserLive({
     useState(false)
   // The height of the controls under the frame, which wrap on a narrow window.
   const [controlsHeight, setControlsHeight] = useState(0)
-  // The size of the frames, which is the page's.
+  // The page's size in CSS pixels, from the frames, and their device pixels per CSS pixel.
   const [frameSize, setFrameSize] = useState<PageSize>()
   const canDrive = driving && inputEnabled && !frozen
   // Notes hold the frame they were made on, so the page keeps its size while there are any.
@@ -225,7 +225,7 @@ export function BrowserLive({
     reserved: controlsHeight,
     frame: frameSize,
     enabled: !!fitRoom && !!onFit && state === "live" && !frozen,
-    onFit: (size) => onFit?.(size),
+    onFit: (size) => onFit?.(size) ?? Promise.resolve(undefined),
   })
   // While frozen, frames are still acknowledged, so the screencast keeps coming, but not
   // painted: the notes stay on the frame they were made on. The newest one waits here and is
@@ -417,10 +417,18 @@ export function BrowserLive({
             c.height = img.height
             c.style.setProperty("--aspect", String(img.width / img.height))
           }
+          const metadata = frameMetadata(metadataValue, img.width, img.height)
+          const page = {
+            width: metadata.deviceWidth,
+            height: Math.round(metadata.deviceHeight),
+            scale: img.width / metadata.deviceWidth,
+          }
           setFrameSize((size) =>
-            size?.width === img.width && size.height === img.height
+            size?.width === page.width &&
+            size.height === page.height &&
+            size.scale === page.scale
               ? size
-              : { width: img.width, height: img.height }
+              : page
           )
           const context = c.getContext("2d")
           if (!context) return
@@ -430,7 +438,7 @@ export function BrowserLive({
           drawnFrame.current = {
             width: img.width,
             height: img.height,
-            metadata: frameMetadata(metadataValue, img.width, img.height),
+            metadata,
           }
           setRenderedPageURL(framePageURL)
           setHasRenderedFrame(true)

@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -117,7 +118,7 @@ func checkBrowserArgs(args []string, batch bool) error {
 		return errors.New("only get text, attr, url and title are allowed")
 	}
 	if args[0] == "set" && (batch || !viewportArgs(args)) {
-		return errors.New("only set viewport, with a width and a height, is allowed")
+		return errors.New("only set viewport, with a width, a height and a scale, is allowed")
 	}
 	for i, a := range args[1:] {
 		if !strings.HasPrefix(a, "-") || a == "-" {
@@ -134,19 +135,24 @@ func checkBrowserArgs(args []string, batch bool) error {
 	return nil
 }
 
-// viewportArgs reports whether args are set viewport <width> <height>, the size a live view
-// fits the page to: whole pixels of a screen, with no scale, which would be a phone's.
+// viewportArgs reports whether args are set viewport <width> <height> [scale], the size a live
+// view fits the page to: whole CSS pixels, and the device pixels per CSS pixel of the user's
+// screen, 1 to 4 in hundredths, so that the frames are as sharp as the screen. It is never a
+// phone's: agent-browser's set viewport has no mobile switch.
 func viewportArgs(args []string) bool {
-	if len(args) != 4 || args[1] != "viewport" {
+	if (len(args) != 4 && len(args) != 5) || args[1] != "viewport" {
 		return false
 	}
-	for _, a := range args[2:] {
+	for _, a := range args[2:4] {
 		if n, err := strconv.Atoi(a); err != nil || n < 1 || n > 10000 || strconv.Itoa(n) != a {
 			return false
 		}
 	}
-	return true
+	return len(args) == 4 || viewportScale.MatchString(args[4]) && args[4] <= "4"
 }
+
+// viewportScale is a page's device scale factor as set viewport takes it: 1 to 4, in hundredths.
+var viewportScale = regexp.MustCompile(`^[1-4](\.[0-9]{1,2})?$`)
 
 // checkBrowserSession picks the command's session. close is allowed only as the whole
 // command on an ephemeral slot, where it ends the session; the profile is never closed.
@@ -217,6 +223,11 @@ func writeStealthChromium() error {
 func browserEnv(slot browserSlot) []string {
 	return []string{
 		"AGENT_BROWSER_STREAM_PORT=" + strconv.Itoa(slot.port),
+		// Without a bound of its own the screencast is bound by the page's width in CSS pixels,
+		// which would scale the frames of a page at 2x back down to 1x. This is the largest page
+		// at 1x, which a live view keeps a page and its scale within (internal/browser).
+		"AGENT_BROWSER_STREAM_MAX_WIDTH=3840",
+		"AGENT_BROWSER_STREAM_MAX_HEIGHT=2160",
 		"AGENT_BROWSER_NO_WEBMCP=1",
 		"AGENT_BROWSER_IDLE_TIMEOUT_MS=0", // Studio stops the whole VM, and ephemeral sessions, when idle
 	}

@@ -53,6 +53,11 @@ func (s *Server) browserError(err error) error {
 	return apiError(err)
 }
 
+// resizedBrowser is what a fit gave the page.
+type resizedBrowser struct {
+	Scale float64 `json:"scale" doc:"The device pixels per CSS pixel the page got: the asked scale within a 3840×2160 frame, or 1 from a guest agent from before scales"`
+}
+
 func (s *Server) registerBrowser(api huma.API) {
 	need := func() error {
 		if s.Browser == nil {
@@ -154,20 +159,24 @@ func (s *Server) registerBrowser(api huma.API) {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`
 		Body     struct {
-			Width   int    `json:"width" minimum:"320" maximum:"3840" doc:"The page's width in CSS pixels"`
-			Height  int    `json:"height" minimum:"200" maximum:"2160" doc:"The page's height in CSS pixels"`
-			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+			Width   int     `json:"width" minimum:"320" maximum:"3840" doc:"The page's width in CSS pixels"`
+			Height  int     `json:"height" minimum:"200" maximum:"2160" doc:"The page's height in CSS pixels"`
+			Scale   float64 `json:"scale,omitempty" minimum:"1" maximum:"4" doc:"Device pixels per CSS pixel of the user's screen, so the frames are as sharp as it; Studio keeps a frame within 3840×2160 pixels and rounds down to hundredths. Omitted is 1."`
+			Session string  `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "resizeBrowser", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{teammate}/browser/viewport", Tags: []string{"browser"},
-		DefaultStatus: http.StatusNoContent,
-		Description:   "Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720.",
-	}, func(ctx context.Context, in *resizeBrowserIn) (*struct{}, error) {
+		Description: "Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720 at 1x.",
+	}, func(ctx context.Context, in *resizeBrowserIn) (*struct{ Body resizedBrowser }, error) {
 		if err := need(); err != nil {
 			return nil, err
 		}
-		return nil, s.browserError(s.Browser.Resize(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Width, in.Body.Height))
+		scale, err := s.Browser.Resize(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Width, in.Body.Height, in.Body.Scale)
+		if err != nil {
+			return nil, s.browserError(err)
+		}
+		return &struct{ Body resizedBrowser }{resizedBrowser{Scale: scale}}, nil
 	})
 
 	type closeSessionIn struct {

@@ -2,7 +2,9 @@ package browser
 
 import (
 	"errors"
+	"math"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -21,7 +23,7 @@ func TestResizeSetsTheViewport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", 1024, 640); err != nil {
+	if _, err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", 1024, 640, 0); err != nil {
 		t.Fatal(err)
 	}
 	cmds := f.fb.allCommands()
@@ -33,13 +35,54 @@ func TestResizeSetsTheViewport(t *testing.T) {
 		t.Errorf("the resize was logged: %d actions, then %d (%v)", len(actions), len(again), err)
 	}
 
-	sent := len(cmds)
-	for _, size := range [][2]int{{319, 640}, {3841, 640}, {1024, 199}, {1024, 2161}} {
-		if err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", size[0], size[1]); !errors.Is(err, ErrBadViewport) {
-			t.Errorf("%v: %v", size, err)
+	// A screen's scale goes along, within a 4K frame and in hundredths; 1x says none.
+	for _, c := range []struct {
+		w, h  int
+		scale float64
+		want  []string
+	}{
+		{1024, 640, 2, []string{"set", "viewport", "1024", "640", "2"}},
+		{1600, 1000, 1.25, []string{"set", "viewport", "1600", "1000", "1.25"}},
+		{1366, 700, 1.333333, []string{"set", "viewport", "1366", "700", "1.33"}},
+		{2400, 1200, 2, []string{"set", "viewport", "2400", "1200", "1.6"}},
+		{3840, 2160, 2, []string{"set", "viewport", "3840", "2160"}},
+		{1024, 640, 1, []string{"set", "viewport", "1024", "640"}},
+	} {
+		got, err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", c.w, c.h, c.scale)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := c.want[len(c.want)-1]; len(c.want) == 5 && strconv.FormatFloat(got, 'f', -1, 64) != want || len(c.want) == 4 && got != 1 {
+			t.Errorf("%dx%d at %v got the scale %v", c.w, c.h, c.scale, got)
+		}
+		cmds := f.fb.allCommands()
+		if got := cmds[len(cmds)-1].Args; !slices.Equal(got, c.want) {
+			t.Errorf("%dx%d at %v: %q, want %q", c.w, c.h, c.scale, got, c.want)
 		}
 	}
-	if err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "e-nothere", 1024, 640); !errors.Is(err, ErrNoSession) {
+
+	// A guest agent from before scales gets the size alone.
+	f.fb.mu.Lock()
+	f.fb.unscaled = true
+	f.fb.mu.Unlock()
+	if got, err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", 1024, 640, 2); err != nil || got != 1 {
+		t.Fatalf("an older guest: %v, %v", got, err)
+	}
+	cmds = f.fb.allCommands()
+	if got := cmds[len(cmds)-1].Args; !slices.Equal(got, []string{"set", "viewport", "1024", "640"}) {
+		t.Errorf("an older guest got %q", got)
+	}
+
+	sent := len(cmds)
+	for _, c := range []struct {
+		w, h  int
+		scale float64
+	}{{319, 640, 1}, {3841, 640, 1}, {1024, 199, 1}, {1024, 2161, 1}, {1024, 640, 0.5}, {1024, 640, 4.5}, {1024, 640, math.NaN()}} {
+		if _, err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "", c.w, c.h, c.scale); !errors.Is(err, ErrBadViewport) {
+			t.Errorf("%+v: %v", c, err)
+		}
+	}
+	if _, err := f.svc.Resize(f.ctx, f.env, f.ada.ID, "e-nothere", 1024, 640, 0); !errors.Is(err, ErrNoSession) {
 		t.Errorf("a missing session: %v", err)
 	}
 	if n := len(f.fb.allCommands()); n != sent {

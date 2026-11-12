@@ -90,7 +90,12 @@ type Status = {
 type Call = { id: number; done: boolean; result?: unknown; error?: string }
 type FakeBrowser = {
   browser?: {
-    sessions: { slot: number; url: string; viewport: [number, number] }[]
+    sessions: {
+      slot: number
+      url: string
+      viewport: [number, number]
+      scale: number
+    }[]
     inputs: {
       type: string
       eventType?: string
@@ -381,6 +386,47 @@ test("the page can be fitted to the live view, and follows its size", async ({
 
 // A paste on the live view types this computer's clipboard into the page, once the user has
 // read what the teammate sees of it; Ctrl+V doesn't reach the remote browser as a key.
+// On a screen of two device pixels to a CSS pixel, the fitted page is at 2x, so its frames have
+// a pixel for each of the screen's and the view isn't blurred; clicks still land in CSS pixels.
+test.describe("at 2x", () => {
+  test.use({ deviceScaleFactor: 2 })
+
+  test("a fitted page has the screen's scale, and frames as sharp as it", async ({
+    page,
+    api,
+    env,
+  }) => {
+    const { tm } = await browsing(page, api, env)
+    const address = page.getByLabel("Browser address")
+    await address.fill("https://example.com/login")
+    await address.press("Enter")
+    const canvas = page.getByLabel("Live view of the browser")
+    await expect(canvas).toHaveAttribute("width", "640")
+    const session = async () =>
+      (await api.json<FakeBrowser>(
+        "GET",
+        `/api/e2e/teammates/${tm}/browser`
+      ))!.browser!.sessions.find((s) => s.slot === 0)!
+    const box = (await page.getByTestId("browser-view").boundingBox())!
+    const room = [Math.floor(box.width), Math.floor(box.height)]
+
+    await page.getByRole("button", { name: "Browser options" }).click()
+    await page
+      .getByRole("menuitemcheckbox", { name: "Fit the page to this view" })
+      .click()
+    await page.keyboard.press("Escape")
+    await expect
+      .poll(async () => {
+        const s = await session()
+        return [...s.viewport, s.scale]
+      })
+      .toEqual([...room, 2])
+    // The canvas holds twice the page's pixels, shown at the page's size in CSS pixels.
+    await expect(canvas).toHaveAttribute("width", String(room[0] * 2))
+    expect(Math.round((await canvas.boundingBox())!.width)).toBe(room[0])
+  })
+})
+
 test("a paste into the live view types the clipboard, after a warning", async ({
   page,
   api,

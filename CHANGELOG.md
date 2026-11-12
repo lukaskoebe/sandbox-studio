@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A teammate's browser fitted to the view is sharp on a high-density screen: the page gets the
+  screen's scale, so its frames have a pixel for each of the screen's.
 - A preview behind HTTP basic auth asks for the sign-in in Studio's own dialog over the preview
   instead of the browser's over all of Studio, then opens the page again. Studio keeps the
   sign-in in memory until it stops and sends it to that preview only.

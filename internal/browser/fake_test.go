@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -54,6 +55,8 @@ type fakeBrowser struct {
 	forwards map[string][]int
 	// element is what the page's script answers to element-at, which nil leaves null.
 	element any
+	// unscaled refuses a scale on set viewport, as a guest agent from before scales does.
+	unscaled bool
 }
 
 // fakeUpload is a file the fake sandboxes received.
@@ -133,6 +136,9 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 	case "close":
 		return map[string]any{}, nil
 	case "set":
+		if f.unscaled && len(args) > 4 {
+			return nil, errors.New(olderGuestViewport)
+		}
 		return map[string]any{"width": args[2], "height": args[3]}, nil
 	case "click", "press", "select", "scroll", "back", "forward", "reload", "wait":
 		return map[string]any{}, nil

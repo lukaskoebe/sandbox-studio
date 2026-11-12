@@ -2802,7 +2802,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720. */
+        /** @description Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720 at 1x. */
         put: operations["resizeBrowser"];
         post?: never;
         delete?: never;
@@ -5908,6 +5908,11 @@ export interface components {
              * @description The page's height in CSS pixels
              */
             height: number;
+            /**
+             * Format: double
+             * @description Device pixels per CSS pixel of the user's screen, so the frames are as sharp as it; Studio keeps a frame within 3840×2160 pixels and rounds down to hundredths. Omitted is 1.
+             */
+            scale?: number;
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
             /**
@@ -5992,6 +5997,13 @@ export interface components {
             templateName?: string;
             /** Format: int64 */
             workspaceMiB: number;
+        };
+        ResizedBrowser: {
+            /**
+             * Format: double
+             * @description The device pixels per CSS pixel the page got: the asked scale within a 3840×2160 frame, or 1 from a guest agent from before scales
+             */
+            scale: number;
         };
         ResourceUse: {
             /**
@@ -14383,12 +14395,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResizedBrowser"];
+                };
             };
             /** @description Error */
             default: {
