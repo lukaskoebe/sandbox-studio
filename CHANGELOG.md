@@ -8,6 +8,12 @@
 - A push to the branch a repository on this computer has checked out can update its files: the
   card offers **Update the checked-out files too**, ticked, and git still refuses the push when
   the working copy has changes of its own. Before, git always refused it.
+- One base serves several teammates: **New computer** keeps its **Teammate** field when it starts
+  from a base, **Fork** has one too, and either can pick **None**. A stopped computer changes its
+  teammate under **Teammate** in its ⋯ menu; the new one's rules, secrets and harness settings
+  apply from its next start. The home is copied or kept as it is, harness history and logins
+  included, as the dialogs say. In the API, a fork takes `teammateId` and
+  `PUT …/sandboxes/{id}/teammate` changes the owner.
 
 ## Unreleased
 

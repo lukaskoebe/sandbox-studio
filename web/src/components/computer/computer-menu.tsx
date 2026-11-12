@@ -16,6 +16,7 @@ import {
   PlusIcon,
   TerminalIcon,
   TrashIcon,
+  UserIcon,
 } from "@phosphor-icons/react"
 import { SaveCheckpointDialog } from "@/components/checkpoints-section"
 import { ConnectionsSheet } from "@/components/connections-panel"
@@ -34,6 +35,7 @@ import {
 import { formatMiB, HistorySheet } from "@/components/sandbox-details"
 import { useSandboxLifecycle } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxDialog } from "@/components/sandbox-options-menu"
+import { SandboxTeammateDialog } from "@/components/sandbox-teammate-dialog"
 import { SSHDialog } from "@/components/ssh-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -65,6 +67,7 @@ type Dialog =
   | "disks"
   | "connections"
   | "ssh"
+  | "teammate"
   | "another"
   | "delete"
 
@@ -259,6 +262,16 @@ export function ComputerMenu({
                   Connect over SSH
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  title="Give this computer another teammate, or none"
+                  onClick={() => setDialog("teammate")}
+                >
+                  <UserIcon />
+                  Teammate
+                  <span className="ml-auto truncate text-caption text-muted-foreground">
+                    {owner?.name ?? "None"}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   disabled={
                     p !== "ready" && p !== "stopped" && p !== "suspended"
                   }
@@ -415,6 +428,14 @@ export function ComputerMenu({
         onOpenChange={close}
       />
       {dialog === "ssh" && <SSHDialog sandbox={sb} open onOpenChange={close} />}
+      {dialog === "teammate" && (
+        <SandboxTeammateDialog
+          env={env}
+          sandbox={sb}
+          open
+          onOpenChange={close}
+        />
+      )}
       {owner && (
         <CreateSandboxDialog
           env={env}

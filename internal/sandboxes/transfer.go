@@ -163,13 +163,16 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 // fork's on-fork script, see startForkScript. The fork is returned in state creating; the copy
 // runs in the background, holding the source, and a failed fork keeps its record in state failed.
 func (m *Manager) Fork(ctx context.Context, envID, id, name string, opts ForkOptions) (View, error) {
-	return m.fork(ctx, envID, id, name, opts.resolve, true)
+	return m.fork(ctx, envID, id, name, opts.resolve, opts.Teammate, true)
 }
 
 // ForkOptions says what a fork does beyond copying the workspace and the home. An option left
 // nil takes the source's fork default: a base's own, or else the tools and nothing else.
 type ForkOptions struct {
 	Docker, Tools, Script *bool
+	// Teammate owns the fork: nil keeps the source's, "" makes it a computer without one. A base
+	// serves several teammates this way; the caller checks the teammate is the environment's.
+	Teammate *string
 }
 
 func (o ForkOptions) resolve(source store.Sandbox) store.ForkDefaults {
@@ -190,10 +193,10 @@ func (o ForkOptions) resolve(source store.Sandbox) store.ForkDefaults {
 	return d
 }
 
-// fork is Fork, with pick saying what it does for the source it finds. With recordBase, the fork
-// records the base a merge back finds its changes against; a merge's scratch sandbox doesn't
-// need one.
-func (m *Manager) fork(ctx context.Context, envID, id, name string, pick func(store.Sandbox) store.ForkDefaults, recordBase bool) (View, error) {
+// fork is Fork, with pick saying what it does for the source it finds and teammate who owns the
+// fork (nil: the source's owner). With recordBase, the fork records the base a merge back finds
+// its changes against; a merge's scratch sandbox doesn't need one.
+func (m *Manager) fork(ctx context.Context, envID, id, name string, pick func(store.Sandbox) store.ForkDefaults, teammate *string, recordBase bool) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
@@ -245,9 +248,13 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, pick func(st
 			return View{}, err
 		}
 	}
+	owner := sb.TeammateID
+	if teammate != nil {
+		owner = *teammate
+	}
 	// The fork pins the source's template, so it gets the source's home disk, if any.
 	rec, err := m.Store.CreateSandbox(ctx, store.Sandbox{
-		EnvironmentID: envID, TemplateID: sb.TemplateID, TeammateID: sb.TeammateID, Name: name,
+		EnvironmentID: envID, TemplateID: sb.TemplateID, TeammateID: owner, Name: name,
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
 		WorkspaceMiB: sb.WorkspaceMiB, DockerMiB: sb.DockerMiB, HomeMiB: sb.HomeMiB,
 		ForkedFromID: sb.ID, ForkedFromGeneration: sb.Generation,

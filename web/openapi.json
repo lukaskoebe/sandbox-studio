@@ -3986,6 +3986,10 @@
             "description": "Run ~/.config/studio/on-fork.sh in a terminal of the new sandbox once it is up. Omitted, it follows the sandbox's fork defaults.",
             "type": "boolean"
           },
+          "teammateId": {
+            "description": "The teammate that owns the new sandbox, so one base serves several teammates. Omitted, it is the source's; empty, the sandbox has none. The home is copied as it is, the source teammate's harness history and logins included.",
+            "type": "string"
+          },
           "tools": {
             "description": "Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults.",
             "type": "boolean"
@@ -9058,6 +9062,19 @@
         },
         "required": [
           "on"
+        ],
+        "type": "object"
+      },
+      "SetTeammateInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "teammateId": {
+            "description": "The teammate that owns the sandbox from now on; empty for none",
+            "type": "string"
+          }
+        },
+        "required": [
+          "teammateId"
         ],
         "type": "object"
       },
@@ -19589,6 +19606,70 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/teammate": {
+      "put": {
+        "description": "The sandbox has to be stopped. The new owner's rules, secrets and harness files apply from its next start; its home stays as it is, the old owner's harness history and logins included. Chats started by the old owner stay theirs.",
+        "operationId": "setSandboxTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTeammateInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Give a sandbox another teammate",
         "tags": [
           "sandboxes"
         ]

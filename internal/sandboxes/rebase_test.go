@@ -1095,3 +1095,60 @@ func TestSetBaseCanBeUndone(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// A base serves several teammates: a fork takes the one asked for, or none, and a stopped
+// computer can change its owner later; a running one can't, since what it runs is the old
+// owner's.
+func TestForkAndOwnerChangeTakeAnotherTeammate(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	tf.guestBoots = true
+	ada, err := f.store.CreateTeammate(f.ctx, store.Teammate{EnvironmentID: f.env.ID, Name: "ada", Harness: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := func(id string) string {
+		t.Helper()
+		sb, err := f.store.Sandbox(f.ctx, f.env.ID, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sb.TeammateID
+	}
+	fork := func(name string, teammate *string) string {
+		t.Helper()
+		answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, name, ForkOptions{Teammate: teammate})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.manager.Wait(f.ctx, answered.ID); err != nil {
+			t.Fatal(err)
+		}
+		return answered.ID
+	}
+	adas := fork("adas", &ada.ID)
+	if got := owner(adas); got != ada.ID {
+		t.Fatalf("the fork's teammate = %q", got)
+	}
+	none := ""
+	if got := owner(fork("nobodys", &none)); got != "" {
+		t.Fatalf("a fork without a teammate has %q", got)
+	}
+	if got := owner(fork("same", nil)); got != owner(f.sandbox.ID) {
+		t.Fatalf("a plain fork's teammate = %q", got)
+	}
+
+	// The fork runs once it is made; its owner changes only once it is stopped.
+	sb, _ := f.store.Sandbox(f.ctx, f.env.ID, adas)
+	tf.setStatus(VMName(sb), runtime.StatusRunning)
+	if _, err := f.manager.SetTeammate(f.ctx, f.env.ID, adas, ""); !errors.Is(err, ErrLifecycleState) {
+		t.Fatalf("a running computer changed its owner: %v", err)
+	}
+	tf.setStatus(VMName(sb), runtime.StatusStopped)
+	if v, err := f.manager.SetTeammate(f.ctx, f.env.ID, adas, ""); err != nil || v.TeammateID != "" || owner(adas) != "" {
+		t.Fatalf("set no teammate: %+v %v", v.Sandbox, err)
+	}
+	if _, err := f.manager.SetTeammate(f.ctx, f.env.ID, adas, ada.ID); err != nil || owner(adas) != ada.ID {
+		t.Fatalf("set the teammate back: %v", err)
+	}
+}

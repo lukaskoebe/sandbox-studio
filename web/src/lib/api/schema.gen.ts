@@ -2103,6 +2103,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/teammate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give a sandbox another teammate
+         * @description The sandbox has to be stopped. The new owner's rules, secrets and harness files apply from its next start; its home stays as it is, the old owner's harness history and logins included. Chats started by the old owner stay theirs.
+         */
+        put: operations["setSandboxTeammate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/terminals": {
         parameters: {
             query?: never;
@@ -4563,6 +4583,8 @@ export interface components {
             name: string;
             /** @description Run ~/.config/studio/on-fork.sh in a terminal of the new sandbox once it is up. Omitted, it follows the sandbox's fork defaults. */
             script?: boolean;
+            /** @description The teammate that owns the new sandbox, so one base serves several teammates. Omitted, it is the source's; empty, the sandbox has none. The home is copied as it is, the source teammate's harness history and logins included. */
+            teammateId?: string;
             /** @description Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults. */
             tools?: boolean;
         };
@@ -6276,6 +6298,10 @@ export interface components {
         SetStealthInBody: {
             /** @description Run the teammate's browser in stealth mode */
             on: boolean;
+        };
+        SetTeammateInBody: {
+            /** @description The teammate that owns the sandbox from now on; empty for none */
+            teammateId: string;
         };
         SetTeammateLevelInBody: {
             /** @description The level of the teammate's sandboxes, one of locked, guarded, assisted or open; empty hands the teammate back to the environment's level */
@@ -12283,6 +12309,44 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setSandboxTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTeammateInBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

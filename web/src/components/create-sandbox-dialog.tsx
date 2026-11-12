@@ -45,7 +45,10 @@ export function CreateSandboxDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState("")
-  const [teammateId, setTeammateId] = useState(teammate)
+  // Unset follows the base's teammate when starting from one; "" is none.
+  const [teammateId, setTeammateId] = useState<string | undefined>(
+    teammate || undefined
+  )
   const [startFrom, setStartFrom] = useState(emptyStart)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -54,6 +57,7 @@ export function CreateSandboxDialog({
   })
   const bases = (sandboxes.data ?? []).filter((sb) => sb.forkDefaults)
   const base = bases.find((sb) => sb.id === startFrom)
+  const owner = teammateId ?? base?.teammateId ?? ""
   const created = {
     onSuccess: (sb: Sandbox) => {
       queryClient.invalidateQueries({
@@ -61,7 +65,7 @@ export function CreateSandboxDialog({
       })
       onOpenChange(false)
       setName("")
-      setTeammateId("")
+      setTeammateId(undefined)
       setStartFrom(emptyStart)
       navigate({ to: "/e/$env/sandboxes/$id", params: { env, id: sb.id } })
     },
@@ -96,13 +100,13 @@ export function CreateSandboxDialog({
               // No options: a base's fork defaults say what it takes.
               fork.mutate({
                 params: { path: { env, id: base.id } },
-                body: { name },
+                body: { name, teammateId: owner },
               })
               return
             }
             create.mutate({
               params: { path: { env } },
-              body: { name, teammateId: teammateId || undefined },
+              body: { name, teammateId: owner || undefined },
             })
           }}
         >
@@ -164,14 +168,17 @@ export function CreateSandboxDialog({
                 ))}
             </Field>
           )}
-          {!base && (
-            <TeammateField
-              env={env}
-              id="sandbox-teammate"
-              value={teammateId}
-              onChange={setTeammateId}
-            />
-          )}
+          <TeammateField
+            env={env}
+            id="sandbox-teammate"
+            value={owner}
+            onChange={setTeammateId}
+            description={
+              base
+                ? `The home is copied as it is, so ${base.name}'s harness history and logins come along whoever owns the copy.`
+                : undefined
+            }
+          />
           <DialogFooter>
             <Button
               type="submit"
@@ -204,5 +211,5 @@ function baseCopies(base: Sandbox) {
   const script = base.forkDefaults?.script
     ? " Then it runs ~/.config/studio/on-fork.sh in a terminal."
     : ""
-  return `Copies ${copied.join(", ")} and ${last}, with ${base.name}'s template, resources and teammate.${script}`
+  return `Copies ${copied.join(", ")} and ${last}, with ${base.name}'s template and resources.${script}`
 }

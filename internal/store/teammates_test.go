@@ -123,8 +123,18 @@ func TestProvidersAndTeammates(t *testing.T) {
 	if owners, err := s.SandboxTeammates(ctx, work.ID); err != nil || owners[sb.ID] != "a1" || owners[unowned.ID] != "" {
 		t.Fatalf("owners: %v %v", owners, err)
 	}
-	if _, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET teammate_id = NULL WHERE id = ?", sb.ID); err == nil {
-		t.Fatal("sandbox ownership changed")
+	// The owner can change, to none or a teammate of the same environment only.
+	if err := s.SetSandboxTeammate(ctx, work.ID, sb.ID, "nobody"); err == nil {
+		t.Fatal("sandbox owned by a teammate that doesn't exist")
+	}
+	if err := s.SetSandboxTeammate(ctx, work.ID, sb.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Sandbox(ctx, work.ID, sb.ID); err != nil || got.TeammateID != "" {
+		t.Fatalf("no owner: %+v %v", got, err)
+	}
+	if err := s.SetSandboxTeammate(ctx, work.ID, sb.ID, "a1"); err != nil {
+		t.Fatal(err)
 	}
 
 	// Teammate rules: same environment, and not both scopes.

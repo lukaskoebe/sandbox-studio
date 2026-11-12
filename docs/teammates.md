@@ -302,8 +302,14 @@ failure is logged, and the teammate can be added by hand.
 
 ## Ownership and rules
 
-- A sandbox can be created with a `teammateId` (base or template). Ownership never changes;
-  fork copies it. Existing sandboxes are unowned.
+- A sandbox can be created with a `teammateId` (base or template). A fork takes the source's
+  unless its request names another (`teammateId`, empty for none), so one base serves several
+  teammates. `PUT …/sandboxes/{id}/teammate` changes the owner of a stopped sandbox
+  (`Manager.SetTeammate`; migration 062 relaxed the owner trigger to "a teammate of the same
+  environment"). Stopped, since rules, secrets and the managed harness files follow the owner
+  and are applied when the guest connects; nothing running keeps the old owner's. The home is
+  not touched, so the old owner's harness history and logins stay in it, and chats keep the
+  teammate that had them. A browser sandbox keeps its teammate.
 - A rule has one scope: environment, sandbox, or teammate. A teammate rule applies only to
   sandboxes that teammate owns. Precedence: environment deny (a fence), then sandbox, then
   teammate, then environment rules. The gateway looks the owner up in the catalog for each

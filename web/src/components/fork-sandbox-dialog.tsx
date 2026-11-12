@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { TeammateField } from "@/components/teammate-field"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
 
 const namePattern = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/
@@ -67,13 +68,14 @@ export function ForkSandboxDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={!pending}>
         <ForkForm
+          env={env}
           sandbox={sandbox}
           pending={pending}
           failure={fork.isError ? errorMessage(fork.error) : undefined}
-          onSubmit={(name, options) =>
+          onSubmit={(name, options, teammateId) =>
             fork.mutate({
               params: { path: { env, id: sandbox.id } },
-              body: { name, ...options },
+              body: { name, ...options, teammateId },
             })
           }
           onCancel={() => handleOpenChange(false)}
@@ -84,20 +86,23 @@ export function ForkSandboxDialog({
 }
 
 function ForkForm({
+  env,
   sandbox,
   pending,
   failure,
   onSubmit,
   onCancel,
 }: {
+  env: string
   sandbox: Sandbox
   pending: boolean
   /** Why the last copy failed. It stays visible until the dialog closes. */
   failure?: string
-  onSubmit: (name: string, options: ForkChoices) => void
+  onSubmit: (name: string, options: ForkChoices, teammateId: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(() => forkName(sandbox.name))
+  const [teammateId, setTeammateId] = useState(sandbox.teammateId ?? "")
   const [choices, setChoices] = useState<ForkChoices>(
     () => sandbox.forkDefaults ?? { docker: false, tools: true, script: false }
   )
@@ -112,7 +117,7 @@ function ForkForm({
       onSubmit={(event) => {
         event.preventDefault()
         if (!name || invalid || pending) return
-        onSubmit(name, { ...choices, docker })
+        onSubmit(name, { ...choices, docker }, teammateId)
       }}
     >
       <DialogHeader>
@@ -189,6 +194,15 @@ function ForkForm({
           </FieldDescription>
         )}
       </Field>
+
+      <TeammateField
+        env={env}
+        id="fork-sandbox-teammate"
+        value={teammateId}
+        onChange={setTeammateId}
+        disabled={pending}
+        description="The home is copied as it is, so its harness history and logins come along whoever owns the fork."
+      />
 
       {failure && (
         <p role="alert" className="text-destructive">

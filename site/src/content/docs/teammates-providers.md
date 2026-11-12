@@ -3,7 +3,7 @@ title: Teammates and providers
 description: Configure an agent identity and connect it to an API key or a subscription.
 ---
 
-A teammate is an agent identity in one environment. It has a name, role, avatar, optional Markdown instructions (“soul”), harness, provider, model, and Git author name and email. **New rules from approvals apply to** sets the scope its approval cards preselect: this sandbox, this teammate, or the environment. One teammate can own multiple sandboxes; a sandbox's owner is selected at creation and cannot be changed later.
+A teammate is an agent identity in one environment. It has a name, role, avatar, optional Markdown instructions (“soul”), harness, provider, model, and Git author name and email. **New rules from approvals apply to** sets the scope its approval cards preselect: this sandbox, this teammate, or the environment. One teammate can own multiple sandboxes. A sandbox's owner is picked when it is created or forked, and changes later under **Teammate** in the computer's ⋯ menu while the computer is stopped: the new teammate's rules, secrets and harness settings apply from its next start, while its home, with the harness history and logins in it, stays as it is.
 
 ![The Teammates page listing agent names, harnesses, providers, models, and Git identities](../../assets/screenshots/teammates.jpg)
 
@@ -77,4 +77,4 @@ A task can also get a schedule of its own in its dialog: once at a day and time,
 
 ## Ownership and deletion
 
-Teammate rules apply only to sandboxes owned by that teammate. A teammate with sandboxes cannot be deleted until those sandboxes are removed. Deleting a teammate also removes its teammate-scoped network rules.
+Teammate rules apply only to sandboxes owned by that teammate. A teammate with sandboxes cannot be deleted until those sandboxes are removed or given another teammate. Deleting a teammate also removes its teammate-scoped network rules.

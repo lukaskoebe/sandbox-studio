@@ -121,3 +121,22 @@ func TestGuard(t *testing.T) {
 		}
 	}
 }
+
+// A fork or an owner change names a teammate of the environment, checked before the sandbox is
+// looked at.
+func TestSandboxTeammateMustBeTheEnvironments(t *testing.T) {
+	h, s := newTestServer(t)
+	env, err := s.Store.CreateEnvironment(context.Background(), "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "http://localhost:7878/api/environments/" + env.ID + "/sandboxes/sb"
+	for _, tc := range []struct{ method, url, body string }{
+		{"PUT", base + "/teammate", `{"teammateId":"nobody"}`},
+		{"POST", base + "/fork", `{"name":"copy","teammateId":"nobody"}`},
+	} {
+		if rec := do(h, tc.method, tc.url, tc.body); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "not in this environment") {
+			t.Errorf("%s %s: %d %s", tc.method, tc.url, rec.Code, rec.Body)
+		}
+	}
+}

@@ -148,7 +148,7 @@ func (m *Manager) prepareMerge(ctx context.Context, r agentRunner, mg store.Merg
 	}
 	scratch, err := m.fork(ctx, source.EnvironmentID, source.ID, name, func(store.Sandbox) store.ForkDefaults {
 		return store.ForkDefaults{}
-	}, false)
+	}, nil, false)
 	if err != nil {
 		fail(fmt.Errorf("make the scratch sandbox: %w", err))
 		return

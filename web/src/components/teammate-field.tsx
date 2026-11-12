@@ -11,19 +11,22 @@ import { $api } from "@/lib/api/client"
 
 const none = "none"
 
-/** Picks the teammate that will own a new sandbox; "" means none. */
+/** Picks the teammate that owns a sandbox; "" means none. */
 export function TeammateField({
   env,
   id,
   value,
   onChange,
   disabled,
+  description = "The agent identity working in the computer. You can change it while the computer is stopped.",
 }: {
   env: string
   id: string
   value: string
   onChange: (teammateId: string) => void
   disabled?: boolean
+  /** What the field says under it, when there are teammates to pick. */
+  description?: string
 }) {
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
@@ -61,8 +64,8 @@ export function TeammateField({
       </Select>
       <FieldDescription>
         {list.length
-          ? "The agent identity working in the sandbox. It can't change later."
-          : "Add teammates on the Teammates page to give the sandbox an owner."}
+          ? description
+          : "Add teammates on the Teammates page to give the computer an owner."}
       </FieldDescription>
     </Field>
   )

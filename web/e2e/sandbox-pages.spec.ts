@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import { expect, sandboxName, terminal, test } from "./fixtures"
+import { addTeammate, expect, sandboxName, terminal, test } from "./fixtures"
 
 /** The session the URL names; the router quotes a name that reads as a number. */
 function termOf(page: Page) {
@@ -486,7 +486,8 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await create.getByLabel("Name").fill(`${name}-task`)
   await create.getByLabel("Start from").click()
   await page.getByRole("option", { name, exact: true }).click()
-  await expect(create.getByLabel("Teammate")).toBeHidden()
+  // A base serves any teammate.
+  await expect(create.getByLabel("Teammate")).toBeVisible()
   await expect(create).toContainText(`Stop ${name} to copy its Docker images.`)
   await expect(create.getByRole("button", { name: "Create" })).toBeDisabled()
   await page.keyboard.press("Escape")
@@ -511,6 +512,7 @@ test("a computer becomes a base, and new computers and forks start from it", asy
     docker: true,
     tools: false,
     script: true,
+    teammateId: "",
   })
   await expect(fork.getByRole("alert")).toContainText(
     "this runtime cannot copy workspaces"
@@ -526,7 +528,10 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await expect(create).toContainText("Docker's data")
   const started = page.waitForRequest(/\/fork$/)
   await create.getByRole("button", { name: "Create" }).click()
-  expect((await started).postDataJSON()).toEqual({ name: `${name}-task` })
+  expect((await started).postDataJSON()).toEqual({
+    name: `${name}-task`,
+    teammateId: "",
+  })
   await page.keyboard.press("Escape")
 
   await more.click()
@@ -542,4 +547,54 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await page.getByRole("menuitem", { name: /^New computer/ }).click()
   await expect(create.getByLabel("Name")).toBeVisible()
   await expect(create.getByLabel("Start from")).toHaveCount(0)
+})
+
+// A computer's teammate changes while it is stopped: the menu says who owns it, and the dialog
+// holds the choice while the computer runs.
+test("a stopped computer gets another teammate from its menu", async ({
+  page,
+  api,
+  env,
+}) => {
+  const teammate = `Owner ${Math.random().toString(36).slice(2, 6)}`
+  const owner = await addTeammate(api, env, teammate)
+  const name = sandboxName("owner")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
+  const more = screen.getByRole("button", { name: `More for ${name}` })
+
+  await more.click()
+  await page.getByRole("menuitem", { name: /^Teammate/ }).click()
+  const dialog = page.getByRole("dialog", { name: `Teammate of ${name}` })
+  await expect(dialog).toContainText(
+    "Stop the computer to change its teammate."
+  )
+  await expect(dialog.getByLabel("Teammate")).toBeDisabled()
+  await page.keyboard.press("Escape")
+
+  await screen
+    .getByRole("button", { name: `Stop ${name}; its disk is kept` })
+    .click()
+  await expect(
+    screen.getByRole("button", { name: `Start ${name}` })
+  ).toBeVisible()
+  await more.click()
+  await page.getByRole("menuitem", { name: /^Teammate/ }).click()
+  await dialog.getByLabel("Teammate").click()
+  await page.getByRole("option", { name: teammate }).click()
+  await dialog.getByRole("button", { name: "Change" }).click()
+  await expect(dialog).toBeHidden()
+  // A teammate's computer is on the teammate's page, and its menu names the owner.
+  await expect(page).toHaveURL(
+    new RegExp(`/e/${env}/teammates/${owner}\\?.*computer=${id}`)
+  )
+  await page.getByRole("button", { name: `More for ${name}` }).click()
+  await expect(
+    page.getByRole("menuitem", { name: `Teammate ${teammate}` })
+  ).toBeVisible()
+  await page.getByRole("menuitem", { name: /^Teammate/ }).click()
+  await dialog.getByLabel("Teammate").click()
+  await page.getByRole("option", { name: "None" }).click()
+  await dialog.getByRole("button", { name: "Change" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/sandboxes/${id}`))
 })

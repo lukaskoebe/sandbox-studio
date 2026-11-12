@@ -185,8 +185,12 @@ func TestMigrateTeammates(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO memory_pages (id, environment_id, scope, slug, title, kind, tier, created_at, updated_at) VALUES ('pg2', 'env', 'shared', 'x', 'X', 'persona-self', 'user', 1, 1)`); err == nil {
 		t.Error("the old page kind is still allowed")
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE sandboxes SET teammate_id = NULL WHERE id = 'sb1'`); err == nil || !strings.Contains(err.Error(), "sandbox teammate is immutable") {
-		t.Errorf("changing the owner: %v", err)
+	// The owner can change (migration 062), but only to a teammate of the environment.
+	if _, err := db.ExecContext(ctx, `UPDATE sandboxes SET teammate_id = 'nobody' WHERE id = 'sb1'`); err == nil || !strings.Contains(err.Error(), "sandbox teammate must belong to the same environment") {
+		t.Errorf("an owner from nowhere: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE sandboxes SET teammate_id = NULL WHERE id = 'sb1'`); err != nil {
+		t.Errorf("clearing the owner: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO rules (id, environment_id, host, ports, action, created_at, teammate_id) VALUES ('r2', 'other', 'x', '', 'allow', 1, 'p1')`); err == nil {
 		t.Error("a rule took a teammate of another environment")

@@ -107,6 +107,8 @@ func (s *Server) registerTransfers(api huma.API) {
 			Docker *bool  `json:"docker,omitempty" doc:"Also copy Docker's images, containers and volumes, which needs a stopped sandbox. Omitted, it follows the sandbox's fork defaults."`
 			Tools  *bool  `json:"tools,omitempty" doc:"Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults."`
 			Script *bool  `json:"script,omitempty" doc:"Run ~/.config/studio/on-fork.sh in a terminal of the new sandbox once it is up. Omitted, it follows the sandbox's fork defaults."`
+			// A pointer, since empty means no teammate rather than the source's.
+			TeammateID *string `json:"teammateId,omitempty" doc:"The teammate that owns the new sandbox, so one base serves several teammates. Omitted, it is the source's; empty, the sandbox has none. The home is copied as it is, the source teammate's harness history and logins included."`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -118,9 +120,35 @@ func (s *Server) registerTransfers(api huma.API) {
 			"Docker state and tools are copied when asked for, by the request or the sandbox's fork defaults; Docker state needs a stopped sandbox. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *forkIn) (*sandboxOut, error) {
+		if in.Body.TeammateID != nil {
+			if err := s.checkTeammate(ctx, in.Env, *in.Body.TeammateID); err != nil {
+				return nil, err
+			}
+		}
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), transferTimeout)
 		defer cancel()
-		view, err := s.Sandboxes.Fork(ctx, in.Env, in.ID, in.Body.Name, sandboxes.ForkOptions{Docker: in.Body.Docker, Tools: in.Body.Tools, Script: in.Body.Script})
+		view, err := s.Sandboxes.Fork(ctx, in.Env, in.ID, in.Body.Name, sandboxes.ForkOptions{Docker: in.Body.Docker, Tools: in.Body.Tools, Script: in.Body.Script, Teammate: in.Body.TeammateID})
+		return &sandboxOut{view}, apiError(err)
+	})
+
+	type setTeammateIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Body struct {
+			TeammateID string `json:"teammateId" doc:"The teammate that owns the sandbox from now on; empty for none"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setSandboxTeammate", Method: http.MethodPut,
+		Path: "/api/environments/{env}/sandboxes/{id}/teammate", Tags: []string{"sandboxes"},
+		Summary: "Give a sandbox another teammate",
+		Description: "The sandbox has to be stopped. The new owner's rules, secrets and harness files apply from its next start; its home stays as it is, the old owner's harness history and logins included. " +
+			"Chats started by the old owner stay theirs.",
+	}, func(ctx context.Context, in *setTeammateIn) (*sandboxOut, error) {
+		if err := s.checkTeammate(ctx, in.Env, in.Body.TeammateID); err != nil {
+			return nil, err
+		}
+		view, err := s.Sandboxes.SetTeammate(ctx, in.Env, in.ID, in.Body.TeammateID)
 		return &sandboxOut{view}, apiError(err)
 	})
 

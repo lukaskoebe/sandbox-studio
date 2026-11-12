@@ -124,7 +124,7 @@ Keep one computer prepared, with your repositories in `/workspace`, your tools, 
 
 A base gets a small **base** mark. **New computer** then has a **Start from** field listing your bases, and **Fork** starts with the same choices, which you can change for that copy.
 
-A copy keeps the base's template, resources and teammate. It has its own network approvals, so a host you allowed for the base alone isn't allowed for the copy. To allow a host or give a secret to every copy, scope the rule or secret to the teammate.
+A copy keeps the base's template and resources. Its teammate is the base's unless you pick another, or **None**, so one base can serve several teammates. The home is copied as it is, so the base's harness history and logins come along whoever owns the copy. A copy has its own network approvals, so a host you allowed for the base alone isn't allowed for the copy. To allow a host or give a secret to every copy, scope the rule or secret to the teammate.
 
 Each copy is a full copy on your disk, as Studio can't share data between them yet. A computer gives one copy at a time, and it shows as running while it does.
 

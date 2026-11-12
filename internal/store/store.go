@@ -592,6 +592,27 @@ func (s *Store) SetSandboxForkDefaults(ctx context.Context, envID, id string, de
 	return nil
 }
 
+// SetSandboxTeammate gives a sandbox another owner, or with "" none. A browser sandbox keeps
+// its teammate.
+func (s *Store) SetSandboxTeammate(ctx context.Context, envID, id, teammateID string) error {
+	var value any
+	if teammateID != "" {
+		value = teammateID
+	}
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET teammate_id = ? WHERE environment_id = ? AND id = ? AND kind = ''", value, envID, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DeleteSandbox removes a sandbox record.
 func (s *Store) DeleteSandbox(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
