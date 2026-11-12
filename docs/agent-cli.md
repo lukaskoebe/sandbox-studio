@@ -62,7 +62,12 @@ work:
 | 0 | done |
 | 1 | refused or failed; the message goes to stderr |
 | 2 | a usage mistake: an unknown command or flag, or a missing argument |
+| 8 | `pr checks`: a check still runs |
 | 75 | waiting for the user (`EX_TEMPFAIL`) |
+
+`pr checks` also exits with 1 when a check failed or was cancelled, as `gh pr checks` does.
+With `--wait` it reads the checks every 30 seconds until none runs, each time about the
+number the first answer found.
 
 A call waits for the user when one of these is true:
 
@@ -124,6 +129,7 @@ at once, as for `~/memory` (`agentproto.HomeDir`).
                                   conversation.md   the comments
                                   reviews.md        reviews and line comments
                                   files.md          the files it changes, with + and −
+                                  checks.md         an open one's CI checks, failed first, with the end of their logs
 
 - **Which repositories.** Those the workspace has a remote for through `git.studio.internal`
   (the guest's `git-remotes` files op, with the branch checked out), those the sandbox pushed
@@ -149,5 +155,13 @@ at once, as for `~/memory` (`agentproto.HomeDir`).
   instructions.
 
 The concept also had conditional requests (`If-None-Match`) per pull request; the 2-minute
-shared listing and the `updated` check do that job with the adapters as they are. Issues and
-checks are not in `~/forge` yet.
+shared listing and the `updated` check do that job with the adapters as they are. Issues are not
+in `~/forge` yet.
+
+- **Checks.** An open pull request in full gets `checks.md` ([git review](git-review.md#ci-checks)).
+  Its front matter has `head_sha` and `state`, and failed checks come first, then the end of
+  each failed check's log.
+- **When checks are read again.** On every sync while a check runs or after the head moved.
+  Finished checks of the same head are read again after 30 minutes, since a check can be run
+  again.
+- **Log cache.** A finished check's log is kept, at most 200 of them.

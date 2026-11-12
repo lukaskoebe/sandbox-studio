@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `studio pr checks` shows a pull request's CI checks: GitHub's check runs and statuses,
+  GitLab's pipeline jobs, and Forgejo's and Gitea's commit statuses.
+  - A failed check comes with the end of its log, where the forge serves one (GitHub Actions
+    and GitLab).
+  - Without a number it takes the open pull request of the branch checked out.
+  - `--wait` waits until no check runs. It exits 1 when one failed and 8 while one runs.
+  - In `~/forge`, an open pull request gets a `checks.md`.
 - After the setup, Home shows **Get to know Studio**: a first task to give a teammate, which
   opens a new chat with it to edit, and five features (network approval, pushes and pull
   requests, the browser, previews and secrets) that tick off as they happen. The first time

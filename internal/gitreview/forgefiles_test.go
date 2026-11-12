@@ -111,6 +111,12 @@ func TestForgeFilesHoldTheSandboxsPullRequests(t *testing.T) {
 		t.Errorf("files.md:\n%s", f)
 	}
 
+	if c := files[dir+"/pulls/42/checks.md"]; !strings.Contains(c, "state: failure\n") || !strings.Contains(c, "**failure**: 1 failure, 1 success.") ||
+		!strings.Contains(c, "- failure: ci/test (2 tests failed) · 2026-11-12 09:04 https://forge.example/acme/web/actions/runs/5") ||
+		!strings.Contains(c, "studio pr checks 42 --wait") || strings.Index(c, "ci/test") > strings.Index(c, "ci/lint") {
+		t.Errorf("checks.md:\n%s", c)
+	}
+
 	// The same again writes nothing: only fetched_at would change.
 	before := len(g.written)
 	svc.forgeState().sandboxes[sb.ID].due = true

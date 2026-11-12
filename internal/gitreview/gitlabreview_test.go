@@ -84,6 +84,8 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 				{"body": "Gone", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "old_line": 2}},
 				{"body": "Thanks!", "author": map[string]any{"username": "cy"}},
 			})
+		case "/pipelines":
+			write(w, []map[string]any{{"id": 6, "sha": "head3"}, {"id": 5, "sha": "head2"}, {"id": 4, "sha": "head2"}})
 		case "/approvals":
 			write(w, map[string]any{"approved_by": []map[string]any{{"user": map[string]any{"username": "bob"}}, {"user": map[string]any{"username": "dee"}}}})
 		case "/versions":
@@ -92,6 +94,18 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 		case "/versions/1", "/versions/2":
 			write(w, map[string]any{"diffs": f.diffs})
 		default:
+			if path == "/api/v4/projects/group%2Fsub%2Fweb/pipelines/5/jobs" {
+				write(w, []map[string]any{
+					{"id": 11, "name": "unit", "stage": "test", "status": "failed", "failure_reason": "script_failure", "web_url": "https://gitlab.example/j/11"},
+					{"id": 12, "name": "flaky", "stage": "test", "status": "failed", "allow_failure": true},
+					{"id": 13, "name": "deploy", "stage": "deploy", "status": "manual"},
+				})
+				return
+			}
+			if path == "/api/v4/projects/group%2Fsub%2Fweb/jobs/11/trace" {
+				_, _ = w.Write([]byte("\x1b[0Ksection_start:1:step_script\r\x1b[0K$ go test ./...\nFAIL x_test.go:3\n\x1b[31;1mERROR: Job failed: exit code 1\x1b[0;m\n"))
+				return
+			}
 			if path == "/api/v4/projects/group%2Fsub%2Fweb/merge_requests" {
 				f.mu.Lock()
 				f.query = append(f.query, r.URL.RawQuery)

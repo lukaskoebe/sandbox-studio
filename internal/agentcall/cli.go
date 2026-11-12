@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,11 +25,13 @@ import (
 // each subcommand's flags come from its tool's schema, and a call goes through the call
 // socket with the same identity, approvals and logs as the MCP tool's.
 
-// Exit codes: 0 done, 1 refused or failed, 2 a usage mistake, 75 waiting for the user.
+// Exit codes: 0 done, 1 refused or failed, 2 a usage mistake, 75 waiting for the user. `pr
+// checks` exits 1 when a check failed and 8 while one runs, as gh does.
 const (
 	ExitOK      = 0
 	ExitFailed  = 1
 	ExitUsage   = 2
+	ExitPending = 8
 	ExitWaiting = 75
 )
 
@@ -47,7 +50,8 @@ type CLIEnv struct {
 	TempDir string
 	// Now names the image files.
 	Now func() time.Time
-	// Poll is how long --wait waits between asking again.
+	// Poll is how long --wait waits between asking again; `pr checks --wait` waits
+	// checksPolls times as long, sparing the forge.
 	Poll time.Duration
 }
 
@@ -101,6 +105,7 @@ var commandNames = map[string]struct {
 	agentproto.MethodGitPullRequestRead:         {"pr read", []string{"number"}},
 	agentproto.MethodGitPullRequestReview:       {"pr review", []string{"number"}},
 	agentproto.MethodGitReviewStatus:            {"pr review-status", []string{"number"}},
+	agentproto.MethodGitPullRequestChecks:       {"pr checks", []string{"number"}},
 	agentproto.MethodSandboxInfo:                {"info", nil},
 	agentproto.MethodBrowserOpen:                {"browser open", []string{"url"}},
 	agentproto.MethodBrowserClick:               {"browser click", []string{"ref"}},
@@ -533,6 +538,9 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 		fmt.Fprintf(env.Stderr, "studio: %v\n", err)
 		return ExitFailed
 	}
+	if tool == agentproto.MethodGitPullRequestChecks {
+		return checksResult(ctx, c, tool, inv, env, result)
+	}
 	if awaiting(result) {
 		follow, params := statusCall(tool, inv.params, result)
 		if !inv.wait || follow == "" {
@@ -555,6 +563,48 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 		}
 	}
 	return print(result, inv, tool, env)
+}
+
+// checksPolls is how many Polls `pr checks --wait` waits between reads: 30 seconds.
+const checksPolls = 6
+
+// checksResult prints a pull request's checks: with --wait once none runs any more. It exits 0
+// when they passed or there are none, 1 when one failed and 8 while one runs.
+func checksResult(ctx context.Context, c Caller, tool string, inv invocation, env CLIEnv, result json.RawMessage) int {
+	var sum struct {
+		Number int    `json:"number"`
+		State  string `json:"state"`
+	}
+	_ = json.Unmarshal(result, &sum)
+	if sum.State == "pending" && inv.wait {
+		// Ask about the number found, so the branch's pull request isn't looked up each time.
+		params := maps.Clone(inv.params)
+		if sum.Number > 0 {
+			params["number"] = sum.Number
+		}
+		for sum.State == "pending" {
+			if !sleep(ctx, checksPolls*env.Poll) {
+				return ExitFailed
+			}
+			var err error
+			if result, err = call(ctx, c, tool, params); err != nil {
+				fmt.Fprintf(env.Stderr, "studio: %v\n", err)
+				return ExitFailed
+			}
+			_ = json.Unmarshal(result, &sum)
+		}
+	}
+	if code := print(result, inv, tool, env); code != ExitOK {
+		return code
+	}
+	switch sum.State {
+	case "failure":
+		return ExitFailed
+	case "pending":
+		fmt.Fprintln(env.Stderr, "studio: checks are still running; --wait waits for them")
+		return ExitPending
+	}
+	return ExitOK
 }
 
 func call(ctx context.Context, c Caller, tool string, params map[string]any) (json.RawMessage, error) {
@@ -792,7 +842,8 @@ a file (-o to name it) whose path is printed. A --<flag>-file reads a text argum
 or from stdin with -.
 
 Exit codes: 0 done, 1 refused or failed, 2 a usage mistake, 75 waiting for the user's approval.
---wait asks again until the user decides.
+--wait asks again until the user decides. pr checks exits 1 when a check failed and 8 while one
+runs; with --wait it waits until none runs.
 
 Commands:
 `)

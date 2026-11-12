@@ -343,3 +343,41 @@ func TestCLIHelp(t *testing.T) {
 		t.Errorf("bare browser: %d\n%s", r.code, r.stderr)
 	}
 }
+
+// pr checks exits 8 while a check runs, waits with --wait asking about the number it found,
+// and exits 1 once one failed.
+func TestCLIChecksWait(t *testing.T) {
+	reads := 0
+	f := &fakeCaller{reply: func(method string, _ json.RawMessage) (any, error) {
+		if method != agentproto.MethodGitPullRequestChecks {
+			return nil, errors.New("unexpected " + method)
+		}
+		reads++
+		state := "pending"
+		if reads >= 3 {
+			state = "failure"
+		}
+		return map[string]any{"number": 9, "state": state, "checks": []map[string]any{{"name": "test", "state": state}}}, nil
+	}}
+	git := map[string]string{"rev-parse --abbrev-ref HEAD": "fix", "config --get-regexp ^remote\\..*\\.url$": "remote.origin.url https://" + agentproto.GitHost + "/github/o/r.git"}
+	r := runCLI(t, f, "", git, "pr", "checks")
+	if r.code != ExitPending || !strings.Contains(r.stdout, "state: pending") || !strings.Contains(r.stderr, "--wait") {
+		t.Fatalf("code %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	if got := params(t, f.calls[0]); got["branch"] != "fix" || got["repository"] != "o/r" || got["number"] != nil {
+		t.Fatalf("first call %v", got)
+	}
+	r = runCLI(t, f, "", git, "pr", "checks", "--wait")
+	if r.code != ExitFailed || !strings.Contains(r.stdout, "state: failure") || reads != 3 {
+		t.Fatalf("code %d, stdout %q, reads %d", r.code, r.stdout, reads)
+	}
+	if got := params(t, f.calls[len(f.calls)-1]); got["number"] != float64(9) {
+		t.Fatalf("waiting asks about the number found: %v", got)
+	}
+	f.reply = func(string, json.RawMessage) (any, error) {
+		return map[string]any{"number": 9, "state": "success", "checks": []any{}}, nil
+	}
+	if r = runCLI(t, f, "", git, "pr", "checks", "9"); r.code != ExitOK {
+		t.Fatalf("passed: code %d", r.code)
+	}
+}

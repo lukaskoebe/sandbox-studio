@@ -523,6 +523,40 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   review requests for a teammate, and GitLab's batched draft notes (one notification for a
   whole review) ([forge-reviews.md](design/forge-reviews.md)).
 
+## CI checks
+
+`git_pull_request_checks(repository, number?, branch?, forge?)` (`studio pr checks`) reads
+the CI checks of a pull request's head commit (`internal/gitreview/checks.go`). Without a
+number it takes the open pull request whose head is `branch`. In a checkout, the command fills in
+the branch from `HEAD`.
+
+- **GitHub:** the check runs (`GET …/commits/{sha}/check-runs?filter=latest`) and the combined
+  commit status (`GET …/commits/{sha}/status`).
+- **GitLab:** the jobs of the merge request's newest pipeline on its head
+  (`…/merge_requests/:iid/pipelines`, then `…/pipelines/:id/jobs`). A job allowed to fail, or
+  one that waits to be started by hand, is `neutral`.
+- **Forgejo and Gitea:** the combined commit status, which their Actions report as well.
+
+**States.** Each check is `pending`, `success`, `failure`, `cancelled`, `skipped` or
+`neutral`. The answer's `state` sums them up:
+
+- `pending` while one runs;
+- then `failure` if one failed or was cancelled;
+- otherwise `success`;
+- `none` when there are no checks.
+
+**Logs.** The first three failed checks with a log carry its end: the last 40 lines and at
+most 6000 bytes, without terminal colours, GitLab's section markers, GitHub's timestamps or
+the token.
+
+- GitHub serves an Actions job's log through a redirect to its storage, which Studio follows
+  once, without the token.
+- GitLab serves a job's trace.
+- A commit status only links to its run.
+
+`~/forge` gives each open pull request in full a `checks.md`
+([agent-cli.md](agent-cli.md#forge)).
+
 ## Integration interface
 
 `internal/integrations` holds a minimal compiled-in interface:

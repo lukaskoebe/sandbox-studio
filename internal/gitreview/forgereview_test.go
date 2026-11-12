@@ -97,6 +97,12 @@ func newReviewForge(t *testing.T) *reviewForge {
 			f.posted = append(f.posted, body)
 			f.mu.Unlock()
 			send(map[string]any{"id": 7, "html_url": "https://forge.example/acme/web/pulls/42#review-7"})
+		case p == "/repos/acme/web/commits/"+f.head+"/status":
+			send(map[string]any{"state": "failure", "statuses": []map[string]any{
+				{"context": "ci/test", "status": "failure", "description": "2 tests failed", "target_url": "https://forge.example/acme/web/actions/runs/5",
+					"created_at": "2026-11-12T09:00:00Z", "updated_at": "2026-11-12T09:04:00Z"},
+				{"context": "ci/lint", "status": "success"},
+			}})
 		case p == "/repos/acme/web/issues/42/comments":
 			send([]map[string]any{{"user": map[string]string{"login": "bob"}, "body": "LGTM?"}})
 		default:
