@@ -291,7 +291,7 @@ func validImageSourceID(id string) bool {
 func (r *Runtime) Start(ctx context.Context, name string) error {
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
-		return err
+		return catalogError(err)
 	}
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
@@ -300,7 +300,7 @@ func (r *Runtime) Start(ctx context.Context, name string) error {
 func (r *Runtime) StartForTransfer(ctx context.Context, name string) error {
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
-		return err
+		return catalogError(err)
 	}
 	return sb.Detach(ctx)
 }
@@ -323,11 +323,11 @@ func (r *Runtime) ImageOf(ctx context.Context, name string) (string, error) {
 func (r *Runtime) Boot(ctx context.Context, name string) error {
 	h, err := msb.GetSandbox(ctx, name)
 	if err != nil {
-		return err
+		return catalogError(err)
 	}
 	sb, err := h.Connect(ctx)
 	if err != nil {
-		return err
+		return catalogError(err)
 	}
 	if sb == nil {
 		return errors.New("boot guest: SDK returned an empty sandbox")
@@ -367,7 +367,7 @@ func (r *Runtime) stop(ctx context.Context, name string, graceful bool) error {
 		if msb.IsKind(err, msb.ErrSandboxNotFound) {
 			return nil
 		}
-		return err
+		return catalogError(err)
 	}
 	s := statusOf(h.Status())
 	if s == StatusStopped || s == StatusCrashed || s == StatusCreated {
@@ -387,7 +387,7 @@ func (r *Runtime) stop(ctx context.Context, name string, graceful bool) error {
 		shutdownErr = shutdownGuest(ctx, h)
 	}
 	stopErr := h.Stop(ctx, msb.WithStopTimeout(30*time.Second))
-	return errors.Join(shutdownErr, stopErr)
+	return catalogError(errors.Join(shutdownErr, stopErr))
 }
 
 func shutdownGuest(ctx context.Context, h *msb.SandboxHandle) error {
@@ -421,7 +421,7 @@ func shutdownGuest(ctx context.Context, h *msb.SandboxHandle) error {
 func (r *Runtime) Pause(ctx context.Context, name string) error {
 	h, err := msb.GetSandbox(ctx, name)
 	if err != nil {
-		return err
+		return catalogError(err)
 	}
 	// The handle carries the VM's identity, so a VM replaced under the same name is refused.
 	return h.PauseWithGuestFlush(ctx, msb.GuestFlushAuto)
@@ -431,7 +431,7 @@ func (r *Runtime) Pause(ctx context.Context, name string) error {
 func (r *Runtime) Resume(ctx context.Context, name string) error {
 	h, err := msb.GetSandbox(ctx, name)
 	if err != nil {
-		return err
+		return catalogError(err)
 	}
 	return h.Resume(ctx)
 }
@@ -439,13 +439,13 @@ func (r *Runtime) Resume(ctx context.Context, name string) error {
 // Remove stops and deletes a sandbox and its owned disks. Missing sandboxes are fine.
 func (r *Runtime) Remove(ctx context.Context, name string) error {
 	if err := r.stop(ctx, name, false); err != nil {
-		return err
+		return catalogError(err)
 	}
 	err := msb.RemoveSandbox(ctx, name)
 	if err != nil && msb.IsKind(err, msb.ErrSandboxNotFound) {
 		return nil
 	}
-	return err
+	return catalogError(err)
 }
 
 // Status returns the runtime state of name.

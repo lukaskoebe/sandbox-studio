@@ -20,6 +20,20 @@ import { rank, type Candidate } from "@/lib/mentions"
 import { cn, formatBytes } from "@/lib/utils"
 
 /** The folders above a path and the path itself, as "web", "web/src", … */
+/** Places in /tmp are written "/tmp/…"; every other place is relative to /workspace. */
+export const tmpRoot = "/tmp"
+
+export function inTmp(place: string) {
+  return place === tmpRoot || place.startsWith(`${tmpRoot}/`)
+}
+
+/** The files API's query for a place. */
+export function filesQuery(place: string) {
+  return inTmp(place)
+    ? { root: "tmp" as const, path: place.slice(tmpRoot.length + 1) }
+    : { path: place }
+}
+
 export function ancestors(path: string) {
   const parts = path ? path.split("/") : []
   return parts.map((_, i) => parts.slice(0, i + 1).join("/"))
@@ -99,14 +113,14 @@ export function FilesTree({
     <div
       ref={tree}
       role="tree"
-      aria-label="Workspace"
+      aria-label={inTmp(place) ? "/tmp" : "Workspace"}
       onKeyDown={onKeyDown}
       className="grid min-w-0"
     >
       <TreeFolder
         env={env}
         sandboxId={sandboxId}
-        dir=""
+        dir={inTmp(place) ? tmpRoot : ""}
         level={1}
         place={place}
         expanded={expanded}
@@ -142,7 +156,7 @@ function TreeFolder({
   const list = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/files",
-    { params: { path: { env, id: sandboxId }, query: { path: dir } } }
+    { params: { path: { env, id: sandboxId }, query: filesQuery(dir) } }
   )
   const indent = { paddingLeft: 8 + level * 14 }
   const note = (text: string, className?: string) => (
@@ -171,7 +185,8 @@ function TreeFolder({
       "h-auto py-1 text-destructive"
     )
   const entries = list.data.entries ?? []
-  if (entries.length === 0) return note(dir ? "Empty" : "No files yet")
+  if (entries.length === 0)
+    return note(dir && dir !== tmpRoot ? "Empty" : "No files yet")
   return (
     <>
       {entries.map((e, i) => {

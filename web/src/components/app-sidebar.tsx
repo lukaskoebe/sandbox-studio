@@ -458,6 +458,11 @@ function EnvironmentSwitcher({ env }: { env: string }) {
   const current = envs.data?.find((e) => e.id === env)
   const create = $api.useMutation("post", "/api/environments", {
     onSuccess: (e) => {
+      // The environment's page checks the cached list, so it has to be in it before going there.
+      queryClient.setQueryData<(typeof e)[]>(
+        ["get", "/api/environments"],
+        (old) => (old?.some((o) => o.id === e.id) ? old : [...(old ?? []), e])
+      )
       queryClient.invalidateQueries({ queryKey: ["get", "/api/environments"] })
       setAdding(false)
       setName("")

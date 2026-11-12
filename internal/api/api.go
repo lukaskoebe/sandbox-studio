@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -187,6 +188,24 @@ func (s *Server) registerEnvironments(api huma.API) {
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *createEnv) (*struct{ Body store.Environment }, error) {
 		env, err := s.Store.CreateEnvironment(ctx, in.Body.Name)
+		return &struct{ Body store.Environment }{env}, apiError(err)
+	})
+
+	type renameEnv struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Name string `json:"name" minLength:"1" maxLength:"64"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "renameEnvironment", Method: http.MethodPatch, Path: "/api/environments/{env}", Tags: []string{"environments"},
+		Description: "Renames the environment. Its ID, and so its sandboxes and links, stay the same.",
+	}, func(ctx context.Context, in *renameEnv) (*struct{ Body store.Environment }, error) {
+		name := strings.TrimSpace(in.Body.Name)
+		if name == "" {
+			return nil, huma.Error422UnprocessableEntity("the name is empty")
+		}
+		env, err := s.Store.RenameEnvironment(ctx, in.Env, name)
 		return &struct{ Body store.Environment }{env}, apiError(err)
 	})
 }

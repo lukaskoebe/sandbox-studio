@@ -195,6 +195,17 @@ func GitConfig(p Teammate, rewrites []GitRewrite) GuestFile {
 	return GuestFile{Path: ".config/git/config", Content: b.String(), Mode: 0o644}
 }
 
+// GitBlock is GitConfig as a managed block of the file, for a sandbox with no harness to set
+// up, such as one without a teammate: git still goes through the virtual remote and asks
+// Studio for credentials, and what the user wrote in the file around the block stays.
+func GitBlock(p Teammate, rewrites []GitRewrite) GuestFile {
+	const comment = "# "
+	f := GitConfig(p, rewrites)
+	f.Content = comment + agentproto.BlockBegin + "\n" + f.Content + comment + agentproto.BlockEnd + "\n"
+	f.Block, f.Comment = true, comment
+	return f
+}
+
 // plainValue reports whether s can be written between double quotes in a git config file
 // without escaping: printable ASCII other than quotes and backslashes.
 func plainValue(s string) bool {

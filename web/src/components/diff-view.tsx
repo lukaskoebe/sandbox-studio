@@ -265,6 +265,10 @@ export default function DiffView({
       tokenizeMaxLineLength: maxTokenLine,
       maxLineDiffLength: maxTokenLine,
       stickyHeaders: true,
+      // The heights the view reserves for what it hasn't drawn yet. They must match the styles
+      // (--diffs-line-height in styles.css, a 40px file header): the defaults of 20px lines
+      // left a gap at the bottom of a fast scroll until the real rows came in.
+      itemMetrics: { lineHeight: 16, diffHeaderHeight: 40 },
       disableFileHeader: !fill,
       enableGutterUtility: commentable,
       // The gutter's button only shows on hover: a touch screen taps the number.

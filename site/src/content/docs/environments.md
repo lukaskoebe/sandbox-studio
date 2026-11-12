@@ -3,7 +3,7 @@ title: Environments
 description: Keep work, personal projects, and their access policies separate.
 ---
 
-An environment is a separate workspace inside Studio. Use the switcher at the top of the sidebar to move between environments or create another one.
+An environment is a separate workspace inside Studio. Use the switcher at the top of the sidebar to move between environments or create another one. To rename one, change its name under **Settings → General**; its sandboxes and links stay as they are.
 
 Each environment has its own:
 

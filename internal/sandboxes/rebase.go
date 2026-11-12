@@ -17,8 +17,9 @@ import (
 // when the target has a home disk, as the default image does: a
 // sandbox with one can't move to a legacy template, which has none. Docker state and tmux
 // sessions end. The sandbox keeps its identity and egress, and its checkpoints stay with
-// their generations. With keepTools the toolchains and global mise config in /opt/mise,
-// what `mise use` installed, are merged into the template's (docs/sandboxes.md).
+// their generations. With KeepTools the toolchains and global mise config in /opt/mise,
+// what `mise use` installed, are merged into the template's (docs/sandboxes.md), and with
+// KeepDocker Docker's images, containers and volumes are copied too.
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
 //
@@ -26,8 +27,8 @@ import (
 // rebase runs in the background, holding the sandbox, and publishes its steps as a fork
 // does; Wait returns its outcome. A failed rebase leaves the sandbox on its old template,
 // and its view keeps the step that failed until the next rebase, ClearProgress or a delete.
-func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keepTools bool) (View, error) {
-	return m.startRebase(ctx, envID, id, OperationRebase, keepTools, func(sb store.Sandbox) (store.RebaseOperation, error) {
+func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keep RebaseOptions) (View, error) {
+	return m.startRebase(ctx, envID, id, OperationRebase, keep, func(sb store.Sandbox) (store.RebaseOperation, error) {
 		resolved := resources.Resources{
 			CPUs: int64(sb.CPUs), MemoryMiB: int64(sb.MemoryMiB), MaxMemoryMiB: int64(sb.MaxMemoryMiB),
 			WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB), HomeMiB: int64(sb.HomeMiB),
@@ -62,10 +63,19 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string, keep
 	})
 }
 
+// RebaseOptions says what a rebase copies besides the workspace and the home.
+type RebaseOptions struct {
+	// KeepTools copies the toolchains in /opt/mise, what mise use installed.
+	KeepTools bool
+	// KeepDocker copies Docker's images, containers and volumes, which takes a while for many
+	// images.
+	KeepDocker bool
+}
+
 // startRebase runs a rebase or a disk resize, operation, of a sandbox in any state with a VM to
 // copy from: the copy stops the VM and starts it for itself. plan says where it goes, and the
-// rest is the same. keepTools also copies /opt/mise.
-func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, keepTools bool, plan func(store.Sandbox) (store.RebaseOperation, error)) (View, error) {
+// rest is the same. keep says what it copies besides the workspace and the home.
+func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, keep RebaseOptions, plan func(store.Sandbox) (store.RebaseOperation, error)) (View, error) {
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -124,18 +134,18 @@ func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, 
 	}
 	handedOff = true
 	timeout := transferTimeout
-	if req.Kind == store.RebaseDisks {
+	if keep.KeepDocker {
 		timeout = diskResizeTimeout
 	}
 	m.background(sb, timeout, unlock, func(ctx context.Context) error {
-		return m.rebase(ctx, rt, sb, req, image, wasRunning, keepTools)
+		return m.rebase(ctx, rt, sb, req, image, wasRunning, keep)
 	})
 	return m.acceptedView(ctx, sb), nil
 }
 
 // rebase runs a rebase that Rebase accepted: it records it durably, builds and fills the
 // new generation and switches the catalog to it, or rolls back.
-func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning, keepTools bool) error {
+func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning bool, keep RebaseOptions) error {
 	op, err := m.Store.BeginRebase(ctx, req)
 	if err != nil {
 		return err
@@ -144,7 +154,7 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 		return m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, op.Kind == store.RebaseDisks, keepTools); err != nil {
+	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, keep.KeepDocker, keep.KeepTools); err != nil {
 		return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 

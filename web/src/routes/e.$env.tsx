@@ -25,10 +25,15 @@ export const Route = createFileRoute("/e/$env")({
       throw redirect({ to: settingsPaths[section], params, replace: true })
   },
   loader: async ({ context, params }) => {
-    const envs = await context.queryClient.ensureQueryData(
-      $api.queryOptions("get", "/api/environments")
+    const list = $api.queryOptions("get", "/api/environments")
+    const has = (l?: { id: string }[] | null) =>
+      l?.some((e) => e.id === params.env)
+    // An environment made a moment ago is not in the cached list yet.
+    if (
+      !has(await context.queryClient.ensureQueryData(list)) &&
+      !has(await context.queryClient.fetchQuery(list))
     )
-    if (!envs?.some((e) => e.id === params.env)) throw notFound()
+      throw notFound()
     if (await setupOnFirstLoad(context.queryClient, params.env))
       throw redirect({ to: "/setup" })
   },

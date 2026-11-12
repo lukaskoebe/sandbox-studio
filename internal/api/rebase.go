@@ -25,7 +25,8 @@ func (s *Server) registerTransfers(api huma.API) {
 		Wait bool   `query:"wait" doc:"Answer once the rebase has ended, with the rebased sandbox or why it failed, instead of at once"`
 		Body struct {
 			TemplateID string `json:"templateId,omitempty" doc:"A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources"`
-			KeepTools  bool   `json:"keepTools,omitempty" doc:"Also keep the toolchains in /opt/mise, what mise use installed: versions the new template lacks are copied, and the global pins it doesn't have are kept in /opt/mise/config/conf.d/studio-kept-tools.toml"`
+			KeepTools  *bool  `json:"keepTools,omitempty" doc:"Keep the toolchains in /opt/mise, what mise use installed, which is the default: versions the new template lacks are copied, and the global pins it doesn't have are kept in /opt/mise/config/conf.d/studio-kept-tools.toml. false leaves them out"`
+			KeepDocker bool   `json:"keepDocker,omitempty" doc:"Also copy Docker's images, containers and volumes. It takes a while for many images, and the sandbox is stopped for the copy as for any rebase"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -33,16 +34,21 @@ func (s *Server) registerTransfers(api huma.API) {
 		Path: "/api/environments/{env}/sandboxes/{id}/rebase", Tags: []string{"sandboxes"},
 		Summary: "Move a sandbox onto another template or the current base image",
 		Description: "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. " +
-			"Software installed outside /workspace and the home, such as apt packages, is lost, and so are the tools mise use installed unless keepTools is set. " +
-			"Docker images, containers and volumes are lost. Tmux sessions end. " +
+			"Software installed outside /workspace and the home, such as apt packages, is lost; the tools mise use installed are kept unless keepTools is false. " +
+			"Docker images, containers and volumes are lost unless keepDocker is set. Tmux sessions end. " +
 			"A running sandbox is stopped for the copy and started again; a stopped one stays stopped. " +
 			"It returns at once in state creating, with the steps in progress; the copy runs in the background. " +
 			"If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed " +
 			"until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.",
 	}, func(ctx context.Context, in *rebaseIn) (*sandboxOut, error) {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), transferTimeout)
+		timeout := transferTimeout
+		if in.Body.KeepDocker {
+			timeout = diskResizeTimeout
+		}
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 		defer cancel()
-		view, err := s.Sandboxes.Rebase(ctx, in.Env, in.ID, in.Body.TemplateID, in.Body.KeepTools)
+		keep := sandboxes.RebaseOptions{KeepTools: in.Body.KeepTools == nil || *in.Body.KeepTools, KeepDocker: in.Body.KeepDocker}
+		view, err := s.Sandboxes.Rebase(ctx, in.Env, in.ID, in.Body.TemplateID, keep)
 		if err != nil || !in.Wait {
 			return &sandboxOut{view}, apiError(err)
 		}

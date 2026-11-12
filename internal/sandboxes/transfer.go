@@ -167,13 +167,14 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string, opts ForkOpt
 }
 
 // ForkOptions says what a fork does beyond copying the workspace and the home. An option left
-// nil takes the source's fork default, which is off unless the source is a base.
+// nil takes the source's fork default: a base's own, or else the tools and nothing else.
 type ForkOptions struct {
 	Docker, Tools, Script *bool
 }
 
 func (o ForkOptions) resolve(source store.Sandbox) store.ForkDefaults {
-	var d store.ForkDefaults
+	// The tools come along unless asked otherwise: a copy without them surprises.
+	d := store.ForkDefaults{Tools: true}
 	if source.ForkDefaults != nil {
 		d = *source.ForkDefaults
 	}

@@ -31,6 +31,9 @@ func catalogError(err error) error {
 	if err == nil {
 		return nil
 	}
+	if _, done := errors.AsType[*CatalogError](err); done {
+		return err
+	}
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "file is not a database"), strings.Contains(msg, "database disk image is malformed"):

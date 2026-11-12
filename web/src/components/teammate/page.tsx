@@ -15,7 +15,12 @@ import { Button } from "@/components/ui/button"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Teammate } from "@/lib/api/client"
 import { useChat, type Chat } from "@/lib/chats"
-import type { ProfileView, TeammateSearch } from "@/lib/computer"
+import {
+  lastComputer,
+  rememberComputer,
+  type ProfileView,
+  type TeammateSearch,
+} from "@/lib/computer"
 import { cn } from "@/lib/utils"
 
 export type SearchChange = Partial<Record<keyof TeammateSearch, unknown>>
@@ -61,10 +66,13 @@ export function TeammatePage({
   const latest = [...mine].sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt)
   )
-  // The screen shows the computer asked for, else the thread's, else where the work happens.
+  // The screen shows the computer asked for, else the thread's, else the one last picked here,
+  // else where the work happens.
+  const remembered = lastComputer(env, id)
   const computer =
     owned.find((s) => s.id === search.computer) ??
     owned.find((s) => s.id === thread?.sandboxId) ??
+    owned.find((s) => s.id === remembered) ??
     owned.find(
       (s) => s.id === latest.find((c) => c.state === "running")?.sandboxId
     ) ??
@@ -77,6 +85,12 @@ export function TeammatePage({
     threadComputer && threadComputer.id !== computer?.id
       ? threadComputer
       : undefined
+
+  // Only a pick counts: what the page chose by itself while the chats loaded would stick.
+  const picked = owned.find((s) => s.id === search.computer)?.id
+  useEffect(() => {
+    if (picked) rememberComputer(env, id, picked)
+  }, [env, id, picked])
 
   const pending = usePendingApprovals()
   const waiting = teammateApprovals(

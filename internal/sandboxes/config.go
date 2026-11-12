@@ -156,8 +156,8 @@ func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Conf
 		env = map[string]string{}
 	}
 	env["STUDIO_SANDBOX_ID"], env["STUDIO_SANDBOX_NAME"] = sb.ID, sb.Name
-	if f := m.harness.f.Load(); f != nil && sb.TeammateID != "" && Public(sb) {
-		// A teammate that can't run yet (no provider, no sign-in) leaves the home as it is.
+	if f := m.harness.f.Load(); f != nil && Public(sb) {
+		// A sandbox without a teammate that can run gets git's setup alone (api.Server.HarnessConfig).
 		files, henv, err := (*f)(ctx, sb)
 		switch {
 		case err != nil:

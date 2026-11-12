@@ -7,12 +7,17 @@ import { teammateSearch } from "@/lib/computer"
 export const Route = createFileRoute("/e/$env/teammates/$id")({
   validateSearch: teammateSearch,
   loader: async ({ context, params }) => {
-    const teammates = await context.queryClient.ensureQueryData(
-      $api.queryOptions("get", "/api/environments/{env}/teammates", {
-        params: { path: { env: params.env } },
-      })
+    const list = $api.queryOptions("get", "/api/environments/{env}/teammates", {
+      params: { path: { env: params.env } },
+    })
+    const has = (l?: { id: string }[] | null) =>
+      l?.some((p) => p.id === params.id)
+    // A teammate added a moment ago is not in the cached list yet.
+    if (
+      !has(await context.queryClient.ensureQueryData(list)) &&
+      !has(await context.queryClient.fetchQuery(list))
     )
-    if (!teammates?.some((p) => p.id === params.id)) throw notFound()
+      throw notFound()
   },
   component: Teammate,
 })

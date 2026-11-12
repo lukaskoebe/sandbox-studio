@@ -9,6 +9,7 @@ import {
   DownloadSimpleIcon,
   ListChecksIcon,
   PaletteIcon,
+  PencilSimpleIcon,
   PowerIcon,
   StopCircleIcon,
   TerminalIcon,
@@ -17,6 +18,7 @@ import {
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -73,6 +75,7 @@ export function GeneralSettings({ env }: { env: string }) {
         <ShutdownSection />
       </SettingsGroup>
       <SettingsGroup label="This environment">
+        <EnvironmentNameSection key={env} env={env} />
         <EnvironmentFilesSection env={env} />
       </SettingsGroup>
       <SettingsGroup label="This browser">
@@ -90,6 +93,72 @@ export function UpdatesSettings() {
         <UpdatesSection />
       </SettingsGroup>
     </SettingsPage>
+  )
+}
+
+/** Renames this environment. Its ID stays, so links and sandboxes keep working. */
+function EnvironmentNameSection({ env }: { env: string }) {
+  const queryClient = useQueryClient()
+  const list = $api.useQuery("get", "/api/environments")
+  const current = list.data?.find((e) => e.id === env)?.name ?? ""
+  const [draft, setDraft] = useState<string>()
+  const rename = $api.useMutation("patch", "/api/environments/{env}", {
+    onSuccess: (data) => {
+      queryClient.setQueryData<(typeof data)[]>(
+        ["get", "/api/environments"],
+        (old) => old?.map((e) => (e.id === data.id ? data : e))
+      )
+      queryClient.invalidateQueries({ queryKey: ["get", "/api/environments"] })
+      setDraft(undefined)
+      toast.success(`Renamed to ${data.name}`)
+    },
+    onError: (err) =>
+      toast.error("Could not rename the environment", {
+        description: errorMessage(err),
+      }),
+  })
+  const value = draft ?? current
+  const changed = value.trim() !== "" && value.trim() !== current
+  const save = () => {
+    if (changed)
+      rename.mutate({ params: { path: { env } }, body: { name: value.trim() } })
+  }
+  return (
+    <SettingRow
+      icon={PencilSimpleIcon}
+      title="Name"
+      description="What the environment switcher calls this environment. Its sandboxes, teammates and links stay as they are."
+      control={
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save()
+          }}
+        >
+          <Input
+            aria-label="Environment name"
+            className="w-48"
+            value={value}
+            maxLength={64}
+            disabled={!list.data || rename.isPending}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setDraft(undefined)
+            }}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            variant="outline"
+            disabled={!changed || rename.isPending}
+          >
+            {rename.isPending && <Spinner />}
+            Rename
+          </Button>
+        </form>
+      }
+    />
   )
 }
 

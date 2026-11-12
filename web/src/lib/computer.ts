@@ -90,3 +90,26 @@ export function teammateSearch(s: Record<string, unknown>): TeammateSearch {
     ...(s.from === "setup" ? { from: "setup" as const } : {}),
   }
 }
+
+const lastComputerKey = (env: string, teammate: string) =>
+  `studio.computer.${env}.${teammate}`
+
+/**
+ * The computer last picked on a teammate's page in this browser, which the page opens again
+ * when the link names none; a per-viewer convenience only.
+ */
+export function lastComputer(env: string, teammate: string): string | null {
+  try {
+    return localStorage.getItem(lastComputerKey(env, teammate))
+  } catch {
+    return null
+  }
+}
+
+export function rememberComputer(env: string, teammate: string, id: string) {
+  try {
+    localStorage.setItem(lastComputerKey(env, teammate), id)
+  } catch {
+    // Storage can be unavailable (private windows); the page then picks by the chats.
+  }
+}

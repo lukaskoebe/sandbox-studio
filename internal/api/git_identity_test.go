@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -93,5 +95,41 @@ func TestHostGitIdentityForTeammates(t *testing.T) {
 	}
 	if got := gitConfig(); !strings.Contains(got, `name = "Ada L"`) {
 		t.Fatalf("turned off, host identity still used:\n%s", got)
+	}
+}
+
+// A sandbox without a teammate has no harness to set up, but git still goes through Studio's
+// remote, as the user of this computer, in a block that keeps what the user wrote around it.
+func TestASandboxWithoutATeammateGetsGitsSetup(t *testing.T) {
+	_, s := newTestServer(t)
+	ctx := context.Background()
+	host := GitIdentity{Name: "Lukas", Email: "lukas@example.com"}
+	s.HostGit = func(context.Context) GitIdentity { return host }
+	env := newEnvironment(t, s, "work")
+	sb, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "mine", CPUs: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := func() agentproto.HomeFile {
+		t.Helper()
+		files, envs, err := s.HarnessConfig(ctx, sb)
+		if err != nil || len(files) != 1 || len(envs) != 0 {
+			t.Fatalf("files %+v, env %v, err %v", files, envs, err)
+		}
+		return files[0]
+	}
+	f := config()
+	if f.Path != ".config/git/config" || !f.Block || f.Comment != "# " ||
+		!strings.HasPrefix(f.Content, "# "+agentproto.BlockBegin+"\n") ||
+		!strings.HasSuffix(f.Content, "# "+agentproto.BlockEnd+"\n") ||
+		!strings.Contains(f.Content, "name = \"Lukas\"\n\temail = lukas@example.com\n") ||
+		!strings.Contains(f.Content, "helper = "+harness.AgentPath+" git-credential") {
+		t.Fatalf("git config = %+v", f)
+	}
+
+	// An identity git config can't hold is left out; the helper stays.
+	host = GitIdentity{Name: `Lukas "the" user`, Email: "lukas@example.com"}
+	if f := config(); strings.Contains(f.Content, "[user]") || !strings.Contains(f.Content, "git-credential") {
+		t.Fatalf("git config = %s", f.Content)
 	}
 }

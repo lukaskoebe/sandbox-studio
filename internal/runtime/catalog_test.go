@@ -23,6 +23,10 @@ func TestCatalogErrorNamesTheFix(t *testing.T) {
 		}
 	}
 	other := errors.New("sandbox not found")
+	damaged := catalogError(errors.New("file is not a database"))
+	if again := catalogError(damaged); again != damaged {
+		t.Fatalf("wrapped twice: %v", again)
+	}
 	if catalogError(other) != other || catalogError(nil) != nil {
 		t.Fatal("other errors must pass through")
 	}

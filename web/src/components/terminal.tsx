@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/context-menu"
 import { errorMessage } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
+import { inApp, openExternal } from "@/lib/desktop"
 import {
   setTerminalsDark,
   useTerminalsDark,
@@ -189,6 +190,7 @@ export function Terminal({
   suspended = false,
   onExit,
   onPasteFile,
+  onLink,
   className,
 }: {
   url: string
@@ -200,6 +202,11 @@ export function Terminal({
    * returns its path there, which the terminal pastes. Without it a pasted file does nothing.
    */
   onPasteFile?: (file: File) => Promise<string>
+  /**
+   * Opens a link clicked in the terminal and returns true, or returns false to leave it to the
+   * system browser. A sandbox's terminal opens its localhost links as previews.
+   */
+  onLink?: (uri: string) => boolean
   className?: string
 }) {
   const container = useRef<HTMLDivElement>(null)
@@ -221,6 +228,8 @@ export function Terminal({
   onExitRef.current = onExit
   const onPasteFileRef = useRef(onPasteFile)
   onPasteFileRef.current = onPasteFile
+  const onLinkRef = useRef(onLink)
+  onLinkRef.current = onLink
   const [pasting, setPasting] = useState(false)
   const suspendedRef = useRef(suspended)
   const parkRef = useRef<(suspended: boolean) => void>(null)
@@ -344,7 +353,16 @@ export function Terminal({
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
-    term.loadAddon(new WebLinksAddon())
+    // The addon's own handler opens a blank window first and then sets its address, which the
+    // app's window.open refuses, as it gets no address: a click did nothing there.
+    term.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        event.preventDefault()
+        if (onLinkRef.current?.(uri)) return
+        if (inApp) openExternal(uri)
+        else window.open(uri, "_blank", "noopener,noreferrer")
+      })
+    )
     // From the page's own events, not xterm's onData, which also carries the terminal's answers
     // to a program's queries, so a program could make them to look like input.
     let lastInput = -Infinity

@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- A rebase keeps the tools from `mise use` unless you untick them, and can keep Docker's images,
+  containers and volumes too: tick **Keep Docker's images, containers and volumes**. That copy
+  takes a while, up to 15 minutes for 10 GB. A fork takes the tools by default as well. In the API,
+  `keepTools` defaults to true and `keepDocker` to false.
+- A new environment opens at once. Before, its page said Not found until Studio was restarted. A
+  page that doesn't exist now has a link back to Studio, since the app has no address bar.
+- **Settings → General** renames an environment. Its sandboxes and links stay as they are
+  (`PATCH /api/environments/{env}`).
+- **Files** browses `/tmp` too: pick it from the first part of the path. Uploads and mentions stay
+  in the workspace. A sandbox from an older Studio needs a restart for it.
+- A link in a terminal opens: in your browser, or in the desktop app's default browser. A link to
+  one of the sandbox's ports opens as a preview, or says to turn previews on.
+- A computer without a teammate gets git's setup: pushes go through the forges you set up, and
+  commits use the name and email from git on this computer.
+- The diff view no longer jumps near its end when you scroll fast. It measured lines as 20 px
+  before drawing them at 16.
+- A teammate with several computers opens the one you looked at last, not always the newest.
+- A damaged microsandbox catalog fails stop, pause, resume and removal with the fix, restarting
+  Studio, as start already did, rather than "file is not a database".
+
 ## v0.17.0 — 2026-11-06
 
 - A fresh computer per task: **Use as a base** in a computer's **⋯** menu makes it a starting point

@@ -76,10 +76,10 @@ export function RebaseSandboxDialog({
           sandbox={sandbox}
           pending={pending}
           failure={rebase.isError ? errorMessage(rebase.error) : undefined}
-          onSubmit={(templateId, keepTools) =>
+          onSubmit={(templateId, keep) =>
             rebase.mutate({
               params: { path: { env, id: sandbox.id } },
-              body: { templateId, keepTools },
+              body: { templateId, ...keep },
             })
           }
           onCancel={() => handleOpenChange(false)}
@@ -104,13 +104,17 @@ function RebaseForm({
   failure?: string
   /**
    * The template to rebase onto, or "" for the current base image, and whether to keep the
-   * tools in /opt/mise.
+   * tools in /opt/mise and Docker's data.
    */
-  onSubmit: (templateId: string, keepTools: boolean) => void
+  onSubmit: (
+    templateId: string,
+    keep: { keepTools: boolean; keepDocker: boolean }
+  ) => void
   onCancel: () => void
 }) {
   const [picked, setPicked] = useState<string>()
   const [keepTools, setKeepTools] = useState(true)
+  const [keepDocker, setKeepDocker] = useState(false)
   const templates = $api.useQuery("get", "/api/environments/{env}/templates", {
     params: { path: { env } },
   })
@@ -137,7 +141,7 @@ function RebaseForm({
       onSubmit={(event) => {
         event.preventDefault()
         if (!ready || pending || choice === undefined) return
-        onSubmit(choice, keepTools)
+        onSubmit(choice, { keepTools, keepDocker })
       }}
     >
       <DialogHeader>
@@ -254,6 +258,7 @@ function RebaseForm({
                 tools from <span className="font-mono">mise use</span>
               </li>
             )}
+            {keepDocker && <li>Docker images and volumes</li>}
           </ul>
         </div>
         <div className="grid content-start gap-1">
@@ -261,7 +266,7 @@ function RebaseForm({
             Lost
           </h3>
           <ul className="grid gap-0.5">
-            <li>Docker images and volumes</li>
+            {!keepDocker && <li>Docker images and volumes</li>}
             <li>
               apt packages
               {!keepTools && (
@@ -287,6 +292,20 @@ function RebaseForm({
           <span className="block text-muted-foreground">
             Copies the versions the new template lacks; for a tool both have,
             the template&apos;s version stays the default.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={keepDocker}
+          onCheckedChange={setKeepDocker}
+          disabled={pending}
+          className="mt-0.5"
+        />
+        <span>
+          Keep Docker&apos;s images, containers and volumes
+          <span className="block text-muted-foreground">
+            Copying many images takes a while: up to 15 minutes for 10 GB.
           </span>
         </span>
       </label>

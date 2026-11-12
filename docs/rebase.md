@@ -27,7 +27,7 @@ resumed.
   Symlinks are created but never followed. Parents are opened with `openat2` and
   `RESOLVE_BENEATH`.
 - `studio-agent docker-export` and `docker-import` do the same for `/var/lib/docker`, which
-  only a disk resize copies. Docker's data is made of what a workspace archive leaves out:
+  a disk resize copies, and a rebase or fork with `keepDocker` or `docker`. Docker's data is made of what a workspace archive leaves out:
   overlay whiteouts are character devices 0/0, an opaque directory is the
   `trusted.overlay.opaque` xattr, and image files keep `security.capability`. So these keep
   character and block devices, FIFOs and every extended attribute, as `SCHILY.xattr.*` PAX
@@ -100,8 +100,9 @@ resumed.
 
 ## Rebase
 
-`POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}` (and
-`"keepTools": true` to [keep the mise tools](#keeping-tools)), or
+`POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}`
+([the mise tools](#keeping-tools) are kept unless `"keepTools": false`, and
+`"keepDocker": true` keeps Docker's images, containers and volumes), or
 without a template ID onto the current base image, which is what new sandboxes get. A rebase
 onto the base keeps the sandbox's resources; one from a template sandbox drops the template's
 tools. A rebase onto a template takes its CPUs and memory and doesn't shrink a disk: a disk the
@@ -124,7 +125,9 @@ request did before it ran in the background.
 2. It writes a durable rebase record with generations `n` and `n+1`.
 3. It stops the source gracefully and starts it again in transfer mode.
 4. It creates generation `n+1` from the new template in transfer mode and copies the
-   workspace and the home, and with `keepTools` the tools (below).
+   workspace and the home, the tools unless `keepTools` is false (below), and with
+   `keepDocker` Docker's data, as a disk resize does. A rebase that keeps Docker's data may take
+   as long as a disk resize: up to 15 minutes for 10 GB.
 5. It stops the source. A sandbox that was running is booted; a stopped one is stopped.
 6. One catalog update switches generation, template, resources and the base it records.
 7. Studio removes the old VM and ends the record.
@@ -142,9 +145,10 @@ startup, a leftover record is resolved by generation: before the commit the targ
 removed and the source stays stopped, after it the source is removed. Lifecycle actions on
 that sandbox are refused until this succeeds.
 
-Docker images, containers and volumes are lost, and so is what was installed outside
-`/workspace` and `/home/agent`: apt packages, `/etc` changes and, unless the rebase keeps
-them, the tools `mise use` installed (in `/opt/mise`). Tmux sessions end. Checkpoints stay with
+Unless `keepDocker` is set, Docker images, containers and volumes are lost: they live on the
+Docker disk, which the new generation gets empty from its template. So is what was installed
+outside `/workspace` and `/home/agent`: apt packages, `/etc` changes and, if `keepTools` is
+false, the tools `mise use` installed (in `/opt/mise`). Tmux sessions end. Checkpoints stay with
 their generation. The catalog's switch to the new generation records a `rebase` event in the
 sandbox's history, see [lineage](sandboxes.md#lineage). With a home disk on the new generation, harness sessions and logins
 survive, and a chat resumes its agent session in the new generation
@@ -154,7 +158,7 @@ survive, and a chat resumes its agent session in the new generation
 
 `mise use -g` pins a tool in `/opt/mise/config/config.toml` and installs it in
 `/opt/mise/installs`, on the root disk, which the new template replaces; a project's
-`mise use` pins it in the workspace, but its install is there too. With `{"keepTools": true}`
+`mise use` pins it in the workspace, but its install is there too. Unless `{"keepTools": false}`
 (the rebase dialog's **Keep the tools installed with mise use**, ticked by default) the copy
 also runs `studio-agent tools-export` in the source and `tools-import` in the target, both as
 root (`internal/guest/tools.go`):

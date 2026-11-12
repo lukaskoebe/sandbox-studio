@@ -36,7 +36,8 @@ type DiskSizes struct {
 // the outcome, and a failed resize leaves the sandbox as it was. A sandbox with no home disk
 // is refused: its home is on the root disk, which the resize would replace.
 func (m *Manager) ResizeDisks(ctx context.Context, envID, id string, sizes DiskSizes) (View, error) {
-	return m.startRebase(ctx, envID, id, OperationDisks, false, func(sb store.Sandbox) (store.RebaseOperation, error) {
+	// The same template's VM again, so everything on the old disks comes along, the tools too.
+	return m.startRebase(ctx, envID, id, OperationDisks, RebaseOptions{KeepTools: true, KeepDocker: true}, func(sb store.Sandbox) (store.RebaseOperation, error) {
 		if sb.HomeMiB == 0 {
 			return store.RebaseOperation{}, ErrNoHomeDisk
 		}

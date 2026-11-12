@@ -199,12 +199,29 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 // HarnessConfig is the owner teammate's harness setup for sb as a session gets it: its config
 // files and its environment, placeholders only. The sandbox manager writes it whenever the
 // guest connects, so the harness is set up in a plain terminal too (sandboxes.HarnessConfig).
+// A sandbox without a teammate, or whose teammate can't run yet, gets git's setup alone, as a
+// block of the file, so git still goes through the virtual remote: it commits as the user
+// of this computer, or as the teammate.
 func (s *Server) HarnessConfig(ctx context.Context, sb store.Sandbox) ([]agentproto.HomeFile, map[string]string, error) {
 	plan, err := s.planSession(ctx, sb)
-	if err != nil {
-		return nil, nil, err
+	if err == nil {
+		return plan.files, plan.env, nil
 	}
-	return plan.files, plan.env, nil
+	rewrites, rerr := s.gitRewrites(ctx, sb.EnvironmentID)
+	if rerr != nil {
+		return nil, nil, errors.Join(err, rerr)
+	}
+	var who harness.Teammate
+	if sb.TeammateID == "" {
+		// The user's own computer commits as the user, when git config can hold the identity.
+		id := s.hostGitIdentity(ctx)
+		if teammates.CheckGitName(id.Name) == nil && teammates.CheckGitEmail(id.Email) == nil {
+			who = harness.Teammate{GitName: id.Name, GitEmail: id.Email}
+		}
+	} else if p, terr := s.Store.Teammate(ctx, sb.EnvironmentID, sb.TeammateID); terr == nil {
+		who = s.harnessTeammate(ctx, p)
+	}
+	return []agentproto.HomeFile{harness.GitBlock(who, rewrites)}, nil, nil
 }
 
 // providerHost is the host a provider's key must be bound to.

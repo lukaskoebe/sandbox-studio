@@ -8,6 +8,7 @@ import {
 import {
   ArrowClockwiseIcon,
   AtIcon,
+  CaretDownIcon,
   DownloadSimpleIcon,
   FileIcon,
   SidebarSimpleIcon,
@@ -24,8 +25,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { CodeView } from "@/components/code-view"
-import { ancestors, FilesTree, GoToFile } from "@/components/chat/files-tree"
+import {
+  ancestors,
+  filesQuery,
+  FilesTree,
+  GoToFile,
+  inTmp,
+  tmpRoot,
+} from "@/components/chat/files-tree"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
@@ -49,7 +64,7 @@ type FileEntry = components["schemas"]["FileEntry"]
 type FileContent = components["schemas"]["FileContent"]
 
 /**
- * A browser of the sandbox's /workspace, as mock K draws it: the tree beside the file
+ * A browser of the sandbox's /workspace, or of its /tmp, as mock K draws it: the tree beside the file
  * shown, the path above them, and Go to file. Below 640px the tree opens over the file
  * and closes once one is picked. Folders opened in the tree stay open while Files moves about.
  * With no file open, the view beside the tree is empty and takes uploads into the folder
@@ -66,7 +81,7 @@ export function FilesPanel({
 }: {
   env: string
   sandboxId: string
-  /** The folder shown, relative to /workspace; "" for /workspace. */
+  /** The folder shown, relative to /workspace ("" for /workspace), or "/tmp/…" in /tmp. */
   dir: string
   /** The file shown, if any. */
   file?: string
@@ -248,11 +263,15 @@ function PathCrumbs({
   changed: Set<string>
   onOpen: (dir: string) => void
 }) {
-  const parts = [
-    "workspace",
-    ...((file ?? dir) ? (file ?? dir).split("/") : []),
-  ]
+  const place = file ?? dir
+  const tmp = inTmp(place)
+  const rest = tmp ? place.slice(tmpRoot.length + 1) : place
+  const parts = [tmp ? "tmp" : "workspace", ...(rest ? rest.split("/") : [])]
   const last = parts.length - 1
+  const to = (i: number) => {
+    const sub = parts.slice(1, i + 1).join("/")
+    return tmp ? (sub ? `${tmpRoot}/${sub}` : tmpRoot) : sub
+  }
   const mark = file !== undefined && changed.has(file)
   return (
     <nav
@@ -260,8 +279,36 @@ function PathCrumbs({
       title={`/${parts.join("/")}`}
       className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden font-mono text-caption whitespace-nowrap"
     >
+      {(!short || last === 0) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Root: /${parts[0]}`}
+            title="Browse /workspace or /tmp"
+            className={cn(
+              "flex shrink-0 items-center gap-0.5 rounded px-1 hover:bg-muted hover:text-foreground",
+              last === 0 ? "font-semibold" : "text-muted-foreground"
+            )}
+          >
+            {parts[0]}
+            <CaretDownIcon className="size-2.5" aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-40">
+            <DropdownMenuRadioGroup
+              value={tmp ? "tmp" : "workspace"}
+              onValueChange={(v) => onOpen(v === "tmp" ? tmpRoot : "")}
+            >
+              <DropdownMenuRadioItem value="workspace" closeOnClick>
+                /workspace
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="tmp" closeOnClick>
+                /tmp
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {parts.map((p, i) => {
-        if (short && i < last) return null
+        if (i === 0 || (short && i < last)) return null
         const sep = i > 0 && !short && (
           <span className="text-muted-foreground">/</span>
         )
@@ -289,7 +336,7 @@ function PathCrumbs({
             <button
               type="button"
               className="max-w-[16ch] truncate rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              onClick={() => onOpen(parts.slice(1, i + 1).join("/"))}
+              onClick={() => onOpen(to(i))}
             >
               {p}
             </button>
@@ -525,9 +572,11 @@ function NoFile({
   const list = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/files",
-    { params: { path: { env, id: sandboxId }, query: { path: dir } } }
+    { params: { path: { env, id: sandboxId }, query: filesQuery(dir) } }
   )
   const { refetch } = list
+  // Uploads go into the workspace only.
+  const canUpload = !inTmp(dir)
   const uploads = useFolderUploads({
     env,
     sandboxId,
@@ -544,7 +593,7 @@ function NoFile({
       aria-label="No file open"
       className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center text-xs text-muted-foreground"
       onDragOver={(e) => {
-        if (!hasFiles(e.dataTransfer)) return
+        if (!canUpload || !hasFiles(e.dataTransfer)) return
         e.preventDefault()
         setDragging(true)
       }}
@@ -553,7 +602,7 @@ function NoFile({
           setDragging(false)
       }}
       onDrop={(e) => {
-        if (!hasFiles(e.dataTransfer)) return
+        if (!canUpload || !hasFiles(e.dataTransfer)) return
         e.preventDefault()
         setDragging(false)
         const { files, folders } = droppedFiles(e.dataTransfer)
@@ -566,11 +615,15 @@ function NoFile({
         </div>
       )}
       <FileIcon className="size-6" />
-      <p>
-        {tree ? "Pick a file in the tree, or press" : "No file open. Press"}{" "}
-        <kbd className="rounded border px-1 font-mono">/</kbd> to go to{" "}
-        {tree ? "one" : "a file"} by name.
-      </p>
+      {canUpload ? (
+        <p>
+          {tree ? "Pick a file in the tree, or press" : "No file open. Press"}{" "}
+          <kbd className="rounded border px-1 font-mono">/</kbd> to go to{" "}
+          {tree ? "one" : "a file"} by name.
+        </p>
+      ) : (
+        <p>{tree ? "Pick a file of /tmp in the tree." : "No file open."}</p>
+      )}
       <div className="flex flex-wrap justify-center gap-2">
         {!tree && (
           <Button size="xs" variant="outline" onClick={onShowTree}>
@@ -578,15 +631,17 @@ function NoFile({
             Show the tree
           </Button>
         )}
-        <Button
-          size="xs"
-          variant="ghost"
-          title={`Upload files into ${folder}; you can also drop them here`}
-          onClick={() => input.current?.click()}
-        >
-          <UploadSimpleIcon />
-          Upload into {dir.split("/").at(-1) || "workspace"}…
-        </Button>
+        {canUpload && (
+          <Button
+            size="xs"
+            variant="ghost"
+            title={`Upload files into ${folder}; you can also drop them here`}
+            onClick={() => input.current?.click()}
+          >
+            <UploadSimpleIcon />
+            Upload into {dir.split("/").at(-1) || "workspace"}…
+          </Button>
+        )}
       </div>
       <input
         ref={input}
@@ -658,14 +713,15 @@ function FileView({
   const content = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/files/content",
-    { params: { path: { env, id: sandboxId }, query: { path } } }
+    { params: { path: { env, id: sandboxId }, query: filesQuery(path) } }
   )
   const { refetch } = content
   const name = path.split("/").at(-1) ?? path
   const c = content.data
-  const canMention = useSyncExternalStore(watchMentionTargets, () =>
-    canMentionIn(sandboxId)
-  )
+  // A mention names a workspace path, so files of /tmp can't be mentioned.
+  const canMention =
+    useSyncExternalStore(watchMentionTargets, () => canMentionIn(sandboxId)) &&
+    !inTmp(path)
   const body = useRef<HTMLDivElement>(null)
   const mention = () => {
     const m: Mention = { path }

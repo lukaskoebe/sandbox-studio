@@ -216,7 +216,12 @@ func rebaseNow(f *checkpointFixture, id, templateID string) (View, error) {
 
 // rebaseKeeping is rebaseNow, keeping the tools in /opt/mise with keepTools.
 func rebaseKeeping(f *checkpointFixture, id, templateID string, keepTools bool) (View, error) {
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, id, templateID, keepTools); err != nil {
+	return rebaseWith(f, id, templateID, RebaseOptions{KeepTools: keepTools})
+}
+
+// rebaseWith is rebaseNow with what keep asks to copy.
+func rebaseWith(f *checkpointFixture, id, templateID string, keep RebaseOptions) (View, error) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, id, templateID, keep); err != nil {
 		return View{}, err
 	}
 	if err := f.manager.Wait(f.ctx, id); err != nil {
@@ -249,7 +254,7 @@ func TestRebaseAnswersAtOnceAndPublishesItsSteps(t *testing.T) {
 	blocking := &blockingTransfer{transferFake: tf, release: make(chan struct{})}
 	f.manager.Runtime = blocking
 
-	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false)
+	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, RebaseOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +316,7 @@ func TestRebaseShowsHowFarItsCopyGot(t *testing.T) {
 	reporting := &reportingTransfer{transferFake: tf, reported: make(chan struct{}), release: make(chan struct{})}
 	f.manager.Runtime = reporting
 
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); err != nil {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, RebaseOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	<-reporting.reported
@@ -381,7 +386,7 @@ func TestRebaseOfStoppedSandboxHasNoBootStep(t *testing.T) {
 	f := newCheckpointFixture(t)
 	newTransferFake(f)
 	template := rebaseTemplate(t, f, rebaseResources)
-	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false)
+	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, RebaseOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +507,7 @@ func TestRebaseOfASandboxWithoutAVMIsRefused(t *testing.T) {
 	if err := tf.Remove(f.ctx, VMName(f.sandbox)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrLifecycleState) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, RebaseOptions{}); !errors.Is(err, ErrLifecycleState) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -631,7 +636,7 @@ func TestRebaseRecoveryRollsBackOrFinishes(t *testing.T) {
 func TestRebaseRequiresTemplateInSameEnvironment(t *testing.T) {
 	f := newCheckpointFixture(t)
 	newTransferFake(f)
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, "missing", false); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, "missing", RebaseOptions{}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("missing template: err = %v", err)
 	}
 	if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {
@@ -648,7 +653,7 @@ func TestRebaseAndForkAreSerialized(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, false); !errors.Is(err, ErrBusy) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, RebaseOptions{}); !errors.Is(err, ErrBusy) {
 		t.Fatalf("Rebase err = %v, want ErrBusy", err)
 	}
 	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{}); !errors.Is(err, ErrBusy) {
@@ -914,6 +919,31 @@ func TestRebaseKeepsToolsWhenAsked(t *testing.T) {
 	}
 }
 
+func TestRebaseKeepsDockerWhenAsked(t *testing.T) {
+	for _, keep := range []bool{false, true} {
+		f := newCheckpointFixture(t)
+		tf := newTransferFake(f)
+		template := rebaseTemplate(t, f, rebaseResources)
+		source := VMName(f.sandbox)
+		tf.setStatus(source, runtime.StatusRunning)
+		tf.setWorkspace(source, "files")
+		tf.mu.Lock()
+		tf.dockers[source] = []byte("images")
+		tf.mu.Unlock()
+
+		view, err := rebaseWith(f, f.sandbox.ID, template.ID, RebaseOptions{KeepDocker: keep})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tf.mu.Lock()
+		got := string(tf.dockers[VMName(view.Sandbox)])
+		tf.mu.Unlock()
+		if keep && got != "images" || !keep && got != "" {
+			t.Fatalf("keep %v: the rebased sandbox has docker %q", keep, got)
+		}
+	}
+}
+
 func yes() *bool { v := true; return &v }
 func no() *bool  { v := false; return &v }
 
@@ -939,12 +969,17 @@ func TestForkCopiesDockerAndToolsWhenAsked(t *testing.T) {
 		return VMName(answered.Sandbox)
 	}
 	plain := fork("plain", ForkOptions{})
+	bare := fork("bare", ForkOptions{Tools: no()})
 	full := fork("full", ForkOptions{Docker: yes(), Tools: yes()})
 
 	tf.mu.Lock()
 	defer tf.mu.Unlock()
-	if len(tf.dockers[plain]) != 0 || len(tf.tools[plain]) != 0 {
+	// The tools come along unless asked otherwise; Docker only when asked.
+	if len(tf.dockers[plain]) != 0 || string(tf.tools[plain]) != "mise" {
 		t.Fatalf("a plain fork got docker %q, tools %q", tf.dockers[plain], tf.tools[plain])
+	}
+	if len(tf.tools[bare]) != 0 {
+		t.Fatalf("a fork without tools got %q", tf.tools[bare])
 	}
 	if string(tf.dockers[full]) != "images" || string(tf.tools[full]) != "mise" {
 		t.Fatalf("the fork got docker %q, tools %q", tf.dockers[full], tf.tools[full])

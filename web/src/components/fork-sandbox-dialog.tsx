@@ -99,7 +99,7 @@ function ForkForm({
 }) {
   const [name, setName] = useState(() => forkName(sandbox.name))
   const [choices, setChoices] = useState<ForkChoices>(
-    () => sandbox.forkDefaults ?? { docker: false, tools: false, script: false }
+    () => sandbox.forkDefaults ?? { docker: false, tools: true, script: false }
   )
   const invalid = name !== "" && !namePattern.test(name)
   // Docker's copy needs the computer stopped, so it's off for as long as it isn't.

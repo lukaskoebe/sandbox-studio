@@ -73,3 +73,26 @@ func TestForkDefaultsMakeASandboxABase(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestRenameEnvironment(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	work, _ := s.CreateEnvironment(ctx, "work")
+	if _, err := s.CreateEnvironment(ctx, "private"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.RenameEnvironment(ctx, work.ID, "client")
+	if err != nil || got.ID != work.ID || got.Name != "client" {
+		t.Fatalf("got %+v %v", got, err)
+	}
+	if _, err := s.RenameEnvironment(ctx, work.ID, "private"); !errors.Is(err, ErrExists) {
+		t.Fatalf("a taken name: %v", err)
+	}
+	if _, err := s.RenameEnvironment(ctx, "nope", "x"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a missing environment: %v", err)
+	}
+}

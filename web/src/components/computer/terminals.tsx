@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { PlusIcon, RobotIcon, TerminalIcon, XIcon } from "@phosphor-icons/react"
 import { Terminal } from "@/components/terminal"
 import {
@@ -30,6 +31,8 @@ import {
 import { useTerminalTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import { pasteFile } from "@/lib/workspace-upload"
+import { usePreviewSetting } from "@/lib/preview-setting"
+import { openPreviewTab, parseSandboxLocalLink } from "@/lib/previews"
 
 const terminalsPath = "/api/environments/{env}/sandboxes/{id}/terminals"
 
@@ -57,6 +60,19 @@ export function Terminals({
 }) {
   const queryClient = useQueryClient()
   const path = { env, id: sb.id }
+  const previews = usePreviewSetting()
+  // localhost in the sandbox's terminal is the sandbox, not the user's machine.
+  const openLocalLink = (uri: string) => {
+    const local = parseSandboxLocalLink(uri)
+    if (!local) return false
+    if (previews.enabled)
+      void openPreviewTab(env, sb.id, local.port, false, local.path)
+    else
+      toast.info(`Port ${local.port} is in the sandbox`, {
+        description: "Turn on previews in Settings → General to open it.",
+      })
+    return true
+  }
   const sessions = $api.useQuery(
     "get",
     terminalsPath,
@@ -243,6 +259,7 @@ export function Terminals({
             suspended={suspended}
             onExit={() => drop(name)}
             onPasteFile={(file) => pasteFile(env, sb.id, file)}
+            onLink={openLocalLink}
           />
         ))}
       </div>

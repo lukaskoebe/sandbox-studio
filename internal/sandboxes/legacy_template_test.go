@@ -147,7 +147,7 @@ func TestRebaseSandboxWithHomeDiskOntoLegacyTemplateIsRefused(t *testing.T) {
 	tf.setHome(VMName(f.sandbox), "opencode sessions")
 	legacy := legacyTemplate(t, f, rebaseResources)
 
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, legacy.ID, false); !errors.Is(err, ErrTemplateWithoutHome) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, legacy.ID, RebaseOptions{}); !errors.Is(err, ErrTemplateWithoutHome) {
 		t.Fatalf("Rebase error = %v, want ErrTemplateWithoutHome", err)
 	}
 	after, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID)

@@ -109,3 +109,43 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
     screen.locator("pre .tok-keyword", { hasText: "Webshop" })
   ).toBeVisible()
 })
+
+test("Files browses /tmp from the path's root, without uploads or mentions there", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("files-tmp")
+  const id = await api.createSandbox(name)
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  await screen.getByRole("tab", { name: "Changes" }).click()
+  await screen.getByRole("button", { name: "Files", exact: true }).click()
+  const path = screen.getByRole("navigation", { name: "Path" })
+  await path.getByRole("button", { name: "Root: /workspace" }).click()
+  await page.getByRole("menuitemradio", { name: "/tmp" }).click()
+
+  const tree = screen.getByRole("tree", { name: "/tmp" })
+  const item = (n: string) =>
+    tree.getByRole("treeitem", { name: new RegExp(`^${n}( |$)`) })
+  const noFile = screen.getByLabel("No file open")
+  await expect(noFile).toContainText("Pick a file of /tmp in the tree")
+  await expect(
+    noFile.getByRole("button", { name: /^Upload into/ })
+  ).toHaveCount(0)
+  await item("vite-cache").click()
+  await expect(item("deps\\.json")).toBeVisible()
+  await item("build\\.log").click()
+  await expect(page).toHaveURL(/file=%2Ftmp%2Fbuild\.log/)
+  await expect(screen.locator("pre")).toContainText("42 modules transformed")
+  await expect(path).toHaveAttribute("title", "/tmp/build.log")
+
+  // Back to the workspace from the root.
+  await path.getByRole("button", { name: "Root: /tmp" }).click()
+  await page.getByRole("menuitemradio", { name: "/workspace" }).click()
+  await expect(
+    screen.getByRole("tree", { name: "Workspace" }).getByRole("treeitem", {
+      name: /^README\.md( |$)/,
+    })
+  ).toBeVisible()
+})

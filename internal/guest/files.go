@@ -17,8 +17,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
-// The chat's read-only file browser: lists directories and reads files of /workspace.
-// Paths resolve beneath /workspace without following any symlink; symlinks are listed as
+// The chat's read-only file browser: lists directories and reads files of /workspace, or of
+// /tmp. Paths resolve beneath the root without following any symlink; symlinks are listed as
 // such and never opened. A file is only shown if the agent user may read it.
 
 // files serves a KindFiles stream.
@@ -30,10 +30,19 @@ func (a *Agent) files(st net.Conn, br *bufio.Reader) error {
 	if req.Op == agentproto.FilesIndex {
 		return agentproto.WriteJSONLine(st, index(context.Background(), Workdir, a.git))
 	}
-	reply, err := browse(Workdir, [2]int{int(a.user.uid), int(a.user.gid)}, req)
+	dir := Workdir
+	switch req.Root {
+	case "":
+	case agentproto.FilesRootTmp:
+		dir = "/tmp"
+	default:
+		return replyError(st, errors.New("unknown files root"))
+	}
+	reply, err := browse(dir, [2]int{int(a.user.uid), int(a.user.gid)}, req)
 	if err != nil {
 		return replyError(st, err)
 	}
+	reply.Root = req.Root
 	return agentproto.WriteJSONLine(st, reply)
 }
 

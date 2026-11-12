@@ -33,11 +33,27 @@ export function applyCoupon(cart: Cart, percent: number) {
 	"web/src/checkout/checkout.tsx": "export function Checkout() {\n  return <form className=\"checkout\" />\n}\n",
 }
 
+// tmp is every e2e sandbox's /tmp.
+var tmp = map[string]string{
+	"build.log":            "vite v6 building for production...\n✓ 42 modules transformed.\n",
+	"vite-cache/deps.json": "{}\n",
+}
+
 var workspaceTime = time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC).Unix()
 
 // browse answers a KindFiles request from workspace, as the guest agent does from disk.
 func browse(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
+	reply, err := browseIn(req)
+	reply.Root = req.Root
+	return reply, err
+}
+
+func browseIn(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 	name := path.Clean("/" + req.Path)[1:]
+	workspace := workspace
+	if req.Root == agentproto.FilesRootTmp {
+		workspace = tmp
+	}
 	switch req.Op {
 	case agentproto.FilesList:
 		prefix := ""

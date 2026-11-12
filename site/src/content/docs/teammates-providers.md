@@ -61,7 +61,7 @@ If an environment has no teammates when you add a provider, Studio adds a teamma
 4. Write to the teammate on its page: that starts a thread, a chat. See [Chat mode](../chat/).
 5. To use the harness's own interface instead, choose **Continue in the terminal** in the thread's **⋯**. Studio opens the harness in a new terminal session on the computer's **Terminal** tab.
 
-The provider key must be bound to the correct API host, and the sandbox must be running. A sandbox without a teammate still has a terminal, but it cannot start an agent session or use teammate memory/browser tools.
+The provider key must be bound to the correct API host, and the sandbox must be running. A sandbox without a teammate still has a terminal, but it cannot start an agent session or use teammate memory/browser tools. Git in it works through the configured forges, and commits use the name and email set in git on the computer running Studio, if it has them.
 
 Studio sets up the harness inside the sandbox. The teammate's name, role, and soul appear in its managed instruction file. The harness configuration uses the provider placeholder; it does not contain the real key. Changes to the teammate instructions take effect on the next session start.
 

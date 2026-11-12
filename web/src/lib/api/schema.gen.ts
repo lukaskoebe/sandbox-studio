@@ -57,6 +57,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Renames the environment. Its ID, and so its sandboxes and links, stay the same. */
+        patch: operations["renameEnvironment"];
+        trace?: never;
+    };
     "/api/environments/{env}/approvals": {
         parameters: {
             query?: never;
@@ -1714,7 +1731,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lists a directory of the sandbox's workspace, directories first, at most 1,000 entries. Symlinks are listed, never followed. */
+        /** @description Lists a directory of the sandbox's workspace or /tmp, directories first, at most 1,000 entries. Symlinks are listed, never followed. */
         get: operations["listFiles"];
         put?: never;
         /**
@@ -1735,7 +1752,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reads a file of the sandbox's workspace: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not. */
+        /** @description Reads a file of the sandbox's workspace or /tmp: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not. */
         get: operations["readFile"];
         put?: never;
         post?: never;
@@ -1922,7 +1939,7 @@ export interface paths {
         put?: never;
         /**
          * Move a sandbox onto another template or the current base image
-         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. Software installed outside /workspace and the home, such as apt packages, is lost, and so are the tools mise use installed unless keepTools is set. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
+         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. Software installed outside /workspace and the home, such as apt packages, is lost; the tools mise use installed are kept unless keepTools is false. Docker images, containers and volumes are lost unless keepDocker is set. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
          */
         post: operations["rebaseSandbox"];
         delete?: never;
@@ -5566,7 +5583,9 @@ export interface components {
             text: string;
         };
         RebaseInBody: {
-            /** @description Also keep the toolchains in /opt/mise, what mise use installed: versions the new template lacks are copied, and the global pins it doesn't have are kept in /opt/mise/config/conf.d/studio-kept-tools.toml */
+            /** @description Also copy Docker's images, containers and volumes. It takes a while for many images, and the sandbox is stopped for the copy as for any rebase */
+            keepDocker?: boolean;
+            /** @description Keep the toolchains in /opt/mise, what mise use installed, which is the default: versions the new template lacks are copied, and the global pins it doesn't have are kept in /opt/mise/config/conf.d/studio-kept-tools.toml. false leaves them out */
             keepTools?: boolean;
             /** @description A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources */
             templateId?: string;
@@ -5605,6 +5624,9 @@ export interface components {
         };
         RenameCheckpointInBody: {
             /** @description Human-readable checkpoint name */
+            name: string;
+        };
+        RenameEnvBody: {
             name: string;
         };
         RenameTerminalInBody: {
@@ -7125,6 +7147,42 @@ export interface operations {
         responses: {
             /** @description Created */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    renameEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameEnvBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11342,8 +11400,10 @@ export interface operations {
     listFiles: {
         parameters: {
             query?: {
-                /** @description Relative to /workspace; empty for /workspace itself */
+                /** @description Relative to the root; empty for the root itself */
                 path?: string;
+                /** @description The folder path is relative to: /workspace (the default) or /tmp */
+                root?: "workspace" | "tmp";
             };
             header?: never;
             path: {
@@ -11424,8 +11484,10 @@ export interface operations {
     readFile: {
         parameters: {
             query?: {
-                /** @description Relative to /workspace; empty for /workspace itself */
+                /** @description Relative to the root; empty for the root itself */
                 path?: string;
+                /** @description The folder path is relative to: /workspace (the default) or /tmp */
+                root?: "workspace" | "tmp";
             };
             header?: never;
             path: {

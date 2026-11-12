@@ -29,7 +29,7 @@ func TestResizeDisksCopiesDockerData(t *testing.T) {
 	tf.setStatus(source, runtime.StatusRunning)
 	tf.setWorkspace(source, "files")
 	tf.setHome(source, "dotfiles")
-	tf.dockers[source] = []byte("images")
+	tf.dockers[source], tf.tools[source] = []byte("images"), []byte("mise")
 
 	view, err := resizeDisksNow(f, f.sandbox.ID, DiskSizes{WorkspaceMiB: 8192, DockerMiB: 16384, HomeMiB: 6144})
 	if err != nil {
@@ -48,6 +48,10 @@ func TestResizeDisksCopiesDockerData(t *testing.T) {
 	}
 	if tf.workspace(target) != "files" || tf.home(target) != "dotfiles" || string(tf.dockers[target]) != "images" || !tf.booted[target] {
 		t.Fatalf("target workspace %q, home %q, docker %q, booted %v", tf.workspace(target), tf.home(target), tf.dockers[target], tf.booted[target])
+	}
+	// The tools in /opt/mise are on the root disk, which the resize replaces too.
+	if string(tf.tools[target]) != "mise" {
+		t.Fatalf("target tools %q", tf.tools[target])
 	}
 	if tf.hasVM(source) {
 		t.Fatal("source VM remains")

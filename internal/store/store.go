@@ -211,6 +211,21 @@ func (s *Store) CreateEnvironment(ctx context.Context, name string) (Environment
 	return e, err
 }
 
+// RenameEnvironment gives an environment a new name. Names are unique.
+func (s *Store) RenameEnvironment(ctx context.Context, id, name string) (Environment, error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE environments SET name = ? WHERE id = ?", name, id)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return Environment{}, fmt.Errorf("an environment named %q: %w", name, ErrExists)
+	}
+	if err != nil {
+		return Environment{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Environment{}, ErrNotFound
+	}
+	return s.Environment(ctx, id)
+}
+
 // Environments lists environments by creation time.
 func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT "+environmentCols+" FROM environments ORDER BY created_at, name")

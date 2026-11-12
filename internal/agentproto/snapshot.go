@@ -102,7 +102,13 @@ const (
 type FilesRequest struct {
 	Op   string `json:"op"`
 	Path string `json:"path,omitempty"`
+	// Root is the folder Path is relative to: FilesRootTmp for /tmp, else /workspace. A guest
+	// that knows roots says so in FilesReply.Root.
+	Root string `json:"root,omitempty"`
 }
+
+// FilesRootTmp roots a FilesRequest at /tmp.
+const FilesRootTmp = "tmp"
 
 // FileEntry is a directory entry.
 type FileEntry struct {
@@ -114,6 +120,8 @@ type FileEntry struct {
 
 // FilesReply answers a FilesRequest.
 type FilesReply struct {
+	// Root echoes FilesRequest.Root.
+	Root string `json:"root,omitempty"`
 	// List.
 	Entries   []FileEntry `json:"entries,omitempty"`
 	Truncated bool        `json:"truncated,omitempty"`
