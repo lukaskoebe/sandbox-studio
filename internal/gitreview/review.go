@@ -1,9 +1,9 @@
 package gitreview
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -79,7 +79,7 @@ func (s *Service) review(ctx context.Context, r *git.Repository, old, newHash pl
 		inNew[h] = true
 		commits = append(commits, c)
 	}
-	sort.SliceStable(commits, func(i, j int) bool { return commits[i].Committer.When.After(commits[j].Committer.When) })
+	commits = newestFirst(commits)
 	for i, c := range commits {
 		if i >= s.Limits.MaxCommits {
 			rv.MoreCommits = len(commits) - i
@@ -328,4 +328,56 @@ func prProposal(rv PushReview, base string) PullRequest {
 	}
 	pr.Title = truncate(pr.Title, 200)
 	return pr
+}
+
+// newestFirst orders commits as git log does: a commit before its parents, and the newest
+// first of those whose children have all gone. Commit times alone leave commits made in the
+// same second in any order.
+func newestFirst(commits []*object.Commit) []*object.Commit {
+	in := make(map[plumbing.Hash]*object.Commit, len(commits))
+	for _, c := range commits {
+		in[c.Hash] = c
+	}
+	children := make(map[plumbing.Hash]int, len(commits))
+	for _, c := range commits {
+		for _, p := range c.ParentHashes {
+			if in[p] != nil {
+				children[p]++
+			}
+		}
+	}
+	ready := &byNewest{}
+	for _, c := range commits {
+		if children[c.Hash] == 0 {
+			heap.Push(ready, c)
+		}
+	}
+	out := make([]*object.Commit, 0, len(commits))
+	for ready.Len() > 0 {
+		c := heap.Pop(ready).(*object.Commit)
+		out = append(out, c)
+		for _, p := range c.ParentHashes {
+			if in[p] == nil {
+				continue
+			}
+			if children[p]--; children[p] == 0 {
+				heap.Push(ready, in[p])
+			}
+		}
+	}
+	return out
+}
+
+// byNewest is a heap of commits, the latest committed on top.
+type byNewest []*object.Commit
+
+func (h byNewest) Len() int           { return len(h) }
+func (h byNewest) Less(i, j int) bool { return h[i].Committer.When.After(h[j].Committer.When) }
+func (h byNewest) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *byNewest) Push(x any)        { *h = append(*h, x.(*object.Commit)) }
+func (h *byNewest) Pop() any {
+	old := *h
+	c := old[len(old)-1]
+	*h = old[:len(old)-1]
+	return c
 }

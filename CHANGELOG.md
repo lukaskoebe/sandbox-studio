@@ -9,6 +9,8 @@
   comment button and drag, or click one and shift-click another. The comment names the range,
   and the agent gets those lines quoted.
 - A push's **Commits** tab opens each commit to its own diff (`GET …/approvals/{id}/commits/{sha}`).
+  Its commits list each before its parents, as git log does, also when they were made in the
+  same second, which left them in any order.
 - A nearly full Docker disk counts the space Docker's daemon may still use: the blocks ext4 keeps
   for root. It read 0 B free while Docker had a twentieth of the disk left. And Home's notice of a
   full disk gives the advice for that disk, not always the home disk's.
