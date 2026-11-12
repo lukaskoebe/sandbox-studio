@@ -124,7 +124,8 @@ test("Files browses /tmp from the path's root, without uploads or mentions there
   await path.getByRole("button", { name: "Root: /workspace" }).click()
   await page.getByRole("menuitemradio", { name: "/tmp" }).click()
 
-  const tree = screen.getByRole("tree", { name: "/tmp" })
+  // The tree shows the whole computer, open at /tmp.
+  const tree = screen.getByRole("tree", { name: "Computer" })
   const item = (n: string) =>
     tree.getByRole("treeitem", { name: new RegExp(`^${n}( |$)`) })
   const noFile = screen.getByLabel("No file open")
@@ -138,13 +139,79 @@ test("Files browses /tmp from the path's root, without uploads or mentions there
   await expect(page).toHaveURL(/file=%2Ftmp%2Fbuild\.log/)
   await expect(screen.locator("pre")).toContainText("42 modules transformed")
   await expect(path).toHaveAttribute("title", "/tmp/build.log")
+  await expect(
+    screen.getByRole("button", { name: "Mention in chat" })
+  ).toHaveCount(0)
 
+  // /workspace in the tree is the workspace again.
+  await item("workspace").click()
+  await expect(path).toHaveAttribute("title", "/workspace")
+  await expect(screen.getByRole("tree", { name: "Workspace" })).toBeVisible()
+  await path.getByRole("button", { name: "Root: /workspace" }).click()
+  await page.getByRole("menuitemradio", { name: "/tmp" }).click()
   // Back to the workspace from the root.
-  await path.getByRole("button", { name: "Root: /tmp" }).click()
+  await path.getByRole("button", { name: "Root: /" }).click()
   await page.getByRole("menuitemradio", { name: "/workspace" }).click()
   await expect(
     screen.getByRole("tree", { name: "Workspace" }).getByRole("treeitem", {
       name: /^README\.md( |$)/,
     })
   ).toBeVisible()
+})
+
+test("Files goes to any path typed, a folder or a file, and / finds a file from anywhere", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("files-path")
+  const id = await api.createSandbox(name)
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=files`)
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  const path = screen.getByRole("navigation", { name: "Path" })
+  const field = screen.getByRole("textbox", { name: "Path to go to" })
+
+  // The root's menu goes to the whole computer.
+  await path.getByRole("button", { name: "Root: /workspace" }).click()
+  await page.getByRole("menuitemradio", { name: /^\/ the computer/ }).click()
+  const tree = screen.getByRole("tree", { name: "Computer" })
+  await expect(tree.getByRole("treeitem", { name: /^etc( |$)/ })).toBeVisible()
+
+  // A typed folder opens in the tree; a typed file opens beside it.
+  await path.getByRole("button", { name: "Go to a path" }).click()
+  await expect(field).toHaveValue("/")
+  await field.fill("/home/agent")
+  await field.press("Enter")
+  await expect(path).toHaveAttribute("title", "/home/agent")
+  await expect(
+    tree.getByRole("treeitem", { name: /^\.bashrc( |$)/ })
+  ).toBeVisible()
+  await path.getByRole("button", { name: "Root: /" }).click()
+  await page.getByRole("menuitem", { name: "Go to a path…" }).click()
+  await field.fill("/etc/../etc/hostname")
+  await field.press("Enter")
+  await expect(path).toHaveAttribute("title", "/etc/hostname")
+  await expect(screen.locator("pre")).toContainText("shop")
+
+  // A path in /workspace is the workspace's, and Escape keeps the place.
+  await path.getByRole("button", { name: "Go to a path" }).click()
+  await field.fill("/workspace/main.go")
+  await field.press("Enter")
+  await expect(page).toHaveURL(/file=main\.go/)
+  await path.getByRole("button", { name: "Go to a path" }).click()
+  await field.fill("/nowhere")
+  await field.press("Escape")
+  await expect(field).toHaveCount(0)
+  await expect(path).toHaveAttribute("title", "/workspace/main.go")
+  await path.getByRole("button", { name: "Go to a path" }).click()
+  await field.fill("/nowhere")
+  await field.press("Enter")
+  await expect(page.getByText("Can't open /nowhere")).toBeVisible()
+
+  // / reaches Go to file also when nothing has the focus.
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur())
+  await page.keyboard.press("/")
+  await expect(
+    screen.getByRole("combobox", { name: /Go to file/ })
+  ).toBeFocused()
 })

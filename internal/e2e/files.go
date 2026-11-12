@@ -100,6 +100,22 @@ var tmp = map[string]string{
 	"vite-cache/deps.json": "{}\n",
 }
 
+// computer is every e2e sandbox's whole file system: /workspace, /tmp and a few more.
+func computer() map[string]string {
+	all := map[string]string{
+		"etc/hostname":       "shop\n",
+		"etc/os-release":     "PRETTY_NAME=\"Ubuntu 24.04 LTS\"\n",
+		"home/agent/.bashrc": "export EDITOR=vi\n",
+	}
+	for p, data := range workspace {
+		all["workspace/"+p] = data
+	}
+	for p, data := range tmp {
+		all["tmp/"+p] = data
+	}
+	return all
+}
+
 var workspaceTime = time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC).Unix()
 
 // browse answers a KindFiles request from workspace, as the guest agent does from disk.
@@ -112,11 +128,17 @@ func browse(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 func browseIn(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 	name := path.Clean("/" + req.Path)[1:]
 	workspace := workspace
-	if req.Root == agentproto.FilesRootTmp {
+	switch req.Root {
+	case agentproto.FilesRootTmp:
 		workspace = tmp
+	case agentproto.FilesRootFS:
+		workspace = computer()
 	}
 	switch req.Op {
 	case agentproto.FilesList:
+		if _, ok := workspace[name]; ok {
+			return agentproto.FilesReply{}, errors.New("not a directory")
+		}
 		prefix := ""
 		if name != "" {
 			prefix = name + "/"

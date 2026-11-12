@@ -148,8 +148,8 @@ const (
 type FilesRequest struct {
 	Op   string `json:"op"`
 	Path string `json:"path,omitempty"`
-	// Root is the folder Path is relative to: FilesRootTmp for /tmp, else /workspace. A guest
-	// that knows roots says so in FilesReply.Root.
+	// Root is the folder Path is relative to: FilesRootTmp for /tmp, FilesRootFS for /, else
+	// /workspace. A guest that knows a root says so in FilesReply.Root.
 	Root string `json:"root,omitempty"`
 	// File, From and Area name a FilesGitDiff's change.
 	File string `json:"file,omitempty"`
@@ -159,6 +159,9 @@ type FilesRequest struct {
 
 // FilesRootTmp roots a FilesRequest at /tmp.
 const FilesRootTmp = "tmp"
+
+// FilesRootFS roots a FilesRequest at /, the whole computer.
+const FilesRootFS = "fs"
 
 // FileEntry is a directory entry.
 type FileEntry struct {

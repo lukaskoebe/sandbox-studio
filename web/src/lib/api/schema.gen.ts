@@ -1772,7 +1772,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lists a directory of the sandbox's workspace or /tmp, directories first, at most 1,000 entries. Symlinks are listed, never followed. */
+        /** @description Lists a directory of the sandbox's workspace, its /tmp or any folder of the computer, directories first, at most 1,000 entries. Symlinks are listed, never followed; a folder the sandbox's user can't read isn't. */
         get: operations["listFiles"];
         put?: never;
         /**
@@ -1793,7 +1793,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reads a file of the sandbox's workspace or /tmp: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not. */
+        /** @description Reads a file of the sandbox's workspace, its /tmp or anywhere on the computer: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not. */
         get: operations["readFile"];
         put?: never;
         post?: never;
@@ -11723,8 +11723,8 @@ export interface operations {
             query?: {
                 /** @description Relative to the root; empty for the root itself */
                 path?: string;
-                /** @description The folder path is relative to: /workspace (the default) or /tmp */
-                root?: "workspace" | "tmp";
+                /** @description The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer) */
+                root?: "workspace" | "tmp" | "fs";
             };
             header?: never;
             path: {
@@ -11807,8 +11807,8 @@ export interface operations {
             query?: {
                 /** @description Relative to the root; empty for the root itself */
                 path?: string;
-                /** @description The folder path is relative to: /workspace (the default) or /tmp */
-                root?: "workspace" | "tmp";
+                /** @description The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer) */
+                root?: "workspace" | "tmp" | "fs";
             };
             header?: never;
             path: {

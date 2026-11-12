@@ -182,7 +182,12 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   clock or the site info's All sites.
 - Preview: the framed app with a port chip, Open in a new tab and Open fresh.
 - Files: the computer's files (`chat/files-panel.tsx`), marking those git reports changed and
-  those the thread's request changed.
+  those the thread's request changed. It opens at `/workspace`; the path's root goes to `/tmp`
+  or `/`, the whole computer, and Go to a path (or a click beside the path) takes any path
+  typed, a folder or a file. A place in `/workspace` is written relative to it and every other
+  one absolute, in the URL too. Uploads and mentions stay in `/workspace`. `/` focuses Go to
+  file from anywhere in the tab, also when nothing has the focus, as after a click on a
+  button in WebKit, where buttons don't take it.
 - Changes: git's view of the computer, read-only (`computer/changes.tsx`, `git-changes.tsx`):
   the pushes waiting for review first, each opening its review with a way back; then each
   repository of `/workspace` with its branch, ↑ ahead and ↓ behind its upstream, and its Staged,

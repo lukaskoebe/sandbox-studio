@@ -469,6 +469,19 @@ func TestFiles(t *testing.T) {
 			t.Fatalf("%s: %+v", p, r)
 		}
 	}
+
+	// A folder the user can't read isn't listed; the whole computer is browsed from /.
+	must(t, os.Chmod(filepath.Join(ws, "src"), 0o700))
+	if r, err := browse(ws, [2]int{-2, -2}, agentproto.FilesRequest{Op: agentproto.FilesList, Path: "src"}); err == nil {
+		t.Fatalf("private folder listed: %+v", r)
+	}
+	if _, err := browse(ws, me, agentproto.FilesRequest{Op: agentproto.FilesList, Path: "src"}); err != nil {
+		t.Fatalf("own folder: %v", err)
+	}
+	rel := strings.TrimPrefix(filepath.Join(ws, "src", "a.go"), "/")
+	if r, err := browse("/", me, agentproto.FilesRequest{Op: agentproto.FilesRead, Path: rel}); err != nil || string(r.Data) != "package a\n" {
+		t.Fatalf("from /: %+v %v", r, err)
+	}
 }
 
 // storeBytes is the size of the store's files, which the fake disk counts as used.

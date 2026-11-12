@@ -389,12 +389,12 @@ func (s *Server) registerChats(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Sandbox ID"`
 		Path string `query:"path" maxLength:"4096" doc:"Relative to the root; empty for the root itself"`
-		Root string `query:"root" enum:"workspace,tmp" doc:"The folder path is relative to: /workspace (the default) or /tmp"`
+		Root string `query:"root" enum:"workspace,tmp,fs" doc:"The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer)"`
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "listFiles", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files", Tags: []string{"chats"},
-		Description: "Lists a directory of the sandbox's workspace or /tmp, directories first, at most 1,000 entries. " +
-			"Symlinks are listed, never followed.",
+		Description: "Lists a directory of the sandbox's workspace, its /tmp or any folder of the computer, directories first, at most 1,000 entries. " +
+			"Symlinks are listed, never followed; a folder the sandbox's user can't read isn't.",
 	}, func(ctx context.Context, in *filesIn) (*struct{ Body FileList }, error) {
 		reply, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesList, Path: in.Path, Root: filesRoot(in.Root)})
 		if err != nil {
@@ -455,7 +455,7 @@ func (s *Server) registerChats(api huma.API) {
 
 	huma.Register(api, huma.Operation{
 		OperationID: "readFile", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files/content", Tags: []string{"chats"},
-		Description: "Reads a file of the sandbox's workspace or /tmp: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come " +
+		Description: "Reads a file of the sandbox's workspace, its /tmp or anywhere on the computer: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come " +
 			"with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not.",
 	}, func(ctx context.Context, in *filesIn) (*struct{ Body FileContent }, error) {
 		if in.Path == "" {
@@ -591,7 +591,7 @@ func (s *Server) workspaceFiles(ctx context.Context, envID, id string, req agent
 	switch {
 	case err == nil && reply.Root != req.Root && req.Op != agentproto.FilesIndex:
 		// A guest from before roots answers for /workspace whatever was asked.
-		return agentproto.FilesReply{}, huma.Error409Conflict("restart the sandbox to browse /tmp: its agent is from an older Studio")
+		return agentproto.FilesReply{}, huma.Error409Conflict("restart the sandbox to browse outside /workspace: its agent is from an older Studio")
 	case err == nil:
 		return reply, nil
 	case errors.Is(err, agentchan.ErrNotConnected), ctx.Err() != nil:
@@ -602,8 +602,11 @@ func (s *Server) workspaceFiles(ctx context.Context, envID, id string, req agent
 
 // filesRoot is the agentproto root of the root query parameter.
 func filesRoot(root string) string {
-	if root == "tmp" {
+	switch root {
+	case "tmp":
 		return agentproto.FilesRootTmp
+	case "fs":
+		return agentproto.FilesRootFS
 	}
 	return ""
 }

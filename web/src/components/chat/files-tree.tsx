@@ -19,21 +19,69 @@ import { $api, errorMessage } from "@/lib/api/client"
 import { rank, type Candidate } from "@/lib/mentions"
 import { cn, formatBytes } from "@/lib/utils"
 
-/** The folders above a path and the path itself, as "web", "web/src", … */
-/** Places in /tmp are written "/tmp/…"; every other place is relative to /workspace. */
+/**
+ * A place in /workspace is written relative to it ("" for /workspace itself); every other
+ * place of the computer is absolute, "/etc/hosts" or "/" for the whole computer.
+ */
 export const tmpRoot = "/tmp"
 
 export function inTmp(place: string) {
   return place === tmpRoot || place.startsWith(`${tmpRoot}/`)
 }
 
-/** The files API's query for a place. */
-export function filesQuery(place: string) {
-  return inTmp(place)
-    ? { root: "tmp" as const, path: place.slice(tmpRoot.length + 1) }
-    : { path: place }
+/** Whether a place is outside /workspace. */
+export function outside(place: string) {
+  return place.startsWith("/")
 }
 
+/**
+ * The place a typed path names: absolute, or relative to /workspace, with "." and ".." resolved
+ * and a place in /workspace written relative to it.
+ */
+export function placeOf(typed: string) {
+  const parts: string[] = []
+  const abs = typed.trim().startsWith("/")
+  for (const p of typed.trim().split("/")) {
+    if (p === "" || p === ".") continue
+    if (p === "..") parts.pop()
+    else parts.push(p)
+  }
+  if (!abs) return parts.join("/")
+  if (parts[0] === "workspace") return parts.slice(1).join("/")
+  return `/${parts.join("/")}`
+}
+
+/** A place as the computer writes it. */
+export function absolutePath(place: string) {
+  if (outside(place)) return place
+  return place ? `/workspace/${place}` : "/workspace"
+}
+
+/** The place of an entry of a folder. */
+export function childOf(dir: string, name: string) {
+  if (dir === "/") return `/${name}`
+  return dir ? `${dir}/${name}` : name
+}
+
+/** The folder a place is in. */
+export function parentOf(place: string) {
+  const i = place.lastIndexOf("/")
+  if (i < 0) return ""
+  return i === 0 ? "/" : place.slice(0, i)
+}
+
+/**
+ * The files API's query for a place. /tmp has a root of its own, which guests from before the
+ * whole computer's root know.
+ */
+export function filesQuery(place: string) {
+  if (inTmp(place))
+    return { root: "tmp" as const, path: place.slice(tmpRoot.length + 1) }
+  if (outside(place)) return { root: "fs" as const, path: place.slice(1) }
+  return { path: place }
+}
+
+/** The folders above a path and the path itself, as "web", "web/src", … */
 export function ancestors(path: string) {
   const parts = path ? path.split("/") : []
   return parts.map((_, i) => parts.slice(0, i + 1).join("/"))
@@ -100,7 +148,7 @@ export function FilesTree({
       e.preventDefault()
       if (isOpen === "true") onToggle(path, false)
       else {
-        const parent = path.split("/").slice(0, -1).join("/")
+        const parent = parentOf(path)
         rows.find((r) => r.dataset.path === parent)?.focus()
       }
     } else if (e.key === "Enter" || e.key === " ") {
@@ -113,14 +161,14 @@ export function FilesTree({
     <div
       ref={tree}
       role="tree"
-      aria-label={inTmp(place) ? "/tmp" : "Workspace"}
+      aria-label={outside(place) ? "Computer" : "Workspace"}
       onKeyDown={onKeyDown}
       className="grid min-w-0"
     >
       <TreeFolder
         env={env}
         sandboxId={sandboxId}
-        dir={inTmp(place) ? tmpRoot : ""}
+        dir={outside(place) ? "/" : ""}
         level={1}
         place={place}
         expanded={expanded}
@@ -185,12 +233,11 @@ function TreeFolder({
       "h-auto py-1 text-destructive"
     )
   const entries = list.data.entries ?? []
-  if (entries.length === 0)
-    return note(dir && dir !== tmpRoot ? "Empty" : "No files yet")
+  if (entries.length === 0) return note(dir ? "Empty" : "No files yet")
   return (
     <>
       {entries.map((e, i) => {
-        const path = dir ? `${dir}/${e.name}` : e.name
+        const path = childOf(dir, e.name)
         const folder = e.type === "dir"
         const isOpen = folder && expanded.has(path)
         const selected = path === place

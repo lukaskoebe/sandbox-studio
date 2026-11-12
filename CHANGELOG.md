@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Files** browses the whole computer: the path's root goes to `/workspace`, `/tmp` or `/`,
+  and **Go to a path** (or a click beside the path) opens any folder or file typed. A folder
+  the sandbox's user can't read isn't listed. `/` goes to Go to file also in the Studio app,
+  where it did nothing after a click on a button.
 - A full-length diff shows its lines **Stacked** or **Split**, old beside new. The switch above
   the diff is remembered in this browser.
 - **Settings → Updates** has **Check for updates**: it asks GitHub now, in every mode, and says

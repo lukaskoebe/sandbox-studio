@@ -18507,7 +18507,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/files": {
       "get": {
-        "description": "Lists a directory of the sandbox's workspace or /tmp, directories first, at most 1,000 entries. Symlinks are listed, never followed.",
+        "description": "Lists a directory of the sandbox's workspace, its /tmp or any folder of the computer, directories first, at most 1,000 entries. Symlinks are listed, never followed; a folder the sandbox's user can't read isn't.",
         "operationId": "listFiles",
         "parameters": [
           {
@@ -18542,15 +18542,16 @@
             }
           },
           {
-            "description": "The folder path is relative to: /workspace (the default) or /tmp",
+            "description": "The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer)",
             "explode": false,
             "in": "query",
             "name": "root",
             "schema": {
-              "description": "The folder path is relative to: /workspace (the default) or /tmp",
+              "description": "The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer)",
               "enum": [
                 "workspace",
-                "tmp"
+                "tmp",
+                "fs"
               ],
               "type": "string"
             }
@@ -18677,7 +18678,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/files/content": {
       "get": {
-        "description": "Reads a file of the sandbox's workspace or /tmp: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not.",
+        "description": "Reads a file of the sandbox's workspace, its /tmp or anywhere on the computer: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not.",
         "operationId": "readFile",
         "parameters": [
           {
@@ -18712,15 +18713,16 @@
             }
           },
           {
-            "description": "The folder path is relative to: /workspace (the default) or /tmp",
+            "description": "The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer)",
             "explode": false,
             "in": "query",
             "name": "root",
             "schema": {
-              "description": "The folder path is relative to: /workspace (the default) or /tmp",
+              "description": "The folder path is relative to: /workspace (the default), /tmp, or / (fs, the whole computer)",
               "enum": [
                 "workspace",
-                "tmp"
+                "tmp",
+                "fs"
               ],
               "type": "string"
             }

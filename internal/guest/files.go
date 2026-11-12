@@ -17,9 +17,10 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
-// The chat's read-only file browser: lists directories and reads files of /workspace, or of
-// /tmp. Paths resolve beneath the root without following any symlink; symlinks are listed as
-// such and never opened. A file is only shown if the agent user may read it.
+// The chat's read-only file browser: lists directories and reads files of /workspace, of /tmp
+// or of the whole computer. Paths resolve beneath the root without following any symlink;
+// symlinks are listed as such and never opened. A folder is only listed and a file only shown
+// if the agent user may read it.
 
 // files serves a KindFiles stream.
 func (a *Agent) files(st net.Conn, br *bufio.Reader) error {
@@ -44,6 +45,8 @@ func (a *Agent) files(st net.Conn, br *bufio.Reader) error {
 	case "":
 	case agentproto.FilesRootTmp:
 		dir = "/tmp"
+	case agentproto.FilesRootFS:
+		dir = "/"
 	default:
 		return replyError(st, errors.New("unknown files root"))
 	}
@@ -70,7 +73,7 @@ func browse(workspace string, owner [2]int, req agentproto.FilesRequest) (agentp
 	defer unix.Close(root)
 	switch req.Op {
 	case agentproto.FilesList:
-		return listDir(root, name)
+		return listDir(root, name, owner)
 	case agentproto.FilesRead:
 		if name == "." {
 			return agentproto.FilesReply{}, errors.New("no file to read")
@@ -93,13 +96,20 @@ func browseError(err error) error {
 	return err
 }
 
-func listDir(root int, name string) (agentproto.FilesReply, error) {
+func listDir(root int, name string, owner [2]int) (agentproto.FilesReply, error) {
 	fd, err := unix.Openat2(root, name, beneath)
 	if err != nil {
 		return agentproto.FilesReply{}, browseError(err)
 	}
 	f := os.NewFile(uintptr(fd), name)
 	defer f.Close()
+	var ds unix.Stat_t
+	if err := unix.Fstat(fd, &ds); err != nil {
+		return agentproto.FilesReply{}, err
+	}
+	if !may(ds, owner, 0o5) {
+		return agentproto.FilesReply{}, errors.New("the sandbox's user can't read this folder")
+	}
 	names, err := f.Readdirnames(-1)
 	if err != nil {
 		return agentproto.FilesReply{}, err
@@ -162,8 +172,7 @@ func readFile(root int, name string, owner [2]int) (agentproto.FilesReply, error
 		return agentproto.FilesReply{}, errors.New("not a regular file")
 	}
 	reply := agentproto.FilesReply{Size: fs.Size}
-	mode := fs.Mode
-	if int(fs.Uid) != owner[0] && mode&0o004 == 0 && (int(fs.Gid) != owner[1] || mode&0o040 == 0) {
+	if !may(fs, owner, 0o4) {
 		reply.Unreadable = true
 		return reply, nil
 	}
@@ -193,6 +202,22 @@ func readFile(root int, name string, owner [2]int) (agentproto.FilesReply, error
 		reply.Binary = true
 	}
 	return reply, nil
+}
+
+// may reports whether owner (uid, gid) has the permission bits want (4 read, 1 search) on a
+// file, from its owner, group or other bits, as the kernel checks them. The agent user's other
+// groups aren't counted.
+func may(fs unix.Stat_t, owner [2]int, want uint32) bool {
+	mode := fs.Mode
+	switch {
+	case owner[0] == 0:
+		return true
+	case int(fs.Uid) == owner[0]:
+		return (mode>>6)&want == want
+	case int(fs.Gid) == owner[1]:
+		return (mode>>3)&want == want
+	}
+	return mode&want == want
 }
 
 // readFull reads until buf is full or the file ends.

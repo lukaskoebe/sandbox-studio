@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -12,6 +13,7 @@ import {
   DownloadSimpleIcon,
   FileIcon,
   SidebarSimpleIcon,
+  TextboxIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
 import {
@@ -26,25 +28,32 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CodeView } from "@/components/code-view"
 import {
+  absolutePath,
   ancestors,
   filesQuery,
   FilesTree,
   GoToFile,
   inTmp,
+  outside,
+  parentOf,
+  placeOf,
   tmpRoot,
 } from "@/components/chat/files-tree"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
-import { $api, errorMessage } from "@/lib/api/client"
+import { toast } from "sonner"
+import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { languageName } from "@/lib/highlight"
 import {
@@ -64,7 +73,7 @@ type FileEntry = components["schemas"]["FileEntry"]
 type FileContent = components["schemas"]["FileContent"]
 
 /**
- * A browser of the sandbox's /workspace, or of its /tmp, as mock K draws it: the tree beside the file
+ * A browser of the sandbox's /workspace, or of any folder of its computer, as mock K draws it: the tree beside the file
  * shown, the path above them, and Go to file. Below 640px the tree opens over the file
  * and closes once one is picked. Folders opened in the tree stay open while Files moves about.
  * With no file open, the view beside the tree is empty and takes uploads into the folder
@@ -81,7 +90,7 @@ export function FilesPanel({
 }: {
   env: string
   sandboxId: string
-  /** The folder shown, relative to /workspace ("" for /workspace), or "/tmp/…" in /tmp. */
+  /** The folder shown, relative to /workspace ("" for /workspace), or absolute outside it. */
   dir: string
   /** The file shown, if any. */
   file?: string
@@ -112,10 +121,40 @@ export function FilesPanel({
       else next.delete(d)
       return next
     })
+  // A place in /workspace is written relative to it, also when reached from /.
   const open = (d: string, f?: string) => {
     if (f && narrow) setOver(false)
-    onOpen(d, f)
+    onOpen(placeOf(d), f === undefined ? undefined : placeOf(f))
   }
+  // A typed path is a folder, or else a file in one.
+  const go = async (p: string) => {
+    const { error } = await fetchClient.GET(
+      "/api/environments/{env}/sandboxes/{id}/files",
+      { params: { path: { env, id: sandboxId }, query: filesQuery(p) } }
+    )
+    if (!error) return open(p)
+    const why = errorMessage(error)
+    if (why.includes("not a directory")) return open(parentOf(p), p)
+    toast.error(`Can't open ${absolutePath(p)}`, { description: why })
+  }
+
+  // / goes to Go to file from anywhere in the panel, also where a click focuses nothing, as
+  // WebKit's buttons don't.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const node = root.current
+      const t = e.target as HTMLElement | null
+      if (e.key !== "/" || e.defaultPrevented || !node || !t) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (t.closest("input, textarea, select, [contenteditable]")) return
+      const inside = node.contains(t)
+      if (!inside && (t !== document.body || node.offsetParent === null)) return
+      e.preventDefault()
+      find.current?.focus()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [])
   const showTree = (show: boolean) => {
     if (narrow) return setOver(show)
     setHidden(!show)
@@ -131,11 +170,7 @@ export function FilesPanel({
       ref={root}
       className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-2", className)}
       onKeyDown={(e) => {
-        const t = e.target as HTMLElement
-        if (e.key === "/" && !t.closest("input, textarea, [contenteditable]")) {
-          e.preventDefault()
-          find.current?.focus()
-        } else if (e.key === "Escape" && narrow && over) setOver(false)
+        if (e.key === "Escape" && narrow && over) setOver(false)
       }}
     >
       <div className="flex min-w-0 items-center gap-1">
@@ -156,6 +191,7 @@ export function FilesPanel({
           short={narrow}
           changed={changed}
           onOpen={open}
+          onGo={(p) => void go(p)}
         />
         <GoToFile
           ref={find}
@@ -248,7 +284,8 @@ function useNarrow(el: RefObject<HTMLElement | null>) {
 
 /**
  * The path of the place shown, each folder a link to it and the place itself in bold. When
- * narrow, the place alone.
+ * narrow, the place alone. Its root switches between /workspace, /tmp and the whole computer,
+ * and Go to a path takes any path typed.
  */
 function PathCrumbs({
   dir,
@@ -256,34 +293,49 @@ function PathCrumbs({
   short,
   changed,
   onOpen,
+  onGo,
 }: {
   dir: string
   file?: string
   short: boolean
   changed: Set<string>
   onOpen: (dir: string) => void
+  /** Shows the place a typed path names, a folder or a file. */
+  onGo: (place: string) => void
 }) {
+  const [typing, setTyping] = useState(false)
   const place = file ?? dir
-  const tmp = inTmp(place)
-  const rest = tmp ? place.slice(tmpRoot.length + 1) : place
-  const parts = [tmp ? "tmp" : "workspace", ...(rest ? rest.split("/") : [])]
+  const abs = outside(place)
+  const rest = abs ? place.slice(1) : place
+  const parts = [abs ? "/" : "workspace", ...(rest ? rest.split("/") : [])]
   const last = parts.length - 1
   const to = (i: number) => {
     const sub = parts.slice(1, i + 1).join("/")
-    return tmp ? (sub ? `${tmpRoot}/${sub}` : tmpRoot) : sub
+    return abs ? `/${sub}` : sub
   }
   const mark = file !== undefined && changed.has(file)
+  if (typing)
+    return (
+      <PathField
+        start={absolutePath(place)}
+        onGo={(typed) => {
+          setTyping(false)
+          onGo(placeOf(typed))
+        }}
+        onCancel={() => setTyping(false)}
+      />
+    )
   return (
     <nav
       aria-label="Path"
-      title={`/${parts.join("/")}`}
+      title={absolutePath(place)}
       className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden font-mono text-caption whitespace-nowrap"
     >
       {(!short || last === 0) && (
         <DropdownMenu>
           <DropdownMenuTrigger
-            aria-label={`Root: /${parts[0]}`}
-            title="Browse /workspace or /tmp"
+            aria-label={`Root: ${abs ? "/" : "/workspace"}`}
+            title="Browse /workspace, /tmp, the whole computer or any path"
             className={cn(
               "flex shrink-0 items-center gap-0.5 rounded px-1 hover:bg-muted hover:text-foreground",
               last === 0 ? "font-semibold" : "text-muted-foreground"
@@ -292,30 +344,39 @@ function PathCrumbs({
             {parts[0]}
             <CaretDownIcon className="size-2.5" aria-hidden />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-40">
+          <DropdownMenuContent align="start" className="w-48">
             <DropdownMenuRadioGroup
-              value={tmp ? "tmp" : "workspace"}
-              onValueChange={(v) => onOpen(v === "tmp" ? tmpRoot : "")}
+              value={abs ? (inTmp(place) ? tmpRoot : "/") : ""}
+              onValueChange={(v: string) => onOpen(v)}
             >
-              <DropdownMenuRadioItem value="workspace" closeOnClick>
+              <DropdownMenuRadioItem value="" closeOnClick>
                 /workspace
               </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="tmp" closeOnClick>
+              <DropdownMenuRadioItem value={tmpRoot} closeOnClick>
                 /tmp
               </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="/" closeOnClick>
+                / <span className="text-muted-foreground">the computer</span>
+              </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setTyping(true)}>
+              <TextboxIcon />
+              Go to a path…
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
       {parts.map((p, i) => {
         if (i === 0 || (short && i < last)) return null
-        const sep = i > 0 && !short && (
+        const sep = i > 1 || (i === 1 && !abs)
+        const slash = sep && !short && (
           <span className="text-muted-foreground">/</span>
         )
         if (i === last)
           return (
             <span key={i} className="flex min-w-0 items-center gap-0.5">
-              {sep}
+              {slash}
               <span
                 aria-current="page"
                 className="min-w-0 truncate px-1 font-semibold"
@@ -332,7 +393,7 @@ function PathCrumbs({
           )
         return (
           <span key={i} className="flex min-w-0 shrink items-center gap-0.5">
-            {sep}
+            {slash}
             <button
               type="button"
               className="max-w-[16ch] truncate rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -343,7 +404,56 @@ function PathCrumbs({
           </span>
         )
       })}
+      <button
+        type="button"
+        aria-label="Go to a path"
+        title="Go to a path"
+        className="h-5 min-w-4 flex-1 cursor-text self-stretch"
+        onClick={() => setTyping(true)}
+      />
     </nav>
+  )
+}
+
+/** The path typed in place of the crumbs: Enter goes there, Escape or leaving puts them back. */
+function PathField({
+  start,
+  onGo,
+  onCancel,
+}: {
+  start: string
+  onGo: (typed: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(start)
+  return (
+    <form
+      className="flex min-w-0 flex-1"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (value.trim()) onGo(value)
+      }}
+    >
+      <input
+        autoFocus
+        aria-label="Path to go to"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onBlur={onCancel}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault()
+            e.stopPropagation()
+            onCancel()
+          }
+        }}
+        className="h-6 min-w-0 flex-1 rounded-md bg-background px-1.5 font-mono text-caption ring-1 ring-ring/40 outline-none focus-visible:ring-ring"
+      />
+    </form>
   )
 }
 
@@ -576,7 +686,7 @@ function NoFile({
   )
   const { refetch } = list
   // Uploads go into the workspace only.
-  const canUpload = !inTmp(dir)
+  const canUpload = !outside(dir)
   const uploads = useFolderUploads({
     env,
     sandboxId,
@@ -622,7 +732,7 @@ function NoFile({
           {tree ? "one" : "a file"} by name.
         </p>
       ) : (
-        <p>{tree ? "Pick a file of /tmp in the tree." : "No file open."}</p>
+        <p>{tree ? `Pick a file of ${dir} in the tree.` : "No file open."}</p>
       )}
       <div className="flex flex-wrap justify-center gap-2">
         {!tree && (
@@ -718,10 +828,10 @@ function FileView({
   const { refetch } = content
   const name = path.split("/").at(-1) ?? path
   const c = content.data
-  // A mention names a workspace path, so files of /tmp can't be mentioned.
+  // A mention names a workspace path, so files outside it can't be mentioned.
   const canMention =
     useSyncExternalStore(watchMentionTargets, () => canMentionIn(sandboxId)) &&
-    !inTmp(path)
+    !outside(path)
   const body = useRef<HTMLDivElement>(null)
   const mention = () => {
     const m: Mention = { path }
