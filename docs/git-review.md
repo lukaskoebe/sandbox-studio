@@ -197,9 +197,17 @@ here, reviewed like any other push.
   --stateless-rpc` for the sandboxes' fetches, as `git http-backend` does (protocol v2 when
   the sandbox asks), and go-git's file transport (`git-upload-pack`, `git-receive-pack`) for
   the staging mirror and the approved push. The push is thus what `git push` to the folder
-  would do: the repository's config applies and its hooks run. A push to the branch a
-  working copy has checked out fails with git's "refusing to update checked out branch"
-  unless the repository sets `receive.denyCurrentBranch=updateInstead`.
+  would do: the repository's config applies and its hooks run.
+- A push to the branch a working copy has checked out: staging marks the review `checkedOut`
+  (`checkedOut` in `local.go`: the repository has a `.git` and `git symbolic-ref HEAD` names
+  the branch), and the card offers **Update the checked-out files too**, ticked. Approved so
+  (`updateCheckedOut`, omitted means yes), the host's git pushes from the staging repository
+  with `--receive-pack="git -c receive.denyCurrentBranch=updateInstead receive-pack"` and
+  `--force-with-lease` on the old tip (go-git's file transport takes no config), so the
+  working tree follows the branch, and git refuses it when the tree has changes of its own
+  or the branch moved since the sandbox pushed. Unticked, the push is go-git's, which git
+  refuses with "refusing to update checked out branch" unless the repository sets
+  `receive.denyCurrentBranch` itself. **Push again** updates the files.
 - The approval says "Approving pushes it to <folder>/<path> on this computer." No pull
   requests. "Test" without a repository checks the folder.
 

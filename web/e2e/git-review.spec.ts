@@ -8,6 +8,10 @@ import {
   type Api,
 } from "./fixtures"
 import type { Locator, Page } from "@playwright/test"
+import { execFileSync } from "node:child_process"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 /**
  * A forge of kind https on a host of its own, and its upstream repository: a bare repository
@@ -630,4 +634,73 @@ test("a comment lands on its line after a removed --- line, and a draft outlives
   await expect(
     sheet.getByRole("note", { name: "Comment on q.sql:4" })
   ).toBeInViewport()
+})
+
+// A push to the branch a repository on this computer has checked out: the card offers to
+// update the checked-out files too, ticked, and approving it moves the working copy along.
+test("a push to a checked-out branch of a local repository updates its files", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const folder = mkdtempSync(join(tmpdir(), "studio-checked-out-"))
+  const repo = join(folder, "proj")
+  const git = (...args: string[]) =>
+    execFileSync("git", args, {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "Me",
+        GIT_AUTHOR_EMAIL: "me@example.com",
+        GIT_COMMITTER_NAME: "Me",
+        GIT_COMMITTER_EMAIL: "me@example.com",
+      },
+    })
+  git("init", "-q", "-b", "main", repo)
+  writeFileSync(join(repo, "README"), "hello\n")
+  git("-C", repo, "add", "README")
+  git("-C", repo, "commit", "-q", "-m", "First")
+  const name = `here-${Math.random().toString(36).slice(2, 8)}`
+  const forge = await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/forges`,
+    { name, kind: "local", baseUrl: folder }
+  )
+  try {
+    const id = await api.createSandbox(sandboxName("checked-out"))
+    await api.guestReady(id)
+    const pushed = await api.push(id, {
+      url: `https://git.studio.internal/${name}/proj.git`,
+      file: "agent.txt",
+      content: "from the sandbox\n",
+      message: "Add a file",
+    })
+    expect(pushed.error, pushed.output).toBeUndefined()
+
+    await page.goto(`/e/${env}`)
+    const card = approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: "proj" })
+    await card.getByRole("button", { name: "Review" }).click()
+    const sheet = page.getByRole("dialog")
+    const update = sheet.getByRole("checkbox", {
+      name: "Update the checked-out files too",
+    })
+    await expect(update).toBeChecked()
+    await expect(sheet).toContainText("main is checked out in the repository")
+    await sheet.getByRole("button", { name: "Approve and push" }).click()
+    await expect(sheet).toBeHidden()
+
+    await expect
+      .poll(() => git("-C", repo, "rev-parse", "HEAD").trim())
+      .toBe(pushed.commit)
+    expect(readFileSync(join(repo, "agent.txt"), "utf8")).toBe(
+      "from the sandbox\n"
+    )
+    expect(git("-C", repo, "status", "--porcelain")).toBe("")
+  } finally {
+    await api.json("DELETE", `/api/environments/${env}/forges/${forge!.id}`)
+    rmSync(folder, { recursive: true, force: true })
+  }
 })

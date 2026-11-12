@@ -3912,6 +3912,8 @@ export interface components {
              * @enum {string}
              */
             scope: "sandbox" | "teammate" | "environment";
+            /** @description For git.push approved with allow, when the review says checkedOut: update the working copy's files along with the branch, as git's receive.denyCurrentBranch=updateInstead does. Omitted, it does; false pushes as git would, which refuses */
+            updateCheckedOut?: boolean;
         };
         DiffSummary: {
             /** Format: int64 */
@@ -5455,6 +5457,8 @@ export interface components {
             /** @description The forge's branch whose tip Base is, if any */
             baseBranch?: string;
             branch: string;
+            /** @description The push goes to the branch a working copy on this computer has checked out (a local forge): approving it updates the copy's files too, unless updateCheckedOut is false */
+            checkedOut?: boolean;
             /** @description New commits, newest first */
             commits: components["schemas"]["Commit"][] | null;
             /** Format: int64 */

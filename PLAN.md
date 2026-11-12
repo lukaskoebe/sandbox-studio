@@ -20,9 +20,10 @@ says.
 The feedback round of 2026-11-12. Its obvious fixes are in the changelog's next release: a new
 environment opening at once, renaming environments, `/tmp` in Files, terminal links, rebases keeping
 the tools and optionally Docker, git's setup on computers without a teammate, the diff view's
-scrolling, the last computer remembered, and the catalog's fix text on every lifecycle action. Why
-Docker's images went on a rebase: they live on the Docker disk, which a new generation got empty
-from its template; **Keep Docker's images** now copies them.
+scrolling, the last computer remembered, and the catalog's fix text on every lifecycle action.
+Since then: the `git_pull_request_create` tool, and pushes to a checked-out branch of a local
+repository, which update its files. Why Docker's images went on a rebase: they live on the Docker
+disk, which a new generation got empty from its template; **Keep Docker's images** now copies them.
 
 To build, in this order:
 
@@ -39,23 +40,15 @@ To build, in this order:
    script that appends a per-preview capability to `navigator.serviceWorker.register` URLs; the gate
    accepts it only with `Service-Worker: script` and `Sec-Fetch-Dest: serviceworker`, and strips it
    before proxying. Check whether a module worker's static imports need it too.
-3. **`git_pull_request_create`.** An MCP tool that proposes a pull request for a pushed branch and
-   waits on the same `git.pr` card a push's **Open a pull request** does; an open one for the branch
-   is returned instead (`internal/agentcall/git.go`, `internal/gitreview/decide.go`).
-4. **Pushing to a checked-out branch** of a local repository. git refuses it
-   (`receive.denyCurrentBranch`). Staging detects a non-bare target whose `HEAD` is the branch, and
-   only then the card offers **Update the checked-out files too**, which receives with
-   `updateInstead`: the push then updates that working tree, and git still refuses it when the tree
-   has changes. **Push again** keeps the choice.
-5. **Deleting an environment**, after typing its name: Studio stops and removes its computers,
+3. **Deleting an environment**, after typing its name: Studio stops and removes its computers,
    disks, templates, CA, vault entries and terminals; the store cascades the rest. The last
    environment can't be deleted, nor one with an operation running.
-6. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
+4. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
    against about 2 for `docker save` and `docker load` over SSH. Measure where the time goes with a
    1–2 GB image first (this host has 6 GB of disk free): the zstd level, the import's writeback
    every 32 MiB, the size pre-walk and the exec stdin chunks. Then tune the copy, or copy the stopped
    source's Docker disk image on the host instead, which a Docker fork already requires.
-7. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
+5. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
    is hard to find. Mocks first, as asked, for you to pick from.
 
 Needs your call:

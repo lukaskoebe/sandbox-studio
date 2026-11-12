@@ -1,6 +1,7 @@
 package gitreview
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -106,19 +107,65 @@ func TestLocalForgeEndToEnd(t *testing.T) {
 		}
 	}
 
+	// The branch the working copy has checked out: the review says so. Approved without
+	// updating the copy, git refuses it.
 	work := filepath.Join(home, "proj")
 	must(run(work, "push", "-q", "origin", "HEAD:refs/heads/main"))
-	pending := h.approvals(t, KindPush, store.StatusPending)
-	if len(pending) != 1 {
-		t.Fatalf("approvals = %d", len(pending))
+	pushMain := func() store.Approval {
+		t.Helper()
+		pending := h.approvals(t, KindPush, store.StatusPending)
+		if len(pending) != 1 {
+			t.Fatalf("approvals = %d", len(pending))
+		}
+		var rv PushReview
+		if err := json.Unmarshal(pending[0].Payload, &rv); err != nil || !rv.CheckedOut {
+			t.Fatalf("the review of a push to main doesn't say it is checked out: %+v %v", rv, err)
+		}
+		return pending[0]
 	}
-	h.decide(t, pending[0], integrations.Allow, "")
-	p, err := h.st.GitPushByApproval(h.ctx, h.env.ID, pending[0].ID)
+	a := pushMain()
+	no := false
+	k, _ := integrations.Set{h.svc}.Kind(KindPush)
+	if err := k.Decide(h.ctx, a, integrations.Decision{Action: integrations.Allow, UpdateCheckedOut: &no}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := h.st.GitPushByApproval(h.ctx, h.env.ID, a.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.State != store.PushFailed || !strings.Contains(p.Result, "checked out") {
 		t.Fatalf("push to the checked-out branch: %s %q", p.State, p.Result)
+	}
+
+	// Pushed again, it updates the working copy's files, as approving does by default.
+	p, err = h.svc.PushAgain(h.ctx, h.env.ID, a.ID)
+	if err != nil || p.State != store.PushPushed || !strings.Contains(p.Result, "updated the files checked out") {
+		t.Fatalf("push again: %+v %v", p, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(proj, "agent.txt")); err != nil || string(b) != "from the agent\n" {
+		t.Fatalf("the working copy's agent.txt = %q %v", b, err)
+	}
+	if out := must(run(proj, "status", "--porcelain")); out != "" {
+		t.Fatalf("the working copy has changes after the push: %s", out)
+	}
+
+	// With changes of its own in the copy, git refuses to update it, and nothing is lost.
+	if err := os.WriteFile(filepath.Join(proj, "README"), []byte("edited here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "second.txt"), []byte("2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	must(run(work, "add", "second.txt"))
+	must(run(work, "commit", "-q", "-m", "Second"))
+	must(run(work, "push", "-q", "origin", "HEAD:refs/heads/main"))
+	a = pushMain()
+	h.decide(t, a, integrations.Allow, "")
+	if p, _ = h.st.GitPushByApproval(h.ctx, h.env.ID, a.ID); p.State != store.PushFailed || !strings.Contains(p.Result, "refused") {
+		t.Fatalf("push into a changed working copy: %s %q", p.State, p.Result)
+	}
+	if b, _ := os.ReadFile(filepath.Join(proj, "README")); string(b) != "edited here\n" {
+		t.Fatalf("the copy's own change is gone: %q", b)
 	}
 	if out, err := run(home, "clone", "-q", g.srv.URL+"/local/missing.git", filepath.Join(home, "missing")); err == nil || !strings.Contains(out, "no repository missing") {
 		t.Fatalf("clone of a missing repository: %v\n%s", err, out)

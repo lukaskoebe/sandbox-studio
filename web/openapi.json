@@ -2196,6 +2196,10 @@
               "environment"
             ],
             "type": "string"
+          },
+          "updateCheckedOut": {
+            "description": "For git.push approved with allow, when the review says checkedOut: update the working copy's files along with the branch, as git's receive.denyCurrentBranch=updateInstead does. Omitted, it does; false pushes as git would, which refuses",
+            "type": "boolean"
           }
         },
         "required": [
@@ -6878,6 +6882,10 @@
           },
           "branch": {
             "type": "string"
+          },
+          "checkedOut": {
+            "description": "The push goes to the branch a working copy on this computer has checked out (a local forge): approving it updates the copy's files too, unless updateCheckedOut is false",
+            "type": "boolean"
           },
           "commits": {
             "description": "New commits, newest first",

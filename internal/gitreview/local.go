@@ -2,6 +2,7 @@ package gitreview
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,10 +11,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/pktline"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/file"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // Local forges: kind local is a folder of repositories on this computer, such as ~/git.
@@ -254,4 +260,56 @@ func (e *readErr) Read(p []byte) (int, error) {
 		e.err = err
 	}
 	return n, err
+}
+
+// checkedOut reports whether the local forge's repository of t is a working copy that has ref
+// checked out, which git refuses to push to unless it updates the copy's files too.
+func checkedOut(ctx context.Context, t target, ref string) bool {
+	dir, err := localRepo(t)
+	if err != nil || !isFile(filepath.Join(dir, ".git")) {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "symbolic-ref", "-q", "HEAD")
+	cmd.Env = gitEnv("")
+	out, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(out)) == ref
+}
+
+// pushUpdatingCheckedOut pushes p from the staging repository at staging to its local forge
+// with the host's git, whose receive-pack updates the files of a working copy that has the
+// branch checked out (receive.denyCurrentBranch=updateInstead). git refuses it when the copy
+// has changes of its own. The lease keeps the push from replacing a branch that moved since
+// the sandbox pushed.
+func pushUpdatingCheckedOut(ctx context.Context, t target, staging string, r *git.Repository, p store.GitPush) (string, error) {
+	dir, err := localRepo(t)
+	if err != nil {
+		return "", err
+	}
+	name := plumbing.ReferenceName(p.Ref)
+	cmd := exec.CommandContext(ctx, "git", "--git-dir", staging, "push", "--porcelain",
+		"--receive-pack=git -c receive.denyCurrentBranch=updateInstead receive-pack",
+		"--force-with-lease="+p.Ref+":"+p.OldSHA, dir, p.NewSHA+":"+p.Ref)
+	cmd.Env = gitEnv("")
+	stderr := &tail{}
+	cmd.Stderr = stderr
+	out, err := cmd.Output()
+	if err != nil {
+		why := strings.TrimSpace(stderr.String())
+		for line := range strings.Lines(string(out)) {
+			// Porcelain: "!<tab>src:dst<tab>[rejected] (reason)".
+			if strings.HasPrefix(line, "!") {
+				why = strings.TrimSpace(line[strings.LastIndex(line, "\t")+1:])
+			}
+		}
+		if strings.Contains(why, "stale info") {
+			return "", fmt.Errorf("%s moved in %s since the sandbox pushed; the agent has to fetch, rebase and push again", name.Short(), dir)
+		}
+		return "", fmt.Errorf("git on this computer refused to push to %s, which has %s checked out: %s", dir, name.Short(), why)
+	}
+	if err := r.Storer.SetReference(plumbing.NewHashReference(name, plumbing.NewHash(p.NewSHA))); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("pushed %s to %s and updated the files checked out in %s", short(p.NewSHA), name.Short(), dir), nil
 }

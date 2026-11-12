@@ -88,11 +88,10 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	if err != nil {
 		return err
 	}
-	if st == store.StatusApproved && !d.Force {
-		var rv PushReview
-		if json.Unmarshal(a.Payload, &rv) == nil && rv.Forced {
-			return fmt.Errorf("%w: the push rewrites %s and drops %d commits; approve it with force", integrations.ErrAction, rv.Branch, len(rv.Dropped)+rv.MoreDropped)
-		}
+	var rv PushReview
+	_ = json.Unmarshal(a.Payload, &rv)
+	if st == store.StatusApproved && !d.Force && rv.Forced {
+		return fmt.Errorf("%w: the push rewrites %s and drops %d commits; approve it with force", integrations.ErrAction, rv.Branch, len(rv.Dropped)+rv.MoreDropped)
 	}
 	if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, st, ""); err != nil {
 		return err
@@ -109,7 +108,8 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	// The push outlives the request that approved it.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
-	result, err := s.pushApproved(ctx, p)
+	update := rv.CheckedOut && (d.UpdateCheckedOut == nil || *d.UpdateCheckedOut)
+	result, err := s.pushApproved(ctx, p, update)
 	if err != nil {
 		s.Log.Info("git remote: approved push failed", "push", p.ID, "err", err)
 		return s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushFailed, err.Error(), d.Note)
@@ -121,8 +121,9 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	return nil
 }
 
-// pushApproved pushes p upstream.
-func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, error) {
+// pushApproved pushes p upstream. updateCheckedOut, for a local forge, also updates the
+// files of a working copy that has the branch checked out.
+func (s *Service) pushApproved(ctx context.Context, p store.GitPush, updateCheckedOut bool) (string, error) {
 	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
 	if errors.Is(err, store.ErrNotFound) {
 		return "", errors.New("the forge was removed from Sandbox Studio")
@@ -145,6 +146,11 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, er
 	repo, err := openStaging(path)
 	if err != nil {
 		return "", fmt.Errorf("staging repository: %w", err)
+	}
+	if updateCheckedOut && f.Kind == KindLocal {
+		result, err := pushUpdatingCheckedOut(ctx, t, path, repo, p)
+		s.fetches.forget(mirrorKey(t))
+		return result, err
 	}
 	result, err := rm.pushUpstream(ctx, repo, p)
 	// Pushed or refused, the forge's branches may now be past every sandbox's mirror of the
@@ -197,7 +203,10 @@ func (s *Service) PushAgain(ctx context.Context, envID, approvalID string) (stor
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
 	defer s.publish(envID, approvalID)
-	result, err := s.pushApproved(ctx, p)
+	// A push to a checked-out branch updates the working copy, as the card's default does.
+	var rv PushReview
+	_ = json.Unmarshal(a.Payload, &rv)
+	result, err := s.pushApproved(ctx, p, rv.CheckedOut)
 	if err != nil {
 		s.Log.Info("git remote: push again failed", "push", p.ID, "err", err)
 		if err := s.Store.SettleGitPush(ctx, envID, p.ID, store.PushFailed, store.PushFailed, err.Error(), p.Note); err != nil {

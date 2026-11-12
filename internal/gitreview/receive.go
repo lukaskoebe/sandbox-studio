@@ -397,6 +397,9 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	}
 	rv.Sandbox, rv.Forge, rv.Owner, rv.Repo, rv.Branch = t.sb.Name, t.forge.Name, t.owner, t.repo, cmd.Name.Short()
 	rv.Upstream = upstreamDescription(t.forge, t.path())
+	if t.forge.Kind == KindLocal {
+		rv.CheckedOut = checkedOut(ctx, t, cmd.Name.String())
+	}
 	rv.New = cmd.New.String()
 	if !current.IsZero() {
 		rv.Old = current.String()

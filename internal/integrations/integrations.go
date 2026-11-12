@@ -40,6 +40,9 @@ type Decision struct {
 	PullRequest *PullRequestChoice
 	// Force approves a git.push that rewrites its branch, which allow alone doesn't.
 	Force bool
+	// UpdateCheckedOut, for a git.push to the branch a local working copy has checked out,
+	// says whether to update its files too, which git otherwise refuses. Nil does.
+	UpdateCheckedOut *bool
 	// Review, for a git.review approved with allow, is the review as the user edited it.
 	// Nil posts the draft as it is.
 	Review *ReviewEdit

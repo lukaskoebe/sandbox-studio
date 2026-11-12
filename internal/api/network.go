@@ -527,14 +527,16 @@ func (s *Server) registerNetwork(api huma.API) {
 				Open  bool   `json:"open" doc:"Open the review's pull request along with the push; false pushes without one"`
 				Title string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
 			} `json:"pullRequest,omitempty" doc:"For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"`
-			Force  bool          `json:"force,omitempty" doc:"For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push"`
-			Review *ReviewEditIn `json:"review,omitempty" doc:"For git.review approved with allow: the review as edited, which Studio posts. Omitted posts the draft as it is"`
+			Force            bool          `json:"force,omitempty" doc:"For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push"`
+			Review           *ReviewEditIn `json:"review,omitempty" doc:"For git.review approved with allow: the review as edited, which Studio posts. Omitted posts the draft as it is"`
+			UpdateCheckedOut *bool         `json:"updateCheckedOut,omitempty" doc:"For git.push approved with allow, when the review says checkedOut: update the working copy's files along with the branch, as git's receive.denyCurrentBranch=updateInstead does. Omitted, it does; false pushes as git would, which refuses"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "decideApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/decide", Tags: []string{"approvals"},
 	}, func(ctx context.Context, in *decideIn) (*struct{ Body ApprovalView }, error) {
-		id := integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember, Force: in.Body.Force}
+		id := integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember, Force: in.Body.Force,
+			UpdateCheckedOut: in.Body.UpdateCheckedOut}
 		if pr := in.Body.PullRequest; pr != nil {
 			id.PullRequest = &integrations.PullRequestChoice{Open: pr.Open, Title: pr.Title}
 		}

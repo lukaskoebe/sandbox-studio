@@ -44,6 +44,8 @@ type PushReview struct {
 	// The pull request approving can open along with the push, and the one it updates.
 	PullRequest     *PullRequest `json:"pullRequest,omitempty" doc:"The pull request the push can open: set for a branch other than the repository's default, on a forge with an API, when none is open from it"`
 	OpenPullRequest string       `json:"openPullRequest,omitempty" doc:"Web URL of the open pull request from the branch, which the push updates"`
+	// CheckedOut: git refuses a push to the branch a working copy has checked out.
+	CheckedOut bool `json:"checkedOut,omitempty" doc:"The push goes to the branch a working copy on this computer has checked out (a local forge): approving it updates the copy's files too, unless updateCheckedOut is false"`
 }
 
 // Commit is one commit of a push.

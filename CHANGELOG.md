@@ -5,6 +5,9 @@
 - An agent can propose a pull request for a branch it pushed, with its own title and description,
   through the `git_pull_request_create` tool. You open or decline it on the same card a push's
   pull request is proposed on.
+- A push to the branch a repository on this computer has checked out can update its files: the
+  card offers **Update the checked-out files too**, ticked, and git still refuses the push when
+  the working copy has changes of its own. Before, git always refused it.
 
 ## Unreleased
 

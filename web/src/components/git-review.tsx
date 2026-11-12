@@ -269,6 +269,9 @@ function PushReview({ approval }: { approval: Approval }) {
   // pushed before but has none doesn't.
   const [openPR, setOpenPR] = useState(!!review?.pullRequest && !review.old)
   const [prTitle, setPRTitle] = useState(proposal?.title ?? "")
+  // A push to the branch a local working copy has checked out updates its files too, as
+  // git's updateInstead does; git still refuses it when the copy has changes.
+  const [updateCheckedOut, setUpdateCheckedOut] = useState(true)
   const decide = useDecideGit()
   const openLater = useOpenPullRequest()
   const pushAgain = usePushAgain()
@@ -300,6 +303,8 @@ function PushReview({ approval }: { approval: Approval }) {
               ? { open: openPR, title: openPR ? prTitle.trim() : undefined }
               : undefined,
           force: forced && action === "allow" ? true : undefined,
+          updateCheckedOut:
+            rv?.checkedOut && action === "allow" ? updateCheckedOut : undefined,
         },
       },
       { onSuccess: () => sends() && send() }
@@ -616,6 +621,22 @@ function PushReview({ approval }: { approval: Approval }) {
           aria-label="Decision"
           className="sticky bottom-0 z-10 grid gap-2 rounded-lg border bg-background/95 p-2 shadow-md backdrop-blur"
         >
+          {rv?.checkedOut && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={updateCheckedOut}
+                  onCheckedChange={setUpdateCheckedOut}
+                />
+                Update the checked-out files too
+              </label>
+              <span className="text-muted-foreground">
+                {updateCheckedOut
+                  ? `${rv.branch} is checked out in the repository; git refuses if it has changes of its own.`
+                  : `${rv.branch} is checked out in the repository, so git refuses the push.`}
+              </span>
+            </div>
+          )}
           {proposal && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <label className="flex items-center gap-2">
