@@ -110,6 +110,20 @@ small or move their bytes to msb exec.
   link) answers the login with `Clear-Site-Data: "cache", "storage"`, which removes the
   preview's caches, storage and service workers but keeps its cookies, for an app that left a
   worker behind from whatever ran on that port before.
+- Module service workers: Chromium fetches a module worker's script, its static imports and its
+  update checks without cookies (`internal/webauth/worker.go`). So every HTML page a preview
+  navigates to gets `<script src="/__studio/preview-sw.js">` after its `<head>` (else its
+  `<html>`, else its doctype; a fragment gets nothing), which the gate serves to the preview's
+  cookie holders. It appends a capability, an HMAC of the preview host that doesn't expire, as
+  `__studio_sw` to the URL of a same-origin worker registered with `type: "module"`, and keeps
+  it out of `scriptURL` as the page reads it. The gate takes the capability only on a `GET` with
+  `Sec-Fetch-Dest: serviceworker` and `Sec-Fetch-Site: same-origin`, which only the browser
+  sends, and removes it from the query, the rest of which stays as written. The proxy appends it
+  to the static imports of a script that came in by it (paths and relative specifiers in
+  `import … from`, `import "…"` and `export … from`), so a chain of imports carries it too.
+  Pages and worker scripts are read decoded for that (Studio drops the browser's
+  `Accept-Encoding`); a page the guest compresses anyway, or that answers anything but 200,
+  passes unchanged.
 - Files: the Files panel browses `/workspace` read-only. Listings and reads never follow
   symlinks, and only files the `agent` user may read are shown.
 

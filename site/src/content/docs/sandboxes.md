@@ -89,6 +89,8 @@ If a web server is listening on a sandbox port, open the screen's **Preview** ta
 
 Studio removes its own authentication cookies before forwarding preview requests and filters Studio cookies from preview responses. The preview app's own cookies are retained. Preview links do not expose the sandbox to your LAN.
 
+Service workers work in previews, module workers included, such as the one Vite's PWA plugin registers during development.
+
 Each port keeps its own browser storage, so a service worker an app registered stays after the app stops, and may keep serving it to whatever runs on the port next. Choose **Reload fresh** on the **Preview** tab to clear the preview's caches, storage and service workers before it opens. Its cookies stay.
 
 An agent can list the ports itself, with the `sandbox_info` tool of Studio's MCP server or `studio-agent info` in a terminal; the same tool tells it the sandbox's security level and the network rules that cover it.

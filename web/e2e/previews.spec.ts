@@ -42,6 +42,48 @@ test("previews: a service worker can't swallow Studio's login, and Open fresh re
   ).toBe(0)
 })
 
+// Chromium fetches a module worker and its imports without cookies. The preview's pages get a
+// script that hands the worker a capability in its URL, which the app never sees.
+test("previews: a module service worker installs with its imports", async ({
+  page,
+  api,
+  env,
+}) => {
+  const id = await api.createSandbox(sandboxName("mpwa"))
+  const login = (await api.json<{ url: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/previews/3000/open`
+  ))!.url
+  const origin = new URL(login).origin
+  await page.goto(login)
+  await expect(page.getByText(/Preview of sandbox/)).toBeVisible()
+
+  await page.goto(`${origin}/module-pwa`)
+  await expect(page.getByText("Module PWA")).toBeVisible()
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready
+  })
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-script-url",
+    `${origin}/module-sw.js?dev-sw`
+  )
+  await page.goto(`${origin}/elsewhere`)
+  await expect(page.getByText("cached module app")).toBeVisible()
+
+  // The capability counts only on a worker's own fetch: a page's fetch without cookies that
+  // carries it is still refused.
+  expect(
+    await page.evaluate(async () => {
+      const patch = await (await fetch("/__studio/preview-sw.js")).text()
+      const token = /t="([^"]+)"/.exec(patch)![1]
+      const res = await fetch(`/module-sw.js?dev-sw&__studio_sw=${token}`, {
+        credentials: "omit",
+      })
+      return res.status
+    })
+  ).toBe(403)
+})
+
 // The chat's preview panel frames the preview cross-site, where Chromium sends a service
 // worker no partitioned cookie: the app's worker must still install and serve, and Reload
 // fresh remove it. The frame here is the panel's, without a chat to open it from.

@@ -217,8 +217,17 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 				a.servePreviewLogin(w, r, host)
 				return
 			}
+			r, worker := a.takeWorkerToken(r, host)
+			if worker {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if !a.validCookie(r, PreviewCookie, "preview", host) && !a.validFrameCookie(r, host) {
 				http.Error(w, "Open this preview from Sandbox Studio.", http.StatusForbidden)
+				return
+			}
+			if path == WorkerPatchPath {
+				a.serveWorkerPatch(w, host)
 				return
 			}
 			next.ServeHTTP(w, r)

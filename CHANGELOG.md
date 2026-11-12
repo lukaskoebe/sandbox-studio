@@ -18,6 +18,10 @@
   disks, templates, teammates, chats, memory, providers, secrets and rules. Studio refuses while
   one of its computers is busy, and the last environment can't be deleted
   (`DELETE /api/environments/{env}`).
+- A module service worker, such as the one Vite's PWA plugin registers in development, installs in
+  a preview. Chrome fetches its script and imports without cookies, so the preview refused them
+  with 403. Previews' pages now load a small Studio script that gives the worker a capability
+  in its URL instead.
 
 ## v0.18.0 — 2026-11-12
 

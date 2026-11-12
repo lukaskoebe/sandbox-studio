@@ -57,9 +57,10 @@ func Route(dial DialFunc, count CountFunc, next http.Handler) http.Handler {
 			// The upstream "host" is only a key for dialing and connection pooling.
 			pr.SetURL(&url.URL{Scheme: "http", Host: net.JoinHostPort(id, strconv.Itoa(port))})
 			pr.Out.Host = pr.In.Host
-			if isWorkerScript(pr.In) {
+			if isWorkerScript(pr.In) || webauth.WorkerToken(pr.In.Context()) != "" || isNavigation(pr.In) {
 				// Without the browser's Accept-Encoding the transport asks for gzip itself and
-				// hands back the decoded script, which guardWorker can prepend to.
+				// hands back the decoded body, which guardWorker, withWorkerToken and patchPage
+				// can change.
 				pr.Out.Header.Del("Accept-Encoding")
 			}
 			stripStudioCookies(pr.Out.Header)
@@ -67,8 +68,12 @@ func Route(dial DialFunc, count CountFunc, next http.Handler) http.Handler {
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			filterGuestCookies(resp.Header)
-			if isWorkerScript(resp.Request) {
-				return guardWorker(resp)
+			token := webauth.WorkerToken(resp.Request.Context())
+			if isWorkerScript(resp.Request) || token != "" {
+				return guardWorker(resp, isWorkerScript(resp.Request), token)
+			}
+			if isNavigation(resp.Request) {
+				patchPage(resp)
 			}
 			return nil
 		},
@@ -204,10 +209,11 @@ func isWorkerScript(r *http.Request) bool {
 	return r != nil && r.Header.Get("Service-Worker") == "script"
 }
 
-// guardWorker puts workerGuard in front of a service worker script, after a "use strict"
-// directive so that the script stays strict. It goes on the script's first line, so that only
-// that line's columns move in a source map.
-func guardWorker(resp *http.Response) error {
+// guardWorker puts workerGuard in front of a service worker's main script, after a "use
+// strict" directive so that the script stays strict. It goes on the script's first line, so
+// that only that line's columns move in a source map. A module worker's scripts that came in
+// by its capability pass it on to their static imports.
+func guardWorker(resp *http.Response, main bool, token string) error {
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Encoding") != "" {
 		return nil
 	}
@@ -217,7 +223,12 @@ func guardWorker(resp *http.Response) error {
 		return err
 	}
 	if len(body) <= maxWorkerScript {
-		body = guardScript(body)
+		if token != "" {
+			body = withWorkerToken(body, token)
+		}
+		if main {
+			body = guardScript(body)
+		}
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	resp.ContentLength = int64(len(body))

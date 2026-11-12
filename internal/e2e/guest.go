@@ -510,6 +510,12 @@ func (g *Guest) Env() map[string]string {
 const (
 	pwaPage   = `<!doctype html><title>PWA</title><p id="app">PWA</p><script>navigator.serviceWorker.register("/pwa-sw.js")</script>`
 	pwaWorker = `self.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(clients.claim()));self.addEventListener("fetch",e=>{if(e.request.mode==="navigate")e.respondWith(new Response("<p>cached app</p>",{headers:{"Content-Type":"text/html"}}))})`
+	// The module worker, as Vite's PWA plugin registers it in development: a query without a
+	// value, an absolute import, and that one's relative import.
+	modulePage   = `<!doctype html><html><head><title>Module PWA</title></head><body><p id="app">Module PWA</p><script type="module">navigator.serviceWorker.register("/module-sw.js?dev-sw",{type:"module"}).then(r=>{document.body.dataset.scriptUrl=(r.installing||r.waiting||r.active).scriptURL})</script></body></html>`
+	moduleWorker = `import {answer} from "/sw/answer.js";self.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(clients.claim()));self.addEventListener("fetch",e=>{if(e.request.mode==="navigate")e.respondWith(new Response("<p>"+answer+"</p>",{headers:{"Content-Type":"text/html"}}))})`
+	moduleAnswer = `import {app} from './name.js';export const answer = "cached " + app`
+	moduleName   = `export const app = "module app"`
 )
 
 // serveTCP answers HTTP on the listening ports, as a dev server would: plain text, except for
@@ -533,6 +539,17 @@ func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 			body, typ = pwaPage, "text/html"
 		case "/pwa-sw.js":
 			body, typ = pwaWorker, "text/javascript"
+		case "/module-pwa":
+			body, typ = modulePage, "text/html"
+		case "/module-sw.js":
+			body, typ = moduleWorker, "text/javascript"
+			if req.URL.RawQuery != "dev-sw" {
+				body = "throw new Error(" + strconv.Quote("the query reached the app as "+req.URL.RawQuery) + ")"
+			}
+		case "/sw/answer.js":
+			body, typ = moduleAnswer, "text/javascript"
+		case "/sw/name.js":
+			body, typ = moduleName, "text/javascript"
 		}
 		if _, err := fmt.Fprintf(st, "HTTP/1.1 200 OK\r\nContent-Type: %s; charset=utf-8\r\nContent-Length: %d\r\n\r\n%s", typ, len(body), body); err != nil {
 			return err

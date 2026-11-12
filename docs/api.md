@@ -52,6 +52,9 @@ from other local users and from web pages:
   with `Sec-Fetch-Site: same-origin` or `Sec-Fetch-Mode: navigate`, which the preview's own
   pages and worker send and another site's requests can't (browsers set those headers);
   its signature is of its own kind, so it can't stand in for `studio_preview`.
+- A module service worker's script and imports come without cookies; they carry a capability
+  in their URL instead, which the gate accepts only on the browser's own worker fetches →
+  [guest agent](guest-agent.md#terminals-and-previews).
 - While the panel shows a preview, it logs in again once the login is an hour old, from a
   hidden frame and with a new ticket (`renew=1`): the login sets both cookies and answers with
   an empty page instead of the preview. An app left open keeps working past the eight hours,

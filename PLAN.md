@@ -23,23 +23,18 @@ the tools and optionally Docker, git's setup on computers without a teammate, th
 scrolling, the last computer remembered, and the catalog's fix text on every lifecycle action.
 Since then: the `git_pull_request_create` tool, pushes to a checked-out branch of a local
 repository, which update its files, a teammate per copy of a base, with the owner changeable
-while a computer is stopped, and deleting an environment after typing its name. Why Docker's
-images went on a rebase: they live on the Docker disk, which a new generation got empty from its
-template; **Keep Docker's images** now copies them.
+while a computer is stopped, deleting an environment after typing its name, and module service
+workers in previews. Why Docker's images went on a rebase: they live on the Docker disk, which a
+new generation got empty from its template; **Keep Docker's images** now copies them.
 
 To build, in this order:
 
-1. **Previews for module service workers.** Chrome fetches a module worker's script without
-   cookies, so the preview gate (`internal/webauth`) refuses it with 403. The preview page gets a
-   script that appends a per-preview capability to `navigator.serviceWorker.register` URLs; the gate
-   accepts it only with `Service-Worker: script` and `Sec-Fetch-Dest: serviceworker`, and strips it
-   before proxying. Check whether a module worker's static imports need it too.
-2. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
+1. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
    against about 2 for `docker save` and `docker load` over SSH. Measure where the time goes with a
    1–2 GB image first (this host has 6 GB of disk free): the zstd level, the import's writeback
    every 32 MiB, the size pre-walk and the exec stdin chunks. Then tune the copy, or copy the stopped
    source's Docker disk image on the host instead, which a Docker fork already requires.
-3. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
+2. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
    is hard to find. Mocks first, as asked, for you to pick from.
 
 Needs your call:
