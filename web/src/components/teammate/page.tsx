@@ -133,6 +133,7 @@ export function TeammatePage({
               term: undefined,
               port: undefined,
               review: undefined,
+              change: undefined,
               files: undefined,
               file: undefined,
             }
@@ -218,7 +219,12 @@ export function TeammatePage({
             onBack={leaveThread}
             onShowChanges={(turn) => {
               setTurnId(turn)
-              screen({ tab: "changes", computer: thread?.sandboxId })
+              screen({
+                tab: "changes",
+                change: "thread",
+                review: undefined,
+                computer: thread?.sandboxId,
+              })
             }}
             onTerminal={(term) =>
               screen({ tab: "terminal", term, computer: thread?.sandboxId })

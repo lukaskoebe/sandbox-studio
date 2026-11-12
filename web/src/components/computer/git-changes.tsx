@@ -1,18 +1,13 @@
-import { useState } from "react"
+import type { ReactNode } from "react"
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  CaretRightIcon,
   FolderOpenIcon,
   GitBranchIcon,
 } from "@phosphor-icons/react"
 import { UnifiedDiff } from "@/components/review-feedback"
 import { Button } from "@/components/ui/button"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
@@ -76,68 +71,146 @@ const statuses: Record<GitChange["status"], { letter: string; cls: string }> = {
   conflicted: { letter: "U", cls: "text-(--st-waiting)" },
 }
 
-/**
- * The repositories of /workspace as git sees them, read-only: each one's branch and how far
- * it is ahead of what it tracks, then its staged, unstaged and untracked files, each opening
- * its diff. Committing stays the agent's, and pushing goes through review.
- */
-export function GitChanges({
-  env,
-  sandboxId,
-  status,
-  onOpenFile,
+/** A change's key in the URL (`?change=`): its area and its path relative to /workspace. */
+export function changeKey(repo: string, c: GitChange) {
+  return `${c.area}:${repo ? `${repo}/${c.path}` : c.path}`
+}
+
+/** The change a key names, with its repository, while git still reports it. */
+export function findChange(repos: GitRepo[] | null | undefined, key: string) {
+  for (const r of repos ?? [])
+    for (const c of r.changes ?? [])
+      if (changeKey(r.path, c) === key) return { repo: r.path, change: c }
+  return undefined
+}
+
+/** The first change git reports, which the tab shows while nothing is picked. */
+export function firstChange(repos: GitRepo[] | null | undefined) {
+  for (const r of repos ?? [])
+    for (const { area } of areas) {
+      const c = (r.changes ?? []).find((x) => x.area === area)
+      if (c) return changeKey(r.path, c)
+    }
+  return undefined
+}
+
+/** A row of the Changes tab's rail, which shows its item beside the rail. */
+export function RailRow({
+  current,
+  idle,
+  onClick,
+  className,
+  children,
+  ...props
 }: {
-  env: string
-  sandboxId: string
+  current: boolean
+  /** Shown only because nothing is picked: on a narrow screen, where it isn't beside the rail, it isn't marked. */
+  idle?: boolean
+  onClick: () => void
+  className?: string
+  children: ReactNode
+  "aria-label"?: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-current={current || undefined}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-7 w-full min-w-0 items-center gap-2 px-3 py-0.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/30 aria-[current=true]:bg-muted",
+        idle && "@max-2xl:aria-[current=true]:bg-transparent",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** A rail section's label, with a count at its end. */
+export function RailLabel({
+  children,
+  count,
+  level = 4,
+}: {
+  children: ReactNode
+  count?: number
+  /** A section of the rail is 3, a part of a repository 4. */
+  level?: 3 | 4
+}) {
+  const H = level === 3 ? "h3" : "h4"
+  return (
+    <H className="flex items-center gap-2 px-3 pt-2 pb-1 text-caption font-medium text-muted-foreground">
+      {children}
+      {count !== undefined && (
+        <span className="ml-auto font-mono text-meta">{count}</span>
+      )}
+    </H>
+  )
+}
+
+/**
+ * The repositories of /workspace as git sees them, read-only, as the rail lists them: each
+ * one's branch and how far it is ahead of what it tracks, then its staged, unstaged and
+ * untracked files, each showing its diff beside the rail. Committing stays the agent's, and
+ * pushing goes through review.
+ */
+export function GitRail({
+  status,
+  open,
+  idle,
+  onOpen,
+}: {
   status: ReturnType<typeof useGitStatus>
-  /** Shows a file in the Files tab, relative to /workspace. */
-  onOpenFile: (path: string) => void
+  /** The change shown, by its changeKey. */
+  open?: string
+  /** The change shown is only the first, as nothing is picked. */
+  idle?: boolean
+  onOpen: (key: string) => void
 }) {
   const note = (text: string) => (
-    <p className="py-2 text-muted-foreground">{text}</p>
+    <p className="px-3 py-2 text-muted-foreground">{text}</p>
   )
-  if (status.isPending) return <Spinner className="my-3" />
+  if (status.isPending) return <Spinner className="mx-3 my-3" />
   if (status.isError)
     return note(`Can't read git's changes: ${errorMessage(status.error)}`)
   const repos = status.data.repos ?? []
   if (repos.length === 0)
     return note("There's no git repository in /workspace.")
   return (
-    <div className="grid min-w-0 gap-4">
+    <>
       {repos.map((r) => (
-        <Repo
-          key={r.path}
-          env={env}
-          sandboxId={sandboxId}
-          repo={r}
-          onOpenFile={onOpenFile}
-        />
+        <Repo key={r.path} repo={r} open={open} idle={idle} onOpen={onOpen} />
       ))}
       {status.data.truncated &&
         note("And more repositories, too many to list here.")}
-    </div>
+    </>
   )
 }
 
 function Repo({
-  env,
-  sandboxId,
   repo: r,
-  onOpenFile,
+  open,
+  idle,
+  onOpen,
 }: {
-  env: string
-  sandboxId: string
   repo: GitRepo
-  onOpenFile: (path: string) => void
+  open?: string
+  idle?: boolean
+  onOpen: (key: string) => void
 }) {
   const changes = r.changes ?? []
   const name = r.path || "workspace"
   return (
-    <section aria-label={`Repository ${name}`} className="grid min-w-0 gap-2">
-      <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+    <section
+      aria-label={`Repository ${name}`}
+      className="min-w-0 border-b pb-1.5"
+    >
+      <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2">
         <span className="font-mono font-medium">{name}</span>
-        <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
-          <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
+        <span className="inline-flex min-w-0 items-center gap-1 text-(--acc-git)">
+          <GitBranchIcon className="size-3.5 shrink-0" />
           <span className="truncate font-mono">
             {r.branch || (r.head ? `detached at ${r.head.slice(0, 7)}` : "—")}
           </span>
@@ -162,38 +235,40 @@ function Repo({
         )}
       </h3>
       {r.error && (
-        <p className="text-muted-foreground">Can't read it: {r.error}</p>
+        <p className="px-3 py-2 text-muted-foreground">
+          Can't read it: {r.error}
+        </p>
       )}
       {!r.error && changes.length === 0 && (
-        <p className="text-muted-foreground">Nothing to commit.</p>
+        <p className="px-3 py-2 text-muted-foreground">Nothing to commit.</p>
       )}
       {areas.map(({ area, label }) => {
         const shown = changes.filter((c) => c.area === area)
         if (shown.length === 0) return null
         return (
-          <div key={area} className="grid min-w-0 gap-1">
-            <h4 className="text-caption text-muted-foreground">
-              {label}{" "}
-              <span className="font-mono text-meta">{shown.length}</span>
-            </h4>
-            <ul aria-label={label} className="grid min-w-0 gap-1">
-              {shown.map((c) => (
-                <li key={c.path} className="min-w-0">
-                  <ChangeRow
-                    env={env}
-                    sandboxId={sandboxId}
-                    repo={r.path}
-                    change={c}
-                    onOpenFile={onOpenFile}
-                  />
-                </li>
-              ))}
+          <div key={area} className="min-w-0">
+            <RailLabel count={shown.length}>{label}</RailLabel>
+            <ul aria-label={label} className="min-w-0">
+              {shown.map((c) => {
+                const key = changeKey(r.path, c)
+                return (
+                  <li key={c.path} className="min-w-0">
+                    <RailRow
+                      current={open === key}
+                      idle={idle}
+                      onClick={() => onOpen(key)}
+                    >
+                      <ChangeLine change={c} />
+                    </RailRow>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )
       })}
       {r.truncated && (
-        <p className="text-muted-foreground">
+        <p className="px-3 py-1 text-muted-foreground">
           And more changes, too many to list here.
         </p>
       )}
@@ -201,76 +276,113 @@ function Repo({
   )
 }
 
-function ChangeRow({
+/** A change as a line: its status letter, its path with the folder dimmed, its counts. */
+function ChangeLine({ change: c }: { change: GitChange }) {
+  const status = statuses[c.status]
+  const slash = c.path.lastIndexOf("/")
+  return (
+    <>
+      <span
+        className={cn("w-3 shrink-0 font-mono text-caption", status.cls)}
+        title={c.status}
+      >
+        {status.letter}
+      </span>
+      {/* The folder gives way first, so the file's name stays. */}
+      <span
+        className="flex min-w-0 flex-1 font-mono text-caption"
+        title={c.from ? `${c.from} → ${c.path}` : c.path}
+      >
+        <span className="min-w-0 shrink-[9999] truncate text-muted-foreground">
+          {c.path.slice(0, slash + 1)}
+        </span>
+        <span className="min-w-0 truncate">{c.path.slice(slash + 1)}</span>
+      </span>
+      {!c.binary && (c.added > 0 || c.removed > 0) && (
+        <span className="shrink-0 font-mono text-caption">
+          {c.added > 0 && (
+            <span className="text-emerald-600 dark:text-emerald-400">
+              +{c.added}
+            </span>
+          )}{" "}
+          {c.removed > 0 && (
+            <span className="text-destructive">−{c.removed}</span>
+          )}
+        </span>
+      )}
+    </>
+  )
+}
+
+/**
+ * A change beside the rail: its status, path and area, Open in Files, and its diff. A change
+ * git no longer reports, as once it is committed, says so.
+ */
+export function ChangeView({
   env,
   sandboxId,
-  repo,
-  change: c,
+  status,
+  open,
   onOpenFile,
 }: {
   env: string
   sandboxId: string
-  repo: string
-  change: GitChange
+  status: ReturnType<typeof useGitStatus>
+  open: string
+  /** Shows a file in the Files tab, relative to /workspace. */
   onOpenFile: (path: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const status = statuses[c.status]
-  const slash = c.path.lastIndexOf("/")
+  const found = findChange(status.data?.repos, open)
+  if (!found) {
+    if (status.isPending) return <Spinner className="m-4" />
+    return (
+      <p className="p-4 text-xs text-muted-foreground">
+        Git doesn't report this change any more: it may be committed or undone.
+      </p>
+    )
+  }
+  const { repo, change: c } = found
+  const s = statuses[c.status]
   const full = repo ? `${repo}/${c.path}` : c.path
+  const area = areas.find((a) => a.area === c.area)!.label.toLowerCase()
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="group/change min-w-0 rounded-lg border bg-card"
+    <section
+      aria-label={`The change to ${full}`}
+      className="flex min-h-0 min-w-0 flex-1 flex-col text-xs"
     >
-      <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
-        <span
-          className={cn("w-3 shrink-0 font-mono text-caption", status.cls)}
-          title={c.status}
-        >
-          {status.letter}
+      <header className="flex min-w-0 flex-none flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2">
+        <span className={cn("font-mono text-caption", s.cls)} title={c.status}>
+          {s.letter}
         </span>
-        <span
-          className="min-w-0 flex-1 truncate font-mono text-caption"
-          title={c.from ? `${c.from} → ${c.path}` : c.path}
+        <h3
+          className="min-w-0 truncate font-mono font-medium"
+          title={c.from ? `${c.from} → ${full}` : full}
         >
-          <span className="text-muted-foreground">
-            {c.path.slice(0, slash + 1)}
-          </span>
-          {c.path.slice(slash + 1)}
-        </span>
-        {!c.binary && (c.added > 0 || c.removed > 0) && (
-          <span className="shrink-0 font-mono text-caption">
-            {c.added > 0 && (
-              <span className="text-emerald-600 dark:text-emerald-400">
-                +{c.added}
-              </span>
-            )}{" "}
-            {c.removed > 0 && (
-              <span className="text-destructive">−{c.removed}</span>
-            )}
-          </span>
-        )}
-        <CaretRightIcon className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[open]/change:rotate-90" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="grid gap-2 border-t p-2">
-        {open && (
-          <ChangeDiff env={env} sandboxId={sandboxId} repo={repo} change={c} />
-        )}
+          {full}
+        </h3>
+        <span className="text-muted-foreground">{area}</span>
         {c.status !== "deleted" && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="xs"
-            className="justify-self-start text-muted-foreground"
+            className="ml-auto"
             onClick={() => onOpenFile(full)}
           >
             <FolderOpenIcon />
             Open in Files
           </Button>
         )}
-      </CollapsibleContent>
-    </Collapsible>
+      </header>
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3">
+        <ChangeDiff
+          key={open}
+          env={env}
+          sandboxId={sandboxId}
+          repo={repo}
+          change={c}
+        />
+      </ScrollArea>
+    </section>
   )
 }
 

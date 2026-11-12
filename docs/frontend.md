@@ -201,13 +201,17 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   one absolute, in the URL too. Uploads and mentions stay in `/workspace`. `/` focuses Go to
   file from anywhere in the tab, also when nothing has the focus, as after a click on a
   button in WebKit, where buttons don't take it.
-- Changes: git's view of the computer, read-only (`computer/changes.tsx`, `git-changes.tsx`):
-  the pushes waiting for review first, each opening its review with a way back; then each
-  repository of `/workspace` with its branch, ↑ ahead and ↓ behind its upstream, and its Staged,
-  Not staged and Untracked files, each opening its diff and Open in Files; then This thread,
-  what the thread's requests changed. The tab counts the changed files. git status is asked every
-  10 seconds while Files or Changes shows, every 30 otherwise, and when a request ends.
-  `?tab=changes&file=…` from before Files had a tab opens Files.
+- Changes: git's view of the computer, read-only (`computer/changes.tsx`, `git-changes.tsx`),
+  as a rail with the one picked beside it. The rail lists the pushes waiting for review first;
+  then each repository of `/workspace` with its branch, ↑ ahead and ↓ behind its upstream, and
+  its Staged, Not staged and Untracked files, as flat rows; then This thread, what the thread's
+  requests changed. Beside it shows a push's review, a change's diff with its area and Open in
+  Files, or the thread's changes. The pick is in the URL: `?review=` for a push, `?change=` for
+  a change (its area and path, as `unstaged:main.go`) or `thread`; with none, the first change
+  shows. Below a container width of 42rem the rail comes first and a pick takes its place,
+  with a way back. The tab counts the changed files. git status is asked every 10 seconds while
+  Files or Changes shows, every 30 otherwise, and when a request ends. Files keeps its `?file=`
+  while another tab shows.
 
 The computer's ⋯ (`components/computer/computer-menu.tsx`) has its name and ID, template, size
 and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkpoint now,

@@ -36,15 +36,26 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
     /notes\.txt/,
   ])
 
-  // A change opens its diff, and Open in Files shows the file in the Files tab.
+  // With nothing picked, the first change shows beside the rail.
+  const shown = (path: string) =>
+    screen.getByRole("region", { name: `The change to ${path}` })
+  await expect(shown("web/src/checkout/coupon.ts")).toContainText("staged")
+  await expect(
+    area("Staged").getByRole("button", { name: /checkout\/\s*coupon\.ts/ })
+  ).toHaveAttribute("aria-current", "true")
+
+  // A change shows its diff beside the rail, and Open in Files shows the file in Files.
   await area("Not staged")
     .getByRole("button", { name: /main\.go/ })
     .click()
-  await expect(area("Not staged")).toContainText("hello, shop")
+  await expect(page).toHaveURL(/change=unstaged%3Amain\.go/)
+  const mainGo = shown("main.go")
+  await expect(mainGo).toContainText("not staged")
+  await expect(mainGo).toContainText("hello, shop")
   // The diff shows stacked until Split is picked, which stays picked in this browser.
-  const lines = area("Not staged").locator("pre[data-diff-type]")
+  const lines = mainGo.locator("pre[data-diff-type]")
   await expect(lines).toHaveAttribute("data-diff-type", "single")
-  const layout = area("Not staged").getByRole("group", { name: "Diff layout" })
+  const layout = mainGo.getByRole("group", { name: "Diff layout" })
   await layout.getByRole("button", { name: "Split" }).click()
   await expect(lines).toHaveAttribute("data-diff-type", "split")
   expect(
@@ -52,9 +63,7 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
   ).toBe("split")
   await layout.getByRole("button", { name: "Stacked" }).click()
   await expect(lines).toHaveAttribute("data-diff-type", "single")
-  await area("Not staged")
-    .getByRole("button", { name: "Open in Files" })
-    .click()
+  await mainGo.getByRole("button", { name: "Open in Files" }).click()
   await expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute(
     "aria-selected",
     "true"
@@ -63,25 +72,39 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
   await expect(
     screen.locator("pre .tok-keyword", { hasText: "package" })
   ).toBeVisible()
-  // Back returns to Changes.
+  // Back returns to Changes, on the same change.
   await page.goBack()
   await expect(tab).toHaveAttribute("aria-selected", "true")
+  await expect(shown("main.go")).toContainText("hello, shop")
   await area("Untracked")
     .getByRole("button", { name: /notes\.txt/ })
     .click()
-  await expect(area("Untracked")).toContainText("Ask about free shipping.")
+  await expect(shown("notes.txt")).toContainText("Ask about free shipping.")
 
   // The Changes tab returns to Changes too, though Files keeps its file in the URL.
-  await area("Untracked").getByRole("button", { name: "Open in Files" }).click()
+  await shown("notes.txt")
+    .getByRole("button", { name: "Open in Files" })
+    .click()
   await expect(page).toHaveURL(/file=notes\.txt/)
   await tab.click()
   await expect(tab).toHaveAttribute("aria-selected", "true")
+  await expect(shown("notes.txt")).toBeVisible()
   await area("Staged")
     .getByRole("button", { name: /coupon\.test\.ts/ })
     .click()
   await expect(
-    area("Staged").locator("pre[data-diff-type]").first()
+    shown("web/src/checkout/coupon.test.ts")
+      .locator("pre[data-diff-type]")
+      .first()
   ).toBeVisible()
+
+  // On a phone the picked change takes the tab, and its back arrow shows the rail.
+  await page.setViewportSize({ width: 390, height: 800 })
+  await expect(repo).toBeHidden()
+  await expect(shown("web/src/checkout/coupon.test.ts")).toBeVisible()
+  await screen.getByRole("button", { name: "Changes", exact: true }).click()
+  await expect(repo).toBeVisible()
+  await expect(shown("web/src/checkout/coupon.test.ts")).toBeHidden()
 })
 
 test("A part of Studio that fails to load says so in its place, and the rest stays", async ({
@@ -98,12 +121,13 @@ test("A part of Studio that fails to load says so in its place, and the rest sta
   )
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)
   const screen = page.getByRole("region", { name: `${name}'s screen` })
-  const notStaged = screen.getByRole("list", {
-    name: "Not staged",
-    exact: true,
-  })
-  await notStaged.getByRole("button", { name: /main\.go/ }).click()
-  const notice = notStaged.getByRole("alert")
+  await screen
+    .getByRole("list", { name: "Not staged", exact: true })
+    .getByRole("button", { name: /main\.go/ })
+    .click()
+  const notice = screen
+    .getByRole("region", { name: "The change to main.go" })
+    .getByRole("alert")
   await expect(notice).toContainText("Couldn't show the changes")
   await expect(notice).toContainText("Studio was updated")
   await expect(notice.getByRole("button", { name: "Reload" })).toBeVisible()

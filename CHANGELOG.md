@@ -20,6 +20,11 @@
   filter narrows it and Enter searches. A page shows its facts newest first, ten at first,
   with chips by kind. The open page or group is in the URL (`?open=`), and on a narrow screen
   the index comes first, with a back arrow from a page.
+- The screen's **Changes** tab is a rail with the change picked beside it (the sidebar of the
+  Changes mock A): the pushes waiting for you, each repository's branch and its staged, not
+  staged and untracked files as flat rows, and what this thread changed; a change shows its
+  diff, area and **Open in Files** on the right. The pick is in the URL (`?change=`), so Back
+  and **Open in Files** return to it. On a narrow screen the rail comes first.
 - A part of Studio that fails shows what went wrong in its place, and the rest stays, instead of
   a blank window. A part that didn't load because Studio was updated since the window opened,
   such as the diff view, says so and offers **Reload**. A missing file under `/assets/` is a

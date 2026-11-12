@@ -436,6 +436,10 @@ test("a message's changes show each file's diff", async ({
   )
   await page.reload()
   await main.getByRole("tab", { name: /^Changes/ }).click()
+  await main
+    .getByRole("region", { name: "This thread", exact: true })
+    .getByRole("button", { name: "1 request changed 1 file" })
+    .click()
   await main.getByRole("button", { name: /src\/app\.go/ }).click()
   const line = main.locator("[data-line]")
   await expect(line.filter({ hasText: "var fresh = 2" })).toBeVisible()

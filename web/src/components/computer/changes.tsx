@@ -1,18 +1,28 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeftIcon, GitBranchIcon } from "@phosphor-icons/react"
+import {
+  ArrowLeftIcon,
+  CaretRightIcon,
+  GitBranchIcon,
+} from "@phosphor-icons/react"
 import { ChangesPanel } from "@/components/chat/changes-panel"
 import { requestLabel } from "@/components/chat/chat-thread"
 import { FilesPanel } from "@/components/chat/files-panel"
 import {
-  GitChanges,
+  ChangeView,
+  firstChange,
+  GitRail,
   gitChangedPaths,
+  RailLabel,
+  RailRow,
   type useGitStatus,
 } from "@/components/computer/git-changes"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { GitReview, gitReviewDescription } from "@/components/git-review"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useClaimApprovals } from "@/lib/approval-claims"
+import { cn } from "@/lib/utils"
 import type { Approval, Sandbox } from "@/lib/api/client"
 import {
   changeCount,
@@ -62,18 +72,23 @@ function useRefreshOnTurnEnd(
   }, [ended, paths, queryClient])
 }
 
+/** What the Changes tab shows beside its rail: a push's review, a change, or the thread's. */
+export type ChangesPick = { review?: string; change?: string }
+
 /**
- * The screen's Changes tab, git's view of the computer (mock A): the pushes that wait for
- * review first, each opening its diff and the decision; then each repository of /workspace
- * with its branch and what is staged, not staged and untracked; then what the open thread's
- * requests changed.
+ * The screen's Changes tab, git's view of the computer (mock A): a rail with the pushes that
+ * wait for review, each repository of /workspace with its branch and what is staged, not
+ * staged and untracked, and what the open thread's requests changed; the one picked shows
+ * beside it. The pick is in the URL; with none, the first change shows. On a narrow screen
+ * the rail comes first and a pick opens over it.
  */
 export function ChangesView({
   env,
   sandbox: sb,
   reviews,
   review,
-  onReview,
+  change,
+  onPick,
   git,
   onOpenFile,
   thread,
@@ -84,111 +99,171 @@ export function ChangesView({
   reviews: Approval[]
   /** The review a link names. */
   review?: string
-  onReview: (id: string | undefined) => void
+  /** The change a link names: a changeKey, or "thread" for the thread's changes. */
+  change?: string
+  onPick: (pick: ChangesPick) => void
   git: ReturnType<typeof useGitStatus>
   /** Shows a file in the Files tab, relative to /workspace. */
   onOpenFile: (path: string) => void
   thread?: ScreenThread
 }) {
   const changedTurns = useChangedTurns(thread)
-  const [picked, setPicked] = useState<string>()
-  const open = review ?? picked
-  const approval = reviews.find((a) => a.id === open)
-  const pick = (id: string | undefined) => {
-    setPicked(id)
-    onReview(id)
-  }
+  const approval = reviews.find((a) => a.id === review)
   // The tab decides the review in view, so the floating stack leaves its card out.
   useClaimApprovals(approval ? [approval.id] : [])
   useRefreshOnTurnEnd(thread, gitPaths)
   const turn =
     changedTurns.find((t) => t.id === thread?.turnId) ?? changedTurns.at(0)
+  const picked = approval ? `review:${approval.id}` : change
+  const first =
+    firstChange(git.data?.repos) ??
+    (thread && changedTurns.length > 0 ? "thread" : undefined)
+  const shown = picked ?? first
+  const files = new Set(
+    changedTurns.flatMap((t) => (t.changes?.files ?? []).map((f) => f.path))
+  ).size
 
-  if (approval) {
-    return (
+  const back = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="m-2 mb-0 justify-self-start text-muted-foreground @2xl:hidden"
+      onClick={() => onPick({})}
+    >
+      <ArrowLeftIcon />
+      Changes
+    </Button>
+  )
+  let main: ReactNode = (
+    <p className="p-4 text-xs text-muted-foreground">
+      Nothing has changed on this computer.
+    </p>
+  )
+  if (approval)
+    main = (
       <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
         <div className="grid gap-3 text-xs">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="justify-self-start text-muted-foreground"
-            onClick={() => pick(undefined)}
-          >
-            <ArrowLeftIcon />
-            Changes
-          </Button>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground">
             {gitReviewDescription(approval)}
           </p>
           <GitReview key={approval.id} approval={approval} />
         </div>
       </ScrollArea>
     )
-  }
-  const heading = "text-caption font-medium text-muted-foreground"
-  return (
-    <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
-      <div className="grid min-w-0 gap-5 text-xs">
-        {reviews.length > 0 && (
-          <section aria-label="Waiting for you" className="grid min-w-0 gap-2">
-            <h2 className={heading}>Waiting for you</h2>
-            <ul className="grid min-w-0 gap-1">
-              {reviews.map((a) => {
-                const branch =
-                  a.git?.review?.branch ?? a.git?.pullRequest?.head ?? "push"
-                return (
-                  <li
-                    key={a.id}
-                    className="flex min-w-0 items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5"
-                  >
-                    <span className="size-1.5 shrink-0 rounded-full bg-(--st-waiting)" />
-                    <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
-                    <span className="min-w-0 flex-1 truncate">
-                      Push to <span className="font-mono">{branch}</span>
-                    </span>
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      aria-label={`Review the push to ${branch}`}
-                      onClick={() => pick(a.id)}
-                    >
-                      Review
-                    </Button>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )}
-        <section aria-label="Git" className="grid min-w-0 gap-2">
-          <GitChanges
-            env={env}
-            sandboxId={sb.id}
-            status={git}
-            onOpenFile={onOpenFile}
-          />
+  else if (shown === "thread" && thread)
+    main = (
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
+        <section aria-label="This thread's changes" className="text-xs">
+          {changedTurns.length > 0 ? (
+            <ChangesPanel
+              env={env}
+              chatId={thread.chat.id}
+              turns={changedTurns}
+              turnId={turn?.id}
+              onTurnChange={thread.onTurn}
+              label={(t) => requestLabel(thread.items, t)}
+            />
+          ) : (
+            <p className="text-muted-foreground">
+              Its requests haven't changed any files yet.
+            </p>
+          )}
         </section>
-        {thread && (
-          <section aria-label="This thread" className="grid min-w-0 gap-2">
-            <h2 className={heading}>This thread</h2>
-            {changedTurns.length > 0 ? (
-              <ChangesPanel
-                env={env}
-                chatId={thread.chat.id}
-                turns={changedTurns}
-                turnId={turn?.id}
-                onTurnChange={thread.onTurn}
-                label={(t) => requestLabel(thread.items, t)}
-              />
-            ) : (
-              <p className="text-muted-foreground">
-                Its requests haven't changed any files yet.
-              </p>
+      </ScrollArea>
+    )
+  else if (shown && shown !== "thread")
+    main = (
+      <ChangeView
+        env={env}
+        sandboxId={sb.id}
+        status={git}
+        open={shown}
+        onOpenFile={onOpenFile}
+      />
+    )
+
+  return (
+    <div className="@container flex min-h-0 min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <ScrollArea
+          aria-label="Changes"
+          className={cn(
+            "min-h-0 w-full flex-1 @2xl:w-68 @2xl:flex-none @2xl:border-r",
+            picked && "hidden @2xl:block"
+          )}
+        >
+          <div className="grid min-w-0 text-xs">
+            {reviews.length > 0 && (
+              <section
+                aria-label="Waiting for you"
+                className="min-w-0 border-b pb-1.5"
+              >
+                <RailLabel level={3}>Waiting for you</RailLabel>
+                <ul className="min-w-0">
+                  {reviews.map((a) => {
+                    const branch =
+                      a.git?.review?.branch ??
+                      a.git?.pullRequest?.head ??
+                      "push"
+                    return (
+                      <li key={a.id} className="min-w-0">
+                        <RailRow
+                          current={shown === `review:${a.id}`}
+                          aria-label={`Review the push to ${branch}`}
+                          onClick={() => onPick({ review: a.id })}
+                        >
+                          <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
+                          <span className="min-w-0 flex-1 truncate">
+                            Push to <span className="font-mono">{branch}</span>
+                          </span>
+                          <span className="shrink-0 text-(--st-waiting)">
+                            review
+                          </span>
+                        </RailRow>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
             )}
-          </section>
-        )}
+            <GitRail
+              status={git}
+              open={shown}
+              idle={!picked}
+              onOpen={(key) => onPick({ change: key })}
+            />
+            {thread && (
+              <section aria-label="This thread" className="min-w-0 pb-1.5">
+                <RailLabel level={3}>This thread</RailLabel>
+                <RailRow
+                  current={shown === "thread"}
+                  idle={!picked}
+                  onClick={() => onPick({ change: "thread" })}
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {changedTurns.length === 0
+                      ? "No files changed yet"
+                      : `${changedTurns.length} ${changedTurns.length === 1 ? "request" : "requests"} changed ${files} ${files === 1 ? "file" : "files"}`}
+                  </span>
+                  <CaretRightIcon className="size-3 shrink-0 text-muted-foreground" />
+                </RailRow>
+              </section>
+            )}
+          </div>
+        </ScrollArea>
+        <div
+          className={cn(
+            "min-h-0 min-w-0 flex-1 flex-col",
+            picked ? "flex" : "hidden @2xl:flex"
+          )}
+        >
+          {picked && back}
+          <ErrorBoundary label="the change" resetKey={shown}>
+            {main}
+          </ErrorBoundary>
+        </div>
       </div>
-    </ScrollArea>
+    </div>
   )
 }
 

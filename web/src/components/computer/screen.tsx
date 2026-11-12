@@ -440,13 +440,16 @@ export function ComputerScreen({
                 </ErrorBoundary>
               )}
               {tab === "changes" && (
-                <ErrorBoundary label="the changes" resetKey={search.review}>
+                <ErrorBoundary label="the changes">
                   <ChangesView
                     env={env}
                     sandbox={sb}
                     reviews={reviews}
                     review={search.review}
-                    onReview={(review) => onChange({ review })}
+                    change={search.change}
+                    onPick={({ review, change }) =>
+                      onChange({ review, change, push: true })
+                    }
                     git={git}
                     onOpenFile={(file) =>
                       onChange({

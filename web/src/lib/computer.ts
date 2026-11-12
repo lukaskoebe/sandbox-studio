@@ -18,6 +18,8 @@ export type ScreenSearch = {
   /** The port the Preview tab shows. */
   port?: number
   review?: string
+  /** What the Changes tab shows beside its rail: a change by its key, or "thread". */
+  change?: string
   fold?: boolean
   /** The screen takes the page, and the conversation is a strip beside it. */
   full?: boolean
@@ -37,6 +39,7 @@ const text = (value: unknown) =>
 export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   const term = text(s.term) ?? text(s.terminal) ?? text(s.session)
   const review = text(s.review)
+  const change = review ? undefined : text(s.change)
   const port = Number(s.port)
   const panel = text(s.panel)
   const file = text(s.file)
@@ -45,7 +48,7 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   const named = screenTabs.find((t) => t === s.tab)
   const tab =
     named ??
-    (review
+    (review || change
       ? "changes"
       : panel === "files" || file || files
         ? "files"
@@ -59,6 +62,7 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
     ...(term ? { term } : {}),
     ...(Number.isInteger(port) && port > 0 && port < 65536 ? { port } : {}),
     ...(review ? { review } : {}),
+    ...(change ? { change } : {}),
     ...(files ? { files } : {}),
     ...(file ? { file } : {}),
     ...(s.fold === true || s.fold === "1" || s.fold === 1
