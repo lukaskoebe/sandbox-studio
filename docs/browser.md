@@ -340,7 +340,12 @@ The window has, top to bottom:
 - **Page.** The live view, filling the rest of the window, with a ring inside it while you
   drive. The teammate's questions (`browser.action`, `browser.credential`) show on the page as
   cards with their answers, and leave the approval stack while they do. A sleeping browser
-  shows its last page faded, with a field to open a page, which wakes it. A replay shows the
+  shows its last page faded behind a card that picks up where it left off: since when it
+  sleeps (its last step), the last three pages it had open, each of which wakes it on that
+  page, **Wake on** the last one's host or a field to open another, and the hosts of the logins
+  it keeps. While it wakes the card is a spinner naming the page. A browser that stopped
+  unexpectedly gets the same card in the warning tone with **Start it again**; one not made
+  yet has no picture and offers a page to start from. A replay shows the
   step's screenshot with a caption of what happened, in words: "Ada clicked “Sign in”",
   "Ada typed 12 hidden characters into “Password”". Activity lists the steps in the same words.
 

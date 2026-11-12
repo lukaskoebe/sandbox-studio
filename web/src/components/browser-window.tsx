@@ -1541,7 +1541,40 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-/** The sleeping browser: its last page, faded, and a way to open a page right there. */
+/** When an action was: the time today, or the day and time before. */
+function clockTime(at: string, now = new Date()) {
+  const d = new Date(at)
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  if (d.toDateString() === now.toDateString()) return time
+  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`
+}
+
+/** The pages the persistent browser last had open, newest first, each once. */
+function lastPages(actions: BrowserAction[] | undefined, max = 3) {
+  const out: BrowserAction[] = []
+  for (const a of actions ?? []) {
+    if (a.ephemeral || !a.url || !/^https?:/.test(a.url)) continue
+    if (out.some((p) => p.url === a.url)) continue
+    out.push(a)
+    if (out.length === max) break
+  }
+  return out
+}
+
+/** A page's path and query, short, for a list of pages. */
+function pathOf(url: string) {
+  try {
+    const u = new URL(url)
+    return `${u.pathname}${u.search}`
+  } catch {
+    return url
+  }
+}
+
+/**
+ * The sleeping browser: its last page faded behind a card that picks up where it left off,
+ * with the pages it had open, the logins it keeps, and a way to open any page.
+ */
 function Asleep({
   w,
   waking,
@@ -1555,102 +1588,198 @@ function Asleep({
   onWake: (url: string) => Promise<void>
 }) {
   const [url, setUrl] = useState("")
+  // The page a wake goes to, for the card while it wakes.
+  const [target, setTarget] = useState("")
   const actions = $api.useQuery("get", `${statusPath}/actions`, {
     params: {
       path: { env: w.env, teammate: w.teammate },
       query: { limit: 50 },
     },
   })
-  const last = actions.data?.find((a) => a.screenshot && !a.ephemeral)
+  const secrets = $api.useQuery("get", "/api/environments/{env}/secrets", {
+    params: { path: { env: w.env } },
+  })
   const vm = w.st?.vm
+  const shot = actions.data?.find((a) => a.screenshot && !a.ephemeral)
+  const pages = lastPages(actions.data ?? undefined)
+  const latest = actions.data?.find((a) => !a.ephemeral)
+  const logins = [
+    ...new Set(
+      (secrets.data ?? [])
+        .filter((s) => s.browserOnly && s.teammateId === w.teammate)
+        .flatMap((s) => s.hosts ?? [])
+    ),
+  ].sort()
   const starting = waking || vm === "starting"
+  const crashed = vm === "crashed"
+  const absent = vm === "absent"
+  const wakeOn = (to: string) => {
+    setTarget(to)
+    void onWake(to)
+  }
+  const typed = url.trim()
+  const resume = pages[0]?.url ?? ""
   return (
     <div className="relative flex min-h-80 flex-1 items-center justify-center overflow-hidden">
-      {last && (
+      {shot && !absent && (
         <img
           aria-hidden
           alt=""
-          src={screenshotURL(w.env, w.teammate, last)}
-          className="pointer-events-none absolute inset-x-0 top-0 mx-auto w-full max-w-6xl opacity-15 blur-[2px] grayscale"
+          src={screenshotURL(w.env, w.teammate, shot)}
+          className="pointer-events-none absolute inset-x-0 top-0 mx-auto w-full max-w-6xl opacity-35"
         />
       )}
-      <div className="relative m-4 grid w-full max-w-sm justify-items-center gap-3 rounded-2xl bg-background/80 p-5 text-center backdrop-blur-sm">
-        {starting || vm === "draining" ? (
-          <>
-            <Spinner className="mx-auto" />
-            <p className="text-sm font-medium">
-              {vm === "draining"
-                ? `${w.name}'s browser is going to sleep…`
+      {starting || vm === "draining" ? (
+        <div
+          role="status"
+          className="relative m-4 flex items-center gap-2.5 rounded-full border bg-background/90 px-4 py-2.5 shadow-sm backdrop-blur-sm"
+        >
+          <Spinner />
+          <p className="text-sm font-medium">
+            {vm === "draining"
+              ? `${w.name}'s browser is going to sleep…`
+              : target
+                ? `Waking on ${hostOf(normalizeBrowserAddress(target).value ?? target) || target}…`
                 : `Waking ${w.name}'s browser…`}
-            </p>
-            {last?.url && (
-              <p className="text-xs text-muted-foreground">
-                Logins and cookies are kept.
-              </p>
-            )}
-          </>
-        ) : (
-          <>
+          </p>
+        </div>
+      ) : (
+        <div
+          role="region"
+          aria-label={`${w.name}'s browser`}
+          className={cn(
+            "relative m-4 grid w-full max-w-md gap-3 rounded-2xl border bg-background/90 p-5 shadow-sm backdrop-blur-sm",
+            crashed && "border-amber-500/40"
+          )}
+        >
+          <div className="flex items-start gap-3">
             <span
               className={cn(
-                "inline-flex size-10 items-center justify-center rounded-full",
-                tileClass("browser")
+                "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
+                crashed
+                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  : tileClass("browser")
               )}
             >
-              {vm === "crashed" ? (
-                <WarningIcon className="size-4.5" weight="fill" />
+              {crashed ? (
+                <WarningIcon className="size-4" weight="fill" />
               ) : (
-                <MoonIcon className="size-4.5" weight="fill" />
+                <MoonIcon className="size-4" weight="fill" />
               )}
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-medium">
-                {vm === "crashed"
+                {crashed
                   ? `${w.name}'s browser stopped unexpectedly`
-                  : vm === "absent"
+                  : absent
                     ? `${w.name} has no browser yet`
-                    : `${w.name}'s browser is asleep`}
+                    : latest
+                      ? `Asleep since ${clockTime(latest.at)}`
+                      : `${w.name}'s browser is asleep`}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {vm === "absent"
-                  ? `It is made when ${w.name} first browses, or when you open a page. Only Studio reaches it.`
-                  : `It wakes when ${w.name} browses, or when you open a page. Logins and cookies are kept.`}
+                {crashed
+                  ? `Its logins and cookies are kept. Start it again, on its last page or another.`
+                  : absent
+                    ? `It is made when ${w.name} first browses, or when you open a page. Only Studio reaches it.`
+                    : `${w.name}'s browser sleeps while nobody uses it. It wakes in a few seconds, with its logins.`}
               </p>
             </div>
-            <form
-              className="flex w-full gap-1.5"
-              onSubmit={(e) => {
-                e.preventDefault()
-                void onWake(url)
-              }}
+          </div>
+          {!absent && pages.length > 0 && (
+            <ul aria-label="Last pages" className="grid">
+              {pages.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => wakeOn(p.url!)}
+                    title={`Wake on ${p.url}`}
+                    className="flex w-full min-w-0 items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono">
+                      {hostOf(p.url)}
+                      <span className="text-muted-foreground">
+                        {pathOf(p.url!)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
+                      {clockTime(p.at)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="flex w-full gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              wakeOn(typed || resume)
+            }}
+          >
+            <Button
+              size="sm"
+              type="submit"
+              variant={crashed ? "outline" : "default"}
+              className="max-w-1/2 shrink-0 rounded-full"
             >
-              <input
-                aria-label="Open a page"
-                placeholder="Open a page…"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="h-8 min-w-0 flex-1 rounded-full border bg-background px-3 font-mono text-xs outline-none placeholder:font-sans focus:border-ring focus:ring-2 focus:ring-ring/30"
-              />
-              <Button size="sm" type="submit" className="rounded-full">
-                {url.trim() ? "Open" : error ? "Try again" : "Wake up"}
-              </Button>
-            </form>
-            {error && (
-              <p
-                role="alert"
-                className="rounded-md bg-destructive/5 px-2 py-1 text-left text-xs text-destructive"
-              >
-                Couldn't wake the browser. {error}
-              </p>
-            )}
-            {last?.url && (
-              <p className="text-caption text-muted-foreground">
-                Last page <span className="font-mono">{hostOf(last.url)}</span>
-              </p>
-            )}
-          </>
-        )}
-      </div>
+              <span className="truncate">
+                {typed
+                  ? "Open"
+                  : crashed
+                    ? "Start it again"
+                    : error
+                      ? "Try again"
+                      : resume
+                        ? `Wake on ${hostOf(resume)}`
+                        : absent
+                          ? "Start it"
+                          : "Wake up"}
+              </span>
+            </Button>
+            <input
+              aria-label="Open a page"
+              placeholder={resume ? "or open a page…" : "Open a page…"}
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className="h-8 min-w-0 flex-1 rounded-full border bg-background px-3 font-mono text-xs outline-none placeholder:font-sans focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </form>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md bg-destructive/5 px-2 py-1 text-left text-xs text-destructive"
+            >
+              Couldn't wake the browser. {error}
+            </p>
+          )}
+          {logins.length > 0 && (
+            <div
+              aria-label="Logins it keeps"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {logins.slice(0, 2).map((h) => (
+                <span
+                  key={h}
+                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-caption text-muted-foreground"
+                >
+                  <KeyIcon className="size-3" />
+                  {h}
+                </span>
+              ))}
+              {logins.length > 2 && (
+                <span
+                  title={logins.slice(2).join(", ")}
+                  className="rounded-full border px-2 py-0.5 text-caption text-muted-foreground"
+                >
+                  +{logins.length - 2}{" "}
+                  {logins.length - 2 === 1 ? "login" : "logins"}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

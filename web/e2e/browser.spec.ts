@@ -169,6 +169,56 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
 })
 
+// A sleeping browser picks up where it left off: its last pages, newest first, each wake it
+// on that page, and the logins it keeps show as chips.
+test("the sleeping browser lists its last pages and wakes on one", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { name, tm, base } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  for (const path of ["a", "b"]) {
+    await address.fill(`example.com/${path}`)
+    await address.press("Enter")
+    await expect
+      .poll(async () => (await api.json<Status>("GET", base))!.url)
+      .toBe(`https://example.com/${path}`)
+  }
+  await api.json("POST", `/api/environments/${env}/secrets`, {
+    name: `SHOP_${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+    value: "hunter2",
+    hosts: ["shop.example.com"],
+    teammateId: tm,
+    browserOnly: true,
+    username: "ada",
+  })
+  await api.json("POST", `${base}/stop`)
+
+  const card = page.getByRole("region", { name: `${name}'s browser` })
+  await expect(card.getByText(/^Asleep since /)).toBeVisible()
+  const pages = card.getByRole("list", { name: "Last pages" })
+  await expect(pages.getByRole("button")).toHaveText([
+    /example\.com\/b/,
+    /example\.com\/a/,
+  ])
+  await expect(
+    card.getByRole("button", { name: "Wake on example.com" })
+  ).toBeVisible()
+  await expect(card.getByLabel("Logins it keeps")).toContainText(
+    "shop.example.com"
+  )
+
+  await pages.getByRole("button", { name: /\/a/ }).click()
+  await expect
+    .poll(async () => (await api.json<Status>("GET", base))!.vm)
+    .toBe("running")
+  await expect
+    .poll(async () => (await api.json<Status>("GET", base))!.url)
+    .toBe("https://example.com/a")
+  await expect(card).toBeHidden()
+})
+
 // A page whose host a deny rule refuses says so over the live view, and links to the rule,
 // which the network settings open.
 test("a page a deny rule blocks says so, with a link to the rule", async ({
