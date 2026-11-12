@@ -38,8 +38,8 @@ func init() {
 				"ephemeral": map[string]any{"type": "boolean", "description": "Open in a new ephemeral session: an empty profile whose cookies and storage are deleted on browser_close, " +
 					"after 10 minutes unused, or when the browser stops. Not together with session."},
 			})},
-		{agentproto.MethodBrowserSnapshot, "The page as an accessibility tree with element refs. Sensitive field values are redacted.",
-			obj(nil, map[string]any{"full": map[string]any{"type": "boolean", "description": "Every node, not only interactive ones"}})},
+		{agentproto.MethodBrowserSnapshot, "The page as an accessibility tree with element refs: interactive elements only, unless full. Sensitive field values are redacted.",
+			obj(nil, map[string]any{"full": map[string]any{"type": "boolean", "description": "Every node with the page's text, not only interactive ones"}})},
 		{agentproto.MethodBrowserClick, "Click an element.",
 			obj([]string{"ref"}, map[string]any{"ref": ref()})},
 		{agentproto.MethodBrowserFill, "Clear a field and fill in text.",

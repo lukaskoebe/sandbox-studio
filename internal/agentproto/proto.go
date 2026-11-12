@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -286,7 +287,30 @@ const (
 
 	// MethodSandboxInfo is the sandbox describing itself: its ports and its network policy.
 	MethodSandboxInfo = "sandbox_info"
+
+	// MethodForgeSync fetches ~/forge again now (docs/agent-cli.md#forge). It is no MCP tool:
+	// only `studio forge sync` makes it.
+	MethodForgeSync = "forge_sync"
 )
+
+// GitHost is the host of Studio's git remote in the sandbox:
+// https://git.studio.internal/<forge>/<repository>.git (docs/git-review.md).
+const GitHost = "git.studio.internal"
+
+// ParseGitRemote reads a remote's URL through GitHost, https://git.studio.internal/<forge>/<path>.git,
+// into its forge and repository path.
+func ParseGitRemote(raw string) (forge, repo string, ok bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() != GitHost {
+		return "", "", false
+	}
+	forge, repo, ok = strings.Cut(strings.Trim(u.Path, "/"), "/")
+	repo = strings.TrimSuffix(repo, ".git")
+	if !ok || forge == "" || !strings.Contains(repo, "/") {
+		return "", "", false
+	}
+	return forge, repo, true
+}
 
 // TaskMethodPrefix starts every task method, as BrowserMethodPrefix does for browser ones.
 const TaskMethodPrefix = "task"

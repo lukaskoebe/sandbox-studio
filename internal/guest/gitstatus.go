@@ -46,6 +46,49 @@ func gitStatus(ctx context.Context, workspace string, git gitFunc) agentproto.Fi
 	return reply
 }
 
+// gitRemotes lists the repositories of workspace with their branch and their remotes through
+// agentproto.GitHost.
+func gitRemotes(ctx context.Context, workspace string, git gitFunc) agentproto.FilesReply {
+	ctx, cancel := context.WithTimeout(ctx, gitStatusTimeout)
+	defer cancel()
+	reply := agentproto.FilesReply{Repos: []agentproto.GitRepo{}}
+	for _, rel := range findRepos(workspace) {
+		if len(reply.Repos) == agentproto.MaxGitRepos {
+			reply.Truncated = true
+			break
+		}
+		dir := path.Join(workspace, rel)
+		repo := agentproto.GitRepo{Path: rel}
+		if out, err := git(ctx, dir, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil {
+			repo.Branch = strings.TrimSpace(string(out))
+		}
+		// No remotes is git's exit status 1, an empty list.
+		out, _ := git(ctx, dir, "config", "--get-regexp", `^remote\..*\.url$`)
+		repo.Remotes = parseStudioRemotes(string(out))
+		reply.Repos = append(reply.Repos, repo)
+	}
+	return reply
+}
+
+// parseStudioRemotes reads git config --get-regexp's "remote.<name>.url <url>" lines and keeps
+// the remotes through agentproto.GitHost.
+func parseStudioRemotes(out string) []agentproto.GitRemote {
+	var remotes []agentproto.GitRemote
+	for line := range strings.Lines(out) {
+		key, raw, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		forge, repo, ok := agentproto.ParseGitRemote(raw)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(key, "remote."), ".url")
+		remotes = append(remotes, agentproto.GitRemote{Name: name, Forge: forge, Repository: repo})
+	}
+	return remotes
+}
+
 // findRepos returns the folders of workspace, relative to it, that are the top of a git
 // repository or worktree, breadth first, without looking into a repository or the folders
 // the index skips.

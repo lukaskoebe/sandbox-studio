@@ -25,6 +25,7 @@ data locations, repository layout, security model, testing and conventions.
 | [Teammates and providers](teammates.md) | provider kinds, teammates, ownership | `internal/teammates` |
 | [Logins on this computer](host-logins.md) | offering providers from the host's Claude Code, Codex and opencode logins, and what Studio reads of them | `internal/hostlogins` |
 | [Harnesses and agent sessions](harnesses.md) | adapters, files, hooks, versions, chats over ACP | `internal/harness`, `internal/chat` |
+| [Agent command](agent-cli.md) | `studio` in the sandbox: the MCP tools as commands, flags from schemas, exit codes, `--wait`; `~/forge` | `internal/agentcall`, `internal/gitreview/forgefiles.go` |
 | [Memory](memory.md) | store, search, embeddings, hooks and tools, extraction, consolidation | `internal/memory`, `internal/agentmem` |
 | [Browser broker](browser.md) | browser VM, tools, policy, redaction, credentials, live view | `internal/browser` |
 | [Git review](git-review.md) | forges, virtual remote, staged pushes, PRs, integration interface | `internal/gitreview` |

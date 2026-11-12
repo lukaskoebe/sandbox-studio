@@ -168,6 +168,12 @@ func (s *Service) toolPullRequestRead(ctx context.Context, sb store.Sandbox, par
 	if err != nil {
 		return nil, integrations.ToolError("%s", err)
 	}
+	// It stays in ~/forge in full, under the name the agent knows the forge by.
+	name := in.Forge
+	if name == "" {
+		name = f.Name
+	}
+	s.noteRead(sb.ID, prKey{forge: name, repo: owner + "/" + repo, number: in.Number}, f, time.Time{}, info)
 	return info, nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,6 +19,14 @@ import (
 )
 
 func main() {
+	// Called as studio, through the link boot makes (guest.CommandLink), it is the studio
+	// command: Studio's tools for agents, scripts and the user (docs/agent-cli.md).
+	if filepath.Base(os.Args[0]) == "studio" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		code := agentcall.RunCLI(ctx, agentcall.SocketCaller{}, os.Args[1:], agentcall.OSEnv())
+		stop()
+		os.Exit(code)
+	}
 	cmd := "connect"
 	if len(os.Args) > 1 {
 		cmd = os.Args[1]

@@ -93,6 +93,9 @@ const (
 	// FilesGitDiff is one file's diff in one of them: Path is the repository, File the file
 	// in it, From its old name when it was renamed, and Area which change of it.
 	FilesGitDiff = "git-diff"
+	// FilesGitRemotes lists the repositories of /workspace with their branch and their remotes
+	// through GitHost, without status: what ~/forge is about (docs/agent-cli.md#forge).
+	FilesGitRemotes = "git-remotes"
 )
 
 // The areas of a git change: the index, the working tree, and files git doesn't track.
@@ -121,6 +124,17 @@ type GitRepo struct {
 	Changes   []GitChange `json:"changes"`
 	Truncated bool        `json:"truncated,omitempty" doc:"More than 1,000 changes"`
 	Error     string      `json:"error,omitempty" doc:"Why git couldn't read it"`
+	// Remotes, only from FilesGitRemotes, are its remotes through GitHost; others are left
+	// out, as their URLs may hold credentials.
+	Remotes []GitRemote `json:"remotes,omitempty"`
+}
+
+// GitRemote is a repository's remote through GitHost: Forge and Repository are the path of
+// https://git.studio.internal/<forge>/<repository>.git.
+type GitRemote struct {
+	Name       string `json:"name"`
+	Forge      string `json:"forge"`
+	Repository string `json:"repository"`
 }
 
 // GitChange is one file's change in one area of a repository. A file staged and then changed

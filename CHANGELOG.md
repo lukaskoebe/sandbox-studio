@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- `studio` in a sandbox runs Studio's tools as shell commands, so an agent can loop over them
+  and pipe them through `grep`: `studio pr list`, `studio browser snapshot --full`, `studio
+  memory search …`, and `studio call <tool> '<json>'` for any tool. Flags come from the tools'
+  arguments, a pull request command takes the forge, repository and branch from the checkout,
+  a screenshot goes to a file, `--json` prints JSON, and exit code 75 means it waits for the
+  user's approval (`--wait` keeps asking). The MCP tools stay as they are. A sandbox gets the
+  command when it starts.
+- `~/forge` holds the pull requests of a sandbox's repositories as read-only files, on GitHub,
+  GitLab, Forgejo, Gitea and Codeberg: `pulls.md` per repository with the open ones and those
+  closed in the last week, and a folder per pull request of the sandbox's own branches or one
+  it read (`pr.md` with front matter, `conversation.md`, `reviews.md`, `files.md`). Studio
+  writes it when a session starts, every 5 minutes while one runs, and on `studio forge
+  sync`; tokens are redacted, and the forge's text is marked as data, not instructions.
 - A sleeping browser picks up where it left off: its last pages, each of which wakes it on that
   page, **Wake on** its last host, and the sites whose logins it keeps, as chips.
 - A preview has a browser bar locked to it: back, forward and reload; the address shows the

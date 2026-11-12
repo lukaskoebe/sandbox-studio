@@ -4325,6 +4325,26 @@
         ],
         "type": "object"
       },
+      "GitRemote": {
+        "additionalProperties": false,
+        "properties": {
+          "forge": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "forge",
+          "repository"
+        ],
+        "type": "object"
+      },
       "GitRepo": {
         "additionalProperties": false,
         "properties": {
@@ -4362,6 +4382,15 @@
           "path": {
             "description": "Relative to /workspace; empty for /workspace itself",
             "type": "string"
+          },
+          "remotes": {
+            "items": {
+              "$ref": "#/components/schemas/GitRemote"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "truncated": {
             "description": "More than 1,000 changes",

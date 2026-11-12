@@ -45,8 +45,13 @@ var serviceEnv = []string{
 
 // Boot starts the supervisor in the background and returns. It does nothing when a
 // supervisor already runs, or when systemd is PID 1: sandboxes created before Studio
-// dropped systemd start the agent from their own unit.
+// dropped systemd start the agent from their own unit. Either way, it links the `studio`
+// command to self.
 func Boot(self string) error {
+	if err := linkCommand(CommandLink, self); err != nil {
+		// The command is a convenience; the agent works without it.
+		fmt.Fprintf(os.Stderr, "studio-agent: link %s: %v\n", CommandLink, err)
+	}
 	if comm, _ := os.ReadFile("/proc/1/comm"); strings.TrimSpace(string(comm)) == "systemd" {
 		return nil
 	}

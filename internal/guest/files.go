@@ -33,6 +33,8 @@ func (a *Agent) files(st net.Conn, br *bufio.Reader) error {
 		return agentproto.WriteJSONLine(st, index(context.Background(), Workdir, a.git))
 	case agentproto.FilesGit:
 		return agentproto.WriteJSONLine(st, gitStatus(context.Background(), Workdir, a.git))
+	case agentproto.FilesGitRemotes:
+		return agentproto.WriteJSONLine(st, gitRemotes(context.Background(), Workdir, a.git))
 	case agentproto.FilesGitDiff:
 		reply, err := gitDiff(context.Background(), Workdir, req, a.git)
 		if err != nil {

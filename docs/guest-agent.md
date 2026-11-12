@@ -75,6 +75,7 @@ small or move their bytes to msb exec.
 | `boot`, `shutdown`, `supervise` | Studio via msb exec | see [sandboxes](sandboxes.md#boot-and-shutdown) |
 | `hook <event> --harness <name>` | the harness | reads the hook JSON on stdin, calls Studio, prints the harness's response |
 | `mcp` | the harness | stdio MCP server with the memory and browser tools |
+| `studio …` (called as `studio`) | the agent, scripts, the user over SSH | the same tools as commands, through the link `/usr/local/bin/studio` that `boot` makes ([agent command](agent-cli.md)) |
 | `claude-acp` | Studio's chat, for a Claude subscription | the chat's ACP agent: runs `claude -p` for its turns ([harnesses](harnesses.md#claude-subscription-chats)) |
 | `claude-permission` | Claude Code, from the chat's plugin | the permission prompt tool of that agent, which asks the shim |
 | `git-credential <action>` | git, as its credential helper | tells Studio about a host git has no credentials for and prints its hint; never answers with one ([git review](git-review.md#credential-hints)) |
@@ -83,7 +84,7 @@ small or move their bytes to msb exec.
 | `export-layer`, `workspace-export`, `workspace-import`, `home-export`, `home-import`, `docker-export`, `docker-import` | Studio via msb exec | template builds, fork, rebase, disk resize, export, import; for a copy between VMs the exports upload their archive to `transfer.studio.internal` ([rebase](rebase.md#workspace-and-home-copy)) |
 | `version` | | |
 
-`hook` and `mcp` reach the agent through `/run/studio-agent/call.sock`, which becomes a
+`hook`, `mcp` and `studio` reach the agent through `/run/studio-agent/call.sock`, which becomes a
 `call` stream. See [harnesses](harnesses.md) and [memory](memory.md#in-agent-sessions).
 
 ## Terminals and previews

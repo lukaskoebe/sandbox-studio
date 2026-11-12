@@ -466,6 +466,9 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   `merge-requests/<n>/head`) works through the virtual remote, since fetches go to the forge
   as they are. `forge` is needed only when the
   environment has more than one forge with an API.
+- **As files.** `~/forge` in the sandbox holds the listing and, for the sandbox's own branches
+  and what it read, these same answers as Markdown, kept fresh while a session runs
+  ([agent-cli.md](agent-cli.md#forge)).
 - **Drafting.** `git_pull_request_review(repository, number, verdict, summary, comments,
   forge?)` takes a verdict (`comment`, `approve`, `request_changes`), a summary (needed
   unless approving) and up to 50 line comments `{path, line, side, body}`, where side `new`

@@ -488,7 +488,12 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	integs = append(integs, &sandboxinfo.Service{Store: st, Ports: hub.Ports, Level: engine.Level})
 	// Every integration that serves MCP tools is in integs by now; the chat service serves none.
 	tsk := &tasks.Service{Store: st, Bus: bus, Log: log}
-	hub.OnCall = routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)
+	route := routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)
+	hub.OnCall = func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
+		gitRemote.NoteCall(id, method, params) // a session runs: ~/forge stays current
+		return route(ctx, id, method, params)
+	}
+	go gitRemote.RunForgeFiles(ctx, hub) // ~/forge in the sandboxes that run a session
 	hub.OnForward = brw.DialForward
 	brw.Runner, brw.VMs, brw.Conns = hub, mgr, conns
 	go brw.Run(ctx)

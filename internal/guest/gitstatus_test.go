@@ -149,3 +149,46 @@ func TestGitStatus(t *testing.T) {
 		}
 	}
 }
+
+// TestGitRemotes: each repository with its branch and only its remotes through Studio's git
+// host; a remote elsewhere, which may carry a token in its URL, stays out.
+func TestGitRemotes(t *testing.T) {
+	git := hostGit(t)
+	ws := t.TempDir()
+	app, lib := filepath.Join(ws, "app"), filepath.Join(ws, "lib")
+	for _, dir := range []string{app, lib} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := git(context.Background(), dir, "init", "-q", "-b", "fix-login"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, args := range [][]string{
+		{"remote", "add", "origin", "https://git.studio.internal/github/acme/app.git"},
+		{"remote", "add", "mirror", "https://user:secret@example.com/acme/app.git"},
+		{"remote", "add", "lab", "https://git.studio.internal/gitlab/group/sub/app"},
+	} {
+		if _, err := git(context.Background(), app, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reply := gitRemotes(context.Background(), ws, git)
+	if len(reply.Repos) != 2 {
+		t.Fatalf("repos = %+v", reply.Repos)
+	}
+	a, l := reply.Repos[0], reply.Repos[1]
+	if a.Path == "lib" {
+		a, l = l, a
+	}
+	if a.Path != "app" || a.Branch != "fix-login" || len(a.Changes) != 0 {
+		t.Fatalf("app: %+v", a)
+	}
+	want := []agentproto.GitRemote{{Name: "origin", Forge: "github", Repository: "acme/app"}, {Name: "lab", Forge: "gitlab", Repository: "group/sub/app"}}
+	if len(a.Remotes) != 2 || a.Remotes[0] != want[0] || a.Remotes[1] != want[1] {
+		t.Fatalf("remotes = %+v", a.Remotes)
+	}
+	if l.Path != "lib" || len(l.Remotes) != 0 {
+		t.Fatalf("lib: %+v", l)
+	}
+}

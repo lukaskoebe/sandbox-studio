@@ -21,13 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // Host is the virtual remote's name.
-const Host = "git.studio.internal"
+const Host = agentproto.GitHost
 
 // Approval kinds.
 const (
@@ -83,6 +84,9 @@ type Service struct {
 	// card keeps Studio from asking again.
 	credMu  sync.Mutex
 	snoozed map[string]time.Time
+	// forge is ~/forge's state (forgefiles.go).
+	forgeOnce sync.Once
+	forge     *forgeFiles
 }
 
 func (s *Service) httpClient() *http.Client {

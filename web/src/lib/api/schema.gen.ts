@@ -4824,6 +4824,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        GitRemote: {
+            forge: string;
+            name: string;
+            repository: string;
+        };
         GitRepo: {
             /**
              * Format: int64
@@ -4844,6 +4849,7 @@ export interface components {
             head?: string;
             /** @description Relative to /workspace; empty for /workspace itself */
             path: string;
+            remotes?: components["schemas"]["GitRemote"][] | null;
             /** @description More than 1,000 changes */
             truncated?: boolean;
             /** @description The branch it tracks, such as origin/main */
