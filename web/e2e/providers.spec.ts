@@ -82,12 +82,14 @@ test("an OpenAI-compatible endpoint suggests the models it lists", async ({
   await expect(dialog.getByText(/Could not list the models/)).toBeVisible()
   await dialog.getByLabel("API key (optional)").fill("sk-e2e-fake")
   await expect(dialog.getByText("The endpoint lists 2 models")).toBeVisible()
-  await expect(dialog.locator("datalist#provider-models option")).toHaveCount(2)
-  await expect(
-    dialog.locator('datalist#provider-models option[value="e2e-coder"]')
-  ).toHaveCount(1)
-  // Any other model can still be typed.
+  // A click into the field lists them, in the app's own popup, and picks one.
   const model = dialog.getByLabel("Model", { exact: true })
+  await model.click()
+  const list = page.getByRole("listbox")
+  await expect(list.getByRole("option")).toHaveCount(2)
+  await list.getByRole("option", { name: "e2e-coder" }).click()
+  await expect(model).toHaveValue("e2e-coder")
+  // Any other model can still be typed.
   await model.fill("my-own-model")
   await expect(model).toHaveValue("my-own-model")
   // An endpoint's model is taken as text only until the user says it sees images.

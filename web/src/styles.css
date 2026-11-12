@@ -105,6 +105,8 @@
  * page and in both styles.
  */
 :root {
+  /* Native controls, a date picker's or a select's popup and scrollbars, follow the theme. */
+  color-scheme: light;
   --background: #f8fafa;
   --foreground: #172024;
   --card: #ffffff;
@@ -213,6 +215,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #0f1416;
   --foreground: #e1e7ea;
   --card: #151b1e;

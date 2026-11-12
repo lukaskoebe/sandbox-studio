@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A teammate's **Default model** and **Also offered in chats** suggest the provider's models
+  for every provider, not only an OpenAI-compatible endpoint's: Claude's models (and `sonnet`,
+  `opus`, `haiku` on Claude Code) for a Claude subscription or Anthropic key, and OpenAI's for
+  ChatGPT or an OpenAI key. Any other model can still be typed. The suggestions open in the
+  app's own popup, which follows the theme; the browser's native list showed light in dark
+  mode. Native controls and scrollbars now follow dark mode too.
 - Taking over the browser no longer leaves the page a step behind. A scroll or click on a
   photo-heavy page sometimes didn't show for 3 s or more, until the mouse moved again: a frame
   over 256 KiB could stop part-way from the browser's VM until Studio sent something back.

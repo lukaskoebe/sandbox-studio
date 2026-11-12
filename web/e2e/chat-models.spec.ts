@@ -20,11 +20,17 @@ test("a thread picks one of the models its teammate offers, from the next messag
   await expect(page.getByLabel("Default model")).toHaveValue(
     "claude-sonnet-5-5"
   )
+  // The provider's models are suggested; one picked becomes a token.
   const offered = page.getByLabel("Also offered in chats")
-  await offered.fill("claude-opus-5-5 refused")
+  await offered.click()
+  await page
+    .getByRole("listbox")
+    .getByRole("option", { name: "claude-opus-5-5" })
+    .click()
   await expect(
     page.getByRole("button", { name: "Remove claude-opus-5-5" })
   ).toBeVisible()
+  await offered.fill("refused ")
   await expect(
     page.getByRole("button", { name: "Remove refused" })
   ).toBeVisible()

@@ -1,30 +1,45 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { Autocomplete } from "@base-ui/react/autocomplete"
 import { XIcon } from "@phosphor-icons/react"
+import { ModelSuggestionList, useSuggestions } from "@/components/model-input"
 
 /** The most models a teammate offers besides its default, as the API takes them. */
 export const maxOfferedModels = 20
 
 /**
  * A list of model ids as tokens: Enter, a comma or a space adds what was typed, × or Backspace
- * in the empty field takes one off. list names a datalist of suggestions.
+ * in the empty field takes one off. It suggests the models of suggestions not added yet.
  */
 export function ModelsInput({
   id,
   value,
   onChange,
-  list,
+  suggestions = [],
   exclude,
   placeholder = "Add a model…",
 }: {
   id: string
   value: string[]
   onChange: (models: string[]) => void
-  list?: string
+  suggestions?: string[]
   /** A model left out, such as the default, which is offered anyway. */
   exclude?: string
   placeholder?: string
 }) {
   const [draft, setDraft] = useState("")
+  const suggested = useSuggestions(
+    suggestions.filter((m) => m !== exclude && !value.includes(m)),
+    draft
+  )
+  // The input that adds a model would open the list again; it stays closed until the next.
+  const added = useRef(false)
+  const popup = {
+    ...suggested,
+    onOpenChange: (open: boolean) => {
+      if (open && added.current) return
+      suggested.onOpenChange(open)
+    },
+  }
   const add = (text: string) => {
     const next = [...value]
     for (const m of text.split(/[\s,]+/)) {
@@ -32,6 +47,10 @@ export function ModelsInput({
     }
     onChange(next.slice(0, maxOfferedModels))
     setDraft("")
+    // Closed, the list doesn't hide the tokens from a screen reader.
+    suggested.onOpenChange(false)
+    added.current = true
+    setTimeout(() => (added.current = false))
   }
   return (
     <div className="flex min-h-8 w-full min-w-0 flex-wrap items-center gap-1 rounded-md border bg-transparent px-1.5 py-1 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
@@ -52,31 +71,38 @@ export function ModelsInput({
         </span>
       ))}
       {value.length < maxOfferedModels && (
-        <input
-          id={id}
-          list={list}
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={128}
-          className="min-w-32 flex-1 bg-transparent px-1 font-mono text-xs outline-none placeholder:font-sans placeholder:text-muted-foreground"
-          placeholder={value.length ? "" : placeholder}
+        <Autocomplete.Root
+          {...popup}
           value={draft}
-          onChange={(e) => {
-            const v = e.target.value
+          onValueChange={(v, details) => {
             // A suggestion picked from the list arrives whole.
-            if (/[\s,]/.test(v)) add(v)
+            if (details.reason === "item-press" || /[\s,]/.test(v)) add(v)
             else setDraft(v)
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault()
-              if (draft.trim()) add(draft)
-            } else if (e.key === "Backspace" && draft === "" && value.length) {
-              onChange(value.slice(0, -1))
-            }
-          }}
-          onBlur={() => draft.trim() && add(draft)}
-        />
+        >
+          <Autocomplete.Input
+            id={id}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={128}
+            className="min-w-32 flex-1 bg-transparent px-1 font-mono text-xs outline-none placeholder:font-sans placeholder:text-muted-foreground"
+            placeholder={value.length ? "" : placeholder}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && draft.trim()) {
+                e.preventDefault()
+                add(draft)
+              } else if (
+                e.key === "Backspace" &&
+                draft === "" &&
+                value.length
+              ) {
+                onChange(value.slice(0, -1))
+              }
+            }}
+            onBlur={() => draft.trim() && add(draft)}
+          />
+          {suggestions.length > 0 && <ModelSuggestionList />}
+        </Autocomplete.Root>
       )}
     </div>
   )

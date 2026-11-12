@@ -30,6 +30,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ModelInput, knownModels } from "@/components/model-input"
 import { ModelsInput } from "@/components/models-input"
 import { ModelSuggestions } from "@/components/provider-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
@@ -142,6 +143,9 @@ export function TeammateForm({
     teammate?.harness ?? supported[0]
   )
   const [model, setModel] = useState(teammate?.model ?? "")
+  const modelSuggestions = compatible
+    ? suggestions.models
+    : knownModels(provider?.kind, harness)
   const [models, setModels] = useState<string[]>(teammate?.models ?? [])
   const [gitName, setGitName] = useState(teammate?.gitName ?? "")
   const [gitEmail, setGitEmail] = useState(teammate?.gitEmail ?? "")
@@ -418,12 +422,8 @@ export function TeammateForm({
           </Field>
           <Field>
             <FieldLabel htmlFor="teammate-model">Default model</FieldLabel>
-            <Input
+            <ModelInput
               id="teammate-model"
-              className="font-mono"
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={128}
               placeholder={
                 provider?.kind === "openai_compatible"
                   ? provider.model
@@ -433,13 +433,11 @@ export function TeammateForm({
                       ? "claude-sonnet-5-5"
                       : "The subscription's default"
               }
-              list="teammate-models"
+              suggestions={modelSuggestions}
               value={model}
-              onChange={(e) => setModel(e.target.value)}
+              onChange={setModel}
             />
-            {compatible && (
-              <ModelSuggestions id="teammate-models" {...suggestions} />
-            )}
+            {compatible && <ModelSuggestions {...suggestions} />}
           </Field>
           <Field>
             <FieldLabel htmlFor="teammate-offered">
@@ -450,7 +448,7 @@ export function TeammateForm({
               value={models}
               onChange={setModels}
               exclude={model.trim()}
-              list={compatible ? "teammate-models" : undefined}
+              suggestions={modelSuggestions}
             />
             <FieldDescription>
               A chat picks one of these or the default in its composer. The

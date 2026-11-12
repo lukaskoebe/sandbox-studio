@@ -20,6 +20,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { ModelInput } from "@/components/model-input"
 import {
   Select,
   SelectContent,
@@ -314,18 +315,14 @@ function ProviderForm({
               </Field>
               <Field>
                 <FieldLabel htmlFor="provider-model">Model</FieldLabel>
-                <Input
+                <ModelInput
                   id="provider-model"
-                  className="font-mono"
-                  autoComplete="off"
-                  spellCheck={false}
-                  maxLength={128}
                   placeholder="qwen3-coder"
-                  list="provider-models"
+                  suggestions={suggestions.models}
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  onChange={setModel}
                 />
-                <ModelSuggestions id="provider-models" {...suggestions} />
+                <ModelSuggestions {...suggestions} />
               </Field>
             </div>
           )}
@@ -431,27 +428,20 @@ function ProviderForm({
 }
 
 /**
- * The models an endpoint lists, as the suggestions of a model input (its list attribute names
- * id), and a line saying where they stand. Any other model can still be typed.
+ * A line saying where the models an endpoint lists stand, under a model input that suggests
+ * them. Any other model can still be typed.
  */
 export function ModelSuggestions({
-  id,
   models,
   error,
   loading,
 }: {
-  id: string
   models: string[]
   error?: string
   loading: boolean
 }) {
   return (
     <>
-      <datalist id={id}>
-        {models.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
       {loading ? (
         <FieldDescription>Asking the endpoint for its models…</FieldDescription>
       ) : error ? (
