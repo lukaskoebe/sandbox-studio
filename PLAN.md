@@ -29,13 +29,21 @@ new generation got empty from its template; **Keep Docker's images** now copies 
 
 To build, in this order:
 
-1. **Faster Docker copies.** A fork or rebase copying 9 GB of Docker data took up to 15 minutes,
-   against about 2 for `docker save` and `docker load` over SSH. Measure where the time goes with a
-   1–2 GB image first (this host has 6 GB of disk free): the zstd level, the import's writeback
-   every 32 MiB, the size pre-walk and the exec stdin chunks. Then tune the copy, or copy the stopped
-   source's Docker disk image on the host instead, which a Docker fork already requires.
+1. **Faster Docker copies: measured, nothing to tune in Studio.** A scratch VM (2 vCPUs, 2 GiB)
+   copied a 7 GB tree shaped like overlay2 (40,000 files over 12 layers, hardlinks, whiteouts,
+   opaque xattrs). Cold, the size pre-walk took 7 s, the export into nothing 40 s (175 MB/s in,
+   3.3 GB zstd out), and decoding the archive 26 s. Writing that same archive to a disk took
+   392 s, and the import ran out of the test disk. The cause was this host's disk, not the copy:
+   a plain `dd` of 1 GiB on the host, with no VM, took 143 s, and 256 MB took 53 s (5–7 MB/s),
+   with the NVMe at 80 °C, 88% full and 80% IO pressure. A copy writes every byte once, as
+   `docker load` does, so it can't beat the disk. Copying the Docker disk image on the host
+   would write as much or more, since ext4 has no reflinks. If a copy is slow again, check
+   `cat /proc/pressure/io` and the drive's temperature first; and compare `docker system df`
+   with what `docker save` wrote, since the copy also carries build cache, containers and volumes.
 2. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
-   is hard to find. Mocks first, as asked, for you to pick from.
+   is hard to find. Mocks A–C are in the artifact W3phXxqbindnbxXExQD2wx, each with a caret on the
+   name and a Settings button in the header; I'd pick A (the sheet takes the card's rows). Waits
+   for your pick.
 
 Needs your call:
 
