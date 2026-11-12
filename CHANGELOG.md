@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.18.0 — 2026-11-12
 
 - A rebase keeps the tools from `mise use` unless you untick them, and can keep Docker's images,
   containers and volumes too: tick **Keep Docker's images, containers and volumes**. That copy
