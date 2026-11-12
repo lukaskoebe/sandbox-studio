@@ -32,6 +32,22 @@ var GitPullRequestStatusTool = Tool{agentproto.MethodGitPullRequestStatus,
 		"repository": str("owner/repo on that forge, when you pushed the branch to more than one", "maxLength", 300),
 	})}
 
+// GitPullRequestCreateTool proposes a pull request for a pushed branch.
+var GitPullRequestCreateTool = Tool{agentproto.MethodGitPullRequestCreate,
+	"Proposes a pull request (a merge request on GitLab) for a branch you pushed and Studio pushed to the forge. Nothing is opened yet: " +
+		"the user sees the title and description, can edit them, and opens or declines it. The call answers at once with " +
+		"\"awaiting approval\"; git_pull_request_status says what became of it. If a pull request from the branch is open " +
+		"already, or waiting for approval, it says so instead. A push still waiting for review can't have one yet: the " +
+		"reviewer can open its pull request while approving it.",
+	obj([]string{"branch", "title"}, map[string]any{
+		"branch":     str("The branch you pushed", "maxLength", 255),
+		"title":      str("The pull request's title", "maxLength", 200),
+		"body":       str("Its description, in Markdown", "maxLength", 20000),
+		"base":       str("The branch to merge into; default the repository's default branch", "maxLength", 255),
+		"forge":      str("The forge's name, when you pushed the branch to more than one", "maxLength", 32),
+		"repository": str("owner/repo on that forge, when you pushed the branch to more than one", "maxLength", 300),
+	})}
+
 // The review tools read a pull request on a forge and draft a review of it. Nothing reaches the
 // forge until the user approves the draft.
 var pullRequestRef = map[string]any{
@@ -98,7 +114,7 @@ var GitReviewStatusTool = Tool{agentproto.MethodGitReviewStatus,
 	obj([]string{"repository", "number"}, pullRequestRef)}
 
 func init() {
-	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitRepositoriesTool, GitPullRequestListTool,
+	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitPullRequestCreateTool, GitRepositoriesTool, GitPullRequestListTool,
 		GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool)
 }
 

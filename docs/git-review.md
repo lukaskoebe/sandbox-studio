@@ -526,9 +526,8 @@ type Integration interface {
 - **Jobs.** `Set.RunJobs` runs each job every `Every` until Studio stops; a failed run is
   logged. No integration has a job yet.
 
-Git review serves seven tools: the two below, answered from Studio's records of the calling
-sandbox's pushes and never from a forge, and the five of [pull request
-reviews](#pull-request-reviews).
+Git review serves eight tools: the three below, which work from Studio's records of the calling
+sandbox's pushes, and the five of [pull request reviews](#pull-request-reviews).
 
 
 - `git_push_status(limit?)`: the sandbox's recent pushes, newest first, with their state
@@ -539,6 +538,13 @@ reviews](#pull-request-reviews).
   updated an open one), `not opened` or
   `failed` (with the reason). `forge` and `repository` pick one when the branch went to
   more than one repository.
+- `git_pull_request_create(branch, title, body?, base?, forge?, repository?)`: proposes the
+  pull request of the branch's newest push, once Studio pushed it to the forge, on the same
+  `git.pr` card a push's own proposal raises, and answers `awaiting approval`. `base` defaults
+  to the repository's default branch, and the body ends with who pushed it, as a proposal's
+  does. One open from the branch, which it asks the forge for, or one awaiting approval is
+  answered instead; a push still waiting for review is refused, since its reviewer can open
+  the pull request while approving it.
 
 ## Limits and open points
 

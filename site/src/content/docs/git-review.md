@@ -35,7 +35,7 @@ An agent that rebases a branch and pushes it with `--force-with-lease` rewrites 
 
 To tell the agent what to change, comment on lines of the diff with the button that appears when you point at a line's number, or by clicking or tapping the number, and add a note in **Comments**, where a click on a line comment takes you back to its line. A rejection and its note reach the agent the next time it fetches or gets a prompt. That next `git fetch` or `git pull` of the repository fails once with the reason and the next one works, so a script that updates repositories on its own should try again: `git fetch || git fetch`. To tell it right away, choose one of the sandbox's chats or agent terminals under **Send to** before you decide: Studio sends the outcome, your note and your line comments there. A chat that is working gets them when its current turn ends. **Send without deciding** sends them and keeps the push waiting, so the agent can push a fix that replaces it. Plain shell terminals are not offered, since text typed into them would run as commands.
 
-GitHub, GitLab and Forgejo/Gitea forges can also request approval to open a pull request (a merge request on GitLab) after a reviewed push to a non-default branch. Other HTTPS, SSH and local forges do not provide pull-request proposals.
+GitHub, GitLab and Forgejo/Gitea forges can also request approval to open a pull request (a merge request on GitLab) after a reviewed push to a non-default branch. Other HTTPS, SSH and local forges do not provide pull-request proposals. An agent can also propose one itself, with its own title and description, for a branch it pushed: you approve it on the same card.
 
 ## Pull request reviews
 

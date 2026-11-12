@@ -85,3 +85,50 @@ func TestPullRequestStatusReadsTheStoredRecord(t *testing.T) {
 		t.Fatalf("status for another forge = %v, want a tool error", err)
 	}
 }
+
+func TestPullRequestCreateProposesOneForAPushedBranch(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	repo := g.clone(t)
+	commitFile(t, repo, "a.txt", "a\n", "Add a")
+	args := `{"branch":"feature","title":"Add a, tested","body":"Adds a."}`
+	if _, err := callTool(t, h, g.sb, "git_pull_request_create", args); !integrations.IsToolError(err) {
+		t.Fatalf("a branch never pushed = %v, want a tool error", err)
+	}
+	if err := push(repo, "refs/heads/main:refs/heads/feature", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	if _, err := callTool(t, h, g.sb, "git_pull_request_create", args); !integrations.IsToolError(err) {
+		t.Fatalf("a push waiting for review = %v, want a tool error", err)
+	}
+	// Pushed, and its own proposal declined: the agent proposes another.
+	h.decide(t, h.approvals(t, KindPush, store.StatusPending)[0], integrations.Allow, "")
+	out, err := callTool(t, h, g.sb, "git_pull_request_create", args)
+	if err != nil || !strings.Contains(out, `"status":"awaiting approval"`) {
+		t.Fatalf("while the push's own proposal waits = %s, %v", out, err)
+	}
+	h.decide(t, h.approvals(t, KindPR, store.StatusPending)[0], integrations.Deny, "")
+	out, err = callTool(t, h, g.sb, "git_pull_request_create", args)
+	if err != nil || !strings.Contains(out, `"status":"awaiting approval"`) || !strings.Contains(out, `"repository":"owner/repo"`) {
+		t.Fatalf("a new proposal = %s, %v", out, err)
+	}
+	pending := h.approvals(t, KindPR, store.StatusPending)
+	if len(pending) != 1 {
+		t.Fatalf("pending proposals = %d, want 1", len(pending))
+	}
+	h.decide(t, pending[0], integrations.Allow, "")
+	if len(h.forge.pulls) != 1 || h.forge.pulls[0].Title != "Add a, tested" || h.forge.pulls[0].Head != "feature" ||
+		h.forge.pulls[0].Base != "main" || !strings.HasPrefix(h.forge.pulls[0].Body, "Adds a.") {
+		t.Fatalf("opened = %+v", h.forge.pulls)
+	}
+	out, err = callTool(t, h, g.sb, "git_pull_request_create", args)
+	if err != nil || !strings.Contains(out, `"status":"opened"`) {
+		t.Fatalf("once opened = %s, %v", out, err)
+	}
+	if len(h.forge.pulls) != 1 {
+		t.Fatalf("a second pull request was opened: %+v", h.forge.pulls)
+	}
+	if _, err := callTool(t, h, g.sb, "git_pull_request_create", `{"branch":"feature"}`); !integrations.IsToolError(err) {
+		t.Fatalf("no title = %v, want a tool error", err)
+	}
+}

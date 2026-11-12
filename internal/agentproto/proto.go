@@ -259,6 +259,9 @@ const (
 	// MethodGitPushStatus and MethodGitPullRequestStatus are the git tools (docs/git-review.md).
 	MethodGitPushStatus        = "git_push_status"
 	MethodGitPullRequestStatus = "git_pull_request_status"
+	// MethodGitPullRequestCreate proposes the pull request of a pushed branch, which the user
+	// approves before Studio opens it.
+	MethodGitPullRequestCreate = "git_pull_request_create"
 	// MethodGitRepositories and MethodGitPullRequestList list the forges' repositories and a
 	// repository's pull requests; MethodGitPullRequestRead, MethodGitPullRequestReview and
 	// MethodGitReviewStatus read a pull request on a forge and draft a review of it, which the

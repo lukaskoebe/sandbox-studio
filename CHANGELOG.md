@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- An agent can propose a pull request for a branch it pushed, with its own title and description,
+  through the `git_pull_request_create` tool. You open or decline it on the same card a push's
+  pull request is proposed on.
+
+## Unreleased
+
 - A rebase keeps the tools from `mise use` unless you untick them, and can keep Docker's images,
   containers and volumes too: tick **Keep Docker's images, containers and volumes**. That copy
   takes a while, up to 15 minutes for 10 GB. A fork takes the tools by default as well. In the API,

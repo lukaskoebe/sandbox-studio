@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ func (s *Service) Tools() []integrations.Tool {
 	return []integrations.Tool{
 		{Def: agentcall.GitPushStatusTool, Handle: s.toolPushStatus},
 		{Def: agentcall.GitPullRequestStatusTool, Handle: s.toolPullRequestStatus},
+		{Def: agentcall.GitPullRequestCreateTool, Handle: s.toolPullRequestCreate},
 		{Def: agentcall.GitRepositoriesTool, Handle: s.toolRepositories},
 		{Def: agentcall.GitPullRequestListTool, Handle: s.toolPullRequestList},
 		{Def: agentcall.GitPullRequestReadTool, Handle: s.toolPullRequestRead},
@@ -105,6 +107,97 @@ func (s *Service) toolPullRequestStatus(ctx context.Context, sb store.Sandbox, p
 	}
 	return map[string]any{"branch": branch, "forge": newest.ForgeName, "repository": repoPath(*newest),
 		"pushState": newest.State, "pullRequest": pr}, nil
+}
+
+// toolPullRequestCreate proposes the pull request of the newest push of a branch, which went
+// to the forge, as a git.pr approval: the card a push's pull request is proposed on.
+func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, params json.RawMessage) (any, error) {
+	s.httpClient()
+	var in struct {
+		Branch     string `json:"branch"`
+		Title      string `json:"title"`
+		Body       string `json:"body"`
+		Base       string `json:"base"`
+		Forge      string `json:"forge"`
+		Repository string `json:"repository"`
+	}
+	if err := decodeArgs(params, &in); err != nil {
+		return nil, err
+	}
+	branch, title := strings.TrimSpace(in.Branch), strings.TrimSpace(in.Title)
+	if branch == "" || title == "" {
+		return nil, integrations.ToolError("give the branch you pushed and the pull request's title")
+	}
+	ps, err := s.Store.SandboxGitPushes(ctx, sb.EnvironmentID, sb.ID, "refs/heads/"+branch, 100)
+	if err != nil {
+		return nil, err
+	}
+	var newest *store.GitPush
+	for i := range ps {
+		p := &ps[i]
+		if (in.Forge == "" || p.ForgeName == in.Forge) && (in.Repository == "" || repoPath(*p) == in.Repository) && p.State != store.PushSuperseded {
+			newest = p
+			break
+		}
+	}
+	if newest == nil {
+		return nil, integrations.ToolError("you have not pushed %s%s", branch, pushedTo(in.Forge, in.Repository))
+	}
+	p := *newest
+	answer := func(pr map[string]any) map[string]any {
+		return map[string]any{"branch": branch, "forge": p.ForgeName, "repository": repoPath(p), "pullRequest": pr}
+	}
+	switch p.State {
+	case store.PushPending:
+		return nil, integrations.ToolError("your push of %s waits for the user's review; the reviewer can open its pull request while approving it, or call this again once git_push_status says pushed", branch)
+	case store.PushPushed:
+	default:
+		return nil, integrations.ToolError("your newest push of %s is %s, not on the forge; push it again first", branch, p.State)
+	}
+	if p.PRURL != "" || (p.PRApprovalID != "" && p.PRResult == "") {
+		return answer(pullRequestView(p)), nil
+	}
+	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
+	if err != nil {
+		return nil, integrations.ToolError("the forge %s was removed from Sandbox Studio", p.ForgeName)
+	}
+	if _, ok := apiForge(f); !ok {
+		return nil, integrations.ToolError("%s", noAPI(f))
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if url := s.openPullRequestOf(ctx, p, branch); url != "" {
+		if err := s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, "", url, PRUpdated); err != nil {
+			return nil, err
+		}
+		return answer(map[string]any{"status": "opened", "url": url}), nil
+	}
+	base := strings.TrimSpace(in.Base)
+	if base == "" {
+		base = p.DefaultBranch
+	}
+	if base == "" {
+		base = s.defaultBranch(ctx, f, p.Owner, p.Repo)
+	}
+	if base == "" {
+		return nil, integrations.ToolError("the forge did not say which branch is the default; give base")
+	}
+	if base == branch {
+		return nil, integrations.ToolError("%s is the branch to merge into; push your changes to another branch", branch)
+	}
+	body := strings.TrimSpace(in.Body)
+	if p.TeammateName != "" {
+		body = strings.TrimSpace(body + "\n\nPushed by " + p.TeammateName + " from sandbox " + sb.Name + " through Sandbox Studio.")
+	}
+	s.proposePR(ctx, p, PullRequest{Head: branch, Base: base, Title: truncate(title, 200), Body: body})
+	p, err = s.Store.GitPush(ctx, p.EnvironmentID, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	if p.PRApprovalID == "" {
+		return nil, errors.New("Studio could not propose the pull request")
+	}
+	return answer(map[string]any{"status": "awaiting approval"}), nil
 }
 
 // pullRequestView is a push's pull request as the stored record says it.
