@@ -79,6 +79,17 @@ func diskSpace(dir string) func() (int64, int64, error) {
 	}
 }
 
+// rootDiskSpace is diskSpace as root sees it, with the blocks kept for root.
+func rootDiskSpace(dir string) func() (int64, int64, error) {
+	return func() (int64, int64, error) {
+		var fs unix.Statfs_t
+		if err := unix.Statfs(dir, &fs); err != nil {
+			return 0, 0, err
+		}
+		return int64(fs.Bfree) * fs.Bsize, int64(fs.Blocks) * fs.Bsize, nil
+	}
+}
+
 // gitLister returns what `git ls-files -co --exclude-standard -z` lists in dir.
 type gitLister func(dir string) ([]string, error)
 

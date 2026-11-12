@@ -126,30 +126,49 @@ func (s *Service) review(ctx context.Context, r *git.Repository, old, newHash pl
 			return rv, err
 		}
 	}
+	d, err := s.treeDiff(ctx, r, from, to)
+	if err != nil {
+		return rv, err
+	}
+	rv.Files, rv.Additions, rv.Deletions, rv.Diff, rv.DiffTruncated = d.Files, d.Additions, d.Deletions, d.Diff, d.DiffTruncated
+	return rv, nil
+}
+
+// TreeDiff is the unified diff from one tree to another, cut at the diff limit.
+type TreeDiff struct {
+	Files         int    `json:"files" doc:"Files changed"`
+	Additions     int    `json:"additions"`
+	Deletions     int    `json:"deletions"`
+	Diff          string `json:"diff"`
+	DiffTruncated bool   `json:"diffTruncated"`
+}
+
+func (s *Service) treeDiff(ctx context.Context, r *git.Repository, from, to *object.Tree) (TreeDiff, error) {
+	var d TreeDiff
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	changes, err := object.DiffTreeWithOptions(ctx, from, to, object.DefaultDiffTreeOptions)
 	if err != nil {
-		return rv, err
+		return d, err
 	}
-	rv.Files = len(changes)
+	d.Files = len(changes)
 	var diff strings.Builder
 	for i, ch := range changes {
 		if int64(diff.Len()) >= s.Limits.MaxDiff {
-			rv.DiffTruncated = true
+			d.DiffTruncated = true
 			fmt.Fprintf(&diff, truncMarker, fmt.Sprintf("%d more files not shown", len(changes)-i))
 			break
 		}
 		text, add, del := s.changeDiff(ctx, r, ch)
-		rv.Additions += add
-		rv.Deletions += del
+		d.Additions += add
+		d.Deletions += del
 		if room := s.Limits.MaxDiff - int64(diff.Len()); int64(len(text)) > room {
 			text = text[:room]
 			if k := strings.LastIndexByte(text, '\n'); k > 0 {
 				text = text[:k+1]
 			}
 			diff.WriteString(text)
-			rv.DiffTruncated = true
+			d.DiffTruncated = true
 			fmt.Fprintf(&diff, truncMarker, fmt.Sprintf("diff larger than %d KiB", s.Limits.MaxDiff>>10))
 			if rest := len(changes) - i - 1; rest > 0 {
 				fmt.Fprintf(&diff, "[%d more files not shown]\n", rest)
@@ -158,8 +177,8 @@ func (s *Service) review(ctx context.Context, r *git.Repository, old, newHash pl
 		}
 		diff.WriteString(text)
 	}
-	rv.Diff = diff.String()
-	return rv, nil
+	d.Diff = diff.String()
+	return d, nil
 }
 
 func commitOf(c *object.Commit) Commit {

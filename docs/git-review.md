@@ -376,17 +376,23 @@ an agent at once, in the sandbox's chat or terminal it works in.
 
 - **The review** (`GitReview` in `web/src/components/git-review.tsx`, the same in the sheet,
   the review page and the sandbox's Git tab) shows the branch and its change, then a push in
-  tabs: **Changes**, the diff at full length; **Commits**, with the repository and sandbox;
+  tabs: **Changes**, the diff at full length, with its files listed beside it (above it when
+  narrow) to jump to; **Commits**, with the repository and sandbox, each commit opening to its own
+  diff from its first parent (`GET …/approvals/{id}/commits/{sha}`, read from the staging
+  repository, for the commits the review lists; 404 once Studio no longer keeps it);
   and while it waits **Comments**, the note and the line comments, each of which jumps to its
   line. A footer that stays in view holds Send to, the pull request choice, Reject and
   Approve, with Send without deciding and Ignore in its More menu. A `git.pr` approval has
   no diff and no tabs.
 - **Line comments.** A line of the review's diff takes a comment from the button on its number
-  while the pointer is over it, or from a click or tap on the number. Neither has a keyboard route
-  yet (`PLAN.md`).
+  while the pointer is over it, or from a click or tap on the number. A comment covers several
+  lines when you drag over their numbers (or press the button and drag), or click one and
+  shift-click another; it shows under the last. Neither has a keyboard route yet (`PLAN.md`).
+  A pull request review's draft keeps comments on one line, as its fields have one.
   `web/src/components/review-feedback.tsx` numbers the lines from the hunk headers and folds
   the comments into the note, after the general note: one item per comment with the file, the
-  line number and the line's code, then the comment. So they reach the agent by every route,
+  line number and the line's code, then the comment. A range names its first and last line and
+  quotes up to 20 of its lines. So they reach the agent by every route,
   fetch and prompt included. The prompt note keeps the note's lines (up to 8000 bytes); the
   fetch message keeps one line of 500.
 - **Send to.** The review lists the sandbox's idle and running chats and its agent

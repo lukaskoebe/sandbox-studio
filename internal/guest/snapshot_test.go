@@ -568,3 +568,16 @@ func TestSnapshotFailsRatherThanLeaveOutAFile(t *testing.T) {
 		t.Fatalf("manifest b: %v", err)
 	}
 }
+
+// Root's free space counts the blocks kept for root: never less than the user's.
+func TestRootDiskSpace(t *testing.T) {
+	dir := t.TempDir()
+	free, total, err := diskSpace(dir)()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootFree, rootTotal, err := rootDiskSpace(dir)()
+	if err != nil || rootTotal != total || rootFree < free {
+		t.Fatalf("root: %d of %d, user: %d of %d, %v", rootFree, rootTotal, free, total, err)
+	}
+}

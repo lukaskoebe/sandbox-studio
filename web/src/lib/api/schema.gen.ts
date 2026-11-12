@@ -111,6 +111,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/approvals/{id}/commits/{sha}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One commit of a push and its diff
+         * @description The changes of one commit the push's review lists, from its first parent. 404 when the review doesn't list it or Studio no longer keeps it.
+         */
+        get: operations["getPushCommit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/approvals/{id}/decide": {
         parameters: {
             query?: never;
@@ -3613,6 +3633,20 @@ export interface components {
             subject: string;
             /** Format: date-time */
             when: string;
+        };
+        CommitDiff: {
+            /** Format: int64 */
+            additions: number;
+            commit: components["schemas"]["Commit"];
+            /** Format: int64 */
+            deletions: number;
+            diff: string;
+            diffTruncated: boolean;
+            /**
+             * Format: int64
+             * @description Files changed
+             */
+            files: number;
         };
         Conflict: {
             /** @description The memory.conflict approval in the inbox */
@@ -7321,6 +7355,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPushCommit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID of a git push */
+                id: string;
+                /** @description A commit the push's review lists */
+                sha: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitDiff"];
                 };
             };
             /** @description Error */

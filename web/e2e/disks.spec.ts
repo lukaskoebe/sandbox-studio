@@ -42,9 +42,14 @@ test("Home and the sandbox's page say when its home or Docker disk is nearly ful
   )
   await expect(strip).toContainText("docker builder prune")
   await expect(strip).not.toContainText("rm -rf ~/.cache")
+  // So does Home's notice.
+  await page.goto(`/e/${env}`)
+  await expect(notice).toContainText("The Docker disk has 300 MB of 20 GB free")
+  await expect(notice).toContainText("docker builder prune")
+  await expect(notice).not.toContainText("rm -rf ~/.cache")
 
   await api.json("PUT", `/api/e2e/sandboxes/${id}/disks`, { disks: null })
-  await expect(strip).toBeHidden({ timeout: 15_000 })
+  await expect(notice).toBeHidden({ timeout: 15_000 })
 })
 
 // The strip opens the disk resize dialog with the sandbox's sizes. The e2e runtime can't

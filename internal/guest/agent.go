@@ -477,7 +477,13 @@ func (a *Agent) replyDisks(st net.Conn) error {
 			continue // a workspace on the home's disk is the home
 		}
 		seen[fs.Dev] = true
-		if free, total, err := diskSpace(d.dir)(); err == nil {
+		space := diskSpace(d.dir)
+		if d.name == agentproto.DiskDocker {
+			// Docker's daemon writes as root, which may use the blocks ext4 keeps for it:
+			// what the terminal user may use reads 0 B free while Docker still has a twentieth.
+			space = rootDiskSpace(d.dir)
+		}
+		if free, total, err := space(); err == nil {
 			disks = append(disks, agentproto.Disk{Name: d.name, Free: free, Total: total})
 		}
 	}

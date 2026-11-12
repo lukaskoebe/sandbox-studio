@@ -22,8 +22,9 @@ const (
 	TransferCAEnv  = "STUDIO_TRANSFER_CA"
 )
 
-// Disk is one of the sandbox's disks, in bytes, as the terminal user sees it: Free leaves
-// out what only root may use.
+// Disk is one of the sandbox's disks, in bytes, as the one writing to it sees it: for the
+// home and workspace, the terminal user, so Free leaves out what only root may use; for
+// Docker's disk, root, as its daemon is.
 type Disk struct {
 	Name  string `json:"name" enum:"home,workspace,docker"`
 	Free  int64  `json:"free"`

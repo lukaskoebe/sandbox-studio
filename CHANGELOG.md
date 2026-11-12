@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- A diff of several files, in a push's review, a pull request review and a commit, lists its files
+  with what happened to each and the lines added and removed, beside the diff when there's room
+  and above it otherwise. A click jumps to the file.
+- A comment in a push's review can cover several lines: drag over their numbers, or press the
+  comment button and drag, or click one and shift-click another. The comment names the range,
+  and the agent gets those lines quoted.
+- A push's **Commits** tab opens each commit to its own diff (`GET …/approvals/{id}/commits/{sha}`).
+- A nearly full Docker disk counts the space Docker's daemon may still use: the blocks ext4 keeps
+  for root. It read 0 B free while Docker had a twentieth of the disk left. And Home's notice of a
+  full disk gives the advice for that disk, not always the home disk's.
+
 ## v0.19.0 — 2026-11-12
 
 - An agent can propose a pull request for a branch it pushed, with its own title and description,

@@ -33,7 +33,10 @@ binary embeds (`//go:embed`) and serves at `/`.
   a Shadow DOM, and highlights with Shiki in two workers that stay once started. Its theme's
   colours are `var(--code-*)`, so a change of style or scheme needs no new highlight, and the
   rest of the style reaches it through the `--diffs-*` variables on `diffs-container` in
-  `styles.css`. A line over 2000 characters stays plain here too. `parseDiff` in
+  `styles.css`. A line over 2000 characters stays plain here too. A full-length diff of several
+  files lists them (`FileOverview`), beside it from a container width of 48rem. Comments on a
+  range use the library's line selection; the comment button, which lies over the numbers,
+  drags a range itself, finding the line under the pointer in the diff's shadow root. `parseDiff` in
   `review-feedback.tsx` stays free of the library, since a comment's quote needs only the lines.
 - Installable app: `public/manifest.webmanifest` (served as `application/manifest+json`)
   with the icons in `public/` (`icon.svg` is the source; the PNGs and `favicon.ico` are

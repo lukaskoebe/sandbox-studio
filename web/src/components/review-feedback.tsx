@@ -19,6 +19,8 @@ export type DiffLine = {
   file?: string
   /** The line's number in the new file, or in the old one for a removed line. */
   line?: number
+  /** An unchanged line's number in the old file. */
+  oldLine?: number
   removed?: boolean
 }
 
@@ -80,15 +82,29 @@ function splitDiff(diff: string): DiffLine[] {
     if (text.startsWith(" ")) {
       oldLeft--
       newLeft--
-      oldLine++
-      return { text, fileNo, file, line: newLine++ }
+      return { text, fileNo, file, line: newLine++, oldLine: oldLine++ }
     }
     return { text, fileNo }
   })
 }
 
-/** A comment on one line of the diff, by the line's index. */
-export type LineComment = { index: number; text: string }
+/**
+ * A comment on a line of the diff, by the line's index, or on the lines from start to index
+ * when it covers several. It shows under its last line.
+ */
+export type LineComment = { index: number; text: string; start?: number }
+
+/** The most lines of a comment's range the agent gets quoted. */
+const quotedLines = 20
+
+/** Where a comment is, such as "cron/billing.go:13" or "cron/billing.go:13–15". */
+export function commentWhere(lines: DiffLine[], c: LineComment) {
+  const l = lines[c.index]
+  const first = c.start !== undefined ? lines[c.start] : undefined
+  if (!first || first.line === undefined || c.start === c.index)
+    return `${l.file}:${l.line}${l.removed ? " (removed line)" : ""}`
+  return `${l.file}:${first.line}–${l.line}`
+}
 
 /** The note the agent gets: the general note, then each line comment with where it is. */
 export function composeNote(
@@ -102,11 +118,23 @@ export function composeNote(
     parts.push(
       "Comments on the diff:\n" +
         sorted
-          .map(({ index, text }) => {
-            const l = lines[index]
-            const where = `${l.file}:${l.line}${l.removed ? " (removed line)" : ""}`
+          .map((c) => {
+            const where = commentWhere(lines, c)
+            const text = c.text.trim().replace(/\n/g, "\n  ")
+            if (c.start !== undefined && c.start < c.index) {
+              const range = lines
+                .slice(c.start, c.index + 1)
+                .filter((l) => l.line !== undefined)
+              const shown = range
+                .slice(0, quotedLines)
+                .map((l) => `  ${l.text}`)
+              if (range.length > quotedLines)
+                shown.push(`  … ${range.length - quotedLines} more lines`)
+              return `- ${where}, on these lines:\n  \`\`\`diff\n${shown.join("\n")}\n  \`\`\`\n  ${text}`
+            }
+            const l = lines[c.index]
             const code = l.text.slice(1).trim()
-            return `- ${where}${code ? `, on \`${code}\`` : ""}:\n  ${text.trim().replace(/\n/g, "\n  ")}`
+            return `- ${where}${code ? `, on \`${code}\`` : ""}:\n  ${text}`
           })
           .join("\n")
     )
@@ -125,6 +153,7 @@ export function UnifiedDiff({
   onComment,
   fill,
   commentLabel,
+  ranges,
   ref,
 }: {
   diff: string
@@ -134,6 +163,8 @@ export function UnifiedDiff({
   fill?: boolean
   /** Who wrote the comments, above each one, such as "Ada's draft". */
   commentLabel?: string
+  /** Whether a comment can cover several lines; on unless the comments go where it can't. */
+  ranges?: boolean
   /** For a list of comments that jumps to them. */
   ref?: Ref<DiffViewHandle>
 }) {
@@ -150,6 +181,7 @@ export function UnifiedDiff({
         onComment={onComment}
         fill={fill}
         commentLabel={commentLabel}
+        ranges={ranges}
         ref={ref}
       />
     </Suspense>

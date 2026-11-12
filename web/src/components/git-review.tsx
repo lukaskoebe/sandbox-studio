@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   ArrowSquareOutIcon,
+  CaretRightIcon,
   ChatCircleTextIcon,
   DotsThreeIcon,
   EyeSlashIcon,
@@ -14,6 +15,11 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +52,7 @@ import { textareaClass } from "@/components/memory-dialogs"
 import {
   FeedbackTargetSelect,
   UnifiedDiff,
+  commentWhere,
   composeNote,
   feedbackBody,
   newChatTarget,
@@ -65,6 +72,94 @@ import { approvalKind, gitSummary } from "@/lib/approval-kinds"
 import { formatAge } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
+
+type Commit = NonNullable<
+  NonNullable<NonNullable<GitDetail["review"]>["commits"]>
+>[number]
+
+/** One commit of a push, opening to its own diff. */
+function CommitRow({
+  commit: c,
+  env,
+  approvalId,
+}: {
+  commit: Commit
+  env: string
+  approvalId: string
+}) {
+  return (
+    <Collapsible render={<li />} className="group/commit grid min-w-0">
+      <div className="flex min-w-0 items-baseline gap-2 px-2 py-1.5">
+        <Ident copy value={c.sha} className="text-muted-foreground">
+          {short(c.sha)}
+        </Ident>
+        <CollapsibleTrigger
+          aria-label={`Changes of ${short(c.sha)}: ${c.subject}`}
+          className="flex min-w-0 flex-1 items-baseline gap-2 rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/30"
+        >
+          <span className="truncate font-medium">{c.subject}</span>
+          <span className="ml-auto shrink-0 text-muted-foreground">
+            {c.author} · {formatAge(c.when)}
+          </span>
+          <CaretRightIcon className="size-3 shrink-0 self-center text-muted-foreground transition-transform group-data-[open]/commit:rotate-90" />
+        </CollapsibleTrigger>
+      </div>
+      {c.body && (
+        <p className="-mt-1 px-2 pb-1.5 break-words whitespace-pre-wrap text-muted-foreground">
+          {c.body}
+        </p>
+      )}
+      <CollapsibleContent className="min-w-0 border-t p-2">
+        <CommitChanges env={env} approvalId={approvalId} sha={c.sha} />
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function CommitChanges({
+  env,
+  approvalId,
+  sha,
+}: {
+  env: string
+  approvalId: string
+  sha: string
+}) {
+  const q = $api.useQuery(
+    "get",
+    "/api/environments/{env}/approvals/{id}/commits/{sha}",
+    { params: { path: { env, id: approvalId, sha } } },
+    { staleTime: Infinity, retry: false }
+  )
+  if (q.isPending)
+    return <p className="text-muted-foreground">Loading the changes…</p>
+  if (q.isError)
+    return (
+      <p className="text-muted-foreground">
+        {errorStatus(q.error) === 404
+          ? "Studio no longer keeps this commit."
+          : `Could not load the changes: ${errorMessage(q.error)}`}
+      </p>
+    )
+  const d = q.data
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <p className="flex items-center gap-2 text-muted-foreground">
+        {d.files} {d.files === 1 ? "file" : "files"} ·{" "}
+        <span className="text-emerald-600 dark:text-emerald-400">
+          +{d.additions}
+        </span>
+        <span className="text-destructive">−{d.deletions}</span>
+        {d.diffTruncated && (
+          <Badge variant="outline" className="ml-auto">
+            diff truncated
+          </Badge>
+        )}
+      </p>
+      <UnifiedDiff diff={d.diff} fill />
+    </div>
+  )
+}
 
 export function isGitApproval(a: Approval) {
   return a.kind === "git.push" || a.kind === "git.pr" || a.kind === "git.review"
@@ -313,7 +408,7 @@ function PushReview({ approval }: { approval: Approval }) {
   const pr = git.pullRequest
   const forced = !pr && !!rv?.forced
   const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
-  const where = (i: number) => `${lines[i]?.file}:${lines[i]?.line}`
+  const where = (c: LineComment) => commentWhere(lines, c)
   const jump = (i: number) => {
     setTab("changes")
     // The panel shows on the next frame.
@@ -542,22 +637,12 @@ function PushReview({ approval }: { approval: Approval }) {
             </dl>
             <ul className="min-w-0 divide-y rounded-md text-xs ring-1 ring-foreground/10">
               {(rv.commits ?? []).map((c) => (
-                <li key={c.sha} className="grid min-w-0 gap-0.5 px-2 py-1.5">
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <Ident copy value={c.sha} className="text-muted-foreground">
-                      {short(c.sha)}
-                    </Ident>
-                    <span className="truncate font-medium">{c.subject}</span>
-                    <span className="ml-auto shrink-0 text-muted-foreground">
-                      {c.author} · {formatAge(c.when)}
-                    </span>
-                  </div>
-                  {c.body && (
-                    <p className="break-words whitespace-pre-wrap text-muted-foreground">
-                      {c.body}
-                    </p>
-                  )}
-                </li>
+                <CommitRow
+                  key={c.sha}
+                  commit={c}
+                  env={approval.environmentId}
+                  approvalId={approval.id}
+                />
               ))}
               {rv.moreCommits > 0 && (
                 <li className="px-2 py-1.5 text-muted-foreground">
@@ -578,8 +663,8 @@ function PushReview({ approval }: { approval: Approval }) {
                 />
                 {comments.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    None yet. In Changes, comment on a line with the button at
-                    its start.
+                    None yet. In Changes, click a line's number to comment on
+                    it, or drag over several numbers to comment on them all.
                   </p>
                 ) : (
                   <ul
@@ -597,7 +682,7 @@ function PushReview({ approval }: { approval: Approval }) {
                             onClick={() => jump(c.index)}
                           >
                             <Ident className="text-muted-foreground">
-                              {where(c.index)}
+                              {where(c)}
                             </Ident>
                             <span className="break-words whitespace-pre-wrap">
                               {c.text}

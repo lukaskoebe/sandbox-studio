@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/notice"
-import { lowDiskText } from "@/components/low-disk"
+import { LowDiskAdvice, lowDiskText } from "@/components/low-disk"
 import {
   ApprovalCardList,
   useApprovalReview,
@@ -293,14 +293,10 @@ function DiskNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
           >
             {sb.name}
           </Link>
-          : {lowDiskText(sb.lowDisks ?? [])}.
+          : {lowDiskText(sb.lowDisks ?? [])}.{" "}
+          <LowDiskAdvice disks={sb.lowDisks ?? []} />
         </span>
       ))}
-      <span className="block">
-        Agents stop when a home disk fills. Free some space in the
-        sandbox&apos;s terminal, such as with{" "}
-        <code className="font-mono">rm -rf ~/.cache ~/.npm</code>.
-      </span>
     </Notice>
   )
 }

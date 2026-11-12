@@ -4,6 +4,8 @@ import {
   registerCustomTheme,
   type CodeViewDiffItem,
   type DiffLineAnnotation,
+  type FileDiffMetadata,
+  type SelectedLineRange,
 } from "@pierre/diffs"
 import {
   CodeView,
@@ -17,6 +19,7 @@ import { ChatCircleTextIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
+  commentWhere,
   parseDiff,
   type DiffLine,
   type LineComment,
@@ -152,6 +155,35 @@ function readPatch(lines: DiffLine[]) {
   return { files, notes, footer }
 }
 
+/** A file's place in the overview: what happened to it and how many lines. */
+const changeLabels: Record<FileDiffMetadata["type"], [string, string]> = {
+  new: ["A", "Added"],
+  deleted: ["D", "Deleted"],
+  change: ["M", "Modified"],
+  "rename-pure": ["R", "Renamed"],
+  "rename-changed": ["R", "Renamed and modified"],
+}
+const changeColors: Record<FileDiffMetadata["type"], string> = {
+  new: "text-emerald-600 dark:text-emerald-400",
+  deleted: "text-destructive",
+  change: "text-sky-700 dark:text-sky-400",
+  "rename-pure": "text-muted-foreground",
+  "rename-changed": "text-sky-700 dark:text-sky-400",
+}
+
+function counts(f: FileDiffMetadata) {
+  let added = 0
+  let removed = 0
+  for (const h of f.hunks) {
+    added += h.additionLines
+    removed += h.deletionLines
+  }
+  return { added, removed }
+}
+
+/** The lines a comment is being written on: the last, and the first of a range. */
+type Editing = { index: number; start?: number }
+
 export type DiffViewHandle = {
   /** Brings line i of the diff into view. */
   scrollToLine: (i: number) => void
@@ -163,6 +195,8 @@ export type DiffViewProps = {
   onComment?: (comments: LineComment[]) => void
   fill?: boolean
   commentLabel?: string
+  /** Whether a comment can cover several lines, chosen by dragging over their numbers. */
+  ranges?: boolean
   ref?: Ref<DiffViewHandle>
 }
 
@@ -173,18 +207,28 @@ export default function DiffView({
   onComment,
   fill,
   commentLabel,
+  ranges = true,
   ref,
 }: DiffViewProps) {
   const lines = parseDiff(diff)
-  const [editing, setEditing] = useState<number>()
+  const [editing, setEditing] = useState<Editing>()
   const view = useRef<CodeViewHandle<Note, undefined>>(null)
+  const box = useRef<HTMLDivElement>(null)
   // A line far from the view unmounts, and the editor on it: the draft outlives it.
-  const draft = useRef<{ index: number; text: string; focused: boolean }>(null)
+  const draft = useRef<{
+    index: number
+    start?: number
+    text: string
+    focused: boolean
+  }>(null)
   const { files, notes, footer } = useMemo(() => readPatch(lines), [lines])
   const indexes = useMemo(() => {
     const out = new Map<string, number>()
     lines.forEach((l, i) => {
       if (l.line !== undefined) out.set(lineKey(l.fileNo, sideOf(l), l.line), i)
+      // A selection may start on an unchanged line's old side.
+      if (l.oldLine !== undefined)
+        out.set(lineKey(l.fileNo, "deletions", l.oldLine), i)
     })
     return out
   }, [lines])
@@ -205,7 +249,7 @@ export default function DiffView({
           metadata: { text },
         })
     const marked = new Set(comments.map((c) => c.index))
-    if (editing !== undefined) marked.add(editing)
+    if (editing !== undefined) marked.add(editing.index)
     for (const i of marked) {
       const l = lines[i]
       if (l.line === undefined) continue
@@ -256,6 +300,28 @@ export default function DiffView({
   )
 
   const commentable = !!onComment
+  const selectable = commentable && ranges
+  /** The lines a selection of line numbers covers, as a comment on them. */
+  const rangeOf = (id: string, r: SelectedLineRange): Editing | undefined => {
+    const a = indexes.get(lineKey(id, r.side ?? "additions", r.start))
+    const b = indexes.get(
+      lineKey(id, r.endSide ?? r.side ?? "additions", r.end)
+    )
+    if (a === undefined || b === undefined) {
+      const one = a ?? b
+      return one === undefined ? undefined : { index: one }
+    }
+    const [lo, hi] = a <= b ? [a, b] : [b, a]
+    return lo < hi ? { index: hi, start: lo } : { index: hi }
+  }
+  const open = (e: Editing) => {
+    const c = comments.find((x) => x.index === e.index)
+    setEditing(
+      e.start === undefined && c?.start !== undefined
+        ? { ...e, start: c.start }
+        : e
+    )
+  }
   const options = useMemo<CodeViewReactOptions<Note, undefined>>(
     () => ({
       theme: "studio",
@@ -271,27 +337,60 @@ export default function DiffView({
       itemMetrics: { lineHeight: 16, diffHeaderHeight: 40 },
       disableFileHeader: !fill,
       enableGutterUtility: commentable,
-      // The gutter's button only shows on hover: a touch screen taps the number.
-      onLineNumberClick: commentable
-        ? (line, { item }) => {
-            const side =
-              "annotationSide" in line ? line.annotationSide : "additions"
-            const i = indexes.get(lineKey(item.id, side, line.lineNumber))
-            if (i !== undefined) setEditing(i)
+      // A click on a number, a drag over several or a shift-click selects them, and the
+      // comment covers what was selected. The gutter's button only shows on hover: a touch
+      // screen taps the number.
+      enableLineSelection: selectable,
+      onLineSelectionEnd: selectable
+        ? (
+            range: SelectedLineRange | null,
+            { item }: { item: { id: string } }
+          ) => {
+            const e = range && rangeOf(item.id, range)
+            if (e) open(e)
           }
         : undefined,
+      onLineNumberClick:
+        commentable && !selectable
+          ? (line, { item }) => {
+              const side =
+                "annotationSide" in line ? line.annotationSide : "additions"
+              const i = indexes.get(lineKey(item.id, side, line.lineNumber))
+              if (i !== undefined) open({ index: i })
+            }
+          : undefined,
     }),
-    [fill, commentable, indexes]
+    [fill, commentable, selectable, indexes, comments]
   )
 
-  const set = (i: number, text?: string) => {
+  const set = (i: number, text?: string, start?: number) => {
     const rest = comments.filter((c) => c.index !== i)
-    onComment?.(text ? [...rest, { index: i, text }] : rest)
+    onComment?.(
+      text
+        ? [
+            ...rest,
+            start === undefined
+              ? { index: i, text }
+              : { index: i, text, start },
+          ]
+        : rest
+    )
   }
   const close = () => {
     draft.current = null
     setEditing(undefined)
+    view.current?.clearSelectedLines()
   }
+  const jumpToFile = (fileNo: number) => {
+    // The diff's own box may be partly out of the page's view, as below the overview.
+    box.current?.scrollIntoView({ block: "nearest" })
+    view.current?.scrollTo({
+      type: "item",
+      id: String(fileNo),
+      align: "start",
+    })
+  }
+  const overview = fill && files.length > 1
 
   // Nothing the library reads as a file, such as a diff that is only Studio's notes.
   if (!files.length)
@@ -302,128 +401,363 @@ export default function DiffView({
     )
   return (
     <WorkerPoolContext.Provider value={pool()}>
-      <div
-        className={cn(
-          "diff-view min-w-0 overflow-hidden rounded-md ring-1 ring-foreground/10"
-        )}
-      >
-        <CodeView<Note, undefined>
-          ref={view}
-          items={items}
+      <div className="@container min-w-0">
+        <div
           className={cn(
-            "overflow-auto",
-            fill ? "max-h-[70dvh]" : "max-h-[60vh]"
+            "grid min-w-0 gap-2",
+            overview && "@3xl:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)]"
           )}
-          options={options}
-          renderGutterUtility={
-            onComment
-              ? (hovered, item) => (
-                  <button
-                    type="button"
-                    aria-label="Comment on this line"
-                    title="Comment on this line"
-                    className="relative z-10 grid size-4 place-items-center rounded-sm bg-primary text-primary-foreground"
-                    onClick={() => {
-                      const h = hovered()
-                      if (!h) return
-                      const i = indexes.get(
-                        lineKey(
-                          item.id,
-                          "side" in h ? String(h.side) : "additions",
-                          h.lineNumber
-                        )
-                      )
-                      if (i !== undefined) setEditing(i)
-                    }}
-                  >
-                    <ChatCircleTextIcon className="size-3" />
-                  </button>
-                )
-              : undefined
-          }
-          renderAnnotation={(...[annotation]) => {
-            const note = annotation.metadata
-            if (note.text !== undefined)
-              return (
-                <p className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
-                  {note.text}
-                </p>
-              )
-            const i = note.comment
-            const l = lines[i]
-            const where = `${l.file}:${l.line}`
-            const comment = comments.find((c) => c.index === i)
-            if (editing === i) {
-              if (draft.current?.index !== i)
-                draft.current = {
-                  index: i,
-                  text: comment?.text ?? "",
-                  focused: false,
+        >
+          {overview && <FileOverview files={files} onPick={jumpToFile} />}
+          <div
+            ref={box}
+            className={cn(
+              "diff-view min-w-0 overflow-hidden rounded-md ring-1 ring-foreground/10"
+            )}
+          >
+            <CodeView<Note, undefined>
+              ref={view}
+              items={items}
+              className={cn(
+                "overflow-auto",
+                fill ? "max-h-[70dvh]" : "max-h-[60vh]"
+              )}
+              options={options}
+              renderGutterUtility={
+                onComment
+                  ? (hovered, item) => (
+                      <CommentButton
+                        hovered={hovered}
+                        onPick={(range) => {
+                          const e = rangeOf(item.id, range)
+                          if (!e) return
+                          open(e)
+                          // What the comment covers stays marked while it's written.
+                          if (selectable)
+                            view.current?.setSelectedLines({
+                              id: item.id,
+                              range,
+                            })
+                        }}
+                        onDrag={
+                          selectable
+                            ? (range) =>
+                                view.current?.setSelectedLines({
+                                  id: item.id,
+                                  range,
+                                })
+                            : undefined
+                        }
+                        selection={() => {
+                          const sel = selectable
+                            ? view.current?.getSelectedLines()
+                            : null
+                          return sel?.id === item.id ? sel.range : undefined
+                        }}
+                      />
+                    )
+                  : undefined
+              }
+              renderAnnotation={(...[annotation]) => {
+                const note = annotation.metadata
+                if (note.text !== undefined)
+                  return (
+                    <p className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
+                      {note.text}
+                    </p>
+                  )
+                const i = note.comment
+                const comment = comments.find((c) => c.index === i)
+                if (editing?.index === i) {
+                  if (
+                    draft.current?.index !== i ||
+                    draft.current.start !== editing.start
+                  )
+                    draft.current = {
+                      index: i,
+                      start: editing.start,
+                      text:
+                        draft.current?.index === i
+                          ? draft.current.text
+                          : (comment?.text ?? ""),
+                      focused: false,
+                    }
+                  const d = draft.current
+                  const where = commentWhere(lines, {
+                    index: i,
+                    start: d.start,
+                    text: "",
+                  })
+                  return (
+                    <CommentEditor
+                      where={where}
+                      initial={d.text}
+                      focus={!d.focused}
+                      onFocused={() => (d.focused = true)}
+                      onChange={(text) => (d.text = text)}
+                      onSave={(text) => {
+                        set(i, text.trim(), d.start)
+                        close()
+                      }}
+                      onCancel={close}
+                    />
+                  )
                 }
-              const d = draft.current
-              return (
-                <CommentEditor
-                  where={where}
-                  initial={d.text}
-                  focus={!d.focused}
-                  onFocused={() => (d.focused = true)}
-                  onChange={(text) => (d.text = text)}
-                  onSave={(text) => {
-                    set(i, text.trim())
-                    close()
-                  }}
-                  onCancel={close}
-                />
-              )
-            }
-            if (!comment) return null
-            return (
-              <div
-                role="note"
-                aria-label={`Comment on ${where}`}
-                className="mx-2 my-1 flex items-start gap-2 rounded-md bg-background px-2 py-1.5 font-sans text-xs whitespace-normal ring-1 ring-foreground/10"
-              >
-                <ChatCircleTextIcon className="mt-0.5 shrink-0 text-muted-foreground" />
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  title="Edit the comment"
-                  onClick={() => setEditing(i)}
-                >
-                  {commentLabel && (
-                    <span className="block text-caption text-muted-foreground">
-                      {commentLabel} · line {l.line}
-                    </span>
-                  )}
-                  {comment.text}
-                </button>
-                {onComment && (
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="Remove the comment"
-                    onClick={() => set(i)}
+                if (!comment) return null
+                const where = commentWhere(lines, comment)
+                const l = lines[i]
+                return (
+                  <div
+                    role="note"
+                    aria-label={`Comment on ${where}`}
+                    className="mx-2 my-1 flex items-start gap-2 rounded-md bg-background px-2 py-1.5 font-sans text-xs whitespace-normal ring-1 ring-foreground/10"
                   >
-                    <XIcon />
-                  </Button>
-                )}
-              </div>
-            )
-          }}
-          renderCodeViewFooter={
-            footer.length
-              ? () => (
-                  <div className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
-                    {footer.map((text) => (
-                      <p key={text}>{text}</p>
-                    ))}
+                    <ChatCircleTextIcon className="mt-0.5 shrink-0 text-muted-foreground" />
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      title="Edit the comment"
+                      onClick={() => open({ index: i, start: comment.start })}
+                    >
+                      {(commentLabel || comment.start !== undefined) && (
+                        <span className="block text-caption text-muted-foreground">
+                          {[
+                            commentLabel,
+                            comment.start !== undefined
+                              ? `lines ${lines[comment.start]?.line}–${l.line}`
+                              : `line ${l.line}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      )}
+                      {comment.text}
+                    </button>
+                    {onComment && (
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label="Remove the comment"
+                        onClick={() => set(i)}
+                      >
+                        <XIcon />
+                      </Button>
+                    )}
                   </div>
                 )
-              : undefined
-          }
-        />
+              }}
+              renderCodeViewFooter={
+                footer.length
+                  ? () => (
+                      <div className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
+                        {footer.map((text) => (
+                          <p key={text}>{text}</p>
+                        ))}
+                      </div>
+                    )
+                  : undefined
+              }
+            />
+          </div>
+        </div>
       </div>
     </WorkerPoolContext.Provider>
+  )
+}
+
+/** The diff's files with what happened to each and their lines, jumping to one on a click. */
+function FileOverview({
+  files,
+  onPick,
+}: {
+  files: FileDiffMetadata[]
+  onPick: (fileNo: number) => void
+}) {
+  const all = files.map(counts)
+  const added = all.reduce((n, c) => n + c.added, 0)
+  const removed = all.reduce((n, c) => n + c.removed, 0)
+  return (
+    <nav
+      aria-label="Files in the diff"
+      className="grid max-h-40 min-w-0 content-start overflow-auto rounded-md py-1 ring-1 ring-foreground/10 @3xl:max-h-[70dvh]"
+    >
+      <p className="flex h-6 items-center gap-2 px-2.5 section-label text-muted-foreground">
+        Files
+        <span className="ml-auto font-mono text-caption tracking-normal normal-case">
+          {files.length} ·{" "}
+          <span className="text-emerald-600 dark:text-emerald-400">
+            +{added}
+          </span>{" "}
+          <span className="text-destructive">−{removed}</span>
+        </span>
+      </p>
+      <ul className="grid min-w-0">
+        {files.map((f, i) => {
+          const [mark, label] = changeLabels[f.type]
+          const dir = f.name.includes("/")
+            ? f.name.slice(0, f.name.lastIndexOf("/") + 1)
+            : ""
+          const base = f.name.slice(dir.length)
+          return (
+            <li key={i} className="min-w-0">
+              <button
+                type="button"
+                title={f.prevName ? `${f.prevName} → ${f.name}` : f.name}
+                className="flex min-h-6 w-full min-w-0 items-center gap-2 px-2.5 py-0.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                onClick={() => onPick(i)}
+              >
+                <span
+                  aria-label={label}
+                  className={cn(
+                    "w-3 shrink-0 text-center font-mono text-caption font-semibold",
+                    changeColors[f.type]
+                  )}
+                >
+                  {mark}
+                </span>
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-caption"
+                  dir="rtl"
+                >
+                  {/* Right-to-left keeps the file name visible when a long path is cut. */}
+                  <bdi>
+                    <span className="text-muted-foreground">{dir}</span>
+                    {base}
+                  </bdi>
+                </span>
+                <span className="shrink-0 font-mono text-caption">
+                  {all[i].added > 0 && (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      +{all[i].added}
+                    </span>
+                  )}{" "}
+                  {all[i].removed > 0 && (
+                    <span className="text-destructive">−{all[i].removed}</span>
+                  )}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
+
+type Hovered = () =>
+  { lineNumber: number; side?: unknown; annotationSide?: unknown } | undefined
+
+const pointOf = (h: NonNullable<ReturnType<Hovered>>) => ({
+  line: h.lineNumber,
+  side:
+    h.side === "deletions" ? ("deletions" as const) : ("additions" as const),
+})
+
+/**
+ * The line under a point of a file's diff, which draws its lines in a shadow root: the
+ * library's hovered line stays put while the pointer is over this button.
+ */
+function lineAt(x: number, y: number, inside: HTMLElement) {
+  let host = inside.parentElement
+  while (host && !host.shadowRoot) host = host.parentElement
+  const hit = host?.shadowRoot
+    ?.elementsFromPoint(x, y)
+    .find(
+      (n): n is HTMLElement =>
+        n instanceof HTMLElement &&
+        n.dataset.lineIndex !== undefined &&
+        (n.dataset.columnNumber ?? n.dataset.line) !== undefined
+    )
+  if (!hit) return undefined
+  return {
+    line: Number(hit.dataset.columnNumber ?? hit.dataset.line),
+    side: hit.dataset.lineType?.includes("deletion")
+      ? ("deletions" as const)
+      : ("additions" as const),
+  }
+}
+
+/**
+ * The button at the start of the hovered line. A click comments on the line, or on the
+ * selection it is on; pressing it and dragging over more lines comments on all of them.
+ */
+function CommentButton({
+  hovered,
+  onPick,
+  onDrag,
+  selection,
+}: {
+  hovered: Hovered
+  onPick: (range: SelectedLineRange) => void
+  onDrag?: (range: SelectedLineRange) => void
+  selection: () => SelectedLineRange | undefined
+}) {
+  const range = (
+    a: ReturnType<typeof pointOf>,
+    b: ReturnType<typeof pointOf>
+  ): SelectedLineRange => ({
+    start: a.line,
+    side: a.side,
+    end: b.line,
+    endSide: b.side,
+  })
+  /** A click on a line of the selection takes the selection. */
+  const pick = (at: ReturnType<typeof pointOf>, moved: boolean) => {
+    const sel = selection()
+    if (!moved && sel) {
+      const lo = Math.min(sel.start, sel.end)
+      const hi = Math.max(sel.start, sel.end)
+      if (at.line >= lo && at.line <= hi) return onPick(sel)
+    }
+    onPick(range(at, at))
+  }
+  return (
+    <button
+      type="button"
+      aria-label="Comment on this line"
+      title="Comment on this line, or drag over several"
+      className="relative z-10 grid size-4 touch-none place-items-center rounded-sm bg-primary text-primary-foreground"
+      onPointerDown={(e) => {
+        const h = hovered()
+        if (e.button !== 0 || !h || !onDrag) return
+        e.preventDefault()
+        const at = pointOf(h)
+        // Shift extends the selection to here, as on a line's number.
+        const sel = selection()
+        if (e.shiftKey && sel) {
+          onPick({ ...sel, end: at.line, endSide: at.side })
+          return
+        }
+        const anchor = at
+        let last = anchor
+        const button = e.currentTarget
+        const move = (ev: PointerEvent) => {
+          const now = lineAt(ev.clientX, ev.clientY, button)
+          if (!now) return
+          last = now
+          if (last.line !== anchor.line || last.side !== anchor.side)
+            onDrag(range(anchor, last))
+        }
+        const up = (ev: PointerEvent) => {
+          last = lineAt(ev.clientX, ev.clientY, button) ?? last
+          document.removeEventListener("pointermove", move)
+          document.removeEventListener("pointerup", up)
+          const moved = last.line !== anchor.line || last.side !== anchor.side
+          if (moved) onPick(range(anchor, last))
+          else pick(anchor, false)
+        }
+        document.addEventListener("pointermove", move)
+        document.addEventListener("pointerup", up)
+      }}
+      onClick={(e) => {
+        // A pointer's press was handled above; this is the keyboard, or no dragging.
+        if (e.detail !== 0 && onDrag) return
+        const h = hovered()
+        if (h) pick(pointOf(h), false)
+      }}
+    >
+      <ChatCircleTextIcon className="size-3" />
+    </button>
   )
 }
 

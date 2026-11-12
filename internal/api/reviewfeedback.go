@@ -135,6 +135,28 @@ func btoi(b bool) int {
 	return 0
 }
 
+func (s *Server) registerCommitDiff(api huma.API) {
+	type commitIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID of a git push"`
+		SHA string `path:"sha" pattern:"^[0-9a-f]{40}$" doc:"A commit the push's review lists"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getPushCommit", Method: http.MethodGet, Path: "/api/environments/{env}/approvals/{id}/commits/{sha}", Tags: []string{"git"},
+		Summary:     "One commit of a push and its diff",
+		Description: "The changes of one commit the push's review lists, from its first parent. 404 when the review doesn't list it or Studio no longer keeps it.",
+	}, func(ctx context.Context, in *commitIn) (*struct{ Body gitreview.CommitDiff }, error) {
+		if s.Git == nil {
+			return nil, huma.Error503ServiceUnavailable("git review is not available")
+		}
+		d, err := s.Git.CommitDiff(ctx, in.Env, in.ID, in.SHA)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &struct{ Body gitreview.CommitDiff }{d}, nil
+	})
+}
+
 func (s *Server) registerPushAgain(api huma.API) {
 	type againIn struct {
 		Env string `path:"env" doc:"Environment ID"`

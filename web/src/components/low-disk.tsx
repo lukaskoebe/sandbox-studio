@@ -29,7 +29,7 @@ export function lowDiskText(disks: Disk[]) {
  * What to do about each nearly full disk: agents stop when the home disk fills, and Docker's
  * builds and pulls fail when its disk does.
  */
-function advice(disks: Disk[]) {
+export function LowDiskAdvice({ disks }: { disks: Disk[] }) {
   const has = (name: Disk["name"]) => disks.some((d) => d.name === name)
   return (
     <>
@@ -74,7 +74,7 @@ export function LowDiskStatus({
     >
       <HardDriveIcon className="size-3 shrink-0 text-(--st-waiting-fg) dark:text-(--st-waiting)" />
       <span>
-        {lowDiskText(disks)}. {advice(disks)}
+        {lowDiskText(disks)}. <LowDiskAdvice disks={disks} />
       </span>
       {canCopyDisks(sandbox) && (
         <Button

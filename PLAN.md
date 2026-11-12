@@ -28,6 +28,22 @@ teammate's settings in the profile card's look (mock A of W3phXxqbindnbxXExQD2wx
 button in the header. Why Docker's images went on a rebase: they live on the Docker disk, which a
 new generation got empty from its template; **Keep Docker's images** now copies them.
 
+The next round of 2026-11-12, built: a file list beside every full-length diff, comments on a
+range of lines, and each commit's own diff in a push's review. A Docker disk read 0 B free when
+it was past 95%: the guest counted only the user's blocks, while Docker's daemon writes as root;
+it counts root's now, and Home's notice gives the advice for the disk that is full.
+
+Mocks for the rest await a pick (artifact QpwsQ47TkZgVksDpD4Yzji):
+
+- **The Changes tab.** A: split into **Files** and **Changes**, where Changes is git's view per
+  repository (branch, ahead, staged, not staged, untracked, each opening its diff; read-only), then
+  pushes waiting and what the thread changed. B: one tab renamed **Code** with a rail.
+  Recommended: A.
+- **Several models per teammate.** A: a default model and the models also offered in chats, with
+  a picker in the composer; a thread keeps its model, switched in place over ACP where the agent
+  can. B: every model of the provider, no list. Recommended: A; check ACP's session model on each
+  harness first.
+
 Measured:
 
 - **Faster Docker copies: nothing to tune in Studio.** A scratch VM (2 vCPUs, 2 GiB)

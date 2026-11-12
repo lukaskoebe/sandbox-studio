@@ -706,3 +706,155 @@ test("a push to a checked-out branch of a local repository updates its files", a
     rmSync(folder, { recursive: true, force: true })
   }
 })
+
+/**
+ * The middle of a diff row's number: a click there selects the line, a drag or shift-click
+ * several. The mouse moves by itself, as hover() waits out the comment button over a number.
+ */
+async function numberOf(sheet: Locator, row: Locator) {
+  // A jump scrolls smoothly: the row settles first.
+  let was = -1
+  await expect
+    .poll(async () => {
+      const y = (await row.boundingBox())?.y ?? -2
+      const settled = y === was
+      was = y
+      return settled
+    })
+    .toBe(true)
+  const index = await row.getAttribute("data-line-index")
+  const cell = sheet
+    .locator(`[data-column-number][data-line-index="${index}"]`)
+    .first()
+  await cell.scrollIntoViewIfNeeded()
+  const box = (await cell.boundingBox())!
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
+
+test("a diff lists its files to jump to, and a comment covers the lines dragged over", async ({
+  page,
+  api,
+  env,
+}) => {
+  const sheet = await reviewWithDiff(
+    { page, api, env },
+    "diff-files",
+    [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,3 +1,4 @@",
+      " one",
+      "-two",
+      "+TWO",
+      "+three",
+      " four",
+      "diff --git a/long.txt b/long.txt",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/long.txt",
+      "@@ -0,0 +1,300 @@",
+      ...Array.from({ length: 300 }, (_, i) => `+x ${i}`),
+      "diff --git a/z.txt b/z.txt",
+      "deleted file mode 100644",
+      "--- a/z.txt",
+      "+++ /dev/null",
+      "@@ -1 +0,0 @@",
+      "-gone",
+      "",
+    ].join("\n")
+  )
+
+  // The overview lists each file with its lines, and jumps to one.
+  const files = sheet.getByRole("navigation", { name: "Files in the diff" })
+  await expect(files.getByRole("listitem")).toHaveCount(3)
+  await expect(files).toContainText("3 · +302 −2")
+  const a = files.getByRole("button", { name: /src\/a\.ts/ })
+  await expect(a).toContainText("+2")
+  await expect(a).toContainText("−1")
+  await expect(files.getByRole("button", { name: /long\.txt/ })).toContainText(
+    "+300"
+  )
+  const gone = sheet.locator("[data-line]").filter({ hasText: /^gone$/ })
+  await expect(gone).not.toBeInViewport()
+  await files.getByRole("button", { name: /z\.txt/ }).click()
+  await expect(gone).toBeInViewport()
+  await a.click()
+
+  // Dragging over the numbers of three lines comments on all of them.
+  const row = (text: RegExp) =>
+    sheet.locator("[data-line]").filter({ hasText: text }).first()
+  const one = await numberOf(sheet, row(/^one$/))
+  const three = await numberOf(sheet, row(/^three$/))
+  await page.mouse.move(one.x, one.y)
+  await page.mouse.down()
+  await page.mouse.move(three.x, three.y, { steps: 5 })
+  await page.mouse.up()
+  await sheet
+    .getByRole("textbox", { name: "Comment on src/a.ts:1–3" })
+    .fill("Keep these together")
+  await sheet.getByRole("button", { name: "Save comment" }).click()
+  const note = sheet.getByRole("note", { name: "Comment on src/a.ts:1–3" })
+  await expect(note).toContainText("lines 1–3")
+  await expect(note).toContainText("Keep these together")
+
+  // A click and a shift-click select a range too.
+  const x2 = await numberOf(sheet, row(/^x 2$/))
+  await page.mouse.click(x2.x, x2.y)
+  const x5 = await numberOf(sheet, row(/^x 5$/))
+  await page.keyboard.down("Shift")
+  await page.mouse.click(x5.x, x5.y)
+  await page.keyboard.up("Shift")
+  await expect(
+    sheet.getByRole("textbox", { name: "Comment on long.txt:3–6" })
+  ).toBeVisible()
+  await sheet.getByRole("button", { name: "Cancel" }).click()
+
+  // Comments names the range, and the agent's note quotes its lines.
+  await sheet.getByRole("tab", { name: /^Comments/ }).click()
+  await expect(
+    sheet.getByRole("list", { name: "Line comments" })
+  ).toContainText("src/a.ts:1–3")
+  const decided = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/decide")
+  )
+  await sheet.getByRole("button", { name: "Reject" }).click()
+  const body = (await decided).postDataJSON() as { note?: string }
+  expect(body.note).toContain("src/a.ts:1–3, on these lines:")
+  expect(body.note).toContain("   one\n  -two\n  +TWO\n  +three")
+  expect(body.note).toContain("Keep these together")
+})
+
+test("a push's commits open to their own changes", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const id = await api.createSandbox(sandboxName("commits"))
+  await api.guestReady(id)
+  const pushed = await api.push(id, {
+    url: forge.url,
+    file: "hello.txt",
+    content: "hello from one commit\n",
+    message: "Add a greeting",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+  await page.goto(`/e/${env}`)
+  await approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+    .getByRole("button", { name: "Review" })
+    .click()
+  const sheet = page.getByRole("dialog")
+  await sheet.getByRole("tab", { name: /^Commits/ }).click()
+  const panel = sheet.getByRole("tabpanel")
+  await panel
+    .getByRole("button", { name: /^Changes of .*: Add a greeting$/ })
+    .click()
+  await expect(panel).toContainText("1 file")
+  await expect(
+    panel.locator("[data-line]").filter({ hasText: "hello from one commit" })
+  ).toBeVisible()
+})

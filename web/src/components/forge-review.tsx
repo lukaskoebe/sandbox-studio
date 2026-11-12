@@ -436,6 +436,8 @@ export function ForgeReview({ approval }: { approval: Approval }) {
           comments={comments}
           onComment={pending ? setComments : undefined}
           fill
+          // A forge's comment is on one line here; a range would need its own fields.
+          ranges={false}
           commentLabel={draft.teammate ? `${draft.teammate}'s draft` : "Draft"}
         />
         {elsewhere.length > 0 && (
