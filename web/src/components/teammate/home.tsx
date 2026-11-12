@@ -157,7 +157,7 @@ export function TeammateHome({
   /** Whether the screen shows the browser, whose questions then show there. */
   watching: boolean
   onThread: (chat: Chat) => void
-  onProfile: (view: "card" | "tasks" | "memory") => void
+  onProfile: (view: "card" | "tasks" | "memory" | "settings") => void
   onWatch: () => void
   /** Opens a push waiting for review on the screen's Changes. */
   onReview: (a: Approval) => void

@@ -248,7 +248,7 @@ export function ProfileCard({
               onClick={() => onOpen("settings", "delete")}
             >
               <TrashIcon />
-              Remove {teammate.name}
+              Delete {teammate.name}
             </Button>
           </div>
         </ScrollArea>

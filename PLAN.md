@@ -17,42 +17,39 @@ says.
 
 ## Next
 
-The feedback round of 2026-11-12. Its obvious fixes were released in v0.18.0: a new
-environment opening at once, renaming environments, `/tmp` in Files, terminal links, rebases keeping
-the tools and optionally Docker, git's setup on computers without a teammate, the diff view's
-scrolling, the last computer remembered, and the catalog's fix text on every lifecycle action.
-Since then: the `git_pull_request_create` tool, pushes to a checked-out branch of a local
-repository, which update its files, a teammate per copy of a base, with the owner changeable
-while a computer is stopped, deleting an environment after typing its name, and module service
-workers in previews. Why Docker's images went on a rebase: they live on the Docker disk, which a
+The feedback round of 2026-11-12. Its obvious fixes were released in v0.18.0: a new environment
+opening at once, renaming environments, `/tmp` in Files, terminal links, rebases keeping the tools
+and optionally Docker, git's setup on computers without a teammate, the diff view's scrolling, the
+last computer remembered, and the catalog's fix text on every lifecycle action. Since then: the
+`git_pull_request_create` tool, pushes to a checked-out branch of a local repository, which update
+its files, a teammate per copy of a base, with the owner changeable while a computer is stopped,
+deleting an environment after typing its name, module service workers in previews, and the
+teammate's settings in the profile card's look (mock A of W3phXxqbindnbxXExQD2wx), with a Settings
+button in the header. Why Docker's images went on a rebase: they live on the Docker disk, which a
 new generation got empty from its template; **Keep Docker's images** now copies them.
 
-To build, in this order:
+Measured:
 
-1. **Faster Docker copies: measured, nothing to tune in Studio.** A scratch VM (2 vCPUs, 2 GiB)
-   copied a 7 GB tree shaped like overlay2 (40,000 files over 12 layers, hardlinks, whiteouts,
-   opaque xattrs). Cold, the size pre-walk took 7 s, the export into nothing 40 s (175 MB/s in,
-   3.3 GB zstd out), and decoding the archive 26 s. Writing that same archive to a disk took
-   392 s, and the import ran out of the test disk. The cause was this host's disk, not the copy:
-   a plain `dd` of 1 GiB on the host, with no VM, took 143 s, and 256 MB took 53 s (5–7 MB/s),
-   with the NVMe at 80 °C, 88% full and 80% IO pressure. A copy writes every byte once, as
-   `docker load` does, so it can't beat the disk. Copying the Docker disk image on the host
-   would write as much or more, since ext4 has no reflinks. If a copy is slow again, check
-   `cat /proc/pressure/io` and the drive's temperature first; and compare `docker system df`
-   with what `docker save` wrote, since the copy also carries build cache, containers and volumes.
-2. **The agent settings**: the profile card's small menu and the sheet look unrelated, and the menu
-   is hard to find. Mocks A–C are in the artifact W3phXxqbindnbxXExQD2wx, each with a caret on the
-   name and a Settings button in the header; I'd pick A (the sheet takes the card's rows). Waits
-   for your pick.
+- **Faster Docker copies: nothing to tune in Studio.** A scratch VM (2 vCPUs, 2 GiB)
+  copied a 7 GB tree shaped like overlay2 (40,000 files over 12 layers, hardlinks, whiteouts,
+  opaque xattrs). Cold, the size pre-walk took 7 s, the export into nothing 40 s (175 MB/s in,
+  3.3 GB zstd out), and decoding the archive 26 s. Writing that same archive to a disk took
+  392 s, and the import ran out of the test disk. The cause was this host's disk, not the copy:
+  a plain `dd` of 1 GiB on the host, with no VM, took 143 s, and 256 MB took 53 s (5–7 MB/s),
+  with the NVMe at 80 °C, 88% full and 80% IO pressure. A copy writes every byte once, as
+  `docker load` does, so it can't beat the disk. Copying the Docker disk image on the host
+  would write as much or more, since ext4 has no reflinks. If a copy is slow again, check
+  `cat /proc/pressure/io` and the drive's temperature first; and compare `docker system df`
+  with what `docker save` wrote, since the copy also carries build cache, containers and volumes.
 
 Needs your call:
 
 - **An AI provider for a computer without a teammate.** A chat needs a teammate today (its soul,
   memory and rules). Either a teammate-less chat on a provider you pick, with no memory, or keep
   pointing to "assign a teammate". The first is the smaller change; I'd wait for a second ask.
-- **Stealth mode with the host's Chrome user agent.** Only the user agent would change: the
-  platform, fonts, WebGL and client hints still say Linux, and a mismatch is easier to spot than a
-  plain Linux Chrome. I'd at most match the host's Chrome version, not its OS.
+- **Stealth mode with the host's Chrome user agent**: no, as agreed. Only the user agent would
+  change while the platform, fonts, WebGL and client hints still say Linux, and that mismatch is
+  easier to spot than a plain Linux Chrome.
 - **Wails' self-update tutorial**: no. It is for Wails v2 and replaces the binary in place; Studio's
   updater already checks attestations, backs up, rolls back and updates the companions →
   [updates](docs/updates.md).

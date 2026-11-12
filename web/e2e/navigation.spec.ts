@@ -55,6 +55,19 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
   await page.keyboard.press("Escape")
   await expect(settings).toBeHidden()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
+
+  // The header's Settings opens them at once, and a row of the card opens the same row there.
+  await page.getByRole("button", { name: `${name}'s settings` }).click()
+  await expect(page).toHaveURL(/[?&]profile=settings/)
+  await expect(settings).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(settings).toBeHidden()
+  await profile.click()
+  await card.getByRole("button", { name: /^New hosts/ }).click()
+  await expect(page).toHaveURL(/[?&]open=network/)
+  await expect(
+    settings.getByRole("button", { name: /^New hosts/ })
+  ).toHaveAttribute("aria-expanded", "true")
 })
 
 test("a collapsed sidebar opens Home and every teammate", async ({

@@ -146,13 +146,16 @@ settings card) and `from=setup`. Esc closes the profile or a menu first, then le
 - A thread: Back to the teammate, its title and state, and ⋯ to continue it in the agent's
   terminal or delete it; then the chat and its composer. Its changes and terminal show on the
   screen.
-- The profile: the name opens a card with the open tasks, what it knows, its computers and its
-  settings; each opens as a sheet. The settings sheet has one card per part, closed, with what
-  it is set to: identity, agent, git identity, approvals, soul, check-ins, network level,
-  browser, secrets (its own, its sandboxes' and the environment's it inherits, with which
-  replaces which; Add secret preselects the teammate's scope) and delete. `?open=` names the
-  open card (`components/disclosure-card.tsx`). One bar, "Unsaved changes · Discard · Save",
-  saves the changes of every card, check-ins included, and shows only while there are some;
+- The profile: the name, with a caret, opens a card with the open tasks, what it knows, its
+  computers and its settings; each opens as a sheet. **Settings** at the end of the header opens
+  the settings sheet at once. The sheet uses the card's rows, an icon, the label, what it is
+  set to and a caret, each opening to its fields underneath, under the card's section labels:
+  Profile (identity, agent, git identity, approvals, soul), Routine and access (check-ins, new
+  hosts, browser, secrets: its own, its sandboxes' and the environment's it inherits, with
+  which replaces which; Add secret preselects the teammate's scope), then delete. A setting has
+  the same name on the card and in the sheet. `?open=` names the open row, which a row of the
+  card opens and scrolls to (`components/disclosure-row.tsx`). One bar, "Unsaved changes · Discard · Save",
+  saves the changes of every row, check-ins included, and shows only while there are some;
   leaving with changes, or closing the sheet, asks first (`components/save-bar.tsx`). Switches and selects that save
   as they change (check-ins on or off, network level, browser) stay as they are.
 

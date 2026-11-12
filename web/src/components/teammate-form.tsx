@@ -9,7 +9,7 @@ import {
   SparkleIcon,
   type Icon,
 } from "@phosphor-icons/react"
-import { DisclosureCard } from "@/components/disclosure-card"
+import { DisclosureRow } from "@/components/disclosure-row"
 import { useSavePart } from "@/components/save-bar"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
@@ -115,8 +115,8 @@ export function TeammateForm({
   prefill?: { name?: string; role?: string }
   onSaved: () => void
   /**
-   * Shows each section as a card that opens to its fields, with the open one named here. In a
-   * SaveBar the page's bar saves the changes; otherwise the open card has a Save. Without it the
+   * Shows each section as a row that opens to its fields, with the open one named here. In a
+   * SaveBar the page's bar saves the changes; otherwise the open row has a Save. Without it the
    * sections follow each other with one Save.
    */
   sections?: { open?: string; onOpen: (id: string | undefined) => void }
@@ -298,7 +298,7 @@ export function TeammateForm({
   return (
     <FormSections.Provider value={sections && { ...sections, saveRow }}>
       <form
-        className={cn("grid grid-cols-1", sections ? "gap-2.5" : "gap-6")}
+        className={cn("grid grid-cols-1", sections ? "gap-0.5" : "gap-6")}
         onSubmit={(e) => {
           e.preventDefault()
           submit()
@@ -616,7 +616,7 @@ const FormSections = createContext<
 
 /**
  * A group of fields under a section title, the same sections as the teammate's overview; or,
- * in a teammate's settings, a card with the section's summary that opens to them.
+ * in a teammate's settings, a row with the section's summary that opens to them.
  */
 function FormSection({
   id,
@@ -636,8 +636,9 @@ function FormSection({
   const sections = useContext(FormSections)
   if (sections)
     return (
-      <DisclosureCard
+      <DisclosureRow
         id={`teammate-${id}`}
+        icon={icon}
         title={title}
         summary={summary}
         open={sections.open === id}
@@ -645,7 +646,7 @@ function FormSection({
       >
         {children}
         {sections.saveRow}
-      </DisclosureCard>
+      </DisclosureRow>
     )
   return (
     <section className="grid gap-4">

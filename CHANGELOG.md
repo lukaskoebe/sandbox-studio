@@ -18,6 +18,10 @@
   disks, templates, teammates, chats, memory, providers, secrets and rules. Studio refuses while
   one of its computers is busy, and the last environment can't be deleted
   (`DELETE /api/environments/{env}`).
+- A teammate's settings look like its profile card: rows with an icon, the current value and a
+  caret, grouped under **Profile** and **Routine and access**, each opening to its fields in
+  place. A setting has the same name in both (**New hosts**, not Network). The name in the
+  header has a caret, and **Settings** at the end of the header opens the settings directly.
 - A module service worker, such as the one Vite's PWA plugin registers in development, installs in
   a preview. Chrome fetches its script and imports without cookies, so the preview refused them
   with 403. Previews' pages now load a small Studio script that gives the worker a capability

@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router"
+import { CaretDownIcon, GearIcon } from "@phosphor-icons/react"
 import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
 import { Readiness } from "@/components/teammate-readiness"
+import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
   activityDetail,
@@ -11,8 +13,8 @@ import { $api, type Teammate } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 
 /**
- * The top of the teammate's home: who it is, the agent it runs and what it does now. The name
- * opens its profile.
+ * The top of the teammate's home: who it is, the agent it runs and what it does now. The name,
+ * with a caret that says it opens, opens its profile card; Settings, at the end, its settings.
  */
 export function TeammateHeader({
   env,
@@ -21,7 +23,7 @@ export function TeammateHeader({
 }: {
   env: string
   teammate: Teammate
-  onProfile: (view: "card") => void
+  onProfile: (view: "card" | "settings") => void
 }) {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
@@ -45,8 +47,12 @@ export function TeammateHeader({
           className="size-7 text-caption"
         />
         <span className="grid min-w-0 leading-tight">
-          <span className="truncate font-heading text-sm font-semibold">
-            {teammate.name}
+          <span className="flex min-w-0 items-center gap-1 font-heading text-sm font-semibold">
+            <span className="truncate">{teammate.name}</span>
+            <CaretDownIcon
+              aria-hidden
+              className="size-3 shrink-0 text-muted-foreground"
+            />
           </span>
           <span className="truncate text-caption text-muted-foreground">
             {[teammate.role, harnessLabels[teammate.harness]]
@@ -85,6 +91,16 @@ export function TeammateHeader({
             )}
           </span>
         </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onProfile("settings")}
+          aria-label={`${teammate.name}'s settings`}
+          title={`${teammate.name}'s settings`}
+        >
+          <GearIcon />
+          <span className="hidden sm:inline">Settings</span>
+        </Button>
       </div>
     </header>
   )

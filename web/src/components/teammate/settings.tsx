@@ -2,7 +2,14 @@ import { useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { TrashIcon } from "@phosphor-icons/react"
+import {
+  BrowserIcon,
+  ClockIcon,
+  GlobeIcon,
+  KeyIcon,
+  TrashIcon,
+  type Icon,
+} from "@phosphor-icons/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +24,7 @@ import {
 import { BackToSetup } from "@/components/back-to-setup"
 import { BrowserSettings } from "@/components/browser-settings"
 import { SaveBar } from "@/components/save-bar"
-import { DisclosureCard } from "@/components/disclosure-card"
+import { DisclosureGroup, DisclosureRow } from "@/components/disclosure-row"
 import {
   TeammateLevelPicker,
   securityLevels,
@@ -32,9 +39,10 @@ import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 import { heartbeatSentence } from "@/lib/tasks"
 
 /**
- * A teammate's settings as cards, each with a one-line summary, that open one at a time: who
- * it is, which agent it runs, the git identity it commits with, its approvals and soul, its
- * check-ins, network level, browser and secrets. The open card is in the URL: ?open=checkins.
+ * A teammate's settings as rows in the profile card's look, each with its current value, that
+ * open one at a time: who it is, which agent it runs, the git identity it commits with, its
+ * approvals and soul; then its check-ins, what it does about new hosts, its browser and
+ * secrets. The open row is in the URL: ?open=checkins.
  */
 export function TeammateSettings({
   env,
@@ -56,8 +64,14 @@ export function TeammateSettings({
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  const card = (section: string, title: string, summary: ReactNode) => ({
+  const row = (
+    section: string,
+    icon: Icon,
+    title: string,
+    summary: ReactNode
+  ) => ({
     id: `teammate-${section}`,
+    icon,
     title,
     summary,
     open: open === section,
@@ -70,70 +84,82 @@ export function TeammateSettings({
   return (
     // Closing the sheet leaves the settings as going to another page does.
     <SaveBar leaves={(search) => search.profile !== "settings"}>
-      <div className="grid max-w-3xl grid-cols-1 gap-2.5">
+      <div className="grid max-w-3xl grid-cols-1">
         {fromSetup && <BackToSetup step="teammate" />}
-        <TeammateForm
-          key={teammate.id}
-          env={env}
-          teammate={teammate}
-          providers={providers.data}
-          onSaved={() => toast.success("Teammate saved")}
-          sections={{ open, onOpen: setOpen }}
-        />
-        <DisclosureCard
-          {...card(
-            "checkins",
-            "Check-ins",
-            teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
-          )}
-        >
-          <TeammateHeartbeat env={env} teammate={teammate} />
-        </DisclosureCard>
-        <DisclosureCard
-          {...card(
-            "network",
-            "Network",
-            <LevelSummary env={env} teammate={teammate} />
-          )}
-        >
-          <p className="text-xs text-muted-foreground">
-            The security level of this teammate's sandboxes: what happens when
-            one connects to a host that no rule covers.
-          </p>
-          <TeammateLevelPicker env={env} teammate={teammate} />
-        </DisclosureCard>
-        <DisclosureCard
-          {...card(
-            "browser",
-            "Browser",
-            teammate.browserStealth ? "Stealth mode on" : "Stealth mode off"
-          )}
-        >
-          <BrowserSettings env={env} teammate={teammate} />
-        </DisclosureCard>
-        <DisclosureCard
-          {...card(
-            "secrets",
-            "Secrets",
-            "Its own, its sandboxes' and the environment's"
-          )}
-        >
-          <TeammateSecrets env={env} teammate={teammate} />
-        </DisclosureCard>
-        <DisclosureCard
-          {...card(
-            "delete",
-            `Delete ${teammate.name}`,
-            "Its sandboxes must be deleted first"
-          )}
-        >
-          <p className="text-xs text-muted-foreground">
-            Network rules scoped to it go with it.
-          </p>
-          <div>
-            <DeleteTeammate env={env} teammate={teammate} />
-          </div>
-        </DisclosureCard>
+        <DisclosureGroup title="Profile">
+          <TeammateForm
+            key={teammate.id}
+            env={env}
+            teammate={teammate}
+            providers={providers.data}
+            onSaved={() => toast.success("Teammate saved")}
+            sections={{ open, onOpen: setOpen }}
+          />
+        </DisclosureGroup>
+        <DisclosureGroup title="Routine and access">
+          <DisclosureRow
+            {...row(
+              "checkins",
+              ClockIcon,
+              "Check-ins",
+              teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
+            )}
+          >
+            <TeammateHeartbeat env={env} teammate={teammate} />
+          </DisclosureRow>
+          <DisclosureRow
+            {...row(
+              "network",
+              GlobeIcon,
+              "New hosts",
+              <LevelSummary env={env} teammate={teammate} />
+            )}
+          >
+            <p className="text-xs text-muted-foreground">
+              The security level of this teammate's sandboxes: what happens when
+              one connects to a host that no rule covers.
+            </p>
+            <TeammateLevelPicker env={env} teammate={teammate} />
+          </DisclosureRow>
+          <DisclosureRow
+            {...row(
+              "browser",
+              BrowserIcon,
+              "Browser",
+              teammate.browserStealth ? "Stealth mode on" : "Stealth mode off"
+            )}
+          >
+            <BrowserSettings env={env} teammate={teammate} />
+          </DisclosureRow>
+          <DisclosureRow
+            {...row(
+              "secrets",
+              KeyIcon,
+              "Secrets",
+              "Its own, its sandboxes' and the environment's"
+            )}
+          >
+            <TeammateSecrets env={env} teammate={teammate} />
+          </DisclosureRow>
+        </DisclosureGroup>
+        <div className="pt-3">
+          <DisclosureRow
+            {...row(
+              "delete",
+              TrashIcon,
+              `Delete ${teammate.name}`,
+              "Its sandboxes must be deleted first"
+            )}
+            destructive
+          >
+            <p className="text-xs text-muted-foreground">
+              Network rules scoped to it go with it.
+            </p>
+            <div>
+              <DeleteTeammate env={env} teammate={teammate} />
+            </div>
+          </DisclosureRow>
+        </div>
       </div>
     </SaveBar>
   )
