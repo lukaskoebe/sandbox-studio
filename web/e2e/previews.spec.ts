@@ -180,6 +180,58 @@ test("previews: a shown preview renews its login", async ({
   }
 })
 
+// The desktop app's webview keeps no cookie for a framed preview, so in the app the screen
+// frames a host that carries the preview's key, which needs none.
+test("previews: in the app, a framed preview's host carries its key instead of a cookie", async ({
+  page,
+  api,
+  env,
+}) => {
+  const previews = await api.json<{ enabled: boolean }>(
+    "GET",
+    "/api/system/previews"
+  )
+  await api.json("PUT", "/api/system/previews", { enabled: true })
+  try {
+    const id = await api.createSandbox(sandboxName("keyed"))
+    await api.guestReady(id)
+    await page.addInitScript(() => {
+      Object.assign(window, {
+        webkit: { messageHandlers: { external: { postMessage: () => {} } } },
+      })
+    })
+    await page.goto(`/e/${env}/sandboxes/${id}?tab=preview`)
+    const element = page.locator('iframe[title="Preview of port 3000"]')
+    await expect(
+      element.contentFrame().getByText(/Preview of sandbox/)
+    ).toBeVisible()
+    const frame = (await (await element.elementHandle()).contentFrame())!
+    const host = new URL(frame.url()).host
+    expect(host).toMatch(new RegExp(`^3000-${id}-[a-z2-7]{26}\\.localhost:`))
+    // Without any cookie of the preview's, it still answers, and keeps the same host.
+    await page.context().clearCookies({ domain: new URL(frame.url()).hostname })
+    expect(
+      await frame.evaluate(async () => (await fetch("/api/items")).status)
+    ).toBe(200)
+    expect(
+      (await api.json<{ url: string }>(
+        "POST",
+        `/api/environments/${env}/sandboxes/${id}/previews/3000/open?embed=true&keyed=true`
+      ))!.url
+    ).toContain(`//${host}/`)
+    // Another key gets nothing.
+    const other = await page.context().newPage()
+    const wrong = await other.goto(
+      `http://3000-${id}-${"a".repeat(26)}.localhost:${new URL(frame.url()).port}/`
+    )
+    expect(wrong!.status()).toBe(403)
+  } finally {
+    await api.json("PUT", "/api/system/previews", {
+      enabled: previews!.enabled,
+    })
+  }
+})
+
 // Previews are off until the user turns them on in Settings → General; a computer's screen
 // has a Preview tab only then.
 test("previews: the screen offers them once Settings turns them on", async ({

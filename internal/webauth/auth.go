@@ -222,6 +222,19 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			if keyed, valid := a.keyedHost(host); keyed {
+				// The host's key stands in for the cookie (keyed.go); a wrong one gets nothing.
+				if !valid {
+					http.Error(w, "Open this preview from Sandbox Studio.", http.StatusForbidden)
+					return
+				}
+				if path == WorkerPatchPath {
+					a.serveWorkerPatch(w, host)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
 			if !a.validCookie(r, PreviewCookie, "preview", host) && !a.validFrameCookie(r, host) {
 				http.Error(w, "Open this preview from Sandbox Studio.", http.StatusForbidden)
 				return

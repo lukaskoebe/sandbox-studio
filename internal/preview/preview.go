@@ -23,7 +23,9 @@ import (
 // DialFunc connects to a loopback port inside a sandbox.
 type DialFunc func(ctx context.Context, sandboxID string, port int) (net.Conn, error)
 
-// Parse extracts the sandbox ID and port from a preview Host header.
+// Parse extracts the sandbox ID and port from a preview Host header:
+// <port>-<sandbox-id>.localhost, or <port>-<sandbox-id>-<key>.localhost for a preview whose
+// host carries its key (webauth.Auth.KeyedHost).
 func Parse(hostport string) (id string, port int, ok bool) {
 	host := hostport
 	if h, _, err := net.SplitHostPort(hostport); err == nil {
@@ -37,11 +39,23 @@ func Parse(hostport string) (id string, port int, ok bool) {
 	if !ok || id == "" {
 		return "", 0, false
 	}
+	if i, key, keyed := strings.Cut(id, "-"); keyed {
+		if i == "" || key == "" || strings.Contains(key, "-") {
+			return "", 0, false
+		}
+		id = i
+	}
 	port, err := strconv.Atoi(p)
 	if err != nil || port <= 0 || port > 65535 {
 		return "", 0, false
 	}
 	return id, port, true
+}
+
+// keyed reports whether a preview host carries its key.
+func keyed(hostport string) bool {
+	host, _, _ := strings.Cut(hostport, ".")
+	return strings.Count(host, "-") == 2
 }
 
 // CountFunc is told of each request a preview answered, with the status it answered; 0 is a
@@ -68,6 +82,10 @@ func Route(dial DialFunc, count CountFunc, next http.Handler) http.Handler {
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			filterGuestCookies(resp.Header)
+			if keyed(resp.Request.Host) && resp.Header.Get("Referrer-Policy") == "" {
+				// The host is the preview's key: it goes to no other site in a Referer.
+				resp.Header.Set("Referrer-Policy", "same-origin")
+			}
 			token := webauth.WorkerToken(resp.Request.Context())
 			if isWorkerScript(resp.Request) || token != "" {
 				return guardWorker(resp, isWorkerScript(resp.Request), token)

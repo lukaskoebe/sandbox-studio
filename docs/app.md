@@ -18,7 +18,9 @@ server is still the product, and the app is a window and a tray around it.
   still starting, as when the app is opened again at once, waits up to a minute for it to
   answer rather than failing on the data directory it holds.
 - **It loads Studio's own address**, not an embedded copy of the UI, so cookies, the event
-  stream and `*.localhost` previews behave as in a browser. It opens a fresh one-time link
+  stream and `*.localhost` previews behave as in a browser. A framed preview is the
+  exception: WebKit keeps no cookie in a frame from another site over http, so the panel
+  frames the preview's keyed host instead ([api.md](api.md)). It opens a fresh one-time link
   from `studio login-url` on every start, as WebKitGTK keeps no cookies across restarts.
   The window's own page ("Starting Studio…", or why Studio didn't start) is a `data:` URL,
   not Wails' HTML option, which the window applies after its URL: a Studio that answered

@@ -18934,6 +18934,16 @@
             }
           },
           {
+            "description": "For a webview that keeps no cookie for a framed preview: the URL's host carries the preview's key, which lets it in without one, and stays the same for the preview",
+            "explode": false,
+            "in": "query",
+            "name": "keyed",
+            "schema": {
+              "description": "For a webview that keeps no cookie for a framed preview: the URL's host carries the preview's key, which lets it in without one, and stays the same for the preview",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "The page to land on after the login, a path on the preview's host such as /login; the root when empty",
             "explode": false,
             "in": "query",

@@ -11912,6 +11912,8 @@ export interface operations {
                 fresh?: boolean;
                 /** @description Only renew the preview's cookies: the login answers with an empty page instead of the preview */
                 renew?: boolean;
+                /** @description For a webview that keeps no cookie for a framed preview: the URL's host carries the preview's key, which lets it in without one, and stays the same for the preview */
+                keyed?: boolean;
                 /** @description The page to land on after the login, a path on the preview's host such as /login; the root when empty */
                 path?: string;
             };

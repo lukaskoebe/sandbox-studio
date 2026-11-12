@@ -20,13 +20,18 @@ export type PreviewOpen = {
   renew?: boolean
 }
 
-/** The one-time login URL of a sandbox port's preview; every load needs a new one. */
+/**
+ * The one-time login URL of a sandbox port's preview; every load needs a new one. The desktop
+ * app's webview keeps no cookie for a framed preview, so there a framed one comes on a host
+ * that carries the preview's key instead (keyed, docs/app.md).
+ */
 export async function previewLoginURL(
   env: string,
   id: string,
   port: number,
   { embed = false, fresh = false, path, renew = false }: PreviewOpen = {}
 ): Promise<string> {
+  const keyed = embed && inApp
   const { data, error, response } = await fetchClient.POST(
     "/api/environments/{env}/sandboxes/{id}/previews/{port}/open",
     {
@@ -36,6 +41,7 @@ export async function previewLoginURL(
           embed || fresh || path || renew
             ? {
                 ...(embed && { embed }),
+                ...(keyed && { keyed }),
                 ...(fresh && { fresh }),
                 ...(path && { path }),
                 ...(renew && { renew }),

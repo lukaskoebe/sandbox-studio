@@ -52,6 +52,15 @@ from other local users and from web pages:
   with `Sec-Fetch-Site: same-origin` or `Sec-Fetch-Mode: navigate`, which the preview's own
   pages and worker send and another site's requests can't (browsers set those headers);
   its signature is of its own kind, so it can't stand in for `studio_preview`.
+- The desktop app's webview keeps no cookie for a framed preview at all: WebKitGTK's libsoup
+  refuses SameSite=None without Secure and Secure over http, `*.localhost` included, and
+  macOS's WKWebView blocks third-party cookies. So the app's panel asks for `keyed=1` and frames
+  `<port>-<id>-<key>.localhost`, whose first label ends in the preview's key: 128 bits of a MAC
+  of the plain host and port under the install key (`internal/webauth/keyed.go`). The gate lets
+  in whatever comes to that host with the right key, no cookie needed, and refuses a wrong one.
+  The key stays the same for a preview, so its origin and storage do too; it is as good as a
+  login for that one preview, for whoever learns the address. Such a preview's responses get
+  `Referrer-Policy: same-origin` unless the app sets one, so the host doesn't go to other sites.
 - A module service worker's script and imports come without cookies; they carry a capability
   in their URL instead, which the gate accepts only on the browser's own worker fetches →
   [guest agent](guest-agent.md#terminals-and-previews).

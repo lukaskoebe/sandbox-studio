@@ -28,6 +28,11 @@ func TestParse(t *testing.T) {
 		"99999-abc.localhost":     {},
 		"3000-.localhost":         {},
 		"a.3000-abc.localhost":    {},
+		// A host that carries its key; webauth checks the key.
+		"3000-abc-k3y.localhost:7878": {"abc", 3000, true},
+		"3000-abc-.localhost":         {},
+		"3000--k3y.localhost":         {},
+		"3000-abc-k-y.localhost":      {},
 	} {
 		id, port, ok := Parse(host)
 		if id != want.id || port != want.port || ok != want.ok {
@@ -61,6 +66,17 @@ func TestRoute(t *testing.T) {
 	if body := rec.Body.String(); body != "guest says hi to 5173-sb1.localhost:7878" || gotID != "sb1" || gotPort != 5173 {
 		t.Fatalf("preview: %d %q via %s:%d", rec.Code, body, gotID, gotPort)
 	}
+
+	if rec.Header().Get("Referrer-Policy") != "" {
+		t.Fatalf("a plain preview host got a Referrer-Policy: %q", rec.Header().Get("Referrer-Policy"))
+	}
+	// A host that carries its key reaches the same sandbox, and sends it to no other site.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "http://5173-sb1-k3y.localhost:7878/x", nil))
+	if gotID != "sb1" || gotPort != 5173 || rec.Header().Get("Referrer-Policy") != "same-origin" {
+		t.Fatalf("keyed preview: %d via %s:%d, Referrer-Policy %q", rec.Code, gotID, gotPort, rec.Header().Get("Referrer-Policy"))
+	}
+	counted = counted[:1]
 
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "http://localhost:7878/", nil))

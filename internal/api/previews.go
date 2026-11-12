@@ -21,6 +21,8 @@ type previewOpenPath struct {
 	Fresh bool `query:"fresh" doc:"Clear the preview's caches and storage, its service workers among them, as it logs in"`
 	// Renew is for the preview panel's hidden frame, which keeps a shown preview's login.
 	Renew bool `query:"renew" doc:"Only renew the preview's cookies: the login answers with an empty page instead of the preview"`
+	// Keyed is for the desktop app's preview panel, whose webview keeps no cookie in a frame.
+	Keyed bool `query:"keyed" doc:"For a webview that keeps no cookie for a framed preview: the URL's host carries the preview's key, which lets it in without one, and stays the same for the preview"`
 	// Path is for a link the agent wrote, such as localhost:5173/login.
 	Path string `query:"path" maxLength:"2000" doc:"The page to land on after the login, a path on the preview's host such as /login; the root when empty"`
 }
@@ -65,6 +67,11 @@ func (s *Server) registerPreviews(api huma.API) {
 		u, err := url.Parse(s.previewURL(in.ID, in.Port))
 		if err != nil {
 			return nil, apiError(err)
+		}
+		if in.Keyed {
+			if u.Host, err = s.Auth.KeyedHost(u.Host); err != nil {
+				return nil, apiError(err)
+			}
 		}
 		token, err := s.Auth.IssuePreview(u.Host)
 		if err != nil {
