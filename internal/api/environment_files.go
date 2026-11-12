@@ -62,16 +62,17 @@ type FileProvider struct {
 
 // FileTeammate is a teammate. Provider names a provider of the file.
 type FileTeammate struct {
-	Name          string `json:"name" minLength:"1" maxLength:"64"`
-	Role          string `json:"role,omitempty" maxLength:"200"`
-	Avatar        string `json:"avatar,omitempty" maxLength:"64"`
-	ApprovalScope string `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment"`
-	Soul          string `json:"soul,omitempty" maxLength:"16384"`
-	Harness       string `json:"harness" enum:"opencode,claude,codex"`
-	Provider      string `json:"provider,omitempty" maxLength:"64" doc:"The name of a provider of this file; empty if the teammate has none"`
-	Model         string `json:"model,omitempty" maxLength:"128"`
-	GitName       string `json:"gitName,omitempty" maxLength:"100"`
-	GitEmail      string `json:"gitEmail,omitempty" maxLength:"254"`
+	Name          string   `json:"name" minLength:"1" maxLength:"64"`
+	Role          string   `json:"role,omitempty" maxLength:"200"`
+	Avatar        string   `json:"avatar,omitempty" maxLength:"64"`
+	ApprovalScope string   `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment"`
+	Soul          string   `json:"soul,omitempty" maxLength:"16384"`
+	Harness       string   `json:"harness" enum:"opencode,claude,codex"`
+	Provider      string   `json:"provider,omitempty" maxLength:"64" doc:"The name of a provider of this file; empty if the teammate has none"`
+	Model         string   `json:"model,omitempty" maxLength:"128"`
+	Models        []string `json:"models,omitempty" maxItems:"20" doc:"Models also offered in chats"`
+	GitName       string   `json:"gitName,omitempty" maxLength:"100"`
+	GitEmail      string   `json:"gitEmail,omitempty" maxLength:"254"`
 	// UseHostGitIdentity is the teammate's choice to commit as the user. The identity itself
 	// is read on the host that imports the file.
 	UseHostGitIdentity bool `json:"useHostGitIdentity,omitempty"`
@@ -173,7 +174,7 @@ func (s *Server) buildEnvironmentFile(ctx context.Context, envID string) (Enviro
 	for _, t := range list {
 		f.Teammates = append(f.Teammates, FileTeammate{
 			Name: t.Name, Role: t.Role, Avatar: t.Avatar, ApprovalScope: t.ApprovalScope, Soul: t.Soul, Harness: t.Harness,
-			Provider: providerName[t.ProviderID], Model: t.Model, GitName: t.GitName, GitEmail: t.GitEmail,
+			Provider: providerName[t.ProviderID], Model: t.Model, Models: t.Models, GitName: t.GitName, GitEmail: t.GitEmail,
 			UseHostGitIdentity: t.UseHostGitIdentity,
 		})
 	}
@@ -425,6 +426,11 @@ func (s *Server) checkEnvironmentFile(f EnvironmentFile) (importPlan, error) {
 				return plan, apiError(err)
 			}
 		}
+		models, err := offeredModels(p.Model, ft.Models)
+		if err != nil {
+			return plan, err
+		}
+		p.Models = models
 		if ft.Provider != "" {
 			prov, ok := providers[ft.Provider]
 			if !ok {

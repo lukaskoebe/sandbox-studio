@@ -188,6 +188,22 @@ func (a *agent) handle(m rpcMessage) (any, *rpcError) {
 			return nil, internal(err)
 		}
 		return struct{}{}, nil
+	case acp.MethodSetConfigOption:
+		var req acp.SetConfigOptionRequest
+		if err := json.Unmarshal(m.Params, &req); err != nil {
+			return nil, invalid(err)
+		}
+		if req.ConfigID != acp.ConfigModel {
+			return nil, &rpcError{Code: acp.CodeInvalidParams, Message: "unknown config option: " + req.ConfigID}
+		}
+		s := a.session(req.SessionID)
+		if s == nil {
+			return nil, &rpcError{Code: acp.CodeInvalidParams, Message: "unknown session"}
+		}
+		if err := s.setModel(req.Value); err != nil {
+			return nil, &rpcError{Code: acp.CodeInvalidParams, Message: err.Error()}
+		}
+		return map[string]any{"configOptions": []any{}}, nil
 	case acp.MethodSessionPrompt:
 		var req acp.PromptRequest
 		if err := json.Unmarshal(m.Params, &req); err != nil {
@@ -360,9 +376,10 @@ type session struct {
 	// servers, which decide what the teammate may do (the permissions server is asked about).
 	allowed []string
 
-	mu   sync.Mutex // guards proc and turn, and the turn's cancelled flag
-	proc *process   // the running Claude Code process, if any
-	turn *turn      // the prompt being answered, if any
+	mu    sync.Mutex // guards proc, turn, model, and the turn's cancelled flag
+	proc  *process   // the running Claude Code process, if any
+	turn  *turn      // the prompt being answered, if any
+	model string     // what --model Claude Code runs with; empty for the settings' model
 }
 
 // turn is a prompt being answered.
@@ -453,6 +470,30 @@ func (s *session) prompt(content []any) (acp.PromptResponse, error) {
 	return r.resp, r.err
 }
 
+// setModel runs the session's next turns on model, "default" being the settings' own. Claude Code
+// takes its model when it starts, so a process that waits for a prompt stops, and the next prompt
+// resumes the session in a new one; a running turn ends on the model it started with.
+func (s *session) setModel(model string) error {
+	if model == "default" {
+		model = ""
+	}
+	if model != "" && (strings.HasPrefix(model, "-") || strings.ContainsAny(model, " \t\n")) {
+		return errors.New("invalid model")
+	}
+	s.mu.Lock()
+	changed := s.model != model
+	s.model = model
+	p := s.proc
+	idle := s.turn == nil
+	s.mu.Unlock()
+	if changed && idle && p != nil {
+		p.stdin.Close()
+		p.terminate()
+		<-p.exited
+	}
+	return nil
+}
+
 // cancel ends the running turn. Claude Code is stopped, and the next prompt resumes the
 // session in a new process: Claude Code leaves an interrupted turn as it is on resume.
 func (s *session) cancel() {
@@ -483,6 +524,9 @@ func (s *session) start() (*process, error) {
 		args = append(args, "--resume", s.id)
 	} else {
 		args = append(args, "--session-id", s.id)
+	}
+	if s.model != "" {
+		args = append(args, "--model", s.model)
 	}
 	if len(s.allowed) > 0 {
 		// Last, since this flag takes a list of values.

@@ -3,8 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -300,9 +302,11 @@ type Teammate struct {
 	Soul            string `json:"soul" doc:"Personality and working rules, as markdown"`
 	Harness         string `json:"harness" enum:"opencode,claude,codex"`
 	ProviderID      string `json:"providerId" doc:"Empty while a copied teammate has no provider of its kind in this environment"`
-	Model           string `json:"model"`
-	GitName         string `json:"gitName"`
-	GitEmail        string `json:"gitEmail"`
+	Model           string `json:"model" doc:"The default model: new chats, the terminal, check-ins and scheduled runs use it. Empty lets the harness pick"`
+	// Models are offered in chats besides Model, which a chat switches to.
+	Models   []string `json:"models" doc:"The models also offered in chats, besides the default"`
+	GitName  string   `json:"gitName"`
+	GitEmail string   `json:"gitEmail"`
 	// UseHostGitIdentity commits as the user Studio runs as: their git config --global
 	// identity, read when a session starts. GitName and GitEmail stay as the fallback.
 	UseHostGitIdentity bool      `json:"useHostGitIdentity" doc:"Sessions commit with the git identity of the user Studio runs as; gitName and gitEmail are used when the host has none"`
@@ -323,13 +327,18 @@ type Teammate struct {
 }
 
 // teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth, browser_share_pages, use_host_git_identity"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, models, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth, browser_share_pages, use_host_git_identity"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
 	var created, updated, beat int64
 	var every, from, to int
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth, &p.BrowserSharePages, &p.UseHostGitIdentity)
+	var models string
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &models, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth, &p.BrowserSharePages, &p.UseHostGitIdentity)
+	p.Models = []string{}
+	if err == nil {
+		err = json.Unmarshal([]byte(models), &p.Models)
+	}
 	if every > 0 {
 		p.Heartbeat = &Heartbeat{EveryHours: every, FromHour: from, ToHour: to}
 	}
@@ -365,9 +374,23 @@ func (s *Store) CreateTeammate(ctx context.Context, p Teammate) (Teammate, error
 // insertTeammate writes a teammate row, with a NULL provider when it has none.
 func insertTeammate(ctx context.Context, q execer, p Teammate, t int64) error {
 	_, err := q.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness,
-		provider_id, model, git_name, git_email, use_host_git_identity, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, p.UseHostGitIdentity, t, t)
+		provider_id, model, models, git_name, git_email, use_host_git_identity, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, modelsJSON(p.Models), p.GitName, p.GitEmail, p.UseHostGitIdentity, t, t)
 	return err
+}
+
+// modelsJSON is a teammate's models as the models column keeps them.
+func modelsJSON(models []string) string {
+	if len(models) == 0 {
+		return "[]"
+	}
+	b, _ := json.Marshal(models)
+	return string(b)
+}
+
+// Offers says whether the teammate offers model in chats: its default or one of its models.
+func (p Teammate) Offers(model string) bool {
+	return model == p.Model || slices.Contains(p.Models, model)
 }
 
 // SetTeammateBrowserStealth turns stealth mode of the teammate's browser on or off. The
@@ -420,9 +443,9 @@ func (s *Store) UpdateTeammate(ctx context.Context, p Teammate) (Teammate, error
 	if p.ApprovalScope == "" {
 		p.ApprovalScope = "environment"
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, avatar = ?, approval_scope = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
+	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, avatar = ?, approval_scope = ?, soul = ?, harness = ?, provider_id = ?, model = ?, models = ?,
 		git_name = ?, git_email = ?, use_host_git_identity = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
-		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, p.UseHostGitIdentity, now(), p.EnvironmentID, p.ID)
+		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, modelsJSON(p.Models), p.GitName, p.GitEmail, p.UseHostGitIdentity, now(), p.EnvironmentID, p.ID)
 	if err := teammateExists(err, p.Name); err != nil {
 		return p, err
 	}

@@ -592,6 +592,39 @@ func TestCancelStopsTheTurnAndTheNextPromptResumes(t *testing.T) {
 	}
 }
 
+// TestSetModelRestartsClaudeOnIt: a switch stops the waiting process, and the next prompt
+// resumes the session with --model; "default" goes back to the settings' model.
+func TestSetModelRestartsClaudeOnIt(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	id := s.open(t)
+	if resp := s.prompt(t, id, "say hi"); resp.StopReason != acp.StopEndTurn {
+		t.Fatalf("response: %+v", resp)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	for _, step := range []struct{ model, want string }{{"claude-opus-5-5", "claude-opus-5-5"}, {"default", ""}} {
+		if err := s.conn.SetModel(ctx, id, step.model); err != nil {
+			t.Fatal(err)
+		}
+		if resp := s.prompt(t, id, "say again"); resp.StopReason != acp.StopEndTurn {
+			t.Fatalf("on %s: %+v", step.model, resp)
+		}
+		argv := s.argvs(t)
+		last := argv[len(argv)-1]
+		if flagOf(last, "--resume") != id || flagOf(last, "--model") != step.want || (step.want == "" && slices.Contains(last, "--model")) {
+			t.Fatalf("on %s: %q", step.model, argv)
+		}
+	}
+	if n := len(s.argvs(t)); n != 3 {
+		t.Fatalf("%d starts", n)
+	}
+	var ae *acp.Error
+	if err := s.conn.SetModel(ctx, id, "--evil"); !errors.As(err, &ae) {
+		t.Fatalf("a flag as the model: %v", err)
+	}
+}
+
 func TestResumeUsesTheTranscript(t *testing.T) {
 	home := setHome(t)
 	const id = "3f1c2b9a-7d4e-4f10-8a6b-5c2d1e0f9a8b"

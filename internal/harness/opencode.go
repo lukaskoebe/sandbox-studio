@@ -48,10 +48,7 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 	m := model(p, provider)
 	switch provider.Kind {
 	case teammates.KindAnthropicAPI, teammates.KindOpenAIAPI:
-		id := "anthropic"
-		if provider.Kind == teammates.KindOpenAIAPI {
-			id = "openai"
-		}
+		id := opencodeProviderID(provider.Kind)
 		cfg["provider"] = map[string]any{id: map[string]any{"options": apiKey}}
 		if m != "" {
 			cfg["model"] = id + "/" + m
@@ -60,6 +57,12 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 		if provider.BaseURL == "" || m == "" {
 			return nil, fmt.Errorf("an openai_compatible provider needs a base URL and a model")
 		}
+		// The endpoint's models OpenCode knows only from here: the default and the ones a chat
+		// can switch to.
+		models := map[string]any{m: compatibleModel(m, provider.Images)}
+		for _, o := range p.Models {
+			models[o] = compatibleModel(o, provider.Images)
+		}
 		cfg["provider"] = map[string]any{compatibleID: map[string]any{
 			"npm":  "@ai-sdk/openai-compatible",
 			"name": "Sandbox Studio",
@@ -67,7 +70,7 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 				"baseURL": provider.BaseURL,
 				"apiKey":  "{env:" + provider.EnvVar + "}",
 			},
-			"models": map[string]any{m: compatibleModel(m, provider.Images)},
+			"models": models,
 		}}
 		cfg["model"] = compatibleID + "/" + m
 	default:
@@ -84,6 +87,17 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 		{Path: ".config/opencode/plugins/studio-memory.js", Content: opencodePlugin, Mode: 0o644},
 		rules,
 	}, nil
+}
+
+// opencodeProviderID is the provider ID a teammate's model is prefixed with in OpenCode.
+func opencodeProviderID(kind string) string {
+	switch kind {
+	case teammates.KindAnthropicAPI:
+		return "anthropic"
+	case teammates.KindOpenAIAPI:
+		return "openai"
+	}
+	return compatibleID
 }
 
 // compatibleModel is the entry of an OpenAI-compatible endpoint's model. OpenCode takes a model

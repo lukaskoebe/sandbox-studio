@@ -21,6 +21,7 @@ import { BrowsingCard, useBrowsing } from "@/components/browser-browsing"
 import { isGitApproval } from "@/components/git-review"
 import { ComposerDock } from "@/components/chat/chat-thread"
 import { Composer, type Prompt } from "@/components/chat/composer"
+import { ModelPicker } from "@/components/chat/model-picker"
 import { TeammateHeader } from "@/components/teammate/header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
@@ -792,6 +793,8 @@ function NewThread({
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>("message")
   const [problem, setProblem] = useState<string>()
+  // The model a new thread starts on: "" for the teammate's default.
+  const [model, setModel] = useState("")
 
   const refresh = () => {
     for (const path of [
@@ -810,7 +813,13 @@ function NewThread({
       )
     const { data, error } = await fetchClient.POST(
       "/api/environments/{env}/sandboxes/{id}/chats",
-      { params: { path: { env, id: computer.id } }, body }
+      {
+        params: { path: { env, id: computer.id } },
+        body: {
+          ...body,
+          model: teammate.models?.includes(model) ? model : undefined,
+        },
+      }
     )
     if (error) throw error
     return data
@@ -929,6 +938,13 @@ function NewThread({
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
+            {mode !== "teach" && (
+              <ModelPicker
+                teammate={teammate}
+                value={model}
+                onChange={setModel}
+              />
+            )}
             <span className="truncate">{where}</span>
           </span>
         }

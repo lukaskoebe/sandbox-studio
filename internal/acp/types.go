@@ -7,13 +7,15 @@ const ProtocolVersion = 1
 
 // Methods, as named by the v1 schema.
 const (
-	MethodInitialize        = "initialize"
-	MethodSessionNew        = "session/new"
-	MethodSessionLoad       = "session/load"
-	MethodSessionResume     = "session/resume"
-	MethodSessionPrompt     = "session/prompt"
-	MethodSessionClose      = "session/close"
-	MethodSessionCancel     = "session/cancel" // notification
+	MethodInitialize    = "initialize"
+	MethodSessionNew    = "session/new"
+	MethodSessionLoad   = "session/load"
+	MethodSessionResume = "session/resume"
+	MethodSessionPrompt = "session/prompt"
+	MethodSessionClose  = "session/close"
+	MethodSessionCancel = "session/cancel" // notification
+	// MethodSetConfigOption sets one of a session's config options, such as its model.
+	MethodSetConfigOption   = "session/set_config_option"
 	MethodSessionUpdate     = "session/update" // notification from the agent
 	MethodRequestPermission = "session/request_permission"
 	MethodElicitationCreate = "elicitation/create"
@@ -21,6 +23,17 @@ const (
 	// advertise in InitializeResponse.Meta.
 	MethodSessionSteering = "_session/steering"
 )
+
+// ConfigModel is the config option of a session's model. Claude's, Codex's and OpenCode's
+// adapters all name it so.
+const ConfigModel = "model"
+
+// SetConfigOptionRequest sets a session's config option.
+type SetConfigOptionRequest struct {
+	SessionID string `json:"sessionId"`
+	ConfigID  string `json:"configId"`
+	Value     string `json:"value"`
+}
 
 // Outcomes of _session/steering.
 const (

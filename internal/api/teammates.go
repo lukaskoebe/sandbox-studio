@@ -78,16 +78,17 @@ type teammatePath struct {
 
 // TeammateInput is the editable part of a teammate.
 type TeammateInput struct {
-	Name          string `json:"name" minLength:"1" maxLength:"64"`
-	Role          string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
-	Avatar        string `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
-	ApprovalScope string `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
-	Soul          string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
-	Harness       string `json:"harness" enum:"opencode,claude,codex"`
-	ProviderID    string `json:"providerId" minLength:"1"`
-	Model         string `json:"model,omitempty" maxLength:"128" doc:"Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
-	GitName       string `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
-	GitEmail      string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
+	Name          string   `json:"name" minLength:"1" maxLength:"64"`
+	Role          string   `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
+	Avatar        string   `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
+	ApprovalScope string   `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
+	Soul          string   `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
+	Harness       string   `json:"harness" enum:"opencode,claude,codex"`
+	ProviderID    string   `json:"providerId" minLength:"1"`
+	Model         string   `json:"model,omitempty" maxLength:"128" doc:"The default model. Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
+	Models        []string `json:"models,omitempty" maxItems:"20" doc:"Models also offered in chats besides the default; each chat picks one"`
+	GitName       string   `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
+	GitEmail      string   `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
 	// UseHostGitIdentity commits with the host user's git identity; GitName and GitEmail stay
 	// the fallback.
 	UseHostGitIdentity bool `json:"useHostGitIdentity,omitempty" doc:"Commit with the git identity of the user Studio runs as, when the host has one"`
@@ -379,7 +380,7 @@ func (s *Server) registerTeammates(api huma.API) {
 		}
 		p := store.Teammate{
 			ID: store.NewID(), EnvironmentID: target, Role: src.Role, Avatar: src.Avatar, ApprovalScope: src.ApprovalScope,
-			Soul: src.Soul, Harness: src.Harness, Model: src.Model, GitName: src.GitName, GitEmail: src.GitEmail,
+			Soul: src.Soul, Harness: src.Harness, Model: src.Model, Models: src.Models, GitName: src.GitName, GitEmail: src.GitEmail,
 			UseHostGitIdentity: src.UseHostGitIdentity,
 		}
 		if p.ProviderID, err = s.matchingProvider(ctx, in.Env, target, src.ProviderID); err != nil {
@@ -482,7 +483,32 @@ func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateIn
 			return p, apiError(err)
 		}
 	}
+	if p.Models, err = offeredModels(p.Model, in.Models); err != nil {
+		return p, err
+	}
 	return p, nil
+}
+
+// maxOfferedModels bounds the models a teammate offers besides its default.
+const maxOfferedModels = 20
+
+// offeredModels checks the models a teammate offers besides def, and drops def and repeats.
+func offeredModels(def string, in []string) ([]string, error) {
+	out := []string{}
+	for _, m := range in {
+		m = strings.TrimSpace(m)
+		if m == "" || m == def || slices.Contains(out, m) {
+			continue
+		}
+		if err := teammates.CheckModel(m); err != nil {
+			return nil, apiError(err)
+		}
+		out = append(out, m)
+	}
+	if len(out) > maxOfferedModels {
+		return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("a teammate offers at most %d models besides its default", maxOfferedModels))
+	}
+	return out, nil
 }
 
 // createDefaultTeammate creates the default teammate on a provider that was just added, if

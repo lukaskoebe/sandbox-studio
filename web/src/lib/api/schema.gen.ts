@@ -393,6 +393,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/chats/{chat}/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the model the chat runs on from its next message: its teammate's default or one of the models it also offers. The agent switches its session when that message goes; an agent that can't refuses the message with 409. The terminal, check-ins and scheduled runs keep the default. */
+        put: operations["setChatModel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/chats/{chat}/prompt": {
         parameters: {
             query?: never;
@@ -3583,6 +3600,8 @@ export interface components {
             harness: string;
             heartbeat: boolean;
             id: string;
+            /** @description The model the chat runs on from its next message; empty is the teammate's default */
+            model?: string;
             /**
              * Format: int64
              * @description The chat's change counter: every change to the chat, its turns or its items raises it
@@ -4496,6 +4515,8 @@ export interface components {
             /** @enum {string} */
             harness: "opencode" | "claude" | "codex";
             model?: string;
+            /** @description Models also offered in chats */
+            models?: string[] | null;
             name: string;
             /** @description The name of a provider of this file; empty if the teammate has none */
             provider?: string;
@@ -5229,6 +5250,10 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        ModelInBody: {
+            /** @description One of the models the chat's teammate offers; empty for its default */
+            model: string;
+        };
         NavigateBrowserInBody: {
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
@@ -5264,6 +5289,15 @@ export interface components {
             tracker?: boolean;
             /** @description A sandbox's write to a host of the curated list, which allows only its reads */
             write?: boolean;
+        };
+        NewChatRequest: {
+            /** @description At most 10 MiB in total */
+            attachments?: components["schemas"]["PromptFile"][] | null;
+            /** @description Files of the workspace the text names as @path; the agent gets a link to each */
+            mentions?: components["schemas"]["Mention"][] | null;
+            /** @description One of the models the sandbox's teammate offers; omitted for its default */
+            model?: string;
+            text?: string;
         };
         OpenInBody: {
             /** @description The pull request's title; empty keeps the proposed one */
@@ -6673,7 +6707,10 @@ export interface components {
             harness: "opencode" | "claude" | "codex";
             heartbeat?: components["schemas"]["Heartbeat"];
             id: string;
+            /** @description The default model: new chats, the terminal, check-ins and scheduled runs use it. Empty lets the harness pick */
             model: string;
+            /** @description The models also offered in chats, besides the default */
+            models: string[] | null;
             name: string;
             /** @description Empty while a copied teammate has no provider of its kind in this environment */
             providerId: string;
@@ -6724,8 +6761,10 @@ export interface components {
             gitName?: string;
             /** @enum {string} */
             harness: "opencode" | "claude" | "codex";
-            /** @description Required for API-key providers; defaults to the model of an OpenAI-compatible provider */
+            /** @description The default model. Required for API-key providers; defaults to the model of an OpenAI-compatible provider */
             model?: string;
+            /** @description Models also offered in chats besides the default; each chat picks one */
+            models?: string[] | null;
             name: string;
             providerId: string;
             /** @description A short description of what the teammate does */
@@ -6929,6 +6968,8 @@ export interface components {
             /** Format: date-time */
             endedAt?: string;
             id: string;
+            /** @description The model the turn was sent with; empty when Studio doesn't know it, such as in the terminal */
+            model?: string;
             /** @enum {string} */
             origin: "chat" | "terminal";
             /** @description The start of the turn's message, at most 200 characters; in a chat's log, not on its stream */
@@ -8081,6 +8122,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setChatModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
             };
             /** @description Error */
             default: {
@@ -11197,7 +11276,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["PromptRequest"];
+                "application/json": components["schemas"]["NewChatRequest"];
             };
         };
         responses: {

@@ -42,6 +42,9 @@ type Chat struct {
 	Heartbeat bool `json:"heartbeat"`
 	// TaskID marks a chat a scheduled run of that task opened (tasks.go).
 	TaskID string `json:"taskId,omitempty" doc:"The task whose scheduled run opened the chat"`
+	// Model is the model the chat runs on, one its teammate offers; empty is the teammate's
+	// default.
+	Model string `json:"model,omitempty" doc:"The model the chat runs on from its next message; empty is the teammate's default"`
 }
 
 // ChatTurn is one prompt and everything the agent did for it.
@@ -54,6 +57,7 @@ type ChatTurn struct {
 	Usage      json.RawMessage `json:"-"`
 	Changes    json.RawMessage `json:"-"`
 	Origin     string          `json:"origin" enum:"chat,terminal"`
+	Model      string          `json:"model,omitempty" doc:"The model the turn was sent with; empty when Studio doesn't know it, such as in the terminal"`
 	UndoneAt   *time.Time      `json:"undoneAt,omitempty"`
 	StartedAt  time.Time       `json:"startedAt"`
 	EndedAt    *time.Time      `json:"endedAt,omitempty"`
@@ -75,12 +79,12 @@ type ChatItem struct {
 	Rev        int64           `json:"rev"`
 }
 
-const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat, task_id"
+const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat, task_id, model"
 
 func scanChat(row interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
 	var created, updated int64
-	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat, &c.TaskID)
+	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat, &c.TaskID, &c.Model)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -88,14 +92,14 @@ func scanChat(row interface{ Scan(...any) error }) (Chat, error) {
 	return c, err
 }
 
-const chatTurnCols = "id, chat_id, seq, snapshot, stop_reason, usage, changes, origin, undone_at, started_at, ended_at, rev"
+const chatTurnCols = "id, chat_id, seq, snapshot, stop_reason, usage, changes, origin, undone_at, started_at, ended_at, rev, model"
 
 func scanChatTurn(row interface{ Scan(...any) error }) (ChatTurn, error) {
 	var t ChatTurn
 	var usage, changes []byte
 	var undone, ended sql.NullInt64
 	var started int64
-	err := row.Scan(&t.ID, &t.ChatID, &t.Seq, &t.Snapshot, &t.StopReason, &usage, &changes, &t.Origin, &undone, &started, &ended, &t.Rev)
+	err := row.Scan(&t.ID, &t.ChatID, &t.Seq, &t.Snapshot, &t.StopReason, &usage, &changes, &t.Origin, &undone, &started, &ended, &t.Rev, &t.Model)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
 	}
@@ -302,6 +306,14 @@ func (s *Store) SetChatTitle(ctx context.Context, chatID, title string) error {
 	})
 }
 
+// SetChatModel sets the model a chat runs on from its next message; "" is the teammate's default.
+func (s *Store) SetChatModel(ctx context.Context, chatID, model string) error {
+	return s.inChatTx(ctx, chatID, func(tx *sql.Tx, _ int64) error {
+		_, err := tx.ExecContext(ctx, "UPDATE chats SET model = ? WHERE id = ?", model, chatID)
+		return err
+	})
+}
+
 // DeleteChat removes a chat with its turns and items.
 func (s *Store) DeleteChat(ctx context.Context, envID, id string) error {
 	res, err := s.db.ExecContext(ctx, "DELETE FROM chats WHERE environment_id = ? AND id = ?", envID, id)
@@ -318,12 +330,17 @@ func (s *Store) DeleteChat(ctx context.Context, envID, id string) error {
 
 // StartChatTurn opens the chat's next turn.
 func (s *Store) StartChatTurn(ctx context.Context, chatID, origin, snapshot string) (ChatTurn, error) {
+	return s.StartChatTurnOn(ctx, chatID, origin, snapshot, "")
+}
+
+// StartChatTurnOn opens the chat's next turn, sent with model.
+func (s *Store) StartChatTurnOn(ctx context.Context, chatID, origin, snapshot, model string) (ChatTurn, error) {
 	var t ChatTurn
 	err := s.inChatTx(ctx, chatID, func(tx *sql.Tx, rev int64) error {
 		var err error
-		t, err = scanChatTurn(tx.QueryRowContext(ctx, `INSERT INTO chat_turns (id, chat_id, seq, snapshot, origin, started_at, rev)
-			VALUES (?, ?, (SELECT IFNULL(MAX(seq), 0) + 1 FROM chat_turns WHERE chat_id = ?), ?, ?, ?, ?) RETURNING `+chatTurnCols,
-			NewID(), chatID, chatID, snapshot, origin, now(), rev))
+		t, err = scanChatTurn(tx.QueryRowContext(ctx, `INSERT INTO chat_turns (id, chat_id, seq, snapshot, origin, model, started_at, rev)
+			VALUES (?, ?, (SELECT IFNULL(MAX(seq), 0) + 1 FROM chat_turns WHERE chat_id = ?), ?, ?, ?, ?, ?) RETURNING `+chatTurnCols,
+			NewID(), chatID, chatID, snapshot, origin, model, now(), rev))
 		return err
 	})
 	return t, err

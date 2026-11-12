@@ -38,11 +38,11 @@ tab, and **Changes** as git's view per repository (branch, ahead, staged, not st
 each opening its diff; read-only), after the pushes waiting and before what the thread changed.
 Previews in the Studio app's window said "Open this preview from Sandbox Studio.": WebKit keeps
 no cookie in a cross-site frame over http, so the app frames the preview's keyed host
-(`<port>-<id>-<key>.localhost`), which the user agreed to.
-
-- **Several models per teammate**, A: a default model and the models also offered in chats, with
-  a picker in the composer; a thread keeps its model, switched in place over ACP where the agent
-  can. Check ACP's session model on each harness first.
+(`<port>-<id>-<key>.localhost`), which the user agreed to. And several models per teammate: a
+default and the ones also offered in chats, picked per thread in the composer and switched in
+place over ACP (`session/set_config_option`); the terminal, check-ins and scheduled tasks keep
+the default. Not live-tested: the switch on each real adapter, and Codex with a compatible
+provider, whose adapter only takes models Codex lists.
 
 Measured:
 

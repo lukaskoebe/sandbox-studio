@@ -58,7 +58,7 @@ func (s *Server) sessionGitIdentity(ctx context.Context, p store.Teammate) (name
 // harnessTeammate is what the harness adapters get of p.
 func (s *Server) harnessTeammate(ctx context.Context, p store.Teammate) harness.Teammate {
 	name, email := s.sessionGitIdentity(ctx, p)
-	return harness.Teammate{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, GitName: name, GitEmail: email}
+	return harness.Teammate{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, Models: p.Models, GitName: name, GitEmail: email}
 }
 
 func (s *Server) registerGitIdentity(api huma.API) {

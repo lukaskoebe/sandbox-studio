@@ -110,6 +110,7 @@ type sessionPlan struct {
 	provider harness.Provider
 	files    []agentproto.HomeFile
 	env      map[string]string
+	teammate store.Teammate
 }
 
 // planSession checks that sb's owner teammate can run its harness and renders the files.
@@ -193,7 +194,7 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	if s.AgentMem != nil {
 		s.AgentMem.BrowseSoon() // the copy of memory in ~/memory
 	}
-	return sessionPlan{harness: h, provider: hp, files: files, env: harness.Env(hp)}, nil
+	return sessionPlan{harness: h, provider: hp, files: files, env: harness.Env(hp), teammate: p}, nil
 }
 
 // HarnessConfig is the owner teammate's harness setup for sb as a session gets it: its config

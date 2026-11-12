@@ -184,7 +184,7 @@ visible thing, updated in place, not one row per chunk.
 | `usage_update` | on the turn: tokens and cost | turn footer, muted |
 | `session_info_update` (title) | `chats.title` | chat list and header |
 | `notice`, `compaction_*`, stop reasons other than `end_turn` | `marker` | `Marker` ("Context compacted", "Stopped", "Hit the token limit") |
-| `available_commands_update`, `config_option_update`, `current_mode_update` | not stored | not shown (no model or mode picker; the teammate decides) |
+| `available_commands_update`, `config_option_update`, `current_mode_update` | not stored | not shown. The model picker lists the teammate's models rather than the agent's options, and sets one with `session/set_config_option` ([harnesses](../harnesses.md#switching-a-chats-model)) |
 
 **Sending prompts.**
 

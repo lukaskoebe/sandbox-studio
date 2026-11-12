@@ -525,3 +525,51 @@ func TestChatStream(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestChatModel: a teammate offers models besides its default, a chat picks one of them, and the
+// agent switches its session to it with the next message; back on the default the chat's model is
+// empty again, and a model the teammate doesn't offer is refused.
+func TestChatModel(t *testing.T) {
+	agent := &acptest.Agent{SessionID: "ses_1", Turns: make([]acptest.Turn, 3)}
+	h, s, _, env := newChatServer(t, agent)
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+
+	rec := do(h, "PUT", envBase+"/teammates/"+sb.TeammateID, `{"name":"Ada claude","harness":"claude","providerId":"`+prov.ID+
+		`","model":"claude-sonnet-4-5","models":[" claude-opus-5-5 ","claude-sonnet-4-5","claude-opus-5-5",""]}`)
+	if tm := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || strings.Join(tm.Models, ",") != "claude-opus-5-5" {
+		t.Fatalf("teammate: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", envBase+"/teammates/"+sb.TeammateID, `{"name":"Ada claude","harness":"claude","providerId":"`+prov.ID+
+		`","model":"claude-sonnet-4-5","models":["bad model"]}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a model with a space: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"Hi"}`)
+	c := decode[store.Chat](t, rec)
+	base := envBase + "/chats/" + c.ID
+	if log := waitIdle(t, h, base); log.Turns[0].Model != "claude-sonnet-4-5" || log.Chat.Model != "" {
+		t.Fatalf("first turn: %+v", log.Turns[0])
+	}
+	if rec := do(h, "PUT", base+"/model", `{"model":"gpt-5"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a model not offered: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/model", `{"model":"claude-opus-5-5"}`); rec.Code != http.StatusOK || decode[store.Chat](t, rec).Model != "claude-opus-5-5" {
+		t.Fatalf("pick: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/prompt", `{"text":"Again"}`); rec.Code != http.StatusAccepted {
+		t.Fatalf("prompt: %d %s", rec.Code, rec.Body)
+	}
+	if log := waitIdle(t, h, base); log.Turns[1].Model != "claude-opus-5-5" {
+		t.Fatalf("second turn: %+v", log.Turns[1])
+	}
+	if rec := do(h, "PUT", base+"/model", `{"model":"claude-sonnet-4-5"}`); rec.Code != http.StatusOK || decode[store.Chat](t, rec).Model != "" {
+		t.Fatalf("back to the default: %d %s", rec.Code, rec.Body)
+	}
+	do(h, "POST", base+"/prompt", `{"text":"Once more"}`)
+	waitIdle(t, h, base)
+	if got := agent.SwitchedModels(); strings.Join(got, ",") != "claude-opus-5-5,claude-sonnet-4-5" {
+		t.Fatalf("switched to %q", got)
+	}
+}

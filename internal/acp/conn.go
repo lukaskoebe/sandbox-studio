@@ -537,6 +537,11 @@ func (c *Conn) Steer(ctx context.Context, id string, prompt []ContentBlock) (Ste
 	return out, err
 }
 
+// SetModel switches the session to model from its next prompt, as the agent names it.
+func (c *Conn) SetModel(ctx context.Context, id, model string) error {
+	return c.Call(ctx, MethodSetConfigOption, SetConfigOptionRequest{SessionID: id, ConfigID: ConfigModel, Value: model}, nil)
+}
+
 // Cancel asks the agent to end the running turn.
 func (c *Conn) Cancel(id string) error {
 	return c.Notify(MethodSessionCancel, SessionRequest{SessionID: id})

@@ -211,6 +211,25 @@ is the harness's own session ID. Studio only passes IDs matching
 `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. The ACP agent is stopped while the TUI runs, since only
 one process may write a session.
 
+### Switching a chat's model
+
+A chat runs on its teammate's default model unless the user picked one of the others it offers
+([teammates](teammates.md#models)). Before a prompt goes on another model than the agent's,
+Studio sends `session/set_config_option` with `configId: "model"` and the value for the
+harness; the agent's session goes on with its history.
+
+| Harness | Value | What it takes (adapter sources checked 2026-11-12) |
+|---|---|---|
+| Claude (`claude-agent-acp` 0.87.0) | the model id; `default` for Claude Code's own default | aliases and full ids |
+| Claude subscription (`studio-agent claude-acp`) | the same | restarts `claude -p` with `--model` once the process is idle, resuming the session |
+| Codex (`codex-acp` 2.1.1) | the model id | only models in Codex's own model list; with an OpenAI-compatible provider it may refuse every other model |
+| OpenCode | `<provider>/<model>`: `anthropic`, `openai`, or `studio` for a compatible provider | for a compatible provider, only models in `opencode.json`'s provider models, which Studio fills with the default and the offered ones |
+
+A refusal (JSON-RPC error) fails the message and leaves the agent on its model. A switch back
+to a default without a name, a subscription teammate with no model set on a harness other than
+Claude, restarts the agent, which resumes the session on its own default. A message queued
+before a switch goes on the model of when it was queued.
+
 ### Claude subscription chats
 
 A chat for a Claude subscription runs `studio-agent claude-acp`, the guest's copy of Studio's

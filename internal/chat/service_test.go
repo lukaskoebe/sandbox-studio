@@ -1054,3 +1054,67 @@ func TestUnansweredChatStartsOverWhenTheSessionIsGone(t *testing.T) {
 		t.Fatalf("chat %s with session %q; want idle in a new session", c.State, c.ACPSessionID)
 	}
 }
+
+// TestModelSwitchGoesWithTheNextPrompt: a chat on another model switches its session before the
+// prompt, once; back on the default it switches back, or, with a default that has no name, the
+// agent starts again on it. A model the agent refuses refuses the prompt, and each turn keeps
+// the model it went with.
+func TestModelSwitchGoesWithTheNextPrompt(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{Turns: make([]acptest.Turn, 6), RefuseModel: []string{"studio/nope"}})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	on := func(model, name, def string) Launch {
+		l := f.launch()
+		l.Model, l.ModelName, l.DefaultModel = model, name, def
+		return l
+	}
+	send := func(l Launch) store.ChatTurn {
+		t.Helper()
+		turn, err := f.s.Send(ctx, env, f.chat.ID, l, Prompt{Text: "go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		turn, _ = f.wait(t, turn.ID)
+		return turn
+	}
+	switched := func(want ...string) {
+		t.Helper()
+		if got := f.agent.SwitchedModels(); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("switched to %q; want %q", got, want)
+		}
+	}
+	if turn := send(on("", "big", "studio/big")); turn.Model != "big" {
+		t.Fatalf("first turn on %q", turn.Model)
+	}
+	switched()
+	if turn := send(on("studio/small", "small", "studio/big")); turn.Model != "small" {
+		t.Fatalf("second turn on %q", turn.Model)
+	}
+	send(on("studio/small", "small", "studio/big"))
+	switched("studio/small")
+	if turn := send(on("", "big", "studio/big")); turn.Model != "big" {
+		t.Fatalf("back on %q", turn.Model)
+	}
+	switched("studio/small", "studio/big")
+
+	_, err := f.s.Send(ctx, env, f.chat.ID, on("studio/nope", "nope", "studio/big"), Prompt{Text: "go"})
+	if !errors.Is(err, store.ErrConflict) || !strings.Contains(err.Error(), "can't switch this chat to nope") {
+		t.Fatalf("a refused model: %v", err)
+	}
+	turns, _ := f.s.Store.ChatTurns(ctx, f.chat.ID)
+	if len(turns) != 4 {
+		t.Fatalf("%d turns after the refusal", len(turns))
+	}
+
+	// A default the harness picks has no name: the agent starts again on it.
+	send(on("studio/small", "small", ""))
+	f.g.mu.Lock()
+	opens := len(f.g.opens)
+	f.g.mu.Unlock()
+	send(on("", "", ""))
+	f.g.mu.Lock()
+	defer f.g.mu.Unlock()
+	if len(f.g.opens) != opens+1 {
+		t.Fatalf("%d agent starts going back to an unnamed default; want %d", len(f.g.opens), opens+1)
+	}
+}

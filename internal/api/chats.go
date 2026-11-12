@@ -39,6 +39,24 @@ type PromptRequest struct {
 	Mentions    []chat.Mention `json:"mentions,omitempty" maxItems:"50" doc:"Files of the workspace the text names as @path; the agent gets a link to each"`
 }
 
+// NewChatRequest is a new chat's first prompt, and the model it starts on.
+type NewChatRequest struct {
+	PromptRequest
+	Model string `json:"model,omitempty" maxLength:"128" doc:"One of the models the sandbox's teammate offers; omitted for its default"`
+}
+
+// offeredModel checks that p offers m, as a chat's model: "" for its default.
+func offeredModel(p store.Teammate, m string) (string, error) {
+	m = strings.TrimSpace(m)
+	if m != "" && !p.Offers(m) {
+		return "", huma.Error422UnprocessableEntity(fmt.Sprintf("%s doesn't offer %s; add it to the teammate's models first", p.Name, m))
+	}
+	if m == p.Model {
+		return "", nil
+	}
+	return m, nil
+}
+
 func (p PromptRequest) prompt() chat.Prompt {
 	out := chat.Prompt{Text: p.Text, Mentions: p.Mentions}
 	for _, f := range p.Attachments {
@@ -74,7 +92,7 @@ func (s *Server) registerChats(api huma.API) {
 	type createIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Sandbox ID"`
-		Body *PromptRequest
+		Body *NewChatRequest
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "createChat", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/chats", Tags: []string{"chats"},
@@ -90,11 +108,21 @@ func (s *Server) registerChats(api huma.API) {
 		if err != nil {
 			return nil, err
 		}
-		launch, err := s.chatLaunch(ctx, sb)
+		launch, plan, err := s.chatPlan(ctx, sb)
 		if err != nil {
 			return nil, err
 		}
+		model := ""
+		if in.Body != nil {
+			if model, err = offeredModel(plan.teammate, in.Body.Model); err != nil {
+				return nil, err
+			}
+		}
 		c, err := chats.Create(ctx, sb, launch.Harness.Name())
+		if err == nil && model != "" {
+			c, err = chats.SetModel(ctx, in.Env, c.ID, model)
+			launch = chatModel(launch, plan, c)
+		}
 		if err != nil || in.Body == nil || (in.Body.Text == "" && len(in.Body.Attachments) == 0) {
 			return &struct{ Body store.Chat }{c}, apiError(err)
 		}
@@ -135,6 +163,39 @@ func (s *Server) registerChats(api huma.API) {
 			return nil, err
 		}
 		return nil, apiError(chats.Delete(ctx, in.Env, in.Chat))
+	})
+
+	type modelIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Chat string `path:"chat" doc:"Chat ID"`
+		Body struct {
+			Model string `json:"model" maxLength:"128" doc:"One of the models the chat's teammate offers; empty for its default"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setChatModel", Method: http.MethodPut, Path: "/api/environments/{env}/chats/{chat}/model", Tags: []string{"chats"},
+		Description: "Sets the model the chat runs on from its next message: its teammate's default or one of the models it " +
+			"also offers. The agent switches its session when that message goes; an agent that can't refuses the message " +
+			"with 409. The terminal, check-ins and scheduled runs keep the default.",
+	}, func(ctx context.Context, in *modelIn) (*struct{ Body store.Chat }, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		c, err := s.Store.Chat(ctx, in.Env, in.Chat)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		p, err := s.Store.Teammate(ctx, in.Env, c.TeammateID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		m, err := offeredModel(p, in.Body.Model)
+		if err != nil {
+			return nil, err
+		}
+		c, err = chats.SetModel(ctx, in.Env, in.Chat, m)
+		return &struct{ Body store.Chat }{c}, apiError(err)
 	})
 
 	type promptIn struct {
@@ -428,13 +489,31 @@ func (s *Server) ChatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch,
 
 // chatLaunch plans a chat's agent like an agent session. The command depends on the provider:
 // a Claude subscription's agent runs Claude Code itself (harness.Claude.ACPCommand).
+// A new chat runs on the teammate's default model.
 func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch, error) {
+	launch, _, err := s.chatPlan(ctx, sb)
+	return launch, err
+}
+
+func (s *Server) chatPlan(ctx context.Context, sb store.Sandbox) (chat.Launch, sessionPlan, error) {
 	plan, err := s.planSession(ctx, sb)
 	if err != nil {
-		return chat.Launch{}, err
+		return chat.Launch{}, plan, err
 	}
+	def := harness.DefaultModel(harness.Teammate{Model: plan.teammate.Model}, plan.provider)
 	return chat.Launch{Harness: plan.harness, Files: plan.files, Command: plan.harness.ACPCommand(plan.provider),
-		Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env, NoImages: !plan.provider.Images}, nil
+		Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env, NoImages: !plan.provider.Images,
+		DefaultModel: harness.ChatModel(plan.harness, plan.provider, def), ModelName: def}, plan, nil
+}
+
+// chatModel puts launch on the chat's model. A model the teammate no longer offers falls back
+// to its default.
+func chatModel(launch chat.Launch, plan sessionPlan, c store.Chat) chat.Launch {
+	if c.Model != "" && c.Model != launch.ModelName && plan.teammate.Offers(c.Model) {
+		launch.Model = harness.ChatModel(plan.harness, plan.provider, c.Model)
+		launch.ModelName = c.Model
+	}
+	return launch
 }
 
 // chatLaunchFor plans the agent of an existing chat.
@@ -447,7 +526,11 @@ func (s *Server) chatLaunchFor(ctx context.Context, envID, chatID string) (chat.
 	if err != nil {
 		return chat.Launch{}, err
 	}
-	return s.chatLaunch(ctx, sb)
+	launch, plan, err := s.chatPlan(ctx, sb)
+	if err != nil {
+		return launch, err
+	}
+	return chatModel(launch, plan, c), nil
 }
 
 // FileList is a directory of a sandbox's workspace.

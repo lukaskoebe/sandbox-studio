@@ -92,13 +92,21 @@ type Guest interface {
 // session's environment (placeholders only). NoImages says that the model can't take
 // images, whatever the agent says it takes: an OpenAI-compatible endpoint's model can be text
 // only behind an agent that always takes them.
+//
+// Model is the model the chat runs on as its agent names it (harness.ChatModel), when it isn't
+// the teammate's default; DefaultModel names the default, to switch back to, and is empty when
+// the harness picks it. ModelName is the model the next turn is sent with, as the teammate names
+// it: what the thread shows.
 type Launch struct {
-	Harness  harness.Harness
-	Files    []agentproto.HomeFile
-	Command  []string
-	Env      map[string]string
-	TUIEnv   map[string]string
-	NoImages bool
+	Harness      harness.Harness
+	Files        []agentproto.HomeFile
+	Command      []string
+	Env          map[string]string
+	TUIEnv       map[string]string
+	NoImages     bool
+	Model        string
+	DefaultModel string
+	ModelName    string
 }
 
 // Service runs the chats of every environment.
@@ -433,6 +441,9 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 	s.stops[c.ID] = false
 	s.mu.Unlock()
 	l, err := s.ensure(ctx, c, launch)
+	if err == nil {
+		l, err = s.useModel(ctx, c, l, launch)
+	}
 	if err != nil && !errors.Is(err, store.ErrConflict) {
 		if full := s.diskFull(ctx, c.SandboxID); full != "" {
 			err = Conflict(full + " Starting the agent failed: " + clip(err.Error(), 2000))
@@ -446,7 +457,7 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 		var atts []Attachment
 		if blocks, atts, err = l.prompt(p); err == nil {
 			var t store.ChatTurn
-			if t, err = l.start(ctx, c, UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions}, blocks); err == nil {
+			if t, err = l.start(ctx, c, UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions}, blocks, launch.ModelName); err == nil {
 				return t, nil
 			}
 		}
@@ -454,6 +465,52 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 	s.started(c.ID)
 	s.unlock(c, store.ChatRunning)
 	return store.ChatTurn{}, err
+}
+
+// useModel puts the chat's session on the launch's model before a prompt, with
+// session/set_config_option. Back to a default the harness picks, which has no name to switch
+// to, the agent starts again: a new process starts on the default and resumes the session. An
+// agent that refuses the model says so, and the prompt isn't sent.
+func (s *Service) useModel(ctx context.Context, c store.Chat, l *live, launch Launch) (*live, error) {
+	if launch.Model == l.model {
+		return l, nil
+	}
+	target := launch.Model
+	if target == "" {
+		target = launch.DefaultModel
+	}
+	if target == "" {
+		l.shutdown(ctx)
+		return s.ensure(ctx, c, launch)
+	}
+	err := l.conn.SetModel(ctx, l.session, target)
+	var ae *acp.Error
+	if errors.As(err, &ae) {
+		name := launch.ModelName
+		if name == "" {
+			name = "its default model"
+		}
+		return nil, Conflict(fmt.Sprintf("%s can't switch this chat to %s (%s); pick another model, or start a new chat", c.Harness, name, ae.Message))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("switching the model: %w", err)
+	}
+	l.model = launch.Model
+	return l, nil
+}
+
+// SetModel sets the model the chat runs on from its next message; "" is the teammate's default.
+// The agent switches when that message goes (useModel).
+func (s *Service) SetModel(ctx context.Context, envID, chatID, model string) (store.Chat, error) {
+	c, err := s.Store.Chat(ctx, envID, chatID)
+	if err != nil {
+		return c, err
+	}
+	if err := s.Store.SetChatModel(ctx, c.ID, model); err != nil {
+		return c, err
+	}
+	s.changed(envID, chatID, true)
+	return s.Store.Chat(ctx, envID, chatID)
 }
 
 // Queue sends p like Send, or, while a turn runs, once the chat is idle again; queued says
@@ -768,6 +825,7 @@ type live struct {
 	steers    bool // the agent takes _session/steering
 	joins     bool // a session/prompt sent while a turn runs goes into it (harness.PromptJoiner)
 	session   string
+	model     string // the model the session was switched to (Launch.Model); "" while it runs on the default
 
 	mu     sync.Mutex
 	turn   *run    // the running turn
@@ -1190,7 +1248,7 @@ func (s *Service) promptNotes(ctx context.Context, c store.Chat) (string, func()
 }
 
 // start opens a turn with the user's item and runs the prompt in the background.
-func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []acp.ContentBlock) (store.ChatTurn, error) {
+func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []acp.ContentBlock, model string) (store.ChatTurn, error) {
 	note, sent, err := l.s.promptNotes(ctx, c)
 	if err != nil {
 		return store.ChatTurn{}, err
@@ -1198,7 +1256,7 @@ func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []
 	if note != "" {
 		blocks = append([]acp.ContentBlock{{Type: "text", Text: note}}, blocks...)
 	}
-	t, err := l.s.Store.StartChatTurn(ctx, c.ID, store.OriginChat, "")
+	t, err := l.s.Store.StartChatTurnOn(ctx, c.ID, store.OriginChat, "", model)
 	if err != nil {
 		return t, err
 	}

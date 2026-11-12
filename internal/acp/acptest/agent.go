@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -67,6 +68,9 @@ type Agent struct {
 	// Joins takes a session/prompt that comes while a turn runs into that turn, as OpenCode
 	// does: it is answered when the turn is.
 	Joins bool
+	// RefuseModel refuses session/set_config_option for these models, as Codex does for a
+	// model it doesn't list.
+	RefuseModel []string
 
 	mu           sync.Mutex
 	Calls        []string          // methods called, in order, with notifications
@@ -76,6 +80,7 @@ type Agent struct {
 	Outcomes     []json.RawMessage // permission answers
 	Answers      []json.RawMessage // elicitation answers
 	Steers       []json.RawMessage // prompt arrays steered or joined into a running turn
+	Models       []string          // the models session/set_config_option switched to, in order
 	callsChanged chan struct{}
 
 	running int           // turns in progress
@@ -215,6 +220,13 @@ func (a *Agent) Steered() []json.RawMessage {
 	return append([]json.RawMessage(nil), a.Steers...)
 }
 
+// SwitchedModels returns the models session/set_config_option switched to, in order.
+func (a *Agent) SwitchedModels() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.Models...)
+}
+
 // Snapshot returns copies of what the agent recorded.
 func (a *Agent) Snapshot() (prompts, outcomes, answers []json.RawMessage) {
 	a.mu.Lock()
@@ -269,6 +281,20 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 		a.reply(id, struct{}{}, nil)
 	case "session/close":
 		a.reply(id, struct{}{}, nil)
+	case "session/set_config_option":
+		var o struct {
+			ConfigID string `json:"configId"`
+			Value    string `json:"value"`
+		}
+		_ = json.Unmarshal(params, &o)
+		if o.ConfigID != "model" || slices.Contains(a.RefuseModel, o.Value) {
+			a.reply(id, nil, &rpcError{Code: -32602, Message: "Invalid params"})
+			return
+		}
+		a.mu.Lock()
+		a.Models = append(a.Models, o.Value)
+		a.mu.Unlock()
+		a.reply(id, map[string]any{"configOptions": []any{}}, nil)
 	case "_session/steering":
 		if !a.Steering {
 			a.reply(id, nil, &rpcError{Code: -32601, Message: "method not found"})

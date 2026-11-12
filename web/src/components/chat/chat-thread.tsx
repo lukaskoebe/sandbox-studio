@@ -21,6 +21,7 @@ import {
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { PreviewSandbox } from "@/components/chat/markdown"
 import { OpenWorkspaceFile } from "@/components/chat/mention-picker"
+import { ModelPicker } from "@/components/chat/model-picker"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
@@ -137,6 +138,12 @@ function ChatLog({
   onLoadEarlier: () => Promise<void>
 }) {
   const turnById = new Map(turns.map((t) => [t.id, t]))
+  // The turns that ran on another model than the one before them.
+  const switchedTo = new Map<string, string>()
+  turns.forEach((t, i) => {
+    const before = turns[i - 1]?.model
+    if (before && t.model && t.model !== before) switchedTo.set(t.id, t.model)
+  })
   const running = chat.state === "running"
   // The turn still underway, if any: its last item is the one still being written,
   // and its latest plan stays pinned above the composer.
@@ -230,8 +237,17 @@ function ChatLog({
                       turn?.undoneAt &&
                       !(item.kind === "marker" && item.marker?.kind === "undo")
                     if (item.id === pinned?.id) return null
+                    const switched =
+                      items.at(i - 1)?.turnId !== item.turnId
+                        ? switchedTo.get(item.turnId)
+                        : undefined
                     return (
                       <Fragment key={item.id}>
+                        {switched && (
+                          <MessageScrollerItem>
+                            <ModelSwitch model={switched} />
+                          </MessageScrollerItem>
+                        )}
                         <MessageScrollerItem
                           messageId={item.id}
                           scrollAnchor={item.id === lastUser}
@@ -444,6 +460,19 @@ export function ComposerDock({
   )
 }
 
+/** Where a thread went on with another model. */
+function ModelSwitch({ model }: { model: string }) {
+  return (
+    <p className="flex items-center gap-2 text-caption text-muted-foreground">
+      <span className="h-px flex-1 bg-border" />
+      <span>
+        Switched to <span className="font-mono">{model}</span>
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </p>
+  )
+}
+
 /** A message on its way to the chat, and how much of the log there was when it left. */
 type Sending = {
   prompt: Prompt
@@ -478,6 +507,23 @@ function ChatComposer({
     { params: { path: { env, id: chat.sandboxId } } },
     { refetchInterval: 5000 }
   )
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
+    params: { path: { env } },
+  })
+  const teammate = teammates.data?.find((t) => t.id === chat.teammateId)
+  // The model picked here until the chat's own catches up.
+  const [model, setModel] = useState<string>()
+  const pickModel = async (m: string) => {
+    setModel(m)
+    const res = await fetchClient.PUT(
+      "/api/environments/{env}/chats/{chat}/model",
+      { params: { path }, body: { model: m } }
+    )
+    if (res.error) {
+      setModel(undefined)
+      toast.error(errorMessage(res.error))
+    }
+  }
 
   if (chat.state === "terminal") return <InTerminal env={env} chat={chat} />
   if (chat.state === "orphaned") {
@@ -551,6 +597,15 @@ function ChatComposer({
         insert={insert}
         mentionsIn={{ env, sandbox: chat.sandboxId }}
         draft={`chat:${chat.id}`}
+        hint={
+          teammate && (
+            <ModelPicker
+              teammate={teammate}
+              value={model ?? chat.model ?? ""}
+              onChange={(m) => void pickModel(m)}
+            />
+          )
+        }
         placeholder={
           chat.state === "running"
             ? `Steer ${teammateName}: this goes into the current turn, with Alt+Enter after it`

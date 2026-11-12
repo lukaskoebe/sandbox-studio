@@ -27,8 +27,9 @@ import (
 type Teammate struct {
 	Name     string
 	Role     string
-	Soul     string // markdown
-	Model    string // overrides Provider.Model when set
+	Soul     string   // markdown
+	Model    string   // overrides Provider.Model when set
+	Models   []string // offered in chats besides Model (ChatModel)
 	GitName  string
 	GitEmail string
 }
@@ -166,6 +167,27 @@ func model(p Teammate, provider Provider) string {
 	}
 	return provider.Model
 }
+
+// ChatModel is model as a chat's agent of h names it in session/set_config_option: the
+// teammate's model id, which OpenCode prefixes with the provider's ID as its config does.
+// Claude's adapter names the default its harness picks "default"; the others have no name for
+// it, and m is empty for it.
+func ChatModel(h Harness, provider Provider, m string) string {
+	switch {
+	case m == "" && h.Name() == teammates.HarnessClaude:
+		return ClaudeDefaultModel
+	case m == "" || h.Name() != teammates.HarnessOpenCode:
+		return m
+	}
+	return opencodeProviderID(provider.Kind) + "/" + m
+}
+
+// ClaudeDefaultModel is how Claude's adapter names the model Claude Code picks itself.
+const ClaudeDefaultModel = "default"
+
+// DefaultModel is the model a session of p uses when nothing switches it: the teammate's, else
+// the provider's; empty when the harness picks it.
+func DefaultModel(p Teammate, provider Provider) string { return model(p, provider) }
 
 // GitConfig is the teammate's git identity and the forges' URL rewrites as the agent user's
 // global git config. It uses the XDG location, which git reads before ~/.gitconfig, so a

@@ -324,3 +324,51 @@ func TestOpenCodeCompatibleModelImages(t *testing.T) {
 		}
 	}
 }
+
+// TestChatModel: OpenCode names a model with its provider's ID, Claude its own default
+// "default", and Codex the model as it is.
+func TestChatModel(t *testing.T) {
+	for _, c := range []struct {
+		h    Harness
+		kind string
+		m    string
+		want string
+	}{
+		{OpenCode{}, teammates.KindAnthropicAPI, "claude-opus-5-5", "anthropic/claude-opus-5-5"},
+		{OpenCode{}, teammates.KindOpenAIAPI, "gpt-5", "openai/gpt-5"},
+		{OpenCode{}, teammates.KindOpenAICompatible, "qwen3", "studio/qwen3"},
+		{OpenCode{}, teammates.KindOpenAICompatible, "", ""},
+		{Claude{}, teammates.KindClaudeSubscription, "", "default"},
+		{Claude{}, teammates.KindAnthropicAPI, "claude-opus-5-5", "claude-opus-5-5"},
+		{Codex{}, teammates.KindOpenAIAPI, "gpt-5", "gpt-5"},
+	} {
+		if got := ChatModel(c.h, Provider{Kind: c.kind}, c.m); got != c.want {
+			t.Errorf("%s %s %q = %q; want %q", c.h.Name(), c.kind, c.m, got, c.want)
+		}
+	}
+}
+
+// OpenCode knows an OpenAI-compatible endpoint's models only from its config: the models a
+// teammate also offers are there beside the default, so that a chat can switch to them.
+func TestOpenCodeListsTheOfferedModels(t *testing.T) {
+	p := teammate
+	p.Models = []string{"qwen3-small", "llama4"}
+	files, err := OpenCode{}.Render(p, Sandbox{Name: "api"}, providers[teammates.KindOpenAICompatible])
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(files, func(f GuestFile) bool { return f.Path == ".config/opencode/opencode.json" })
+	var cfg struct {
+		Model    string `json:"model"`
+		Provider map[string]struct {
+			Models map[string]any `json:"models"`
+		} `json:"provider"`
+	}
+	if err := json.Unmarshal([]byte(files[i].Content), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	models := slices.Sorted(maps.Keys(cfg.Provider[compatibleID].Models))
+	if cfg.Model != compatibleID+"/qwen3-coder:30b" || strings.Join(models, ",") != "llama4,qwen3-coder:30b,qwen3-small" {
+		t.Fatalf("model %q, models %q", cfg.Model, models)
+	}
+}

@@ -20,6 +20,11 @@
 - Previews work in the Studio app's window. They all said "Open this preview from Sandbox
   Studio.": the app's webview keeps no cookie for a framed preview. There the screen frames the
   preview on a host that carries its key, `<port>-<id>-<key>.localhost`, which needs no cookie.
+- A teammate has a **Default model** and models **Also offered in chats**. With some offered, the
+  composer picks the thread's model, from the next message; a thread keeps it and shows where it
+  changed, and a new one starts on the default. The agent switches in place over ACP; one that
+  refuses a model says so. Codex only switches to models it lists. The terminal, check-ins and
+  scheduled tasks use the default (`PUT …/chats/{chat}/model`, `model` on a new chat).
 
 ## v0.19.0 — 2026-11-12
 

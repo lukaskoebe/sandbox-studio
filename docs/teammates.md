@@ -121,7 +121,8 @@ What is built and what is verified is in [harnesses](harnesses.md#subscription-l
 ## Teammates
 
 - Name (unique in the environment), role, avatar, approval scope, soul (markdown, at most
-  16 KiB), harness, provider, model, git name and email.
+  16 KiB), harness, provider, default model, the models also offered in chats
+  ([below](#models)), git name and email.
 - The avatar is one emoji or one of the generated avatars, stored as `shape:<name>` (`circle`,
   `square`, `diamond`, `triangle`, `pentagon`, `hexagon`, `star`, `cross`), which the UI draws
   in the teammate's color. Empty shows the initials. Nothing is uploaded.
@@ -140,6 +141,25 @@ What is built and what is verified is in [harnesses](harnesses.md#subscription-l
   from approvals did before). It is the scope the approval cards for this teammate's
   sandboxes preselect for a new rule; the card still lets the user pick another. See
   [approvals](approvals.md#network-approval-cards).
+
+### Models
+
+- `model` is the teammate's default, and `models` the ones it also offers in chats: at most
+  20 ids besides the default, each checked like the default, without repeats. The form's
+  **Also offered in chats** takes them as tokens.
+- With any offered, a chat's composer has a model picker beside the attachment button, "Model
+  for this thread", with the default marked. A chat keeps its pick (`chats.model`, empty for the
+  default): `PUT /api/environments/{env}/chats/{chat}/model` with `{model}` stores it, and
+  `POST …/sandboxes/{id}/chats` takes `model` for a new chat, as the teammate's home composer
+  sends it. A model the teammate doesn't offer answers 422.
+- A pick applies from the next message. Before that prompt Studio switches the running agent
+  in place over ACP (`session/set_config_option`, `configId: "model"`); see
+  [harnesses](harnesses.md#switching-a-chats-model). An agent that refuses the model fails the
+  message with 409, which says to pick another model or start a new chat; nothing else changes.
+- Each turn keeps the model it ran on (`chat_turns.model`), and the thread shows a line where it
+  changed.
+- The terminal, check-ins and scheduled tasks always use the default. A chat opened in the
+  terminal runs the TUI on the default too.
 
 ## The conversation
 

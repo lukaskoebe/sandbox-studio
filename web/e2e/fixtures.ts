@@ -33,6 +33,8 @@ export type GuestState = {
     prompts: unknown[]
     outcomes: { outcome: { outcome: string; optionId?: string } }[]
     steers: unknown[]
+    /** The models the chat's agent was switched to, in order. */
+    models: string[]
   }[]
   /** The folders repositories were cloned to (POST …/sandboxes/{id}/clone). */
   clones: string[]
@@ -244,7 +246,12 @@ export { expect }
 
 /** A unique sandbox name for a test. */
 /** A teammate on a fake Anthropic key, added through the API if the environment has none yet. */
-export async function addTeammate(api: Api, env: string, name: string) {
+export async function addTeammate(
+  api: Api,
+  env: string,
+  name: string,
+  more: Record<string, unknown> = {}
+) {
   const providers = await api.json<
     { id: string; harnesses: string[] | null }[]
   >("GET", `/api/environments/${env}/providers`)
@@ -263,6 +270,7 @@ export async function addTeammate(api: Api, env: string, name: string) {
       harness: provider.harnesses?.at(0) ?? "claude",
       providerId: provider.id,
       model: "claude-sonnet-5-5",
+      ...more,
     }
   )
   return teammate!.id

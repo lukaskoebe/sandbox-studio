@@ -69,6 +69,7 @@ type ACPAgent struct {
 	Prompts  []json.RawMessage `json:"prompts"`
 	Outcomes []json.RawMessage `json:"outcomes"`
 	Steers   []json.RawMessage `json:"steers" doc:"Messages steered or joined into a running turn"`
+	Models   []string          `json:"models" doc:"The models session/set_config_option switched to, in order"`
 }
 
 // acpInitWithoutImages is acptest.DefaultInit for an adapter that takes no images.
@@ -89,7 +90,9 @@ func (g *Guest) serveACP(st net.Conn, br *bufio.Reader) error {
 	}
 	// Like the adapters: OpenCode joins a prompt sent mid-turn into the turn, Claude and Codex
 	// take _session/steering.
-	a := &acptest.Agent{SessionID: "e2e-session-" + req.Chat, Turns: acpTurns(20), Joins: req.Harness == "opencode", Steering: req.Harness != "opencode"}
+	// A model named "refused" is one the agent doesn't list, as Codex refuses one.
+	a := &acptest.Agent{SessionID: "e2e-session-" + req.Chat, Turns: acpTurns(20), Joins: req.Harness == "opencode", Steering: req.Harness != "opencode",
+		RefuseModel: []string{"refused", "studio/refused", "anthropic/refused", "openai/refused"}}
 	g.mu.Lock()
 	if g.noImages {
 		a.Init = acpInitWithoutImages
@@ -119,7 +122,7 @@ func (g *Guest) acpState() []ACPAgent {
 	out := []ACPAgent{}
 	for _, p := range procs {
 		prompts, outcomes, _ := p.agent.Snapshot()
-		out = append(out, ACPAgent{Chat: p.start.Chat, Harness: p.start.Harness, Prompts: orEmpty(prompts), Outcomes: orEmpty(outcomes), Steers: orEmpty(p.agent.Steered())})
+		out = append(out, ACPAgent{Chat: p.start.Chat, Harness: p.start.Harness, Prompts: orEmpty(prompts), Outcomes: orEmpty(outcomes), Steers: orEmpty(p.agent.Steered()), Models: append([]string{}, p.agent.SwitchedModels()...)})
 	}
 	return out
 }

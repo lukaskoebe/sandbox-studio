@@ -30,6 +30,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ModelsInput } from "@/components/models-input"
 import { ModelSuggestions } from "@/components/provider-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
@@ -141,6 +142,7 @@ export function TeammateForm({
     teammate?.harness ?? supported[0]
   )
   const [model, setModel] = useState(teammate?.model ?? "")
+  const [models, setModels] = useState<string[]>(teammate?.models ?? [])
   const [gitName, setGitName] = useState(teammate?.gitName ?? "")
   const [gitEmail, setGitEmail] = useState(teammate?.gitEmail ?? "")
   const [useHostGit, setUseHostGit] = useState(
@@ -202,6 +204,7 @@ export function TeammateForm({
     harness: h,
     providerId,
     model: model.trim() || undefined,
+    models: models.filter((m) => m !== model.trim()),
     gitName: gitName.trim() || undefined,
     gitEmail: gitEmail.trim() || undefined,
     useHostGitIdentity: useHostGit || undefined,
@@ -227,6 +230,7 @@ export function TeammateForm({
       providerId !== teammate.providerId ||
       harness !== teammate.harness ||
       model !== teammate.model ||
+      models.join(" ") !== (teammate.models ?? []).join(" ") ||
       gitName !== teammate.gitName ||
       gitEmail !== teammate.gitEmail ||
       useHostGit !== teammate.useHostGitIdentity ||
@@ -251,6 +255,7 @@ export function TeammateForm({
       setProviderId(teammate.providerId)
       setHarness(teammate.harness)
       setModel(teammate.model)
+      setModels(teammate.models ?? [])
       setGitName(teammate.gitName)
       setGitEmail(teammate.gitEmail)
       setUseHostGit(teammate.useHostGitIdentity)
@@ -271,6 +276,7 @@ export function TeammateForm({
       harness && harnessLabels[harness],
       provider?.name,
       model.trim() || undefined,
+      models.length > 0 ? `+${models.length} in chats` : undefined,
     ]
       .filter(Boolean)
       .join(" · "),
@@ -411,7 +417,7 @@ export function TeammateForm({
             </FieldDescription>
           </Field>
           <Field>
-            <FieldLabel htmlFor="teammate-model">Model</FieldLabel>
+            <FieldLabel htmlFor="teammate-model">Default model</FieldLabel>
             <Input
               id="teammate-model"
               className="font-mono"
@@ -434,6 +440,22 @@ export function TeammateForm({
             {compatible && (
               <ModelSuggestions id="teammate-models" {...suggestions} />
             )}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="teammate-offered">
+              Also offered in chats
+            </FieldLabel>
+            <ModelsInput
+              id="teammate-offered"
+              value={models}
+              onChange={setModels}
+              exclude={model.trim()}
+              list={compatible ? "teammate-models" : undefined}
+            />
+            <FieldDescription>
+              A chat picks one of these or the default in its composer. The
+              terminal, check-ins and scheduled tasks use the default.
+            </FieldDescription>
           </Field>
         </FormSection>
         <FormSection

@@ -1003,6 +1003,10 @@
           "id": {
             "type": "string"
           },
+          "model": {
+            "description": "The model the chat runs on from its next message; empty is the teammate's default",
+            "type": "string"
+          },
           "rev": {
             "description": "The chat's change counter: every change to the chat, its turns or its items raises it",
             "format": "int64",
@@ -3589,6 +3593,17 @@
             "maxLength": 128,
             "type": "string"
           },
+          "models": {
+            "description": "Models also offered in chats",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "name": {
             "maxLength": 64,
             "minLength": 1,
@@ -5780,6 +5795,20 @@
         ],
         "type": "object"
       },
+      "ModelInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "description": "One of the models the chat's teammate offers; empty for its default",
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "type": "object"
+      },
       "NavigateBrowserInBody": {
         "additionalProperties": false,
         "properties": {
@@ -5877,6 +5906,43 @@
           "sandboxName",
           "patterns"
         ],
+        "type": "object"
+      },
+      "NewChatRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attachments": {
+            "description": "At most 10 MiB in total",
+            "items": {
+              "$ref": "#/components/schemas/PromptFile"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "mentions": {
+            "description": "Files of the workspace the text names as @path; the agent gets a link to each",
+            "items": {
+              "$ref": "#/components/schemas/Mention"
+            },
+            "maxItems": 50,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "model": {
+            "description": "One of the models the sandbox's teammate offers; omitted for its default",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 262144,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "OpenInBody": {
@@ -9915,7 +9981,18 @@
             "type": "string"
           },
           "model": {
+            "description": "The default model: new chats, the terminal, check-ins and scheduled runs use it. Empty lets the harness pick",
             "type": "string"
+          },
+          "models": {
+            "description": "The models also offered in chats, besides the default",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
@@ -9962,6 +10039,7 @@
           "harness",
           "providerId",
           "model",
+          "models",
           "gitName",
           "gitEmail",
           "useHostGitIdentity",
@@ -10079,9 +10157,20 @@
             "type": "string"
           },
           "model": {
-            "description": "Required for API-key providers; defaults to the model of an OpenAI-compatible provider",
+            "description": "The default model. Required for API-key providers; defaults to the model of an OpenAI-compatible provider",
             "maxLength": 128,
             "type": "string"
+          },
+          "models": {
+            "description": "Models also offered in chats besides the default; each chat picks one",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "name": {
             "maxLength": 64,
@@ -10704,6 +10793,10 @@
             "type": "string"
           },
           "id": {
+            "type": "string"
+          },
+          "model": {
+            "description": "The model the turn was sent with; empty when Studio doesn't know it, such as in the terminal",
             "type": "string"
           },
           "origin": {
@@ -12776,6 +12869,69 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/model": {
+      "put": {
+        "description": "Sets the model the chat runs on from its next message: its teammate's default or one of the models it also offers. The agent switches its session when that message goes; an agent that can't refuses the message with 409. The terminal, check-ins and scheduled runs keep the default.",
+        "operationId": "setChatModel",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {
@@ -17645,7 +17801,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PromptRequest"
+                "$ref": "#/components/schemas/NewChatRequest"
               }
             }
           }
