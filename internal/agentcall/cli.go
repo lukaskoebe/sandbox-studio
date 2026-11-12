@@ -107,6 +107,7 @@ var commandNames = map[string]struct {
 	agentproto.MethodGitReviewStatus:            {"pr review-status", []string{"number"}},
 	agentproto.MethodGitPullRequestChecks:       {"pr checks", []string{"number"}},
 	agentproto.MethodSandboxInfo:                {"info", nil},
+	agentproto.MethodApprovalStatus:             {"wait", []string{"approval"}},
 	agentproto.MethodBrowserOpen:                {"browser open", []string{"url"}},
 	agentproto.MethodBrowserClick:               {"browser click", []string{"ref"}},
 	agentproto.MethodBrowserFill:                {"browser fill", []string{"ref", "text"}},
@@ -538,8 +539,11 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 		fmt.Fprintf(env.Stderr, "studio: %v\n", err)
 		return ExitFailed
 	}
-	if tool == agentproto.MethodGitPullRequestChecks {
+	switch tool {
+	case agentproto.MethodGitPullRequestChecks:
 		return checksResult(ctx, c, tool, inv, env, result)
+	case agentproto.MethodApprovalStatus:
+		return waitResult(ctx, c, tool, inv, env, result)
 	}
 	if awaiting(result) {
 		follow, params := statusCall(tool, inv.params, result)
@@ -547,7 +551,10 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 			if code := print(result, inv, tool, env); code != ExitOK {
 				return code
 			}
-			if follow != "" {
+			switch id := approvalOf(result); {
+			case id != "":
+				fmt.Fprintf(env.Stderr, "studio: waiting for the user; `studio wait %s` waits for the decision\n", id)
+			case follow != "":
 				fmt.Fprintln(env.Stderr, "studio: waiting for the user; run it with --wait to wait for the decision")
 			}
 			return ExitWaiting
@@ -563,6 +570,57 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 		}
 	}
 	return print(result, inv, tool, env)
+}
+
+// waitResult is `studio wait`: it asks again until the approval is settled, then prints it. It
+// exits 0 when the user approved and what that did went through, 1 when they denied or dismissed
+// it or the forge refused it.
+func waitResult(ctx context.Context, c Caller, tool string, inv invocation, env CLIEnv, result json.RawMessage) int {
+	var st struct {
+		Status  string `json:"status"`
+		Settled bool   `json:"settled"`
+		Result  struct {
+			Status string `json:"status"`
+		} `json:"result"`
+	}
+	_ = json.Unmarshal(result, &st)
+	for !st.Settled {
+		if !sleep(ctx, env.Poll) {
+			return ExitFailed
+		}
+		var err error
+		if result, err = call(ctx, c, tool, inv.params); err != nil {
+			fmt.Fprintf(env.Stderr, "studio: %v\n", err)
+			return ExitFailed
+		}
+		st.Result.Status = ""
+		_ = json.Unmarshal(result, &st)
+	}
+	if code := print(result, inv, tool, env); code != ExitOK {
+		return code
+	}
+	if st.Status != "approved" || st.Result.Status == "failed" {
+		return ExitFailed
+	}
+	return ExitOK
+}
+
+// approvalOf is the approval ID a result that waits for the user names, at its top or in its
+// pullRequest (pr create's is an object, pr review's a string).
+func approvalOf(result json.RawMessage) string {
+	var v struct {
+		Approval    string          `json:"approval"`
+		PullRequest json.RawMessage `json:"pullRequest"`
+	}
+	_ = json.Unmarshal(result, &v)
+	if v.Approval == "" && len(v.PullRequest) > 0 {
+		var pr struct {
+			Approval string `json:"approval"`
+		}
+		_ = json.Unmarshal(v.PullRequest, &pr)
+		return pr.Approval
+	}
+	return v.Approval
 }
 
 // checksPolls is how many Polls `pr checks --wait` waits between reads: 30 seconds.

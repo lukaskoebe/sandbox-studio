@@ -485,7 +485,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		BaseVersion: version.Version,
 	}
 	hub.OnConnect = mgr.Configure
-	integs = append(integs, &sandboxinfo.Service{Store: st, Ports: hub.Ports, Level: engine.Level})
+	// Kinds reads integs when called, by when every integration is in it.
+	integs = append(integs, &sandboxinfo.Service{Store: st, Ports: hub.Ports, Level: engine.Level,
+		Kinds: func(kind string) (integrations.ApprovalKind, bool) { return integs.Kind(kind) }})
 	// Every integration that serves MCP tools is in integs by now; the chat service serves none.
 	tsk := &tasks.Service{Store: st, Bus: bus, Log: log}
 	route := routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)

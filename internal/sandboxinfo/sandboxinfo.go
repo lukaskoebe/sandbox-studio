@@ -28,6 +28,9 @@ type Service struct {
 	Level func(ctx context.Context, envID, teammateID string) (string, error)
 	// Now is the clock that decides which rules have expired; time.Now when nil.
 	Now func() time.Time
+	// Kinds finds the integration that settles an approval kind (integrations.Set.Kind), for
+	// what became of a decided approval.
+	Kinds func(kind string) (integrations.ApprovalKind, bool)
 }
 
 func (s *Service) ID() string                                 { return "sandbox-info" }
@@ -35,7 +38,10 @@ func (s *Service) Routes() []gateway.VirtualHost              { return nil }
 func (s *Service) ApprovalKinds() []integrations.ApprovalKind { return nil }
 func (s *Service) Jobs() []integrations.Job                   { return nil }
 func (s *Service) Tools() []integrations.Tool {
-	return []integrations.Tool{{Def: agentcall.SandboxInfoTool, Handle: s.info}}
+	return []integrations.Tool{
+		{Def: agentcall.SandboxInfoTool, Handle: s.info},
+		{Def: agentcall.ApprovalStatusTool, Handle: s.approvalStatus},
+	}
 }
 
 // Info is what sandbox_info returns.

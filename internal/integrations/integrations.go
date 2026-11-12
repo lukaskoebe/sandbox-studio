@@ -76,6 +76,11 @@ type PullRequestChoice struct {
 type ApprovalKind struct {
 	Kind   string
 	Decide func(ctx context.Context, a store.Approval, d Decision) error
+	// Outcome, where the kind has one, is what became of a decided approval for the agent's
+	// approval_status (docs/agent-cli.md#waiting-for-the-user): a pull request opened or a
+	// review posted, with failed as its status when the forge refused it. settled is false
+	// while the decision is still being carried out. Nil: an approval is settled once decided.
+	Outcome func(ctx context.Context, a store.Approval) (result map[string]any, settled bool, err error)
 }
 
 // Tool is an MCP tool an integration serves to agents. Def is its definition in the

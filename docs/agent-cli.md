@@ -81,8 +81,32 @@ With `--wait` the command keeps asking every 5 seconds:
 - `pr review` waits through `git_pull_request_review_status`.
 - A refusal that only waits is retried as it was.
 
-There are no approval IDs and no `studio wait <id>` command. Those would need a host API that
-names pending approvals to the guest, which is left for later.
+### Waiting for the user
+
+An answer that waits for the user names its approval: `approval` in `pr review`'s answer and
+in `pr create`'s `pullRequest`, and on a pending push in `git pushes`. The command's stderr
+then names `studio wait <id>`.
+
+`studio wait <id>` asks `approval_status` every 5 seconds until the approval is settled, then
+prints it:
+
+- `status` is pending, approved, denied or dismissed, and `settled` says whether it's over.
+- An approved push, pull request or review is settled once Studio has carried it out, with
+  `result` saying what became of it (pushed, opened, posted, or failed with the forge's
+  answer). These come from the kind's `Outcome` (`integrations.ApprovalKind`). Any other kind
+  is settled once decided.
+- It exits 0 when the user approved and that went through, and 1 when they denied or dismissed
+  it or the forge refused it.
+
+`approval_status` answers only for the calling sandbox's approvals; another sandbox's ID reads
+as unknown. It's also an MCP tool, for agents without the command.
+
+Asking again, as after a timeout, doesn't make a second card:
+
+- `pr create` answers with the pushed branch's pull request once one is proposed.
+- `pr review` takes `--idempotency-key <key>`. A call with a key this sandbox drafted a review
+  with answers with that draft's status instead of drafting again, which would replace it. The
+  key is kept in the approval's payload as `idempotencyKey` (`store.ApprovalByKey`).
 
 ## Browser
 

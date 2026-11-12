@@ -477,8 +477,10 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   the diff doesn't show, asks the forge for the token's account, and creates a `git.review`
   approval with the subject `<forge>/<owner>/<repo>#<n>` and a `git_reviews` row
   (migration 051) holding the head commit the draft was written against. The agent gets
-  "awaiting approval" at once. A newer draft for the same pull request from the same sandbox
-  supersedes one still waiting.
+  "awaiting approval" at once, with the approval's ID for `approval_status` and `studio wait`
+  (docs/agent-cli.md#waiting-for-the-user). A newer draft for the same pull request from the
+  same sandbox supersedes one still waiting, except a call with an `idempotency_key` the
+  sandbox already drafted with, which answers with that draft.
 - **The review** (`ForgeReview` in `web/src/components/forge-review.tsx`, in the same sheet,
   review page and Git tab as a push) shows the pull request, a link to it on the forge, the
   verdict as a toggle, the summary, the diff with the draft's comments on their lines, and a

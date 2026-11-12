@@ -290,6 +290,8 @@ const (
 
 	// MethodSandboxInfo is the sandbox describing itself: its ports and its network policy.
 	MethodSandboxInfo = "sandbox_info"
+	// MethodApprovalStatus is what became of one of the sandbox's approvals, by its ID.
+	MethodApprovalStatus = "approval_status"
 
 	// MethodForgeSync fetches ~/forge again now (docs/agent-cli.md#forge). It is no MCP tool:
 	// only `studio forge sync` makes it.

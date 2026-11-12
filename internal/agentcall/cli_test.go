@@ -381,3 +381,48 @@ func TestCLIChecksWait(t *testing.T) {
 		t.Fatalf("passed: code %d", r.code)
 	}
 }
+
+// An answer that waits for the user names `studio wait <id>`, which asks approval_status until
+// the approval is settled: 0 when approved and done, 1 when denied or failed.
+func TestCLIWaitForAnApproval(t *testing.T) {
+	reads := 0
+	outcome := map[string]any{"status": "posted", "url": "https://github.com/o/r/pull/9#review"}
+	f := &fakeCaller{reply: func(method string, raw json.RawMessage) (any, error) {
+		switch method {
+		case agentproto.MethodGitPullRequestReview:
+			return map[string]any{"status": "awaiting approval", "approval": "ap1", "pullRequest": "o/r#9"}, nil
+		case agentproto.MethodApprovalStatus:
+			reads++
+			switch {
+			case reads == 1:
+				return map[string]any{"approval": "ap1", "status": "pending", "settled": false}, nil
+			case reads == 2:
+				// Approved, still posting.
+				return map[string]any{"approval": "ap1", "status": "approved", "settled": false}, nil
+			}
+			return map[string]any{"approval": "ap1", "status": "approved", "settled": true, "result": outcome}, nil
+		}
+		return nil, errors.New("unexpected " + method)
+	}}
+	r := runCLI(t, f, "", nil, "pr", "review", "9", "--repository", "o/r", "--verdict", "comment", "--summary", "LGTM")
+	if r.code != ExitWaiting || !strings.Contains(r.stderr, "studio wait ap1") {
+		t.Fatalf("code %d, stderr %q", r.code, r.stderr)
+	}
+	r = runCLI(t, f, "", nil, "wait", "ap1")
+	if r.code != ExitOK || reads != 3 || !strings.Contains(r.stdout, "posted") {
+		t.Fatalf("code %d, reads %d, stdout %q", r.code, reads, r.stdout)
+	}
+	if got := params(t, f.calls[len(f.calls)-1]); got["approval"] != "ap1" {
+		t.Fatalf("asked %v", got)
+	}
+	outcome = map[string]any{"status": "failed", "reason": "403"}
+	if r = runCLI(t, f, "", nil, "wait", "ap1"); r.code != ExitFailed {
+		t.Fatalf("failed: code %d", r.code)
+	}
+	f.reply = func(string, json.RawMessage) (any, error) {
+		return map[string]any{"approval": "ap1", "status": "denied", "settled": true}, nil
+	}
+	if r = runCLI(t, f, "", nil, "wait", "ap1"); r.code != ExitFailed {
+		t.Fatalf("denied: code %d", r.code)
+	}
+}

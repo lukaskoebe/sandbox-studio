@@ -116,7 +116,13 @@ func TestPullRequestCreateProposesOneForAPushedBranch(t *testing.T) {
 	if len(pending) != 1 {
 		t.Fatalf("pending proposals = %d, want 1", len(pending))
 	}
+	if !strings.Contains(out, `"approval":"`+pending[0].ID+`"`) {
+		t.Fatalf("the answer names no approval: %s", out)
+	}
 	h.decide(t, pending[0], integrations.Allow, "")
+	if res, settled, err := h.svc.prOutcome(h.ctx, pending[0]); err != nil || !settled || res["status"] != "opened" {
+		t.Fatalf("outcome = %v %v %v", res, settled, err)
+	}
 	if len(h.forge.pulls) != 1 || h.forge.pulls[0].Title != "Add a, tested" || h.forge.pulls[0].Head != "feature" ||
 		h.forge.pulls[0].Base != "main" || !strings.HasPrefix(h.forge.pulls[0].Body, "Adds a.") {
 		t.Fatalf("opened = %+v", h.forge.pulls)

@@ -6141,6 +6141,8 @@ export interface components {
             forge: string;
             /** @description The forge's host, which the review posts to */
             forgeHost: string;
+            /** @description The agent's key for this draft, so that asking again doesn't draft it twice */
+            idempotencyKey?: string;
             /** @description The account opened the pull request, so the forge takes a verdict only as a comment */
             ownPullRequest?: boolean;
             owner: string;

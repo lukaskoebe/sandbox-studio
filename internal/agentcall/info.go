@@ -16,8 +16,19 @@ var SandboxInfoTool = Tool{agentproto.MethodSandboxInfo,
 		"Ask again after starting a server; nothing here changes what you may do.",
 	obj(nil, map[string]any{})}
 
+// ApprovalStatusTool says what became of one of the sandbox's approvals; internal/sandboxinfo
+// serves it, and `studio wait` asks it until the approval is settled.
+var ApprovalStatusTool = Tool{agentproto.MethodApprovalStatus,
+	"What became of something you asked the user to approve, by the approval ID an answer with \"awaiting approval\" " +
+		"gave: its status (pending, approved, denied, dismissed), whether it is settled, and once it is, the result " +
+		"(the pull request opened, the review or comment posted, the push pushed, or failed with the forge's answer). " +
+		"Don't ask it in a loop: `studio wait <id>` waits for you.",
+	obj([]string{"approval"}, map[string]any{
+		"approval": str("The approval's ID", "maxLength", 100),
+	})}
+
 func init() {
-	Tools = append(Tools, SandboxInfoTool)
+	Tools = append(Tools, SandboxInfoTool, ApprovalStatusTool)
 }
 
 // RunInfo is `studio-agent info`: it prints what sandbox_info returns, as indented JSON.

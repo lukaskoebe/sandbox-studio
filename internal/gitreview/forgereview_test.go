@@ -185,18 +185,31 @@ func TestReviewDraftWaitsForApprovalAndPostsTheEdits(t *testing.T) {
 	draft := `{"repository":"acme/web","number":42,"verdict":"request_changes","summary":"Validate against the final total.",
 		"comments":[{"path":"web/coupon.ts","line":21,"body":"Use finalTotal(cart)"},{"path":"web/coupon.ts","line":21,"side":"old","body":"This was right"}]}`
 	got, err := callReviewTool(t, svc.toolPullRequestReview, sb, draft)
-	if err != nil || got["status"] != "awaiting approval" {
+	if err != nil || got["status"] != "awaiting approval" || got["approval"] == "" {
 		t.Fatalf("draft: %v %v", got, err)
 	}
 	// A second draft replaces the first.
-	if _, err := callReviewTool(t, svc.toolPullRequestReview, sb, draft); err != nil {
+	keyed := strings.Replace(draft, `"number":42,`, `"number":42,"idempotency_key":"k1",`, 1)
+	second, err := callReviewTool(t, svc.toolPullRequestReview, sb, keyed)
+	if err != nil {
 		t.Fatal(err)
 	}
 	pending, err := st.Approvals(ctx, sb.EnvironmentID, store.StatusPending, 10)
-	if err != nil || len(pending) != 1 || pending[0].Kind != KindReview {
+	if err != nil || len(pending) != 1 || pending[0].Kind != KindReview || pending[0].ID != second["approval"] {
 		t.Fatalf("pending: %v %v", pending, err)
 	}
+	// Asked again with its key, as after a timeout, the draft answers instead of being replaced.
+	again, err := callReviewTool(t, svc.toolPullRequestReview, sb, keyed)
+	if err != nil || again["approval"] != second["approval"] || again["status"] != "awaiting approval" {
+		t.Fatalf("again: %v %v", again, err)
+	}
+	if pending, _ = st.Approvals(ctx, sb.EnvironmentID, store.StatusPending, 10); len(pending) != 1 || pending[0].ID != second["approval"] {
+		t.Fatalf("the keyed call drafted again: %v", pending)
+	}
 	a := pending[0]
+	if res, settled, err := svc.reviewOutcome(ctx, a); err != nil || settled || res != nil {
+		t.Fatalf("outcome while pending: %v %v %v", res, settled, err)
+	}
 	detail, err := svc.ReviewDetail(ctx, a)
 	if err != nil || detail.Draft.Account != "lukas" || detail.Draft.Own || len(detail.Draft.Comments) != 2 || detail.Review.HeadSHA != "abc123" {
 		t.Fatalf("detail: %+v %v", detail, err)
@@ -227,6 +240,12 @@ func TestReviewDraftWaitsForApprovalAndPostsTheEdits(t *testing.T) {
 	status, _ = callReviewTool(t, svc.toolReviewStatus, sb, `{"repository":"acme/web","number":42}`)
 	if status["status"] != "posted" || status["url"] != "https://forge.example/acme/web/pulls/42#review-7" {
 		t.Fatalf("status: %v", status)
+	}
+	if res, settled, err := svc.reviewOutcome(ctx, a); err != nil || !settled || res["status"] != "posted" {
+		t.Fatalf("outcome once posted: %v %v %v", res, settled, err)
+	}
+	if again, _ = callReviewTool(t, svc.toolPullRequestReview, sb, keyed); again["status"] != "posted" {
+		t.Fatalf("again once posted: %v", again)
 	}
 	note, done, err := svc.PromptNote(ctx, sb.EnvironmentID, sb.ID)
 	if err != nil || !strings.Contains(note, "your review of acme/web#42 on forge was posted: https://forge.example/acme/web/pulls/42#review-7") {

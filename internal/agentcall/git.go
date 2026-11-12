@@ -90,7 +90,7 @@ var GitPullRequestReadTool = Tool{agentproto.MethodGitPullRequestRead,
 var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
 	"Drafts a review of a pull request, yours or anyone's: a verdict, a summary and comments on lines of its diff. To only " +
 		"comment, use verdict comment. Nothing is posted yet: the user " +
-		"sees the draft beside the diff, can edit it, and posts or discards it. The call answers at once with \"awaiting approval\"; " +
+		"sees the draft beside the diff, can edit it, and posts or discards it. The call answers at once with \"awaiting approval\" and the approval ID; " +
 		"git_pull_request_review_status says what became of it. A comment must be on a line the diff shows, as added or kept (side new) " +
 		"or removed (side old). A new draft for the same pull request replaces one still waiting.",
 	obj([]string{"repository", "number", "verdict", "summary"}, map[string]any{
@@ -105,7 +105,11 @@ var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
 			"side": map[string]any{"type": "string", "enum": []string{"new", "old"}, "description": "Default new"},
 			"body": str("The comment, in Markdown", "maxLength", 5000),
 		})},
+		"idempotency_key": idempotencyKey,
 	})}
+
+// idempotencyKey lets an agent ask again, as after a timeout, without making a second draft.
+var idempotencyKey = str("Any key of yours for this draft, such as a UUID: asking again with the same key answers with the draft it made instead of making another", "maxLength", 200)
 
 // GitReviewStatusTool reports what became of the newest review drafted for a pull request.
 var GitReviewStatusTool = Tool{agentproto.MethodGitReviewStatus,

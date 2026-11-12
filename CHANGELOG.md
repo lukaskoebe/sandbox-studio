@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `studio wait <id>` waits for the user's decision on something an agent asked to approve, and
+  says what became of it: the push pushed, the pull request opened, the review posted, or
+  failed with the forge's answer. It exits 0 when that went through and 1 otherwise.
+  - Answers that wait for the user name their approval, and the command's message names
+    `studio wait`. `git pushes` names a pending push's approval.
+  - `approval_status` is also an MCP tool, and answers only about the sandbox's own approvals.
+  - `pr review --idempotency-key <key>`: asking again with the key, as after a timeout,
+    answers with the draft already made instead of replacing it with a second.
 - `studio pr checks` shows a pull request's CI checks: GitHub's check runs and statuses,
   GitLab's pipeline jobs, and Forgejo's and Gitea's commit statuses.
   - A failed check comes with the end of its log, where the forge serves one (GitHub Actions

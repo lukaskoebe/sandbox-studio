@@ -44,6 +44,7 @@ type pushView struct {
 	State      string    `json:"state"`
 	Result     string    `json:"result,omitempty" doc:"What the forge answered, or why the push failed"`
 	Note       string    `json:"note,omitempty" doc:"The reviewer's note"`
+	Approval   string    `json:"approval,omitempty" doc:"A pending push's approval, for approval_status"`
 	Updated    time.Time `json:"updated"`
 }
 
@@ -65,6 +66,9 @@ func (s *Service) toolPushStatus(ctx context.Context, sb store.Sandbox, params j
 	for _, p := range ps {
 		out = append(out, pushView{Branch: strings.TrimPrefix(p.Ref, "refs/heads/"), Forge: p.ForgeName, Repository: repoPath(p),
 			State: p.State, Result: p.Result, Note: p.Note, Updated: p.UpdatedAt})
+		if p.State == store.PushPending {
+			out[len(out)-1].Approval = p.ApprovalID
+		}
 	}
 	return map[string]any{"pushes": out}, nil
 }
@@ -199,14 +203,15 @@ func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, p
 	if p.PRApprovalID == "" {
 		return nil, errors.New("Studio could not propose the pull request")
 	}
-	return answer(map[string]any{"status": "awaiting approval"}), nil
+	return answer(pullRequestView(p)), nil
 }
 
-// pullRequestView is a push's pull request as the stored record says it.
+// pullRequestView is a push's pull request as the stored record says it. One awaiting approval
+// names its approval, for approval_status (`studio wait`).
 func pullRequestView(p store.GitPush) map[string]any {
 	switch {
 	case p.PRResult == "":
-		return map[string]any{"status": "awaiting approval"}
+		return map[string]any{"status": "awaiting approval", "approval": p.PRApprovalID}
 	case p.PRResult == "opened", p.PRResult == PRUpdated:
 		return map[string]any{"status": "opened", "url": p.PRURL}
 	case strings.HasPrefix(p.PRResult, "not opened"):

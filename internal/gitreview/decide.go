@@ -33,11 +33,54 @@ type GitDetail struct {
 // ApprovalKinds are the approvals the git remote raises.
 func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 	return []integrations.ApprovalKind{
-		{Kind: KindPush, Decide: s.decidePush},
-		{Kind: KindPR, Decide: s.decidePR},
-		{Kind: KindReview, Decide: s.decideReview},
+		{Kind: KindPush, Decide: s.decidePush, Outcome: s.pushOutcome},
+		{Kind: KindPR, Decide: s.decidePR, Outcome: s.prOutcome},
+		{Kind: KindReview, Decide: s.decideReview, Outcome: s.reviewOutcome},
 		{Kind: KindCredential, Decide: s.decideCredential},
 	}
+}
+
+// pushOutcome is what became of an approved push: pushed, or failed with the forge's answer.
+func (s *Service) pushOutcome(ctx context.Context, a store.Approval) (map[string]any, bool, error) {
+	p, err := s.Store.GitPushByApproval(ctx, a.EnvironmentID, a.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if p.State == store.PushPending {
+		return nil, false, nil
+	}
+	v := map[string]any{"status": p.State, "branch": strings.TrimPrefix(p.Ref, "refs/heads/"), "forge": p.ForgeName, "repository": repoPath(p)}
+	if p.Result != "" {
+		v["result"] = p.Result
+	}
+	if p.Note != "" {
+		v["note"] = p.Note
+	}
+	return v, true, nil
+}
+
+// prOutcome is what became of a proposed pull request: opened with its URL, or failed.
+func (s *Service) prOutcome(ctx context.Context, a store.Approval) (map[string]any, bool, error) {
+	p, err := s.Store.GitPushByApproval(ctx, a.EnvironmentID, a.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if p.PRResult == "" {
+		return nil, false, nil
+	}
+	return pullRequestView(p), true, nil
+}
+
+// reviewOutcome is what became of a drafted review: posted with its URL, discarded, or failed.
+func (s *Service) reviewOutcome(ctx context.Context, a store.Approval) (map[string]any, bool, error) {
+	r, err := s.Store.GitReviewByApproval(ctx, a.EnvironmentID, a.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if r.State == store.ReviewPending {
+		return nil, false, nil
+	}
+	return reviewView(r), true, nil
 }
 
 // GitDetail describes a git approval for the inbox.

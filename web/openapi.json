@@ -8223,6 +8223,10 @@
             "description": "The forge's host, which the review posts to",
             "type": "string"
           },
+          "idempotencyKey": {
+            "description": "The agent's key for this draft, so that asking again doesn't draft it twice",
+            "type": "string"
+          },
           "ownPullRequest": {
             "description": "The account opened the pull request, so the forge takes a verdict only as a comment",
             "type": "boolean"

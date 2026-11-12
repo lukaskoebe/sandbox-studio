@@ -469,6 +469,18 @@ func (s *Store) Approval(ctx context.Context, envID, id string) (Approval, error
 	return a, err
 }
 
+// ApprovalByKey returns a sandbox's newest approval of a kind made with the agent's idempotency
+// key, which the approval's payload keeps as idempotencyKey.
+func (s *Store) ApprovalByKey(ctx context.Context, envID, sandboxID, kind, key string) (Approval, error) {
+	a, err := scanApproval(s.db.QueryRowContext(ctx, "SELECT "+approvalCols+` FROM approvals
+		WHERE environment_id = ? AND sandbox_id = ? AND kind = ? AND CASE WHEN json_valid(payload) THEN json_extract(payload, '$.idempotencyKey') END = ?
+		ORDER BY created_at DESC, rowid DESC LIMIT 1`, envID, sandboxID, kind, key))
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrNotFound
+	}
+	return a, err
+}
+
 // Approvals lists approvals, newest first. An empty envID lists all environments, for
 // the inbox that pops up wherever the user is; an empty status lists every status.
 func (s *Store) Approvals(ctx context.Context, envID, status string, limit int) ([]Approval, error) {

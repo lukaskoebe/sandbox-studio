@@ -43,6 +43,8 @@ type ReviewDraft struct {
 	Summary       string          `json:"summary"`
 	Comments      []ReviewComment `json:"comments"`
 	Attribution   bool            `json:"attribution,omitempty" doc:"The posted review ends with the line saying the teammate wrote it"`
+	// IdempotencyKey is the agent's key for the draft: asking again with it answers with this draft.
+	IdempotencyKey string `json:"idempotencyKey,omitempty" doc:"The agent's key for this draft, so that asking again doesn't draft it twice"`
 }
 
 // ReviewDetail describes a git.review approval for the inbox.
@@ -183,9 +185,24 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 		Verdict  string          `json:"verdict"`
 		Summary  string          `json:"summary"`
 		Comments []ReviewComment `json:"comments"`
+		Key      string          `json:"idempotency_key"`
 	}
 	if err := decodeArgs(params, &in); err != nil {
 		return nil, err
+	}
+	if key := strings.TrimSpace(in.Key); key != "" {
+		// Asked again, as after a timeout: the draft made with the key answers.
+		a, err := s.Store.ApprovalByKey(ctx, sb.EnvironmentID, sb.ID, KindReview, key)
+		if err == nil {
+			r, err := s.Store.GitReviewByApproval(ctx, sb.EnvironmentID, a.ID)
+			if err != nil {
+				return nil, err
+			}
+			return reviewView(r), nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
 	}
 	f, rv, err := s.reviewForge(ctx, sb.EnvironmentID, in.Forge)
 	if err != nil {
@@ -196,7 +213,7 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 		return nil, err
 	}
 	draft := ReviewDraft{Forge: f.Name, ForgeHost: forgeHost(f), Owner: owner, Repo: repo, Sandbox: sb.Name,
-		Verdict: in.Verdict, Summary: strings.TrimSpace(in.Summary), Comments: in.Comments}
+		Verdict: in.Verdict, Summary: strings.TrimSpace(in.Summary), Comments: in.Comments, IdempotencyKey: strings.TrimSpace(in.Key)}
 	if err := checkReview(draft.Verdict, draft.Summary, draft.Comments); err != nil {
 		return nil, integrations.ToolError("%s", err)
 	}
@@ -271,7 +288,7 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 		return nil, err
 	}
 	s.publish(sb.EnvironmentID, a.ID)
-	out := map[string]any{"status": "awaiting approval", "pullRequest": fmt.Sprintf("%s/%s#%d", owner, repo, in.Number)}
+	out := map[string]any{"status": "awaiting approval", "approval": a.ID, "pullRequest": fmt.Sprintf("%s/%s#%d", owner, repo, in.Number)}
 	if draft.Own && draft.Verdict != VerdictComment {
 		out["note"] = "The forge's account is the pull request's author, so the verdict is posted as a comment."
 	}
@@ -339,7 +356,7 @@ func reviewView(r store.GitReview) map[string]any {
 	v := map[string]any{"forge": r.ForgeName, "pullRequest": fmt.Sprintf("%s/%s#%d", r.Owner, r.Repo, r.Number), "updated": r.UpdatedAt}
 	switch r.State {
 	case store.ReviewPending:
-		v["status"] = "awaiting approval"
+		v["status"], v["approval"] = "awaiting approval", r.ApprovalID
 	case store.ReviewPosted:
 		v["status"], v["url"] = "posted", r.URL
 		if r.Result != "" {
