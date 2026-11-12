@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- A sleeping browser picks up where it left off: its last pages, each of which wakes it on that
+  page, **Wake on** its last host, and the sites whose logins it keeps, as chips.
+- A preview has a browser bar locked to it: back, forward and reload; the address shows the
+  port as a fixed part that opens the port picker, and the path after it is typed; it lists
+  the pages visited and shows a thin bar while one loads. A link to another site opens in a
+  new tab, and one to another forwarded port of the sandbox switches to that port.
+- A teammate's settings have a **Knowledge** group. **Memory** shows its pages, facts, facts
+  this week and last dream, with **Open its memory**, **Add a fact**, **Dream now**, and two
+  new switches per teammate: **Learn from its chats** and **Dream every night**
+  (`PUT /api/environments/{env}/teammates/{id}/memory`). **Tasks** shows its open and
+  scheduled tasks. Routine and access gains **Network rules** (its own and its computers',
+  the environment's folded, each linking to Settings → Network) and **Copy to another
+  environment**.
+- Memory is an index and a reader. The index has Needs you, This week and Sessions, the pages
+  folded by kind, and the facts on no page as Preferences, Decisions and Facts and events; the
+  filter narrows it and Enter searches. A page shows its facts newest first, ten at first,
+  with chips by kind. The open page or group is in the URL (`?open=`), and on a narrow screen
+  the index comes first, with a back arrow from a page.
+
 ## v0.21.0 — 2026-11-12
 
 - A teammate's browser fitted to the view is sharp on a high-density screen: the page gets the
