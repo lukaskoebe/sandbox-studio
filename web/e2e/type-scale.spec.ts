@@ -91,6 +91,8 @@ test("every page's text is on the type scale, in both styles", async ({
       expect(await offScale(page), `${style} ${path || "Home"}`).toEqual([])
     }
   }
+  // The permission it waits on would show over the tests after it.
+  await api.dismissApprovals()
 })
 
 test("Home's notices share one look", async ({ page, env }) => {
