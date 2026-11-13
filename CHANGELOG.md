@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.22.0 — 2026-11-13
 
 - A teammate can comment on a pull request's conversation (`studio pr comment <number>
   --body …`, or the `git_pull_request_comment` tool) on GitHub, GitLab, Forgejo and Gitea.
