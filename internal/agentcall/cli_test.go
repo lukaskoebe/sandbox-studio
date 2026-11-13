@@ -393,10 +393,10 @@ func TestCLIWaitForAnApproval(t *testing.T) {
 			return map[string]any{"status": "awaiting approval", "approval": "ap1", "pullRequest": "o/r#9"}, nil
 		case agentproto.MethodApprovalStatus:
 			reads++
-			switch {
-			case reads == 1:
+			switch reads {
+			case 1:
 				return map[string]any{"approval": "ap1", "status": "pending", "settled": false}, nil
-			case reads == 2:
+			case 2:
 				// Approved, still posting.
 				return map[string]any{"approval": "ap1", "status": "approved", "settled": false}, nil
 			}

@@ -3,7 +3,7 @@ import { request, type APIResponse } from "@playwright/test"
 /**
  * Exchanges STUDIO_LOGIN_URL's one-time token for a session, and hands the session to the
  * tests in STUDIO_LIVE_STATE (workers inherit the environment). The guided setup is
- * dismissed, so that pages open as themselves rather than on /setup.
+ * dismissed, so that pages open as themselves rather than on /setup, and so is the onboarding.
  */
 export default async function globalSetup() {
   const login = process.env.STUDIO_LOGIN_URL
@@ -28,6 +28,13 @@ export default async function globalSetup() {
     "dismiss the setup",
     ctx.put(`/api/setup?env=${envs[0].id}`, {
       data: { steps: {}, dismissed: true },
+    })
+  )
+  // The onboarding's card and first-time tips too: a tip beside a control could cover it.
+  await check(
+    "dismiss the onboarding",
+    ctx.put(`/api/onboarding?env=${envs[0].id}`, {
+      data: { seen: [], dismissed: true, tipsOff: true },
     })
   )
   process.env.STUDIO_LIVE_STATE = JSON.stringify(await ctx.storageState())
