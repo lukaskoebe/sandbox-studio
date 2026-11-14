@@ -55,6 +55,8 @@ type fakeBrowser struct {
 	forwards map[string][]int
 	// element is what the page's script answers to element-at, which nil leaves null.
 	element any
+	// cursor is what the page's script answers to cursor-at, which nil leaves null.
+	cursor any
 	// unscaled refuses a scale on set viewport, as a guest agent from before scales does.
 	unscaled bool
 }
@@ -145,6 +147,8 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 	case agentproto.BrowserElementAt:
 		// The guest turns this into an eval of its own script, which answers like eval.
 		return map[string]any{"result": f.element, "origin": f.url}, nil
+	case agentproto.BrowserCursorAt:
+		return map[string]any{"result": f.cursor, "origin": f.url}, nil
 	}
 	return nil, fmt.Errorf("unknown command %q", args[0])
 }

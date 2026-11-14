@@ -181,6 +181,22 @@ func (t *tab) elementAt(x, y float64) any {
 	return map[string]any{"tag": "body", "selector": "body", "box": box(image.Rect(0, 0, t.w, t.h))}
 }
 
+// cursorAt is the cursor the page shows at (x, y), as the guest's cursor-at script says it:
+// pointer over a link or button, text over a field, default elsewhere.
+func (t *tab) cursorAt(x, y float64) any {
+	at := image.Pt(int(x), int(y))
+	for _, e := range t.elements() {
+		if !at.In(e.rect) {
+			continue
+		}
+		if e.role == "textbox" {
+			return "text"
+		}
+		return "pointer"
+	}
+	return "default"
+}
+
 // open goes to a new page: the forward history and the old page's values are gone.
 func (t *tab) open(u string) {
 	t.history = append(t.history[:t.at+1], u)
@@ -374,6 +390,13 @@ func (t *tab) answer(args []string) (any, bool, error) {
 			return nil, false, errors.New("element-at takes the x and y of a point")
 		}
 		return map[string]any{"result": t.elementAt(x, y), "origin": t.url()}, false, nil
+	case agentproto.BrowserCursorAt:
+		x, errX := strconv.ParseFloat(arg(1), 64)
+		y, errY := strconv.ParseFloat(arg(2), 64)
+		if errX != nil || errY != nil || len(args) != 3 {
+			return nil, false, errors.New("cursor-at takes the x and y of a point")
+		}
+		return map[string]any{"result": t.cursorAt(x, y), "origin": t.url()}, false, nil
 	}
 	return nil, false, fmt.Errorf("unknown command %q", args[0])
 }

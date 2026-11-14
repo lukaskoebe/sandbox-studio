@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- While you drive a teammate's browser, the cursor follows the page: a pointer over links, a
+  text cursor over fields and text, and the page's own cursors such as grab or resize. The
+  page is asked as the mouse moves, by a fixed read-only script in the browser VM.
+- A sleeping browser's card keeps a long address on one truncated line instead of running
+  out of the card, and so do **Wake on** and the waking spinner.
+
 ## v0.22.0 — 2026-11-13
 
 - A teammate can comment on a pull request's conversation (`studio pr comment <number>

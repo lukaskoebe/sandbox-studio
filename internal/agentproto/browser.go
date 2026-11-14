@@ -62,6 +62,11 @@ type BrowserCommand struct {
 // read-only script there; the host passes only the two numbers (docs/browser.md).
 const BrowserElementAt = "element-at"
 
+// BrowserCursorAt is the other: Args [BrowserCursorAt, x, y] name the mouse cursor the page
+// shows at (x, y), such as pointer over a link or text over a field, for the live view while
+// the user drives. Like BrowserElementAt it runs the guest's own fixed, read-only script.
+const BrowserCursorAt = "cursor-at"
+
 // BrowserResult is agent-browser's JSON response and the optional screenshot.
 type BrowserResult struct {
 	Output     json.RawMessage `json:"output"`

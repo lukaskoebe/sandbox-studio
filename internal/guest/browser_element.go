@@ -4,7 +4,7 @@ package guest
 
 import (
 	"encoding/base64"
-	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -24,23 +24,67 @@ import (
 const maxElementAt = 100_000
 
 // elementAtArgs turns the host's [BrowserElementAt, x, y] into the agent-browser command that
-// runs elementAtScript at that point. The script goes base64 encoded, so no part of it can
-// read as one of agent-browser's own options.
+// runs elementAtScript at that point.
 func elementAtArgs(req agentproto.BrowserCommand) ([]string, error) {
-	if len(req.Args) != 3 || req.Args[0] != agentproto.BrowserElementAt || req.Stdin != "" || req.Fresh || req.Screenshot {
-		return nil, errors.New("element-at takes the x and y of a point")
+	return pointScriptArgs(req, agentproto.BrowserElementAt, elementAtScript)
+}
+
+// cursorAtArgs turns the host's [BrowserCursorAt, x, y] into the agent-browser command that
+// runs cursorAtScript at that point.
+func cursorAtArgs(req agentproto.BrowserCommand) ([]string, error) {
+	return pointScriptArgs(req, agentproto.BrowserCursorAt, cursorAtScript)
+}
+
+// pointScriptArgs runs one of the guest's scripts at the point of [name, x, y]. The script
+// goes base64 encoded, so no part of it can read as one of agent-browser's own options.
+func pointScriptArgs(req agentproto.BrowserCommand, name, script string) ([]string, error) {
+	if len(req.Args) != 3 || req.Args[0] != name || req.Stdin != "" || req.Fresh || req.Screenshot {
+		return nil, fmt.Errorf("%s takes the x and y of a point", name)
 	}
 	var at [2]string
 	for i, s := range req.Args[1:] {
 		v, err := strconv.ParseFloat(s, 64)
 		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > maxElementAt {
-			return nil, errors.New("element-at takes the x and y of a point in CSS pixels")
+			return nil, fmt.Errorf("%s takes the x and y of a point in CSS pixels", name)
 		}
 		at[i] = strconv.FormatFloat(v, 'f', -1, 64)
 	}
-	script := strings.NewReplacer("__X__", at[0], "__Y__", at[1]).Replace(elementAtScript)
+	script = strings.NewReplacer("__X__", at[0], "__Y__", at[1]).Replace(script)
 	return []string{"eval", "-b", base64.StdEncoding.EncodeToString([]byte(script))}, nil
 }
+
+// cursorAtScript names the cursor the page shows at (__X__, __Y__): the element's computed
+// cursor, its keyword where it is an image with a keyword to fall back on, and for auto what
+// Chromium picks, which is text over editable content and over selectable text, and default
+// elsewhere. It only reads the page, and nothing a form field holds.
+const cursorAtScript = `(() => {
+  const x = __X__, y = __Y__;
+  let el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  for (let i = 0; i < 16 && el.shadowRoot; i++) {
+    const inner = el.shadowRoot.elementFromPoint(x, y);
+    if (!inner || inner === el) break;
+    el = inner;
+  }
+  const style = getComputedStyle(el);
+  const cursor = style.cursor.split(",").pop().trim();
+  if (cursor !== "auto") return cursor;
+  const tag = el.localName;
+  const type = tag === "input" ? (el.getAttribute("type") || "text").toLowerCase() : "";
+  const textTypes = ["text", "search", "email", "url", "tel", "password", "number", "date", "datetime-local", "month", "time", "week"];
+  if ((tag === "input" && textTypes.includes(type)) || tag === "textarea" || el.isContentEditable) return "text";
+  if (tag === "input" || tag === "select" || tag === "button" || style.userSelect === "none") return "default";
+  // Over text the page shows: the character at the point, if the point is on it.
+  const range = document.caretRangeFromPoint && document.caretRangeFromPoint(x, y);
+  const node = range && range.startContainer;
+  if (!node || node.nodeType !== Node.TEXT_NODE || !el.contains(node)) return "default";
+  const around = document.createRange();
+  around.setStart(node, Math.max(0, range.startOffset - 1));
+  around.setEnd(node, Math.min(node.length, range.startOffset + 1));
+  for (const r of around.getClientRects())
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return "text";
+  return "default";
+})()`
 
 // elementAtScript describes the element at (__X__, __Y__) in the page's viewport: its tag,
 // role, accessible name, ID, a short CSS path, its box and up to 300 characters of the text

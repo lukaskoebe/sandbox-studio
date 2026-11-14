@@ -53,6 +53,11 @@ func (s *Server) browserError(err error) error {
 	return apiError(err)
 }
 
+// browserCursor is the cursor a page shows at a point.
+type browserCursor struct {
+	Cursor string `json:"cursor" doc:"A CSS cursor keyword, such as default, pointer or text"`
+}
+
 // resizedBrowser is what a fit gave the page.
 type resizedBrowser struct {
 	Scale float64 `json:"scale" doc:"The device pixels per CSS pixel the page got: the asked scale within a 3840×2160 frame, or 1 from a guest agent from before scales"`
@@ -273,6 +278,22 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, s.browserError(err)
 		}
 		return &struct{ Body browser.Element }{el}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getBrowserCursor", Method: http.MethodGet, Path: "/api/environments/{env}/teammates/{teammate}/browser/cursor", Tags: []string{"browser"},
+		Description: "The mouse cursor a session's page shows at a point, such as pointer over a link or text over a field, for the live view " +
+			"while the user drives. It waits a moment at most for another command (409), and it leaves the page and the agents' element refs " +
+			"as they are (docs/browser.md).",
+	}, func(ctx context.Context, in *elementIn) (*struct{ Body browserCursor }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		c, err := s.Browser.CursorAt(ctx, in.Env, in.Teammate, in.Session, in.X, in.Y)
+		if err != nil {
+			return nil, s.browserError(err)
+		}
+		return &struct{ Body browserCursor }{browserCursor{c}}, nil
 	})
 
 	type actionsIn struct {

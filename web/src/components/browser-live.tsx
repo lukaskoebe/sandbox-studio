@@ -18,6 +18,7 @@ import {
 import type { NoteSpot } from "@/lib/browser-notes"
 import { useFitPage, type PageSize } from "@/lib/browser-fit"
 import { PasswordCapture, type TypedPassword } from "@/lib/browser-logins"
+import { usePageCursor, type CursorLookup } from "@/lib/page-cursor"
 
 // Chrome accepts CDP char text one Unicode code point at a time.
 const mobileInputSentinel = "\u200b"
@@ -115,6 +116,7 @@ export function BrowserLive({
   onFit,
   passwordField,
   onPassword,
+  cursorAt,
   className,
 }: {
   url: string
@@ -152,6 +154,8 @@ export function BrowserLive({
    * window offers to save it. It stays on this computer until then.
    */
   onPassword?: (typed: TypedPassword) => void
+  /** The cursor the page shows at a point, which the frame shows while the user drives. */
+  cursorAt?: CursorLookup
   className?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -219,6 +223,14 @@ export function BrowserLive({
   // The page's size in CSS pixels, from the frames, and their device pixels per CSS pixel.
   const [frameSize, setFrameSize] = useState<PageSize>()
   const canDrive = driving && inputEnabled && !frozen
+  // The cursor the page shows under the mouse, asked as it moves, scrolls and clicks.
+  const pageCursor = usePageCursor(cursorAt, canDrive && state === "live")
+  const lastMouse = useRef<{ x: number; y: number } | undefined>(undefined)
+  const trackCursor = pageCursor.track
+  useEffect(() => {
+    // A new page has its own cursor under a mouse that rests.
+    if (lastMouse.current) trackCursor(lastMouse.current)
+  }, [activePageURL, trackCursor])
   // Notes hold the frame they were made on, so the page keeps its size while there are any.
   useFitPage({
     room: fitRoom,
@@ -590,6 +602,13 @@ export function BrowserLive({
   ) => {
     const at = pagePoint(e, clamp)
     if (!at || !canDrive) return false
+    if (
+      eventType !== "mousePressed" &&
+      (!("pointerType" in e) || e.pointerType === "mouse")
+    ) {
+      lastMouse.current = at
+      trackCursor(at)
+    }
     const msg = {
       type: "input_mouse",
       eventType,
@@ -1064,6 +1083,7 @@ export function BrowserLive({
           style={
             {
               "--controls": `${controlsHeight}px`,
+              cursor: pageCursor.cursor,
               width:
                 "min(100cqw, var(--live-max, 100cqw), calc((100cqh - var(--controls)) * var(--aspect, 1280 / 577)))",
             } as React.CSSProperties
@@ -1073,6 +1093,7 @@ export function BrowserLive({
             canDrive ? "cursor-default" : "pointer-events-none",
             state !== "live" && "opacity-40"
           )}
+          data-cursor={pageCursor.cursor}
           onPointerDown={(e) => {
             // The right button pins a note (the context menu, above), so the page doesn't get it.
             if (!e.isPrimary || (onNote && e.button === 2)) return

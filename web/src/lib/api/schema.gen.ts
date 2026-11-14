@@ -2628,6 +2628,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/cursor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The mouse cursor a session's page shows at a point, such as pointer over a link or text over a field, for the live view while the user drives. It waits a moment at most for another command (409), and it leaves the page and the agents' element refs as they are (docs/browser.md). */
+        get: operations["getBrowserCursor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/downloads": {
         parameters: {
             query?: never;
@@ -3536,6 +3553,10 @@ export interface components {
             target?: string;
             teammateId: string;
             url?: string;
+        };
+        BrowserCursor: {
+            /** @description A CSS cursor keyword, such as default, pointer or text */
+            cursor: string;
         };
         BrowserDownloadInput: {
             /** @description The file's name, as the list shows it */
@@ -14090,6 +14111,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserAction"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getBrowserCursor: {
+        parameters: {
+            query: {
+                /** @description The point's x in CSS pixels of the page's viewport */
+                x: number;
+                /** @description The point's y in CSS pixels of the page's viewport */
+                y: number;
+                /** @description An ephemeral session's ID; empty for the persistent profile */
+                session?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserCursor"];
                 };
             };
             /** @description Error */

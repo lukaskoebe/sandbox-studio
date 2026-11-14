@@ -255,6 +255,11 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 		if args, err = elementAtArgs(req); err != nil {
 			return replyError(st, err)
 		}
+	} else if len(args) > 0 && args[0] == agentproto.BrowserCursorAt {
+		// So does the live view's, for the cursor to show while the user drives.
+		if args, err = cursorAtArgs(req); err != nil {
+			return replyError(st, err)
+		}
 	} else if err := checkBrowserArgs(args, false); err != nil {
 		return replyError(st, err)
 	}

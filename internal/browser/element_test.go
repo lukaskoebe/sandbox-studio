@@ -190,3 +190,76 @@ func TestElementDescribe(t *testing.T) {
 		}
 	}
 }
+
+// The live view's cursor lookup asks the guest for the cursor at the point, keeps to the
+// cursors it knows, and waits a moment at most for another command.
+func TestCursorAt(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.CursorAt(f.ctx, f.env, f.ada.ID, "", 5, 5); !errors.Is(err, ErrNotLive) {
+		t.Errorf("a browser that never started: %v", err)
+	}
+	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		page any
+		want string
+	}{
+		{"pointer", "pointer"}, {"text", "text"}, {"grabbing", "grabbing"}, {nil, "default"},
+		{"none", "default"}, {`url("x.png")`, "default"}, {"pointer; color: red", "default"}, {42, ""},
+	} {
+		f.fb.mu.Lock()
+		f.fb.cursor = c.page
+		f.fb.mu.Unlock()
+		got, err := f.svc.CursorAt(f.ctx, f.env, f.ada.ID, "", 120.25, 306)
+		if c.want == "" {
+			if err == nil {
+				t.Errorf("%v: cursor %q, want an error", c.page, got)
+			}
+			continue
+		}
+		if err != nil || got != c.want {
+			t.Errorf("%v: cursor %q (%v), want %q", c.page, got, err, c.want)
+		}
+	}
+	last := f.fb.allCommands()
+	if cmd := last[len(last)-1]; !slices.Equal(cmd.Args, []string{agentproto.BrowserCursorAt, "120.3", "306"}) || cmd.TimeoutMS != 1000 || cmd.Screenshot {
+		t.Errorf("command = %+v", cmd)
+	}
+	for _, p := range [][2]float64{{-1, 5}, {5, math.NaN()}} {
+		if _, err := f.svc.CursorAt(f.ctx, f.env, f.ada.ID, "", p[0], p[1]); !errors.Is(err, ErrBadPoint) {
+			t.Errorf("%v: %v", p, err)
+		}
+	}
+
+	st := f.svc.state(f.env, f.ada.ID)
+	f.svc.mu.Lock()
+	st.visible = true
+	f.svc.mu.Unlock()
+	if _, err := f.svc.CursorAt(f.ctx, f.env, f.ada.ID, "", 5, 5); !errors.Is(err, ErrHidden) {
+		t.Errorf("a page showing a credential: %v", err)
+	}
+	f.svc.mu.Lock()
+	st.visible = false
+	f.svc.mu.Unlock()
+
+	f.fb.mu.Lock()
+	f.fb.blockArgs = "get url"
+	f.fb.blockStarted, f.fb.blockRelease = make(chan struct{}), make(chan struct{})
+	started, release := f.fb.blockStarted, f.fb.blockRelease
+	f.fb.mu.Unlock()
+	done := make(chan error, 1)
+	go func() { done <- f.svc.Start(f.ctx, f.env, f.ada.ID) }()
+	<-started
+	begun := time.Now()
+	if _, err := f.svc.CursorAt(f.ctx, f.env, f.ada.ID, "", 5, 5); !errors.Is(err, ErrBusy) {
+		t.Errorf("a busy browser: %v", err)
+	}
+	if waited := time.Since(begun); waited < cursorWait || waited > cursorWait+time.Second {
+		t.Errorf("waited %v for a busy browser", waited)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

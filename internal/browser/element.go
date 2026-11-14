@@ -79,55 +79,7 @@ type ElementBox struct {
 // the teammate's browser, for a note the user pins there. It neither waits long for another
 // command (ErrBusy) nor counts as using the browser, and it doesn't touch the session's refs.
 func (s *Service) ElementAt(ctx context.Context, envID, teammateID, session string, x, y float64) (Element, error) {
-	if !validPoint(x) || !validPoint(y) {
-		return Element{}, ErrBadPoint
-	}
-	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
-		return Element{}, err
-	}
-	st := s.state(envID, teammateID)
-	s.mu.Lock()
-	pg := st.pageFor(session)
-	hidden := pg != nil && pg.visible
-	s.mu.Unlock()
-	switch {
-	case pg == nil:
-		return Element{}, ErrNoSession
-	case hidden:
-		// A credential shows on the page, so neither its picture nor its text leaves it.
-		return Element{}, ErrHidden
-	}
-	t, err := s.streamTarget(ctx, envID, teammateID, session)
-	if err != nil {
-		return Element{}, err
-	}
-	wait := time.NewTimer(elementWait)
-	defer wait.Stop()
-	select {
-	case st.run <- struct{}{}:
-	case <-wait.C:
-		return Element{}, ErrBusy
-	case <-ctx.Done():
-		return Element{}, ctx.Err()
-	}
-	defer func() { <-st.run }()
-	s.mu.Lock()
-	current := s.streamCurrentLocked(st, pg, envID, t.vm, t.session) && st.pageFor(session) == pg
-	hidden = pg.visible
-	secrets := pg.secrets
-	s.mu.Unlock()
-	switch {
-	case !current:
-		return Element{}, ErrNotLive
-	case hidden:
-		return Element{}, ErrHidden
-	}
-	ctx, cancel := context.WithTimeout(ctx, elementTimeout)
-	defer cancel()
-	data, _, err := s.exec(ctx, st, pg, agentproto.BrowserCommand{
-		Args:      []string{agentproto.BrowserElementAt, formatPoint(x), formatPoint(y)},
-		TimeoutMS: int(elementTimeout / time.Millisecond),
-	})
+	data, secrets, err := s.pointLookup(ctx, envID, teammateID, session, agentproto.BrowserElementAt, x, y, elementWait, elementTimeout)
 	if err != nil {
 		return Element{}, err
 	}
@@ -146,6 +98,106 @@ func (s *Service) ElementAt(ctx context.Context, envID, teammateID, session stri
 		return Element{}, errors.New("the browser's reply was not understood")
 	}
 	return el, nil
+}
+
+const (
+	// cursorWait and cursorTimeout bound the live view's cursor lookup, which it asks again
+	// as the mouse moves: it waits for no one, and a slow page keeps the cursor it had.
+	cursorWait    = 250 * time.Millisecond
+	cursorTimeout = time.Second
+)
+
+// cursors are the CSS cursor keywords the live view may show. A page's own image cursor
+// comes as the keyword it falls back on, and none, which would lose the user's mouse over a
+// view that lags the page, as default.
+var cursors = map[string]bool{
+	"default": true, "context-menu": true, "help": true, "pointer": true, "progress": true, "wait": true, "cell": true,
+	"crosshair": true, "text": true, "vertical-text": true, "alias": true, "copy": true, "move": true, "no-drop": true,
+	"not-allowed": true, "grab": true, "grabbing": true, "all-scroll": true, "col-resize": true, "row-resize": true,
+	"n-resize": true, "e-resize": true, "s-resize": true, "w-resize": true, "ne-resize": true, "nw-resize": true,
+	"se-resize": true, "sw-resize": true, "ew-resize": true, "ns-resize": true, "nesw-resize": true, "nwse-resize": true,
+	"zoom-in": true, "zoom-out": true,
+}
+
+// CursorAt names the mouse cursor the page shows at (x, y), in CSS pixels of the viewport, of
+// a session of the teammate's browser, for the live view while the user drives: pointer over
+// a link, text over a field, default where the page says nothing or names a cursor Studio
+// doesn't know. Like ElementAt it runs the guest's fixed script, leaves the refs alone and
+// isn't logged, but it waits a moment at most for another command (ErrBusy).
+func (s *Service) CursorAt(ctx context.Context, envID, teammateID, session string, x, y float64) (string, error) {
+	data, _, err := s.pointLookup(ctx, envID, teammateID, session, agentproto.BrowserCursorAt, x, y, cursorWait, cursorTimeout)
+	if err != nil {
+		return "", err
+	}
+	var reply struct {
+		Result *string `json:"result"`
+	}
+	if err := json.Unmarshal(data, &reply); err != nil {
+		return "", errors.New("the browser's reply was not understood")
+	}
+	if reply.Result == nil || !cursors[*reply.Result] {
+		return "default", nil
+	}
+	return *reply.Result, nil
+}
+
+// pointLookup runs one of the guest's point scripts, cmd, at (x, y) of a session's page and
+// returns eval's answer with the session's credentials. It waits up to wait for another
+// command to finish, and refuses a page that shows a credential (ErrHidden).
+func (s *Service) pointLookup(ctx context.Context, envID, teammateID, session, cmd string, x, y float64, wait, timeout time.Duration) (json.RawMessage, []string, error) {
+	if !validPoint(x) || !validPoint(y) {
+		return nil, nil, ErrBadPoint
+	}
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
+		return nil, nil, err
+	}
+	st := s.state(envID, teammateID)
+	s.mu.Lock()
+	pg := st.pageFor(session)
+	hidden := pg != nil && pg.visible
+	s.mu.Unlock()
+	switch {
+	case pg == nil:
+		return nil, nil, ErrNoSession
+	case hidden:
+		// A credential shows on the page, so neither its picture nor its text leaves it.
+		return nil, nil, ErrHidden
+	}
+	t, err := s.streamTarget(ctx, envID, teammateID, session)
+	if err != nil {
+		return nil, nil, err
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case st.run <- struct{}{}:
+	case <-timer.C:
+		return nil, nil, ErrBusy
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	defer func() { <-st.run }()
+	s.mu.Lock()
+	current := s.streamCurrentLocked(st, pg, envID, t.vm, t.session) && st.pageFor(session) == pg
+	hidden = pg.visible
+	secrets := pg.secrets
+	s.mu.Unlock()
+	switch {
+	case !current:
+		return nil, nil, ErrNotLive
+	case hidden:
+		return nil, nil, ErrHidden
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	data, _, err := s.exec(ctx, st, pg, agentproto.BrowserCommand{
+		Args:      []string{cmd, formatPoint(x), formatPoint(y)},
+		TimeoutMS: int(timeout / time.Millisecond),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return data, secrets, nil
 }
 
 func validPoint(v float64) bool {

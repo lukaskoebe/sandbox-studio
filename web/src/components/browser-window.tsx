@@ -243,6 +243,26 @@ export function BrowserWindow({
     },
     [env, teammate, sessionID]
   )
+  // The cursor the page shows under the mouse while the user drives. A 409 is a page busy
+  // or showing a credential, which keeps the cursor it had; other errors count as failures.
+  const cursorAt = useCallback(
+    async (at: { x: number; y: number }) => {
+      const { data, response } = await fetchClient.GET(
+        "/api/environments/{env}/teammates/{teammate}/browser/cursor",
+        {
+          params: {
+            path: { env, teammate },
+            query: { x: at.x, y: at.y, session: sessionID || undefined },
+          },
+          signal: AbortSignal.timeout(2000),
+        }
+      )
+      if (data) return data.cursor
+      if (response.status === 409) return undefined
+      throw new Error(`cursor lookup: ${response.status}`)
+    },
+    [env, teammate, sessionID]
+  )
   // The gateway logs the refusal as the page fails, after the live view reports its URL.
   const refetchStatus = status.refetch
   useEffect(() => {
@@ -765,6 +785,7 @@ export function BrowserWindow({
               onFit={fitPage}
               passwordField={passwordField}
               onPassword={offerPassword}
+              cursorAt={cursorAt}
             />
             {!noting && (
               <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-caption text-background opacity-0 shadow-sm transition group-hover:opacity-100">
@@ -1657,10 +1678,10 @@ function Asleep({
       {starting || vm === "draining" ? (
         <div
           role="status"
-          className="relative m-4 flex items-center gap-2.5 rounded-full border bg-background/90 px-4 py-2.5 shadow-sm backdrop-blur-sm"
+          className="relative m-4 flex min-w-0 items-center gap-2.5 rounded-full border bg-background/90 px-4 py-2.5 shadow-sm backdrop-blur-sm"
         >
           <Spinner />
-          <p className="text-sm font-medium">
+          <p className="min-w-0 truncate text-sm font-medium">
             {vm === "draining"
               ? `${w.name}'s browser is going to sleep…`
               : target
@@ -1673,7 +1694,7 @@ function Asleep({
           role="region"
           aria-label={`${w.name}'s browser`}
           className={cn(
-            "relative m-4 grid w-full max-w-md gap-3 rounded-2xl border bg-background/90 p-5 shadow-sm backdrop-blur-sm",
+            "relative m-4 grid w-full max-w-md grid-cols-1 gap-3 rounded-2xl border bg-background/90 p-5 shadow-sm backdrop-blur-sm",
             crashed && "border-amber-500/40"
           )}
         >
@@ -1712,7 +1733,7 @@ function Asleep({
             </div>
           </div>
           {!absent && pages.length > 0 && (
-            <ul aria-label="Last pages" className="grid">
+            <ul aria-label="Last pages" className="grid grid-cols-1">
               {pages.map((p) => (
                 <li key={p.id}>
                   <button

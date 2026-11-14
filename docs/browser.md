@@ -79,9 +79,10 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     host were confused.
   - `close` passes only as the whole command on an ephemeral slot, where it ends the session.
     It never reaches the persistent profile.
-  - `element-at x y` isn't agent-browser's: the guest runs its own fixed, read-only script
-    for it, for a note the user pins (see [Live view and takeover](#live-view-and-takeover)).
-    The host passes only the point; it can't pass a script, and a batch can't carry it.
+  - `element-at x y` and `cursor-at x y` aren't agent-browser's: the guest runs its own
+    fixed, read-only script for each, for a note the user pins and for the cursor while the
+    user drives (see [Live view and takeover](#live-view-and-takeover)). The host passes only
+    the point; it can't pass a script, and a batch can't carry either.
 - **Egress goes through the same gateway, MITM CA and rules.** The VM's HTTPS is always
   terminated with the environment's CA (agent sandboxes' connections are spliced unless a rule
   or a secret needs them checked), so its requests can be checked one by one.
@@ -386,6 +387,18 @@ clears the local input buffer.
     - **Pacing:** ack pacing gives 23–28 fps at 1920×1080, as many as Chromium in the 2-vCPU
       VM makes, and 32–42 fps at 1280×800. Push pacing at 10 fps capped them. Ack and push had
       the same latency on loopback.
+- **Cursor.** While you drive, the view shows the cursor the page shows under the mouse:
+  pointer over a link, text over a field or selectable text, a page's own grab or resize
+  cursor. The stream carries no cursor, so the view asks `GET .../browser/cursor?x=&y=`
+  (`Service.CursorAt`, `cursor-at` in `internal/guest/browser_element.go`) as the mouse moves,
+  scrolls, releases and the page changes: one lookup at a time, at most one every 120 ms,
+  the newest point winning. The script reads the element's computed cursor at the point,
+  and for `auto` picks as Chromium does: text over editable content and over the character
+  under the point, default elsewhere. Studio passes on CSS keywords only: a page's image
+  cursor comes as its fallback keyword, and `none` as default, so a view that lags the page
+  never loses the mouse. A lookup waits 250 ms at most for another command; busy, or on a
+  page showing a credential (409), the view keeps the cursor it had, and after five failures
+  in a row, as on a guest from before the lookup, it stops asking.
 - **Frame.** `GET .../browser/frame` (`?session=` an ephemeral session's ID) is the session's
   latest screencast frame as a JPEG, which the TUI draws in Home's detail pane. While a live
   view watches, it is the frame the relay saw last, if under 2 s old. Otherwise Studio opens

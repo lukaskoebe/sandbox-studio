@@ -568,6 +568,19 @@
         ],
         "type": "object"
       },
+      "BrowserCursor": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "A CSS cursor keyword, such as default, pointer or text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cursor"
+        ],
+        "type": "object"
+      },
       "BrowserDownloadInput": {
         "additionalProperties": false,
         "properties": {
@@ -22532,6 +22545,98 @@
                     "array",
                     "null"
                   ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/cursor": {
+      "get": {
+        "description": "The mouse cursor a session's page shows at a point, such as pointer over a link or text over a field, for the live view while the user drives. It waits a moment at most for another command (409), and it leaves the page and the agents' element refs as they are (docs/browser.md).",
+        "operationId": "getBrowserCursor",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The point's x in CSS pixels of the page's viewport",
+            "explode": false,
+            "in": "query",
+            "name": "x",
+            "required": true,
+            "schema": {
+              "description": "The point's x in CSS pixels of the page's viewport",
+              "format": "double",
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "description": "The point's y in CSS pixels of the page's viewport",
+            "explode": false,
+            "in": "query",
+            "name": "y",
+            "required": true,
+            "schema": {
+              "description": "The point's y in CSS pixels of the page's viewport",
+              "format": "double",
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "explode": false,
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "description": "An ephemeral session's ID; empty for the persistent profile",
+              "maxLength": 32,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserCursor"
                 }
               }
             },

@@ -178,7 +178,9 @@ test("the sleeping browser lists its last pages and wakes on one", async ({
 }) => {
   const { name, tm, base } = await browsing(page, api, env)
   const address = page.getByLabel("Browser address")
-  for (const path of ["a", "b"]) {
+  // A long address truncates in its row rather than widening the card.
+  const long = `b/${"z-long-segment-with-no-break".repeat(8)}?q=1`
+  for (const path of ["a", long]) {
     await address.fill(`example.com/${path}`)
     await address.press("Enter")
     await expect
@@ -202,6 +204,9 @@ test("the sleeping browser lists its last pages and wakes on one", async ({
     /example\.com\/b/,
     /example\.com\/a/,
   ])
+  expect(
+    await card.evaluate((el) => el.scrollWidth - el.clientWidth)
+  ).toBeLessThanOrEqual(0)
   await expect(
     card.getByRole("button", { name: "Wake on example.com" })
   ).toBeVisible()
@@ -382,6 +387,37 @@ test("a click on the live view lands on the right page coordinates", async ({
   )!
   expect(Math.abs(press.x! - 120)).toBeLessThanOrEqual(2)
   expect(Math.abs(press.y! - 306)).toBeLessThanOrEqual(2)
+})
+
+test("the live view shows the page's cursor under the mouse while you drive", async ({
+  page,
+  api,
+  env,
+}) => {
+  await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("https://example.com/login")
+  await address.press("Enter")
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
+
+  const canvas = page.getByLabel("Live view of the browser")
+  await expect(canvas).toBeVisible()
+  await page.waitForTimeout(300) // the frame of the new page
+  const box = (await canvas.boundingBox())!
+  const hover = (x: number, y: number) =>
+    page.mouse.move(
+      box.x + (x / 640) * box.width,
+      box.y + (y / 400) * box.height,
+      { steps: 3 }
+    )
+  const cursor = () => canvas.evaluate((el) => getComputedStyle(el).cursor)
+  // "Email" spans (40,110)-(600,146) and "Sign in" (40,286)-(200,326).
+  await hover(120, 128)
+  await expect.poll(cursor).toBe("text")
+  await hover(120, 306)
+  await expect.poll(cursor).toBe("pointer")
+  await hover(620, 30)
+  await expect.poll(cursor).toBe("default")
 })
 
 // Fit the page to this view gives the page the size of the view's body, one pixel to one, and
