@@ -582,7 +582,7 @@ release is kept beside it instead of read from the tag.
 A sandbox or template whose base differs from the default image, Docker Hub prefixes aside,
 is `baseOutdated`. The computer's menu then has a dot on its trigger and a block with the
 release it came from and a Rebase button; Home lists such sandboxes until the notice is
-dismissed for this release. A template sandbox goes up to date by a rebase onto the current
+dismissed for this release, with **Rebase all…** ([rebase](rebase.md#rebase)). A template sandbox goes up to date by a rebase onto the current
 base, which drops the template's tools, or onto its template rebuilt on it: a template
 that is behind has **Rebuild on the current base** in Settings → Templates
 (`POST /api/environments/{env}/templates/{id}/rebuild`), which builds its spec again as the

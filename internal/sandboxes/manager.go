@@ -79,6 +79,9 @@ type Manager struct {
 
 	opsMu sync.Mutex
 	ops   map[string]*operation // sandbox ID → its create or fork; see progress.go
+	// copySlot lets one rebase or disk resize copy at a time; see waitForCopy.
+	copySlotOnce sync.Once
+	copySlot     chan struct{}
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	autoFailed  sync.Map // sandbox ID → when its scheduled checkpoint last failed, see scheduledCheckpoint

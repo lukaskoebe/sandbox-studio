@@ -110,7 +110,9 @@ export function SandboxProgress({
                 ? "The sandbox keeps its disks, in the state it was in."
                 : "The sandbox stays on its old template, in the state it was in."
               : "Delete the sandbox to try again."
-            : "This can take a few minutes. The work keeps going in the background."}
+            : run?.queued
+              ? "Sandboxes copy one at a time, so this one waits for the copy before it. It keeps running meanwhile."
+              : "This can take a few minutes. The work keeps going in the background."}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
@@ -128,7 +130,9 @@ export function SandboxProgress({
                     className={cn("flex items-center gap-2", labelTones[state])}
                   >
                     <StepIcon state={state} />
-                    {stepLabels[step]}
+                    {state === "running" && run?.queued
+                      ? "Waiting for another sandbox's copy to finish"
+                      : stepLabels[step]}
                   </div>
                   {state === "running" && step === "pull" && (
                     <PullBar pull={run?.pull} />

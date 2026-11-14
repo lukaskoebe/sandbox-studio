@@ -279,6 +279,23 @@ test("a computer on an older base says so and rebases onto the current one", asy
     "href",
     `/e/${env}/sandboxes/${id}`
   )
+  // Rebase all lists where each goes, with the same choices as one rebase.
+  await notice.getByRole("button", { name: "Rebase all…" }).click()
+  const all = page.getByRole("dialog", { name: /^Rebase \d+ sandbox/ })
+  const row = all
+    .getByRole("list", { name: "Sandboxes to rebase" })
+    .getByRole("listitem")
+    .filter({ hasText: name })
+  await expect(row).toContainText("onto current base")
+  await expect(
+    all.getByRole("checkbox", { name: /Keep the tools installed/ })
+  ).toBeChecked()
+  await expect(
+    all.getByRole("checkbox", { name: /Keep Docker/ })
+  ).not.toBeChecked()
+  await expect(all.getByRole("button", { name: /^Rebase/ })).toBeEnabled()
+  await page.keyboard.press("Escape")
+  await expect(all).toBeHidden()
   await notice.getByRole("button", { name: "Dismiss" }).click()
   await expect(notice).toBeHidden()
   await page.reload()

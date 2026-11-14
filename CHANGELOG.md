@@ -5,6 +5,11 @@
 - While you drive a teammate's browser, the cursor follows the page: a pointer over links, a
   text cursor over fields and text, and the page's own cursors such as grab or resize. The
   page is asked as the mouse moves, by a fixed read-only script in the browser VM.
+- Home's notice about sandboxes on an old base image has **Rebase all…**: it lists where each
+  goes (the current base, or its template rebuilt on it) and skips one whose template isn't
+  rebuilt yet, with the same keep choices as a single rebase.
+- Rebases and disk resizes run one at a time: one started while another copies waits its turn,
+  and its page says so. Several at once could run the machine out of memory.
 - A sleeping browser's card keeps a long address on one truncated line instead of running
   out of the card, and so do **Wake on** and the waking spinner.
 

@@ -6914,6 +6914,10 @@
             "$ref": "#/components/schemas/PullProgress",
             "description": "The image pull, once it reports sizes"
           },
+          "queued": {
+            "description": "A rebase or disk resize waiting for another one to finish, before its first step",
+            "type": "boolean"
+          },
           "state": {
             "description": "A failed create or fork leaves the sandbox failed; a failed rebase or disk resize leaves it as it was, in its status",
             "enum": [

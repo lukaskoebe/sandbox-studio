@@ -91,6 +91,8 @@ type Progress struct {
 	Error     string        `json:"error,omitempty" doc:"Why the step failed"`
 	Pull      *PullProgress `json:"pull,omitempty" doc:"The image pull, once it reports sizes"`
 	Copy      *CopyProgress `json:"copy,omitempty" doc:"The copy of the tree being copied, during the copy step"`
+	// Queued is a rebase or disk resize that waits for another one to finish.
+	Queued bool `json:"queued,omitempty" doc:"A rebase or disk resize waiting for another one to finish, before its first step"`
 }
 
 // PullProgress counts an image pull. Totals are 0 while unknown.
@@ -168,6 +170,41 @@ func (m *Manager) advance(id, step string) {
 	m.publish(envID, id)
 }
 
+// waitForCopy waits until no other rebase or disk resize runs, showing sandbox id as queued
+// meanwhile, and returns the release. Each runs two VMs of the sandbox's size side by side and
+// copies its disks between them, so a second at the same time would double the memory and
+// the disk traffic: rebasing every sandbox at once took the machine out of memory.
+func (m *Manager) waitForCopy(ctx context.Context, id string) (func(), error) {
+	m.copySlotOnce.Do(func() { m.copySlot = make(chan struct{}, 1) })
+	select {
+	case m.copySlot <- struct{}{}:
+		return func() { <-m.copySlot }, nil
+	default:
+	}
+	m.queued(id, true)
+	defer m.queued(id, false)
+	select {
+	case m.copySlot <- struct{}{}:
+		return func() { <-m.copySlot }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// queued marks the operation on sandbox id as waiting for another's copy, or not.
+func (m *Manager) queued(id string, on bool) {
+	m.opsMu.Lock()
+	op := m.ops[id]
+	if op == nil || op.progress.Queued == on {
+		m.opsMu.Unlock()
+		return
+	}
+	op.progress.Queued = on
+	envID := op.envID
+	m.opsMu.Unlock()
+	m.publish(envID, id)
+}
+
 // pulled records the image pull's progress.
 func (m *Manager) pulled(id string, pull runtime.PullProgress) {
 	m.opsMu.Lock()
@@ -232,10 +269,28 @@ func (m *Manager) runtimeProgress(id string) func(runtime.Progress) {
 // run removes what it made when it fails. unlock releases the sandboxes the operation holds,
 // before waiters see the end.
 func (m *Manager) background(rec store.Sandbox, timeout time.Duration, unlock func(), run func(context.Context) error) {
+	m.backgroundAfter(rec, nil, timeout, unlock, run)
+}
+
+// backgroundAfter is background whose run first waits for wait, if not nil, and gets the
+// timeout only from then on. wait returns what to release when run ends.
+func (m *Manager) backgroundAfter(rec store.Sandbox, wait func(context.Context) (func(), error), timeout time.Duration, unlock func(), run func(context.Context) error) {
 	go func() {
+		var err error
+		release := func() {}
+		if wait != nil {
+			if r, werr := wait(context.Background()); werr != nil {
+				err = werr
+			} else {
+				release = r
+			}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		err := run(ctx)
+		if err == nil {
+			err = run(ctx)
+		}
+		release()
 		if err != nil {
 			m.Log.Warn("sandbox operation failed", "sandbox", rec.ID, "err", err)
 		}

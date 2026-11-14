@@ -291,6 +291,55 @@ func TestRebaseAnswersAtOnceAndPublishesItsSteps(t *testing.T) {
 	}
 }
 
+// A rebase while another rebase or resize copies waits its turn, queued, without touching
+// its VM, and runs once the other is done.
+func TestRebaseWaitsForAnotherCopy(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.setWorkspace(source, "files")
+	f.manager.Runtime = tf
+
+	other, err := f.manager.waitForCopy(f.ctx, "another-sandbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID, RebaseOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, func() bool {
+		v, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+		return err == nil && v.Progress != nil && v.Progress.Queued
+	})
+	time.Sleep(50 * time.Millisecond)
+	v, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Progress == nil || !v.Progress.Queued || v.Progress.Step != StepPrepare || v.Status != StatusCreating {
+		t.Fatalf("queued view = %+v, progress %+v", v, v.Progress)
+	}
+	if st, _ := tf.Status(f.ctx, source); st != runtime.StatusRunning {
+		t.Fatalf("the queued sandbox's VM is %s", st)
+	}
+
+	other()
+	if err := f.manager.Wait(f.ctx, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+	if v, err = f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID); err != nil || v.Progress != nil || v.TemplateID != template.ID {
+		t.Fatalf("after the rebase: %+v, progress %+v (%v)", v, v.Progress, err)
+	}
+	// The slot is free again.
+	release, err := f.manager.waitForCopy(f.ctx, "another-sandbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+}
+
 // reportingTransfer holds an import of the workspace after it reported its progress.
 type reportingTransfer struct {
 	*transferFake

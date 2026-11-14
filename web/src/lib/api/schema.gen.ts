@@ -5685,6 +5685,8 @@ export interface components {
             operation: "create" | "fork" | "rebase" | "disks";
             /** @description The image pull, once it reports sizes */
             pull?: components["schemas"]["PullProgress"];
+            /** @description A rebase or disk resize waiting for another one to finish, before its first step */
+            queued?: boolean;
             /**
              * @description A failed create or fork leaves the sandbox failed; a failed rebase or disk resize leaves it as it was, in its status
              * @enum {string}

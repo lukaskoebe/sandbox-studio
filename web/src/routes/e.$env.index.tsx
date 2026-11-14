@@ -17,6 +17,7 @@ import {
   useApprovalReview,
 } from "@/components/approval-stack"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import { RebaseAllDialog } from "@/components/rebase-sandbox-dialog"
 import { Ident } from "@/components/ident"
 import { SessionLines } from "@/components/session-lines"
 import { SetupCard } from "@/components/setup-card"
@@ -206,6 +207,7 @@ const baseNoticeKey = "studio.base-notice"
  */
 function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
   const updates = $api.useQuery("get", "/api/system/updates")
+  const [rebasing, setRebasing] = useState(false)
   const current = updates.data?.current ?? ""
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -233,6 +235,9 @@ function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
       icon={<StackIcon />}
       actions={
         <>
+          <Button size="sm" variant="outline" onClick={() => setRebasing(true)}>
+            Rebase all…
+          </Button>
           {release && (
             <a
               href={`https://github.com/lukaskoebe/sandbox-studio/releases/tag/${current}`}
@@ -272,7 +277,13 @@ function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
           </Link>
         </span>
       ))}
-      . Rebase them from their computer&apos;s menu.
+      . Rebase them all here, or each from its computer&apos;s menu.
+      <RebaseAllDialog
+        env={env}
+        sandboxes={outdated}
+        open={rebasing}
+        onOpenChange={setRebasing}
+      />
     </Notice>
   )
 }

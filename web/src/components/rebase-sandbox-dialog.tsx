@@ -21,8 +21,9 @@ import {
   type Sandbox,
   type Template,
 } from "@/lib/api/client"
+import { canCopyDisks } from "@/components/status-badge"
 import { templateStack } from "@/lib/lineage"
-import { formatAge } from "@/lib/utils"
+import { cn, formatAge } from "@/lib/utils"
 
 /**
  * Moves a sandbox onto the current base image or another ready template. The workspace and
@@ -122,12 +123,7 @@ function RebaseForm({
   const choices = (templates.data ?? []).filter(
     (template) => template.id !== sandbox.templateId
   )
-  const stack = templateStack(sandbox.templateName)
-  // The sandbox's template rebuilt on the current base, the newest first.
-  const rebuilt = choices
-    .filter((t) => !t.baseOutdated && stack && templateStack(t.name) === stack)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .at(0)
+  const rebuilt = rebuiltTemplate(sandbox, choices)
   // A sandbox without a template goes onto the current base; one with a template onto that
   // template rebuilt, when there is one.
   const fallback = sandbox.templateId ? rebuilt?.id : ""
@@ -279,36 +275,13 @@ function RebaseForm({
           </ul>
         </div>
       </section>
-      <label className="flex items-start gap-2">
-        <Checkbox
-          checked={keepTools}
-          onCheckedChange={setKeepTools}
-          disabled={pending}
-          className="mt-0.5"
-        />
-        <span>
-          Keep the tools installed with{" "}
-          <span className="font-mono">mise use</span>
-          <span className="block text-muted-foreground">
-            Copies the versions the new template lacks; for a tool both have,
-            the template&apos;s version stays the default.
-          </span>
-        </span>
-      </label>
-      <label className="flex items-start gap-2">
-        <Checkbox
-          checked={keepDocker}
-          onCheckedChange={setKeepDocker}
-          disabled={pending}
-          className="mt-0.5"
-        />
-        <span>
-          Keep Docker&apos;s images, containers and volumes
-          <span className="block text-muted-foreground">
-            Copying many images takes a while: up to 15 minutes for 10 GB.
-          </span>
-        </span>
-      </label>
+      <KeepChoices
+        keepTools={keepTools}
+        keepDocker={keepDocker}
+        onKeepTools={setKeepTools}
+        onKeepDocker={setKeepDocker}
+        disabled={pending}
+      />
       <p className="text-muted-foreground">
         {sandbox.status === "running" || sandbox.status === "starting"
           ? "It restarts after the copy."
@@ -339,6 +312,278 @@ function RebaseForm({
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+/** The sandbox's template rebuilt on the current base, the newest one, if there is one. */
+function rebuiltTemplate(sandbox: Sandbox, templates: Template[]) {
+  const stack = templateStack(sandbox.templateName)
+  if (!stack) return undefined
+  return templates
+    .filter(
+      (t) =>
+        t.id !== sandbox.templateId &&
+        !t.baseOutdated &&
+        templateStack(t.name) === stack
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .at(0)
+}
+
+/** The two copies a rebase may add to the workspace and home, as checkboxes. */
+function KeepChoices({
+  keepTools,
+  keepDocker,
+  onKeepTools,
+  onKeepDocker,
+  disabled,
+}: {
+  keepTools: boolean
+  keepDocker: boolean
+  onKeepTools: (on: boolean) => void
+  onKeepDocker: (on: boolean) => void
+  disabled: boolean
+}) {
+  return (
+    <>
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={keepTools}
+          onCheckedChange={onKeepTools}
+          disabled={disabled}
+          className="mt-0.5"
+        />
+        <span>
+          Keep the tools installed with{" "}
+          <span className="font-mono">mise use</span>
+          <span className="block text-muted-foreground">
+            Copies the versions the new template lacks; for a tool both have,
+            the template&apos;s version stays the default.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2">
+        <Checkbox
+          checked={keepDocker}
+          onCheckedChange={onKeepDocker}
+          disabled={disabled}
+          className="mt-0.5"
+        />
+        <span>
+          Keep Docker&apos;s images, containers and volumes
+          <span className="block text-muted-foreground">
+            Copying many images takes a while: up to 15 minutes for 10 GB.
+          </span>
+        </span>
+      </label>
+    </>
+  )
+}
+
+/** Where Rebase all moves a sandbox, or why it leaves it. */
+type Plan =
+  | { sandbox: Sandbox; templateId: string; onto: string }
+  | { sandbox: Sandbox; skip: string }
+
+function planRebase(sandbox: Sandbox, templates: Template[]): Plan {
+  if (!canCopyDisks(sandbox)) return { sandbox, skip: "busy" }
+  if (!sandbox.templateId)
+    return { sandbox, templateId: "", onto: "current base" }
+  const rebuilt = rebuiltTemplate(sandbox, templates)
+  if (rebuilt)
+    return {
+      sandbox,
+      templateId: rebuilt.id,
+      onto: `${rebuilt.name || rebuilt.id.slice(0, 8)} rebuilt`,
+    }
+  return {
+    sandbox,
+    skip: `rebuild ${sandbox.templateName || "its template"} first`,
+  }
+}
+
+/**
+ * Rebases every sandbox on the old base image: one without a template onto the current base,
+ * one with a template onto that template rebuilt. A template not rebuilt yet leaves its
+ * sandboxes, which would lose its tools on the bare base. Studio copies one at a time.
+ */
+export function RebaseAllDialog({
+  env,
+  sandboxes,
+  open,
+  onOpenChange,
+}: {
+  env: string
+  sandboxes: Sandbox[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const queryClient = useQueryClient()
+  const [keepTools, setKeepTools] = useState(true)
+  const [keepDocker, setKeepDocker] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [failures, setFailures] = useState<string[]>([])
+  const templates = $api.useQuery("get", "/api/environments/{env}/templates", {
+    params: { path: { env } },
+    enabled: open,
+  })
+  const plans = sandboxes.map((sb) => planRebase(sb, templates.data ?? []))
+  const go = plans.filter((p) => "templateId" in p)
+  const rebase = $api.useMutation(
+    "post",
+    "/api/environments/{env}/sandboxes/{id}/rebase"
+  )
+
+  async function start() {
+    setPending(true)
+    const failed: string[] = []
+    let started = 0
+    // Each request only checks and accepts its rebase; Studio runs them one after another.
+    for (const p of go) {
+      try {
+        await rebase.mutateAsync({
+          params: { path: { env, id: p.sandbox.id } },
+          body: { templateId: p.templateId, keepTools, keepDocker },
+        })
+        started++
+      } catch (err) {
+        failed.push(`${p.sandbox.name}: ${errorMessage(err)}`)
+      }
+    }
+    await queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/sandboxes"],
+    })
+    setPending(false)
+    setFailures(failed)
+    if (started > 0)
+      toast.success(
+        started === 1 ? "Rebase started" : `${started} rebases started`,
+        { description: started > 1 ? "They run one at a time." : undefined }
+      )
+    if (failed.length === 0) onOpenChange(false)
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && pending) return
+        if (next) setFailures([])
+        onOpenChange(next)
+      }}
+    >
+      <DialogContent showCloseButton={!pending}>
+        <form
+          className="contents"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!pending && go.length > 0) void start()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              Rebase {sandboxes.length}{" "}
+              {sandboxes.length === 1 ? "sandbox" : "sandboxes"}
+            </DialogTitle>
+            <DialogDescription>
+              Each gets a new generation from the current base, with its work
+              copied over. They go one at a time, the others waiting their turn.
+            </DialogDescription>
+          </DialogHeader>
+
+          {templates.isPending ? (
+            <div
+              className="grid min-h-12 place-items-center"
+              aria-label="Loading templates"
+            >
+              <Spinner />
+            </div>
+          ) : (
+            <ul
+              aria-label="Sandboxes to rebase"
+              className="grid max-h-64 divide-y overflow-y-auto border"
+            >
+              {plans.map((p) => (
+                <li
+                  key={p.sandbox.id}
+                  className="flex min-w-0 items-baseline gap-3 px-3 py-2"
+                >
+                  <span className="min-w-0 truncate font-mono">
+                    {p.sandbox.name}
+                  </span>
+                  <span
+                    className={cn(
+                      "ml-auto max-w-[55%] shrink-0 truncate text-right",
+                      "skip" in p ? "text-muted-foreground" : ""
+                    )}
+                  >
+                    {"skip" in p ? `skipped: ${p.skip}` : `onto ${p.onto}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {plans.some((p) => "skip" in p && p.skip !== "busy") && (
+            <p className="text-muted-foreground">
+              A sandbox on a template keeps the template&apos;s tools only on
+              that template rebuilt: rebuild it in Settings → Templates, or
+              rebase the sandbox from its computer&apos;s menu.
+            </p>
+          )}
+
+          <KeepChoices
+            keepTools={keepTools}
+            keepDocker={keepDocker}
+            onKeepTools={setKeepTools}
+            onKeepDocker={setKeepDocker}
+            disabled={pending}
+          />
+          <p className="text-muted-foreground">
+            Each keeps /workspace, /home/agent, its chats and checkpoints, and
+            loses apt packages and running terminals. A running sandbox restarts
+            after its copy; a stopped one stays stopped. One that fails stays as
+            it was.
+          </p>
+
+          {failures.length > 0 && !pending && (
+            <div role="alert" className="grid gap-1 text-destructive">
+              <p>
+                {failures.length === 1
+                  ? "One rebase didn't start:"
+                  : `${failures.length} rebases didn't start:`}
+              </p>
+              <ul className="grid gap-0.5">
+                {failures.map((f) => (
+                  <li key={f} className="break-words">
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={pending || templates.isPending || go.length === 0}
+            >
+              {pending && <Spinner />}
+              {go.length === sandboxes.length
+                ? "Rebase all"
+                : `Rebase ${go.length}`}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -137,9 +137,11 @@ func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, 
 	if keep.KeepDocker {
 		timeout = diskResizeTimeout
 	}
-	m.background(sb, timeout, unlock, func(ctx context.Context) error {
-		return m.rebase(ctx, rt, sb, req, image, wasRunning, keep)
-	})
+	// Another rebase or resize copying makes this one wait its turn, holding the sandbox.
+	m.backgroundAfter(sb, func(ctx context.Context) (func(), error) { return m.waitForCopy(ctx, sb.ID) }, timeout, unlock,
+		func(ctx context.Context) error {
+			return m.rebase(ctx, rt, sb, req, image, wasRunning, keep)
+		})
 	return m.acceptedView(ctx, sb), nil
 }
 

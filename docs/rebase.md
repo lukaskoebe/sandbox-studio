@@ -120,6 +120,20 @@ closes once the request is accepted, and the sandbox page shows the steps. `?wai
 answers only once the rebase has ended, with the rebased sandbox or the error, as the
 request did before it ran in the background.
 
+One rebase or disk resize copies at a time. Each runs two VMs of the sandbox's size side by
+side and copies its disks between them, and rebasing several sandboxes at once took a machine
+out of memory. One accepted while another copies waits its turn before step 2, with
+`progress.queued` set on its first step. It holds the sandbox meanwhile, which keeps running
+as it was, and its timeout starts once its turn comes. The sandbox page shows "Waiting for
+another sandbox's copy to finish".
+
+After an update that brings a new base image, Home's notice names the sandboxes still on the
+old one, with **Rebase all…**. Its dialog lists where each goes: one without a template onto
+the current base, one with a template onto that template rebuilt on it. A sandbox whose
+template isn't rebuilt yet is skipped, since the bare base would drop the template's tools, and
+so is one that is busy. The keep choices apply to all. **Rebase all** sends one request per
+sandbox, and Studio runs them one after another; a request that fails is listed in the dialog.
+
 1. Studio resolves the new template image, or takes the base image. A failure here changes nothing and fails the
    request.
 2. It writes a durable rebase record with generations `n` and `n+1`.
