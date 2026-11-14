@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 )
 
@@ -33,7 +34,8 @@ func TestRebindLineageBindsTheAncestryToTheNewRecord(t *testing.T) {
 	if string(b) != `{"sandbox_id":7,"snapshot_id":"snap_04ce"}` {
 		t.Errorf("ancestry is %s", b)
 	}
-	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+	// Windows has no such modes: every file there reads as 666.
+	if fi, _ := os.Stat(path); goruntime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("ancestry is %o, want 600", fi.Mode().Perm())
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 1 {

@@ -10,15 +10,35 @@ import (
 	"testing"
 )
 
-// openTempDir is a test directory without the private (0700) one Go makes above it, which would
-// keep everything below it private.
+// openTempDir is a test directory that msb's rule applies to: below /tmp, sticky as it is, rather
+// than Go's temporary directory, which on macOS sits in a private (0700) per-user folder that keeps
+// everything below it safe, so nothing there could ever be refused.
 func openTempDir(t *testing.T) string {
-	tmp := t.TempDir()
-	if err := CheckHome(filepath.Dir(filepath.Dir(tmp))); err != nil {
+	tmp, err := os.MkdirTemp("/tmp", "msbdb-")
+	if err != nil {
+		t.Skipf("no directory in /tmp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(tmp, 0o755)
+		_ = os.RemoveAll(tmp)
+	})
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckHome(filepath.Join(tmp, "probe")); err != nil {
 		t.Skipf("the temporary directories are below one other accounts can change: %v", err)
 	}
-	if err := os.Chmod(filepath.Dir(tmp), 0o755); err != nil {
+	// A private directory above would keep it safe however open it is.
+	if err := os.Chmod(tmp, 0o775); err != nil {
 		t.Fatal(err)
+	}
+	var u *UnsafeHome
+	refused := errors.As(CheckHome(filepath.Join(tmp, "probe")), &u)
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !refused {
+		t.Skip("a private directory above the temporary directories keeps everything below them safe")
 	}
 	return tmp
 }
