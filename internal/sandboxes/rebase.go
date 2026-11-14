@@ -153,10 +153,13 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 		return err
 	}
 	if op.FromGeneration != sb.Generation {
-		return m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
+		return m.dropRebaseTarget(ctx, sb, op, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, keep.KeepDocker, keep.KeepTools); err != nil {
+	if stopped, err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, keep.KeepDocker, keep.KeepTools); err != nil {
+		if !stopped {
+			return m.dropRebaseTarget(ctx, sb, op, err)
+		}
 		return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
@@ -194,52 +197,80 @@ func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 }
 
 // rebaseInto builds and fills target, copying Docker's data too when docker is set and the
-// toolchains in /opt/mise when tools is.
-func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning, docker, tools bool) error {
-	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
-		return err
-	}
+// toolchains in /opt/mise when tools is. The target is made, its image pulled, before the
+// source is stopped, so the sandbox stays as it was meanwhile: stopped reports whether the
+// source was touched, which a failure has to undo.
+func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning, docker, tools bool) (stopped bool, err error) {
+	clock := m.timePhases(sb.ID)
+	defer func() { clock.finished(err) }()
 	egress, err := m.Egress.Attach(sb)
 	if err != nil {
-		return err
+		return false, err
 	}
-	// Drop the source agent's session; the target's agent connects on Boot.
-	if err := m.resetHub(sb.ID); err != nil {
-		return err
-	}
-	if err := rt.StartForTransfer(ctx, VMName(sb)); err != nil {
-		return err
-	}
-	m.advance(sb.ID, StepPull)
+	// The target runs no agent until Boot, so it shares the socket the source's agent uses.
 	sock := m.Paths.AgentSocket(sb.ID)
 	spec := transferSpec(target, image, egress)
 	spec.Progress = m.runtimeProgress(sb.ID)
 	if err := rt.CreateForTransfer(ctx, VMName(target), spec, sock, sandboxLabels(target)); err != nil {
-		return err
+		return false, err
 	}
+	clock.done("new VM")
+	m.advance(sb.ID, StepPrepare)
+	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
+		return true, err
+	}
+	clock.done("stop")
+	// Drop the source agent's session; the target's agent connects on Boot.
+	if err := m.resetHub(sb.ID); err != nil {
+		return true, err
+	}
+	if err := rt.StartForTransfer(ctx, VMName(sb)); err != nil {
+		return true, err
+	}
+	clock.done("start for the copy")
 	m.advance(sb.ID, StepCopy)
-	report := m.copying(sb.ID)
+	report := clock.copies(m.copying(sb.ID))
 	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, target.HomeMiB, report); err != nil {
-		return err
+		return true, err
 	}
 	if tools {
 		if err := copyTools(ctx, rt, ownedVM(sb), ownedVM(target), report); err != nil {
-			return err
+			return true, err
 		}
 	}
 	if docker {
 		if err := copyDocker(ctx, rt, ownedVM(sb), ownedVM(target), target.DockerMiB, report); err != nil {
-			return err
+			return true, err
 		}
 	}
+	clock.done("copy")
 	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
-		return err
+		return true, err
 	}
+	clock.done("stop after the copy")
 	if wasRunning {
 		m.advance(sb.ID, StepBoot)
-		return rt.Boot(ctx, VMName(target))
+		err := rt.Boot(ctx, VMName(target))
+		clock.done("boot")
+		return true, err
 	}
-	return m.Runtime.Stop(ctx, VMName(target))
+	err = m.Runtime.Stop(ctx, VMName(target))
+	clock.done("stop the new VM")
+	return true, err
+}
+
+// dropRebaseTarget removes the target VM of a rebase that failed before it stopped the source,
+// and ends the record. The source stays as it was. The record stays for recovery if that fails.
+func (m *Manager) dropRebaseTarget(ctx context.Context, sb store.Sandbox, op store.RebaseOperation, cause error) error {
+	cleanupCtx, cancel := cleanupContext(ctx)
+	defer cancel()
+	if err := m.Runtime.Remove(cleanupCtx, vmNameAtGeneration(sb, op.ToGeneration)); err != nil {
+		return errors.Join(cause, fmt.Errorf("target cleanup failed; rebase recovery retained: %w", err))
+	}
+	if err := m.Store.EndRebase(cleanupCtx, op); err != nil {
+		return errors.Join(cause, fmt.Errorf("rebase record cleanup failed: %w", err))
+	}
+	return cause
 }
 
 // rollbackRebase removes the target VM, stops the source and ends the record. The record

@@ -3,9 +3,11 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -83,11 +85,28 @@ func homeImport(src io.Reader) error {
 }
 
 func toolsExport(dst, warn io.Writer, zstd bool) error {
+	var have []string
+	if list := os.Getenv(agentproto.ToolsHaveEnv); list != "" {
+		have = strings.Split(list, "\n")
+	}
 	w := bufio.NewWriterSize(dst, 1<<20)
-	if err := guest.ExportTools(guest.MiseDir, w, warn, compression(zstd)); err != nil {
+	if err := guest.ExportTools(guest.MiseDir, w, warn, compression(zstd), have); err != nil {
 		return err
 	}
 	return w.Flush()
+}
+
+func toolsHave(w io.Writer) error {
+	names, err := guest.ToolsHave(guest.MiseDir)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if _, err := fmt.Fprintln(w, name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func toolsImport(src io.Reader) error {

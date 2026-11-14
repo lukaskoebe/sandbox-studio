@@ -90,23 +90,22 @@ func exportTree(root string, w io.Writer, warn io.Writer, opts treeOptions, c Co
 		}
 	}
 	links := map[[2]uint64]string{} // device and inode → first archived name
-	err = walkTree(root, opts, func(p, rel string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) && p != root {
-				fmt.Fprintf(warn, "skipped %s: it disappeared during the export\n", p)
+	err = readAhead(root, opts, func(e walked) error {
+		if e.err != nil {
+			if errors.Is(e.err, fs.ErrNotExist) && e.p != root {
+				fmt.Fprintf(warn, "skipped %s: it disappeared during the export\n", e.p)
 				return nil
 			}
-			return err
+			return e.err
 		}
-		info, err := d.Info()
-		if errors.Is(err, fs.ErrNotExist) {
-			fmt.Fprintf(warn, "skipped %s: it disappeared during the export\n", rel)
+		if errors.Is(e.infoErr, fs.ErrNotExist) {
+			fmt.Fprintf(warn, "skipped %s: it disappeared during the export\n", e.rel)
 			return nil
 		}
-		if err != nil {
-			return err
+		if e.infoErr != nil {
+			return e.infoErr
 		}
-		return exportEntry(tw, p, rel, info, links, opts.special, warn)
+		return exportEntry(tw, e, links, opts.special, warn)
 	})
 	if err != nil {
 		return err
@@ -115,6 +114,94 @@ func exportTree(root string, w io.Writer, warn io.Writer, opts treeOptions, c Co
 		return err
 	}
 	return gz.Close()
+}
+
+// walked is an entry of an export's walk, as readAhead hands it on.
+type walked struct {
+	p, rel  string
+	err     error // the walk's, for p
+	info    fs.FileInfo
+	infoErr error
+	// f is a regular file opened ahead, and cold says none of it was in the cache before its
+	// read-ahead, which copyOut drops. Without f, exportEntry opens the file itself.
+	f    *os.File
+	cold bool
+}
+
+const (
+	// aheadFiles is how many entries the walk runs ahead of the archive, and aheadBytes how much
+	// of each file it asks the disk for meanwhile: a disk that reads several files at a time
+	// beats one that waits for each, and the cache holds at most aheadFiles × aheadBytes more.
+	aheadFiles = 32
+	aheadBytes = 1 << 20
+)
+
+// readAhead walks root as walkTree does and calls fn with each entry in order, while the walk
+// runs ahead: it reads the next entries' status and starts reading their files. fn's first
+// error ends it.
+func readAhead(root string, opts treeOptions, fn func(walked) error) error {
+	entries := make(chan walked, aheadFiles)
+	stop := make(chan struct{})
+	walkErr := make(chan error, 1)
+	errStopped := errors.New("stopped")
+	go func() {
+		defer close(entries)
+		seen := map[[2]uint64]bool{} // files with several names: only the first is opened ahead
+		walkErr <- walkTree(root, opts, func(p, rel string, d fs.DirEntry, err error) error {
+			e := walked{p: p, rel: rel, err: err}
+			if err == nil {
+				e.info, e.infoErr = d.Info()
+				if e.infoErr == nil && d.Type().IsRegular() && e.info.Size() > 0 {
+					st, _ := e.info.Sys().(*syscall.Stat_t)
+					if st == nil || st.Nlink <= 1 || !seen[[2]uint64{uint64(st.Dev), st.Ino}] {
+						if st != nil && st.Nlink > 1 {
+							seen[[2]uint64{uint64(st.Dev), st.Ino}] = true
+						}
+						e.f, e.cold = openAhead(p, e.info.Size())
+					}
+				}
+			}
+			select {
+			case entries <- e:
+				return nil
+			case <-stop:
+				if e.f != nil {
+					e.f.Close()
+				}
+				return errStopped
+			}
+		})
+	}()
+	var err error
+	for e := range entries {
+		if err == nil {
+			err = fn(e)
+			if err != nil {
+				close(stop)
+			}
+		}
+		if e.f != nil {
+			e.f.Close()
+		}
+	}
+	if werr := <-walkErr; err == nil && !errors.Is(werr, errStopped) {
+		err = werr
+	}
+	return err
+}
+
+// openAhead opens the regular file p of size bytes for the export, and asks the disk for its
+// start. It returns nil when it can't open it, which exportEntry then tries itself. O_NONBLOCK
+// keeps a file swapped for a FIFO meanwhile from holding up the walk; a regular file ignores it.
+func openAhead(p string, size int64) (*os.File, bool) {
+	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, false
+	}
+	fd := int(f.Fd())
+	cold := !cached(fd)
+	_ = unix.Fadvise(fd, 0, min(size, aheadBytes), unix.FADV_WILLNEED)
+	return f, cold
 }
 
 // walkTree walks root as an export does, leaving out lost+found and what opts skips, with each
@@ -169,8 +256,9 @@ func treeSize(root string, opts treeOptions) int64 {
 	return total
 }
 
-func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]uint64]string, special bool, warn io.Writer) error {
-	st, ok := info.Sys().(*syscall.Stat_t)
+func exportEntry(tw *tar.Writer, e walked, links map[[2]uint64]string, special bool, warn io.Writer) error {
+	p, rel := e.p, e.rel
+	st, ok := e.info.Sys().(*syscall.Stat_t)
 	if !ok {
 		return fmt.Errorf("%s: no file status", rel)
 	}
@@ -212,11 +300,15 @@ func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]u
 			h.Typeflag, h.Linkname = tar.TypeLink, first
 			return tw.WriteHeader(h)
 		}
-		f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
-		if err != nil {
-			return skipVanished(err, rel, warn)
+		f, cold := e.f, e.cold
+		if f == nil {
+			var err error
+			if f, err = os.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW, 0); err != nil {
+				return skipVanished(err, rel, warn)
+			}
+			defer f.Close()
+			cold = st.Size > 0 && !cached(int(f.Fd()))
 		}
-		defer f.Close()
 		if st.Nlink > 1 {
 			links[key] = rel
 		}
@@ -224,7 +316,7 @@ func exportEntry(tw *tar.Writer, p, rel string, info fs.FileInfo, links map[[2]u
 		if err := tw.WriteHeader(h); err != nil {
 			return err
 		}
-		n, err := copyOut(tw, f, st.Size)
+		n, err := copyOut(tw, f, st.Size, cold)
 		if errors.Is(err, io.EOF) {
 			// The file shrank during the export. Pad it to the size in its header.
 			fmt.Fprintf(warn, "%s changed during the export\n", rel)

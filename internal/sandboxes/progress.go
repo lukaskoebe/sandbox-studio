@@ -19,7 +19,7 @@ import (
 
 // Steps, in the order they run.
 const (
-	StepPrepare   = "prepare"   // stopping the sandbox and starting it for the copy (rebase)
+	StepPrepare   = "prepare"   // stopping the sandbox and starting it for the copy (rebase), after the pull
 	StepPull      = "pull"      // pulling the image
 	StepVM        = "vm"        // starting the VM
 	StepCopy      = "copy"      // copying the workspace (fork)
@@ -62,9 +62,10 @@ const (
 var (
 	createSteps = []string{StepPull, StepVM, StepBoot, StepServices, StepAgent, StepConfigure}
 	forkSteps   = []string{StepPull, StepVM, StepCopy, StepBoot, StepServices, StepAgent, StepConfigure}
-	// A rebased sandbox's agent connects and is configured as after any start.
-	rebaseRunningSteps = []string{StepPrepare, StepPull, StepVM, StepCopy, StepBoot}
-	rebaseStoppedSteps = []string{StepPrepare, StepPull, StepVM, StepCopy}
+	// A rebase makes its new VM before it stops the sandbox for the copy, so the image pull
+	// isn't downtime. A rebased sandbox's agent connects and is configured as after any start.
+	rebaseRunningSteps = []string{StepPull, StepVM, StepPrepare, StepCopy, StepBoot}
+	rebaseStoppedSteps = []string{StepPull, StepVM, StepPrepare, StepCopy}
 )
 
 const (

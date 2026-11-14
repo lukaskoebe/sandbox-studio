@@ -37,8 +37,8 @@ func newUploadFake(t *testing.T, tf *transferFake, transfers *Transfers) *upload
 	return u
 }
 
-func (u *uploadFake) UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, fast bool, url string, caPEM []byte) error {
-	u.fast = append(u.fast, fast)
+func (u *uploadFake) UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, opts runtime.ExportOptions, url string, caPEM []byte) error {
+	u.fast = append(u.fast, opts.Fast)
 	if !strings.HasPrefix(url, "https://"+TransferHost+"/") || string(caPEM) != "CA" {
 		return fmt.Errorf("url %s, CA %q", url, caPEM)
 	}
@@ -132,7 +132,7 @@ func TestUploadKeepsTheExportsCompression(t *testing.T) {
 	tf.setStatus("dst", runtime.StatusRunning)
 	tf.setWorkspace("src", "files")
 	var out strings.Builder
-	if err := rt.ExportTree(f.ctx, src, runtime.TreeWorkspace, false, &out); err != nil {
+	if err := rt.ExportTree(f.ctx, src, runtime.TreeWorkspace, runtime.ExportOptions{}, &out); err != nil {
 		t.Fatal(err)
 	}
 	if out.String() != "files" {

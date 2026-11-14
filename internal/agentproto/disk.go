@@ -22,6 +22,16 @@ const (
 	TransferCAEnv  = "STUDIO_TRANSFER_CA"
 )
 
+// A rebase that keeps tools asks the new VM what it already has with `studio-agent tools-have`,
+// which prints one name relative to /opt/mise per line: each installs/<tool>/<version> and each
+// plugins/<name>. It passes them, one per line, to the old VM's `tools-export` in ToolsHaveEnv,
+// and the export leaves them out: the import would keep the new VM's own anyway.
+const (
+	ToolsHaveEnv = "STUDIO_TOOLS_HAVE"
+	// MaxToolsHave bounds ToolsHaveEnv; a longer list is not passed, and everything is copied.
+	MaxToolsHave = 64 << 10
+)
+
 // Disk is one of the sandbox's disks, in bytes, as the one writing to it sees it: for the
 // home and workspace, the terminal user, so Free leaves out what only root may use; for
 // Docker's disk, root, as its daemon is.

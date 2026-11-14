@@ -104,9 +104,9 @@ is on:
 
 | Step | Meaning |
 |---|---|
-| `prepare` | the sandbox stops and starts again for the copy (rebase and disk resize) |
 | `pull` | the image; the view carries layers and bytes while the pull reports them |
 | `vm` | the VM starts |
+| `prepare` | the sandbox stops and starts again for the copy (rebase and disk resize), once its new VM runs |
 | `copy` | the workspace and home copy (fork and rebase), the tools a rebase keeps and Docker's data for a disk resize; the view carries the tree and its bytes |
 | `boot` | `studio-agent boot` runs |
 | `services` | the supervisor starts containerd, Docker and the agent |
@@ -124,8 +124,8 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
   the settings. On start, `Reconcile` fails each create or fork that was still running, with
   the error "Studio stopped before this step finished", and removes its VM. So no sandbox
   stays `creating` after a restart.
-- A rebase runs through the steps `prepare`, `pull`, `vm`, `copy` and, for a sandbox that
-  was running, `boot`. The agent then connects and is configured as after any start. A
+- A rebase runs through the steps `pull`, `vm`, `prepare`, `copy` and, for a sandbox that
+  was running, `boot`: its new VM is made while the sandbox stays as it was. The agent then connects and is configured as after any start. A
   failed rebase rolls back ([rebase](rebase.md#rebase)), so the sandbox keeps its status;
   only its `progress` stays, in state `failed` with the step and the error, until the next
   rebase, a delete, a restart of Studio, or `DELETE …/sandboxes/{id}/progress` (the

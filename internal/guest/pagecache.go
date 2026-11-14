@@ -21,12 +21,12 @@ import (
 // cacheChunk is how much of the files copied may stay in the cache before it is dropped.
 const cacheChunk = 32 << 20
 
-// copyOut copies size bytes of f to w. A file none of which was in the cache before is dropped
-// from it every cacheChunk and at the end; a file that was, as a running sandbox's working
-// files may be, keeps its pages.
-func copyOut(w io.Writer, f *os.File, size int64) (int64, error) {
+// copyOut copies size bytes of f to w. A cold file, none of which was in the cache before the
+// export opened it, is dropped from it every cacheChunk and at the end; one that was, as a
+// running sandbox's working files may be, keeps its pages.
+func copyOut(w io.Writer, f *os.File, size int64, cold bool) (int64, error) {
 	fd := int(f.Fd())
-	if size == 0 || cached(fd) {
+	if size == 0 || !cold {
 		return io.CopyN(w, f, size)
 	}
 	var n int64
@@ -54,10 +54,13 @@ func cached(fd int) bool {
 // cacheDropper drops the page cache of the files an import writes. They are new, so nothing
 // else reads them yet. A written page can only be dropped once it is on the disk: writeback of
 // each file starts when it is written, and once the files written since the last drop hold
-// cacheChunk bytes, or there are maxPending of them, the dropper waits for it and drops them.
+// cacheChunk bytes, or there are maxPending of them, they are handed to the background, which
+// waits for their writeback and drops them while the import writes on. A batch waits for the
+// one before it, so at most two are in the cache at a time.
 type cacheDropper struct {
 	pending []int // duplicates of the written files' descriptors
 	bytes   int64
+	behind  chan struct{} // closed once the batch dropped in the background is; nil for none
 }
 
 // maxPending caps the files that wait to be dropped, each with a descriptor open.
@@ -83,17 +86,42 @@ func (d *cacheDropper) written(fd int, size int64) {
 	d.pending = append(d.pending, dup)
 	d.bytes += size
 	if d.bytes >= cacheChunk || len(d.pending) >= maxPending {
-		d.drop()
+		d.dropBehind()
 	}
 }
 
-// drop waits for the queued files to be written and drops them from the cache.
+// dropBehind hands the queued files to the background to drop, once the batch before is.
+func (d *cacheDropper) dropBehind() {
+	d.wait()
+	batch, done := d.pending, make(chan struct{})
+	d.pending, d.bytes, d.behind = nil, 0, done
+	go func() {
+		defer close(done)
+		dropAll(batch)
+	}()
+}
+
+// wait waits for the batch dropped in the background, if any.
+func (d *cacheDropper) wait() {
+	if d.behind != nil {
+		<-d.behind
+		d.behind = nil
+	}
+}
+
+// drop waits for all the queued files to be written and drops them from the cache.
 func (d *cacheDropper) drop() {
-	for _, fd := range d.pending {
+	d.wait()
+	dropAll(d.pending)
+	d.pending, d.bytes = d.pending[:0], 0
+}
+
+// dropAll waits for the files fds to be written, drops them from the cache and closes them.
+func dropAll(fds []int) {
+	for _, fd := range fds {
 		dropWritten(fd, 0, 0)
 		unix.Close(fd)
 	}
-	d.pending, d.bytes = d.pending[:0], 0
 }
 
 // dropWritten waits for the length bytes of fd at off to be written (all of it for 0) and drops
@@ -103,15 +131,17 @@ func dropWritten(fd int, off, length int64) {
 	_ = unix.Fadvise(fd, off, length, unix.FADV_DONTNEED)
 }
 
-// droppingWriter writes a new file and drops each cacheChunk of it it wrote. A write of nothing
-// but zeros moves past them instead: an archive holds a sparse file's holes as zeros, and
-// writing them can take a disk that the file fits on as it was.
+// droppingWriter writes a new file and drops each cacheChunk of it it wrote. It starts each
+// chunk's writeback once it is written and waits for it a chunk later, so the disk writes one
+// while the next arrives. A write of nothing but zeros moves past them instead: an archive
+// holds a sparse file's holes as zeros, and writing them can take a disk that the file fits on
+// as it was.
 type droppingWriter struct {
-	f       *os.File
-	fd      int
-	n, done int64 // written, and dropped up to
-	hole    bool  // the last write moved past zeros
-	copied  *atomic.Int64
+	f                *os.File
+	fd               int
+	n, started, done int64 // written, written out from, and dropped up to
+	hole             bool  // the last write moved past zeros
+	copied           *atomic.Int64
 }
 
 func (w *droppingWriter) Write(p []byte) (n int, err error) {
@@ -125,9 +155,13 @@ func (w *droppingWriter) Write(p []byte) (n int, err error) {
 	}
 	w.n += int64(n)
 	w.copied.Add(int64(n))
-	if w.n-w.done >= cacheChunk {
-		dropWritten(w.fd, w.done, w.n-w.done)
-		w.done = w.n
+	if w.n-w.started >= cacheChunk {
+		_ = unix.SyncFileRange(w.fd, w.started, w.n-w.started, unix.SYNC_FILE_RANGE_WRITE)
+		if w.started > w.done {
+			dropWritten(w.fd, w.done, w.started-w.done)
+			w.done = w.started
+		}
+		w.started = w.n
 	}
 	return n, err
 }

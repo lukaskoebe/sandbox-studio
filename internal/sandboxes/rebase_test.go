@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	goruntime "runtime"
 	"slices"
 	"strings"
@@ -26,22 +27,25 @@ import (
 // import-tools:<vm>.
 type transferFake struct {
 	*fakeSandboxRuntime
-	mu         sync.Mutex
-	workspaces map[string][]byte
-	homes      map[string][]byte
-	dockers    map[string][]byte
-	tools      map[string][]byte
-	specs      map[string]runtime.Spec
-	labels     map[string]map[string]string
-	booted     map[string]bool
-	sockets    map[string]string
-	guestBoots bool            // a booted VM's agent connects and answers, see answerGuest
-	busy       map[string]bool // VMs with a command running, as the runtime allows one per VM
+	mu           sync.Mutex
+	workspaces   map[string][]byte
+	homes        map[string][]byte
+	dockers      map[string][]byte
+	tools        map[string][]byte
+	specs        map[string]runtime.Spec
+	labels       map[string]map[string]string
+	booted       map[string]bool
+	sockets      map[string]string
+	toolsHave    map[string][]string // what ToolsHave answers, by VM
+	toolsSkipped map[string][]string // what each VM's tools export was told to leave out
+	guestBoots   bool                // a booted VM's agent connects and answers, see answerGuest
+	busy         map[string]bool     // VMs with a command running, as the runtime allows one per VM
 }
 
 func newTransferFake(f *checkpointFixture) *transferFake {
 	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, dockers: map[string][]byte{}, tools: map[string][]byte{}, specs: map[string]runtime.Spec{},
-		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}, busy: map[string]bool{}}
+		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}, busy: map[string]bool{},
+		toolsHave: map[string][]string{}, toolsSkipped: map[string][]string{}}
 	f.manager.Runtime = tf
 	f.manager.Templates = perTemplateResolver{}
 	return tf
@@ -112,9 +116,14 @@ func (f *transferFake) run(name string) (done func(), err error) {
 	}, nil
 }
 
-func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, _ bool, w io.Writer) error {
+func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, opts runtime.ExportOptions, w io.Writer) error {
 	trees, suffix := f.trees(tree)
 	f.record("export" + suffix + ":" + owned.Name)
+	if tree == runtime.TreeTools {
+		f.mu.Lock()
+		f.toolsSkipped[owned.Name] = opts.ToolsHave
+		f.mu.Unlock()
+	}
 	done, err := f.run(owned.Name)
 	if err != nil {
 		return err
@@ -131,6 +140,17 @@ func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tr
 	f.mu.Unlock()
 	_, err = w.Write(data)
 	return err
+}
+
+// ToolsHave answers what toolsHave says the VM has.
+func (f *transferFake) ToolsHave(_ context.Context, owned runtime.OwnedVM) ([]string, error) {
+	f.record("tools-have:" + owned.Name)
+	if err := f.failure("tools-have:" + owned.Name); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.toolsHave[owned.Name], nil
 }
 
 func (f *transferFake) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader, progress func(copied, total int64)) error {
@@ -263,11 +283,15 @@ func TestRebaseAnswersAtOnceAndPublishesItsSteps(t *testing.T) {
 		!slices.Equal(p.Steps, rebaseRunningSteps) {
 		t.Fatalf("answer = %+v, progress %+v", answered, p)
 	}
-	// While the image pulls, the view shows the pull, and the sandbox is busy.
+	// While the image pulls, the view shows the pull, and the sandbox is busy. It keeps running:
+	// the new VM is made before the old one stops.
 	waitUntil(t, func() bool {
 		v, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
 		return err == nil && v.Progress != nil && v.Progress.Step == StepPull && v.Progress.Pull != nil
 	})
+	if st, _ := tf.Status(f.ctx, source); st != runtime.StatusRunning || tf.countCall("stop:"+source) != 0 {
+		t.Fatalf("during the pull the source is %s, calls %v", st, tf.calls)
+	}
 	if _, err := f.manager.Stop(f.ctx, f.env.ID, f.sandbox.ID); !errors.Is(err, ErrBusy) {
 		t.Fatalf("Stop during a rebase: err = %v, want ErrBusy", err)
 	}
@@ -318,11 +342,11 @@ func TestRebaseWaitsForAnotherCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Progress == nil || !v.Progress.Queued || v.Progress.Step != StepPrepare || v.Status != StatusCreating {
+	if v.Progress == nil || !v.Progress.Queued || v.Progress.Step != StepPull || v.Status != StatusCreating {
 		t.Fatalf("queued view = %+v, progress %+v", v, v.Progress)
 	}
-	if st, _ := tf.Status(f.ctx, source); st != runtime.StatusRunning {
-		t.Fatalf("the queued sandbox's VM is %s", st)
+	if st, _ := tf.Status(f.ctx, source); st != runtime.StatusRunning || tf.countCall("create-transfer:"+vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1)) != 0 {
+		t.Fatalf("the queued sandbox's VM is %s, calls %v", st, tf.calls)
 	}
 
 	other()
@@ -467,10 +491,18 @@ func TestRebaseRunningSandboxCopiesWorkspaceAndBootsTarget(t *testing.T) {
 	tf.setWorkspace(source, "files")
 	tf.setHome(source, "opencode sessions")
 	checkpoint := f.createReadyCheckpoint(t, "before")
+	var logged syncBuffer
+	f.manager.Log = slog.New(slog.NewTextHandler(&logged, nil))
 
 	view, err := rebaseNow(f, f.sandbox.ID, template.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Each phase says how long it took, and each tree its bytes and rate.
+	for _, want := range []string{`phase="new VM"`, "phase=stop ", `phase="start for the copy"`, "tree=workspace", "tree=home", "phase=copy ", "phase=boot", "sandbox copy finished"} {
+		if !strings.Contains(logged.String(), want) {
+			t.Errorf("the log lacks %s:\n%s", want, logged.String())
+		}
 	}
 	target := VMName(view.Sandbox)
 	if view.Generation != f.sandbox.Generation+1 || view.TemplateID != template.ID || view.Status != runtime.StatusRunning {
@@ -599,7 +631,14 @@ func TestRebaseFailureRemovesTargetAndRestoresSource(t *testing.T) {
 				if status, _ := tf.Status(f.ctx, source); status != want {
 					t.Fatalf("source is %s, want %s", status, want)
 				}
-				// A running source comes back through the normal start path, with services.
+				// A running source comes back through the normal start path, with services. One
+				// whose new VM couldn't be made was never stopped.
+				if step == "create-transfer" {
+					wantStarts = 0
+					if tf.countCall("stop:"+source) != 0 || tf.countCall("start-transfer:"+source) != 0 {
+						t.Fatalf("the source was touched: calls = %v", tf.calls)
+					}
+				}
 				if tf.countCall("start:"+source) != wantStarts {
 					t.Fatalf("calls = %v", tf.calls)
 				}
@@ -934,6 +973,8 @@ func TestRebaseKeepsToolsWhenAsked(t *testing.T) {
 		tf.setWorkspace(source, "files")
 		tf.mu.Lock()
 		tf.tools[source] = []byte("node 20")
+		// The new VM's image has node 22, which the export leaves out.
+		tf.toolsHave[vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1)] = []string{"installs/node/22.1.0"}
 		tf.mu.Unlock()
 
 		view, err := rebaseKeeping(f, f.sandbox.ID, template.ID, keep)
@@ -946,6 +987,12 @@ func TestRebaseKeepsToolsWhenAsked(t *testing.T) {
 		tf.mu.Unlock()
 		if keep && (got != "node 20" || tf.countCall("export-tools:"+source) != 1 || tf.countCall("import-tools:"+target) != 1) {
 			t.Fatalf("kept tools %q, calls %v", got, tf.calls)
+		}
+		tf.mu.Lock()
+		skipped := tf.toolsSkipped[source]
+		tf.mu.Unlock()
+		if keep && !slices.Equal(skipped, []string{"installs/node/22.1.0"}) {
+			t.Fatalf("the export left out %q", skipped)
 		}
 		if !keep && (got != "" || tf.countCall("export-tools:"+source) != 0) {
 			t.Fatalf("tools copied without asking: %q, calls %v", got, tf.calls)
@@ -960,6 +1007,8 @@ func TestRebaseKeepsToolsWhenAsked(t *testing.T) {
 	tf.setStatus(source, runtime.StatusRunning)
 	tf.setWorkspace(source, "files")
 	tf.fail("export-tools:"+source, ErrToolsTooLarge)
+	// A new VM that can't say what it has gets everything.
+	tf.fail("tools-have:"+vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1), errors.New("no tools-have"))
 	if _, err := rebaseKeeping(f, f.sandbox.ID, template.ID, true); !errors.Is(err, ErrToolsTooLarge) {
 		t.Fatalf("err = %v", err)
 	}
@@ -1200,4 +1249,22 @@ func TestForkAndOwnerChangeTakeAnotherTeammate(t *testing.T) {
 	if _, err := f.manager.SetTeammate(f.ctx, f.env.ID, adas, ada.ID); err != nil || owner(adas) != ada.ID {
 		t.Fatalf("set the teammate back: %v", err)
 	}
+}
+
+// syncBuffer is a log destination that several goroutines can write to.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }

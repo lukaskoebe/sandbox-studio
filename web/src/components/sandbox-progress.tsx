@@ -112,7 +112,9 @@ export function SandboxProgress({
               : "Delete the sandbox to try again."
             : run?.queued
               ? "Sandboxes copy one at a time, so this one waits for the copy before it. It keeps running meanwhile."
-              : "This can take a few minutes. The work keeps going in the background."}
+              : rebase && (run.step === "pull" || run.step === "vm")
+                ? "The new VM is made first, and the sandbox stays as it is until the copy. This can take a few minutes."
+                : "This can take a few minutes. The work keeps going in the background."}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>

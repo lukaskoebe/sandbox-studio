@@ -58,6 +58,10 @@ func toolsExport(io.Writer, io.Writer, bool) error {
 	return errors.New("studio-agent tools-export only runs inside Linux sandboxes")
 }
 
+func toolsHave(io.Writer) error {
+	return errors.New("studio-agent tools-have only runs inside Linux sandboxes")
+}
+
 func toolsImport(io.Reader) error {
 	return errors.New("studio-agent tools-import only runs inside Linux sandboxes")
 }

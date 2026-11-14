@@ -35,8 +35,9 @@ type transferRuntime interface {
 	CreateForTransfer(context.Context, string, runtime.Spec, string, map[string]string) error
 	StartForTransfer(context.Context, string) error
 	Boot(context.Context, string) error
-	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, bool, io.Writer) error
+	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, runtime.ExportOptions, io.Writer) error
 	ImportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Reader, func(copied, total int64)) error
+	ToolsHave(context.Context, runtime.OwnedVM) ([]string, error)
 }
 
 // copyReport is told how far the copy of a tree got: the bytes of its files copied, and their
@@ -74,9 +75,16 @@ func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM
 // root disk, which has no size of its own to check against.
 const toolsLimit = 32 << 30
 
-// copyTools merges the toolchains and global mise config of src into dst's.
+// copyTools merges the toolchains and global mise config of src into dst's. The versions dst
+// has already stay as dst has them, so they aren't copied: a rebase onto a template whose
+// image has the sandbox's tools copies little. If dst can't say what it has, all are copied.
 func copyTools(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, report copyReport) error {
-	return copyTree(ctx, rt, src, dst, runtime.TreeTools, &limitWriter{left: toolsLimit, err: ErrToolsTooLarge}, report)
+	have, err := rt.ToolsHave(ctx, dst)
+	if err != nil {
+		have = nil
+	}
+	return copyTreeWith(ctx, rt, src, dst, runtime.TreeTools, runtime.ExportOptions{Fast: true, ToolsHave: have},
+		&limitWriter{left: toolsLimit, err: ErrToolsTooLarge}, report)
 }
 
 // copyDocker copies Docker's data from src into dst's Docker disk of dockerMiB. Neither VM may
@@ -91,6 +99,11 @@ func copyDocker(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedV
 // as the archive's compressed size says little about what its files take there. report, if
 // set, is told how far it got.
 func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, limit *limitWriter, report copyReport) error {
+	return copyTreeWith(ctx, rt, src, dst, tree, runtime.ExportOptions{Fast: true}, limit, report)
+}
+
+// copyTreeWith is copyTree with the export's options.
+func copyTreeWith(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, opts runtime.ExportOptions, limit *limitWriter, report copyReport) error {
 	var progress func(copied, total int64)
 	if report != nil {
 		report(tree, 0, 0)
@@ -102,7 +115,7 @@ func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM,
 	limit.w = pw
 	exported := make(chan error, 1)
 	go func() {
-		err := rt.ExportTree(ctx, src, tree, true, limit)
+		err := rt.ExportTree(ctx, src, tree, opts, limit)
 		if err != nil {
 			err = fmt.Errorf("export %s: %w", tree, err)
 			cancel()

@@ -10,6 +10,13 @@
   rebuilt yet, with the same keep choices as a single rebase.
 - Rebases and disk resizes run one at a time: one started while another copies waits its turn,
   and its page says so. Several at once could run the machine out of memory.
+- Rebases and disk resizes are faster, and shorter for the sandbox:
+  - The new VM is made, and its image pulled, before the sandbox stops, so it keeps running
+    through the pull.
+  - Keeping tools, on a rebase or a fork, no longer copies the versions the new VM has already.
+  - The copy reads several files at a time and writes to the disk while the next files arrive.
+    A cold export of many small files took 0.7 s instead of 1.8 s on a test tree.
+  - Studio's log says how long each phase took and how fast each tree copied.
 - A sleeping browser's card keeps a long address on one truncated line instead of running
   out of the card, and so do **Wake on** and the waking spinner.
 

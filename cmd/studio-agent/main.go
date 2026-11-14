@@ -81,6 +81,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: tools-export: %v\n", err)
 			os.Exit(1)
 		}
+	case "tools-have":
+		// What the new VM of such a rebase has in /opt/mise, which its tools-export leaves out.
+		if err := toolsHave(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: tools-have: %v\n", err)
+			os.Exit(1)
+		}
 	case "tools-import":
 		if err := toolsImport(os.Stdin); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: tools-import: %v\n", err)
@@ -215,7 +221,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|tools-export|tools-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|tools-export|tools-have|tools-import|docker-export|docker-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

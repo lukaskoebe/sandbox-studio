@@ -5,8 +5,9 @@ a home disk ([sandboxes](sandboxes.md#storage-and-mounts)); a disk resize moves 
 as well. None uses msb restore or msb fork.
 Restore drops Studio's DNS and proxy egress
 ([#1736](https://github.com/superradcompany/microsandbox/issues/1736)).
-A rebase and a disk resize take a sandbox in any state with a VM: the copy stops the VM and
-starts it for itself, as both trees must be read from a running guest. One that was running
+A rebase and a disk resize take a sandbox in any state with a VM: they make the new VM first,
+and then the copy stops the old one and starts it for itself, as both trees must be read from a
+running guest. One that was running
 restarts on the new generation, and any other stays stopped, a suspended one losing what it had
 in memory. A fork needs a running or stopped sandbox; a suspended one is refused until it is
 resumed.
@@ -90,11 +91,21 @@ resumed.
   same few pages: the export drops each file it
   read from the cache, every 32 MiB and at its end, unless the file had pages cached before,
   as a running sandbox's working files may. The import has only new files: it starts their
-  writeback as each is written, and once 32 MiB or 256 files are waiting, waits for it and
-  drops them (`internal/guest/pagecache.go`). Measured on 2026-11-04
+  writeback as each is written, and once 32 MiB or 256 files are waiting, hands them to a
+  background goroutine that waits for it and drops them, while the import writes the next
+  batch; a batch waits for the one before, so at most two are cached. A file larger than 32 MiB
+  starts each chunk's writeback once it is written and waits for it a chunk later
+  (`internal/guest/pagecache.go`). Measured on 2026-11-04
   ([`spikes/transfer-memory`](../spikes/transfer-memory/README.md)), copying 1.8 GiB in a 2
   GiB VM: 2106 MiB resident at the peak and 48 s before, 256 MiB and 29 s after. Directory
   entries and inodes stay cached, about 1 KiB per file, until the guest needs the memory.
+- The export reads ahead: its walk runs up to 32 entries ahead of the archive in its own
+  goroutine, reads their status and opens each file, noting whether it was cached, and asks the
+  disk for its first MiB (`POSIX_FADV_WILLNEED`). So the disk reads several small files at a
+  time instead of one after another, and the cache holds at most 32 MiB more. On the host's
+  NVMe (2026-11-14, 197 MiB in 4,000 files of 2–62 KiB and six of 12 MiB, cold), the export took
+  0.7 s instead of 1.8 s and the import 0.9 s instead of 1.1 s; in a VM, where each read waits
+  longer, it should gain more, unmeasured so far.
 - Transfer mode creates or starts a VM without `studio-agent boot`, so no guest services
   or containers run. `Boot` starts them afterwards.
 
@@ -114,8 +125,8 @@ sandbox's template rebuilt on the current base when there is one
 The request checks the template, the home disk and the sandbox's state, and answers at once
 with the sandbox in state `creating`. The rebase then runs in the background, holding the
 sandbox, and publishes its steps on the `sandboxes` topic like a fork
-([creation progress](sandboxes.md#creation-progress)): `prepare` (steps 2–3 below), `pull`
-and `vm` (step 4's VM), `copy`, and `boot` for a sandbox that was running. The rebase dialog
+([creation progress](sandboxes.md#creation-progress)): `pull` and `vm` (step 3's VM),
+`prepare` (step 4), `copy`, and `boot` for a sandbox that was running. The rebase dialog
 closes once the request is accepted, and the sandbox page shows the steps. `?wait=true`
 answers only once the rebase has ended, with the rebased sandbox or the error, as the
 request did before it ran in the background.
@@ -137,14 +148,21 @@ sandbox, and Studio runs them one after another; a request that fails is listed 
 1. Studio resolves the new template image, or takes the base image. A failure here changes nothing and fails the
    request.
 2. It writes a durable rebase record with generations `n` and `n+1`.
-3. It stops the source gracefully and starts it again in transfer mode.
-4. It creates generation `n+1` from the new template in transfer mode and copies the
-   workspace and the home, the tools unless `keepTools` is false (below), and with
-   `keepDocker` Docker's data, as a disk resize does. A rebase that keeps Docker's data may take
-   as long as a disk resize: up to 15 minutes for 10 GB.
-5. It stops the source. A sandbox that was running is booted; a stopped one is stopped.
-6. One catalog update switches generation, template, resources and the base it records.
-7. Studio removes the old VM and ends the record.
+3. It creates generation `n+1` from the new template in transfer mode, pulling its image. The
+   source stays as it was meanwhile, so the pull isn't downtime; the new VM runs no agent yet,
+   so it can share the source's agent socket.
+4. It stops the source gracefully and starts it again in transfer mode.
+5. It copies the workspace and the home, the tools unless `keepTools` is false (below), and
+   with `keepDocker` Docker's data, as a disk resize does. A rebase that keeps Docker's data may
+   take as long as a disk resize: up to 15 minutes for 10 GB.
+6. It stops the source. A sandbox that was running is booted; a stopped one is stopped.
+7. One catalog update switches generation, template, resources and the base it records.
+8. Studio removes the old VM and ends the record.
+
+Studio's log says how long each phase took (`sandbox copy phase`: the new VM, the stop, the
+start for the copy, the copy, the stop after it and the boot), each tree's copy with its bytes
+and MiB/s (`sandbox copy tree`), and the whole (`sandbox copy finished`), so a slow rebase or
+resize shows where its time went.
 
 A failed rebase leaves the sandbox on its old template and base, in its old status. Its view keeps
 `progress` with `operation: rebase`, `state: failed`, the step and the error: the workspace
@@ -152,8 +170,9 @@ shows a note naming the failed step, with a Dismiss button
 (`DELETE /api/environments/{env}/sandboxes/{id}/progress`). The next rebase replaces
 the report.
 
-If a step before the commit fails, Studio removes the target, stops the source and ends
-the record. A sandbox that was running is then started again through the normal start
+If the new VM can't be made (step 3), Studio removes what there is of it and ends the record;
+the source was never touched. If a later step before the commit fails, Studio removes the
+target, stops the source and ends the record. A sandbox that was running is then started again through the normal start
 path. If that start fails, both errors are returned and the sandbox stays stopped. At
 startup, a leftover record is resolved by generation: before the commit the target is
 removed and the source stays stopped, after it the source is removed. Lifecycle actions on
@@ -180,7 +199,11 @@ root (`internal/guest/tools.go`):
 - The export holds `installs`, `plugins` and `config` of `/opt/mise`; shims and caches stay
   behind. It is capped at 32 GiB (`ErrToolsTooLarge`).
 - The import extracts it beside the target's `/opt/mise` and moves in each toolchain version,
-  version alias and plugin the target lacks. One the template has stays the template's.
+  version alias and plugin the target lacks. One the template has stays the template's, so the
+  export leaves those out: Studio first runs `studio-agent tools-have` in the target, which
+  lists its `installs/<tool>/<version>` and `plugins/<name>`, and passes the list to the export
+  in `STUDIO_TOOLS_HAVE` (up to 64 KiB; a longer list, or a target that can't answer, copies
+  everything). A rebase onto a template whose image has the sandbox's tools copies little.
 - The source's global pins (`config.toml` over `conf.d/*.toml`) that the target's global
   config doesn't pin go to `/opt/mise/config/conf.d/studio-kept-tools.toml`, so they stay on
   the PATH while the new template's pins win; the next rebase carries that file along as

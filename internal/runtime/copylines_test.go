@@ -32,3 +32,27 @@ func TestCopyLinesWithoutAReportReadsToo(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A tools export is told what the target has in its environment, unless the list is too long
+// for one; other trees ignore it.
+func TestExportOptionsPassWhatTheTargetHas(t *testing.T) {
+	have := []string{"installs/node/22.1.0", "plugins/foo"}
+	args, env := ExportOptions{Fast: true, ToolsHave: have}.command(TreeTools)
+	if !slices.Equal(args, []string{"tools-export", "--zstd"}) || env["STUDIO_TOOLS_HAVE"] != "installs/node/22.1.0\nplugins/foo" {
+		t.Fatalf("args %q, env %q", args, env)
+	}
+	if args, env := (ExportOptions{ToolsHave: have}).command(TreeWorkspace); !slices.Equal(args, []string{"workspace-export"}) || env != nil {
+		t.Fatalf("workspace: args %q, env %q", args, env)
+	}
+	long := []string{strings.Repeat("x", 64<<10+1)}
+	if _, env := (ExportOptions{Fast: true, ToolsHave: long}).command(TreeTools); env != nil {
+		t.Fatalf("a list too long was passed: %d bytes", len(env["STUDIO_TOOLS_HAVE"]))
+	}
+	var b limitedBuffer
+	b.max = 8
+	_, _ = b.Write([]byte("12345"))
+	_, _ = b.Write([]byte("6789"))
+	if !b.over || b.b.String() != "12345" {
+		t.Fatalf("limitedBuffer kept %q, over %v", b.b.String(), b.over)
+	}
+}

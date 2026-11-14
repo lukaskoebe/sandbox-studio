@@ -41,9 +41,11 @@ const (
 // miseBinary runs reshim after an import; tests point it elsewhere.
 var miseBinary = "/usr/local/bin/mise"
 
-// ExportTools writes the kept parts of dir as a workspace archive. A sandbox without dir (an
-// image from before /opt/mise) exports an empty tree.
-func ExportTools(dir string, w io.Writer, warn io.Writer, c Compression) error {
+// ExportTools writes the kept parts of dir as a workspace archive, without the toolchain
+// versions, aliases and plugins have names (ToolsHave's names of the target's MiseDir), which
+// the import would leave out anyway. A sandbox without dir (an image from before /opt/mise)
+// exports an empty tree.
+func ExportTools(dir string, w io.Writer, warn io.Writer, c Compression, have []string) error {
 	if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
 		empty, err := os.MkdirTemp("", "studio-tools")
 		if err != nil {
@@ -52,11 +54,45 @@ func ExportTools(dir string, w io.Writer, warn io.Writer, c Compression) error {
 		defer os.Remove(empty)
 		dir = empty
 	}
+	target := map[string]bool{}
+	for _, name := range have {
+		target[name] = true
+	}
 	skip := func(rel string) bool {
 		top, _, _ := strings.Cut(rel, "/")
-		return rel != "." && !slices.Contains(keptTools, top)
+		return (rel != "." && !slices.Contains(keptTools, top)) || target[rel]
 	}
 	return exportTree(dir, w, warn, treeOptions{skip: skip}, c)
+}
+
+// ToolsHave names what ImportTools into dir would keep of its own rather than take from the
+// archive: each installs/<tool>/<version>, an alias among them, and each plugins/<name>.
+func ToolsHave(dir string) ([]string, error) {
+	var names []string
+	tools, err := os.ReadDir(filepath.Join(dir, "installs"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	for _, tool := range tools {
+		if !tool.IsDir() {
+			continue
+		}
+		versions, err := os.ReadDir(filepath.Join(dir, "installs", tool.Name()))
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range versions {
+			names = append(names, "installs/"+tool.Name()+"/"+v.Name())
+		}
+	}
+	plugins, err := os.ReadDir(filepath.Join(dir, "plugins"))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	for _, p := range plugins {
+		names = append(names, "plugins/"+p.Name())
+	}
+	return names, nil
 }
 
 // ImportTools merges a tools archive into dir, the target's MiseDir, which holds the new

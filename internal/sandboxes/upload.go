@@ -102,7 +102,7 @@ func (t *Transfers) serve(sb store.Sandbox) http.Handler {
 
 // treeUploader is a runtime whose guests can send an export to TransferHost.
 type treeUploader interface {
-	UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, fast bool, url string, caPEM []byte) error
+	UploadTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, opts runtime.ExportOptions, url string, caPEM []byte) error
 }
 
 var _ treeUploader = (*runtime.Runtime)(nil)
@@ -118,7 +118,7 @@ type uploadingRuntime struct {
 	log       *slog.Logger
 }
 
-func (u uploadingRuntime) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, fast bool, w io.Writer) error {
+func (u uploadingRuntime) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, opts runtime.ExportOptions, w io.Writer) error {
 	ca, err := u.ca(ctx, owned.Labels["studio.environment-id"])
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func (u uploadingRuntime) ExportTree(ctx context.Context, owned runtime.OwnedVM,
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ran := make(chan error, 1)
-	go func() { ran <- u.up.UploadTree(ctx, owned, tree, fast, "https://"+TransferHost+"/"+token, ca) }()
+	go func() { ran <- u.up.UploadTree(ctx, owned, tree, opts, "https://"+TransferHost+"/"+token, ca) }()
 	select {
 	case body := <-up.body:
 		_, err := io.Copy(w, body)
@@ -146,7 +146,7 @@ func (u uploadingRuntime) ExportTree(ctx context.Context, owned runtime.OwnedVM,
 		if u.log != nil {
 			u.log.Warn("the guest couldn't upload its export; copying over msb exec", "vm", owned.Name, "tree", tree, "err", err)
 		}
-		return u.transferRuntime.ExportTree(ctx, owned, tree, fast, w)
+		return u.transferRuntime.ExportTree(ctx, owned, tree, opts, w)
 	case <-ctx.Done():
 		return fmt.Errorf("export %s: %w", tree, ctx.Err())
 	}

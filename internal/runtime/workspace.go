@@ -30,34 +30,84 @@ func (t Tree) known() bool {
 	return t == TreeWorkspace || t == TreeHome || t == TreeDocker || t == TreeTools
 }
 
-// ExportTree streams the archive of a tree of a running VM to w, compressed with zstd when
-// fast is set and with gzip otherwise. It runs `studio-agent <tree>-export` as root. The
-// guest agent comes from the host, so both sides of a fork read zstd; an export file stays
-// gzip, which older Studios import.
-func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, fast bool, w io.Writer) error {
+// ExportOptions say how ExportTree and UploadTree archive a tree.
+type ExportOptions struct {
+	// Fast compresses with zstd, which both sides of a copy between VMs read; without it the
+	// archive is gzip, as an export file stays for older Studios to import.
+	Fast bool
+	// ToolsHave names, for TreeTools, what the VM the archive goes to has already (ToolsHave),
+	// which the archive leaves out.
+	ToolsHave []string
+}
+
+// args and env are the export's command line and its environment beyond RunCommand's.
+func (o ExportOptions) command(tree Tree) (args []string, env map[string]string) {
+	args = []string{string(tree) + "-export"}
+	if o.Fast {
+		args = append(args, "--zstd")
+	}
+	if tree == TreeTools && len(o.ToolsHave) > 0 {
+		if list := strings.Join(o.ToolsHave, "\n"); len(list) <= agentproto.MaxToolsHave {
+			env = map[string]string{agentproto.ToolsHaveEnv: list}
+		}
+	}
+	return args, env
+}
+
+// ExportTree streams the archive of a tree of a running VM to w, as opts says. It runs
+// `studio-agent <tree>-export` as root. The guest agent comes from the host, so both sides of
+// a fork read zstd.
+func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, opts ExportOptions, w io.Writer) error {
 	if !tree.known() {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
-	args := []string{string(tree) + "-export"}
-	if fast {
-		args = append(args, "--zstd")
-	}
-	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/", Stdout: w})
+	args, env := opts.command(tree)
+	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/", Stdout: w, Env: env})
 }
 
 // UploadTree runs `studio-agent <tree>-export` as root in a running VM with the archive, in
 // ExportTree's format, sent to url, Studio's transfer host, whose certificate caPEM's CA signs.
 // A guest's writes to msb exec's stdout are slow; its TCP through the gateway isn't.
-func (r *Runtime) UploadTree(ctx context.Context, owned OwnedVM, tree Tree, fast bool, url string, caPEM []byte) error {
+func (r *Runtime) UploadTree(ctx context.Context, owned OwnedVM, tree Tree, opts ExportOptions, url string, caPEM []byte) error {
 	if !tree.known() {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
-	args := []string{string(tree) + "-export"}
-	if fast {
-		args = append(args, "--zstd")
+	args, env := opts.command(tree)
+	if env == nil {
+		env = map[string]string{}
 	}
-	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/",
-		Env: map[string]string{agentproto.TransferURLEnv: url, agentproto.TransferCAEnv: string(caPEM)}})
+	env[agentproto.TransferURLEnv], env[agentproto.TransferCAEnv] = url, string(caPEM)
+	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/", Env: env})
+}
+
+// ToolsHave names what a running VM has in /opt/mise that a tools import into it keeps of its
+// own: each installs/<tool>/<version> and plugins/<name>, as `studio-agent tools-have` prints.
+func (r *Runtime) ToolsHave(ctx context.Context, owned OwnedVM) ([]string, error) {
+	var out limitedBuffer
+	out.max = 4 * agentproto.MaxToolsHave
+	if err := r.runAgent(ctx, owned, "tools-have", RunCommand{Stdout: &out}); err != nil {
+		return nil, err
+	}
+	if out.over {
+		return nil, nil
+	}
+	return strings.Fields(out.b.String()), nil
+}
+
+// limitedBuffer keeps up to max bytes and notes that more came.
+type limitedBuffer struct {
+	b    bytes.Buffer
+	max  int
+	over bool
+}
+
+func (l *limitedBuffer) Write(p []byte) (int, error) {
+	if l.b.Len()+len(p) > l.max {
+		l.over = true
+	} else {
+		l.b.Write(p)
+	}
+	return len(p), nil
 }
 
 // ImportTree extracts an archive from rd into the empty tree of a running VM. It runs
