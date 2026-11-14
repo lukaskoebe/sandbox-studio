@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,8 +28,14 @@ import (
 
 // doctorCheck runs the host checks. Studio's own listeners count as healthy when owned.
 // The SSH agent is checked when agentForges SSH forges sign with it.
-func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, agentForges int, embedder *memory.Llama) doctor.Report {
+//
+// sandboxList lists Studio's sandboxes, to compare with the VMs msb has; nil leaves that out.
+func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, agentForges int, embedder *memory.Llama,
+	sandboxList func(context.Context) ([]store.Sandbox, error)) doctor.Report {
 	p := hostProbes()
+	if sandboxList != nil {
+		p.LostVMs = lostVMsProbe(sandboxList)
+	}
 	if embedder != nil {
 		p.Embedder = func() (bool, string, string) {
 			var u memory.Unavailable
@@ -81,7 +88,12 @@ func runDoctor(w io.Writer, addr, image string) int {
 	// The catalog is only read, so a running Studio keeps it. The agent checked is this
 	// shell's; the Git page shows the one the running Studio reaches.
 	agentForges, _ := store.CountAgentForges(ctx, p.DB())
-	r := doctorCheck(ctx, p.Data, image, addr, studioRunning(ctx, addr), agentForges, nil)
+	r := doctorCheck(ctx, p.Data, image, addr, studioRunning(ctx, addr), agentForges, nil, func(ctx context.Context) ([]store.Sandbox, error) {
+		if _, err := os.Stat(p.DB()); errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return store.ReadSandboxes(ctx, p.DB())
+	})
 	for _, c := range r.Checks {
 		fmt.Fprintf(w, "%-5s %-28s %s\n", c.Status, c.Name, c.Message)
 		if c.Fix != "" {
@@ -175,17 +187,13 @@ func runRestoreMSBDB(w io.Writer, addr string, args []string) int {
 		fmt.Fprintln(os.Stderr, "studio restore-msb-db: "+held+" Then run this again.")
 		return 1
 	}
+	expected := expectedVMs(ctx)
 	if from == "" {
-		asides, err := msbdb.Asides(path)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+		var err error
+		if from, err = pickSaved(ctx, w, path, expected); err != nil {
+			fmt.Fprintln(os.Stderr, "studio restore-msb-db:", err)
 			return 1
 		}
-		if len(asides) == 0 {
-			fmt.Fprintf(os.Stderr, "studio restore-msb-db: there is no damaged database next to %s to restore from.\n", path)
-			return 1
-		}
-		from = asides[0]
 	}
 	if known, err := msbdb.Sandboxes(ctx, path); err == nil && len(known) > 0 && !replace {
 		fmt.Fprintf(os.Stderr, "studio restore-msb-db: %s knows %d sandboxes (%s), which msb would lose. "+
@@ -204,6 +212,10 @@ func runRestoreMSBDB(w io.Writer, addr string, args []string) int {
 	}
 	if _, err := os.Stat(r.Aside); err == nil {
 		fmt.Fprintf(w, "The database that was in place is kept at %s.\n", r.Aside)
+	}
+	if missing := missingVMs(expected, known); len(missing) > 0 {
+		fmt.Fprintf(w, "It has no record of %s, which Studio expects. Start Studio and open each: Repair gives a VM whose disks are kept a new record.\n",
+			strings.Join(missing, ", "))
 	}
 	fmt.Fprintln(w, "Start Studio again; the sandboxes start from their disks. If one hangs while starting, stop it and start it again.")
 	return 0
@@ -263,4 +275,118 @@ func runAutostart(w io.Writer, args []string) int {
 		fmt.Fprintf(w, "autostart is on: %s starts %s at login\n", st.Path, st.Command)
 	}
 	return 0
+}
+
+// findLostVMs lists the sandboxes of sbs whose VM isn't among statuses, msb's VMs by name;
+// lostDisks finds a lost VM's disks. A sandbox that never started and has no disks is left
+// out: its VM is being made, or making it failed.
+func findLostVMs(sbs []store.Sandbox, statuses map[string]runtime.Status, lostDisks func(string) (string, error)) []doctor.LostVM {
+	var lost []doctor.LostVM
+	for _, sb := range sbs {
+		vm := sandboxes.VMName(sb)
+		if _, ok := statuses[vm]; ok {
+			continue
+		}
+		_, err := lostDisks(vm)
+		disks := err == nil
+		if !disks && sb.StartedAt == nil {
+			continue
+		}
+		l := doctor.LostVM{Sandbox: sb.Name, VM: vm, Disks: disks}
+		for name := range statuses {
+			if id, ok := sandboxes.VMSandboxID(name); ok && id == sb.ID {
+				l.Known = append(l.Known, name)
+			}
+		}
+		slices.Sort(l.Known)
+		lost = append(lost, l)
+	}
+	return lost
+}
+
+// expectedVMs are the VMs Studio's catalog expects msb to have, read without changing it; none
+// when it can't be read.
+func expectedVMs(ctx context.Context) []string {
+	p, err := paths.Default()
+	if err != nil {
+		return nil
+	}
+	if _, err := os.Stat(p.DB()); err != nil {
+		return nil
+	}
+	sbs, err := store.ReadSandboxes(ctx, p.DB())
+	if err != nil {
+		return nil
+	}
+	var vms []string
+	for _, sb := range sbs {
+		vms = append(vms, sandboxes.VMName(sb))
+	}
+	return vms
+}
+
+// missingVMs are the VMs of expected that known lacks.
+func missingVMs(expected, known []string) []string {
+	var missing []string
+	for _, vm := range expected {
+		if !slices.Contains(known, vm) {
+			missing = append(missing, vm)
+		}
+	}
+	return missing
+}
+
+// pickSaved chooses the saved catalog next to path to restore from: the one that knows the
+// most of the VMs Studio expects, the newest of those, and only if it knows more of them than
+// the catalog in place. It lists what each one knows on w. Without expected VMs (Studio's own
+// catalog can't be read) it is the newest damaged one, as before.
+func pickSaved(ctx context.Context, w io.Writer, path string, expected []string) (string, error) {
+	saved, err := msbdb.Saved(path)
+	if err != nil {
+		return "", err
+	}
+	if len(saved) == 0 {
+		return "", fmt.Errorf("there is no saved database next to %s to restore from", path)
+	}
+	if len(expected) == 0 {
+		asides, err := msbdb.Asides(path)
+		if err != nil || len(asides) == 0 {
+			return saved[0], err
+		}
+		return asides[0], nil
+	}
+	count := func(known []string) int { return len(expected) - len(missingVMs(expected, known)) }
+	inPlace := -1
+	if known, _, _, err := msbdb.Inspect(ctx, path); err == nil {
+		inPlace = count(known)
+		fmt.Fprintf(w, "%s (in place): knows %d of the %d VMs Studio expects\n", path, inPlace, len(expected))
+	} else {
+		fmt.Fprintf(w, "%s (in place): can't be read: %v\n", path, err)
+	}
+	best, bestN := "", -1
+	for _, f := range saved {
+		known, _, _, err := msbdb.Inspect(ctx, f)
+		if err != nil {
+			fmt.Fprintf(w, "%s: can't be read: %v\n", f, err)
+			continue
+		}
+		n := count(known)
+		fmt.Fprintf(w, "%s: knows %d of them\n", f, n)
+		if n > bestN { // saved is newest first, so a tie keeps the newer
+			best, bestN = f, n
+		}
+	}
+	switch {
+	case best == "":
+		return "", errors.New("none of the saved databases can be read")
+	case bestN <= inPlace:
+		missing := ""
+		if inPlace < len(expected) {
+			missing = " Start Studio and open the sandboxes that can't start: Repair gives a VM whose disks are kept a new record."
+		}
+		return "", fmt.Errorf("none of the saved databases knows more of Studio's VMs than the one in place, so it stays.%s "+
+			"To restore one anyway, name it: studio restore-msb-db -replace <file>", missing)
+	}
+	fmt.Fprintf(w, "Restoring from %s.\n", best)
+	return best, nil
 }

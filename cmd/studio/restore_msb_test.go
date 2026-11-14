@@ -6,10 +6,13 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
+	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // writeCatalog writes a small catalog shaped like msb's with the named sandboxes.
@@ -90,5 +93,77 @@ func TestRestoreMSBDBRebuildsFromTheNewestAside(t *testing.T) {
 	}
 	if status := runRestoreMSBDB(&out, addr, []string{"a", "b"}); status == 0 {
 		t.Fatal("two files were taken")
+	}
+}
+
+// The case from a Mac: a repair moved a damaged catalog aside before a rebase, the rebase made
+// the sandbox's second generation, and the catalog was damaged again. Restoring from the newest
+// damaged one gave msb back the first generation only. The restore picks the saved catalog that
+// knows the VM Studio expects, here the one an earlier restore replaced.
+func TestRestoreMSBDBPicksTheSavedCatalogThatKnowsStudiosVMs(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("MSB_HOME", t.TempDir())
+	t.Setenv("SANDBOX_STUDIO_HOME", t.TempDir())
+	p, err := paths.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, p.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := st.CreateEnvironment(ctx, "e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "katara", CPUs: 1, MemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+	db, err := sql.Open("sqlite", "file:"+p.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE sandboxes SET generation = 2 WHERE id = ?", sb.ID); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	g1, g2 := "ss-"+sb.ID+"-g1", "ss-"+sb.ID+"-g2"
+
+	path, _ := msbdb.Path()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCatalog(t, path+".broken-20261113T073800Z", g1, "ss-other-g1")
+	writeCatalog(t, path+".replaced-20261113T111025Z", g2, "ss-other-g1")
+	writeCatalog(t, path, g1, "ss-other-g1")
+	const addr = "127.0.0.1:1"
+
+	var out bytes.Buffer
+	if status := runRestoreMSBDB(&out, addr, []string{"-replace"}); status != 0 {
+		t.Fatalf("status %d: %s", status, out.String())
+	}
+	known, err := msbdb.Sandboxes(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(known, g2) {
+		t.Fatalf("restored catalog knows %v, want %s; output:\n%s", known, g2, out.String())
+	}
+	if !strings.Contains(out.String(), "Restoring from "+path+".replaced-20261113T111025Z") {
+		t.Errorf("output doesn't say which it restored from:\n%s", out.String())
+	}
+
+	// Now the one in place knows it; no saved one knows more, so nothing changes.
+	out.Reset()
+	if status := runRestoreMSBDB(&out, addr, []string{"-replace"}); status != 1 {
+		t.Fatalf("with nothing better saved: status %d: %s", status, out.String())
+	}
+	if known, _ := msbdb.Sandboxes(ctx, path); !slices.Contains(known, g2) {
+		t.Fatalf("the catalog in place changed: %v", known)
 	}
 }

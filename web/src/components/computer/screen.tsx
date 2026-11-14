@@ -33,7 +33,11 @@ import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { PreviewPanel, PreviewsOff } from "@/components/chat/preview-panel"
 import { isGitApproval } from "@/components/git-review"
 import { MergeBanner } from "@/components/merge-fork"
-import { lostVM, useSandboxLifecycle } from "@/components/sandbox-lifecycle"
+import {
+  lostVM,
+  RepairButton,
+  useSandboxLifecycle,
+} from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import {
   RebaseFailedAlert,
@@ -749,7 +753,7 @@ function Off({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
       </b>
       <p className="text-xs text-(--glass-dim)">
         {lost
-          ? lostVM
+          ? lostVM(sb)
           : p === "booting"
             ? "Its terminals open once it is up."
             : p === "suspended"
@@ -775,6 +779,7 @@ function Off({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           {p === "suspended" ? "Resume" : "Start"}
         </Button>
       )}
+      {lost && <RepairButton env={env} sandbox={sb} className="mt-1" />}
     </div>
   )
 }

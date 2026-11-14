@@ -329,6 +329,16 @@ func (s *Server) registerSandboxes(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "repairSandboxVM", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/repair-vm", Tags: []string{"sandboxes"},
+		Summary: "Give a sandbox whose VM microsandbox lost a new record around its disks, and start it",
+		Description: "For a sandbox with status absent and repairable set: microsandbox's database lost the VM's record, while the disks are still on hand. " +
+			"Studio has microsandbox make the VM again the way it made it, swaps in the kept disks unchanged, and starts it.",
+	}, func(ctx context.Context, in *sandboxPath) (*sandboxOut, error) {
+		v, err := s.Sandboxes.RepairVM(context.WithoutCancel(ctx), in.Env, in.ID)
+		return &sandboxOut{v}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "stopSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/stop", Tags: []string{"sandboxes"},
 	}, func(ctx context.Context, in *sandboxPath) (*sandboxOut, error) {
 		v, err := s.Sandboxes.Stop(context.WithoutCancel(ctx), in.Env, in.ID)

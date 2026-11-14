@@ -124,7 +124,7 @@ func TestBrowserDownloadRefusesAFileOverTheUploadLimit(t *testing.T) {
 	if err := os.WriteFile(path, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Truncate(path, agentproto.MaxUploadBytes+1); err != nil {
+	if err := os.Truncate(path, agentproto.MaxPasteBytes+1); err != nil {
 		t.Skipf("sparse files: %v", err)
 	}
 	if _, _, err := openDownload(dir, "huge.iso"); err == nil {

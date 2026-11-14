@@ -493,3 +493,133 @@ func copyFile(from, to string) error {
 	}
 	return out.Close()
 }
+
+// Saved lists the catalogs kept next to path: the damaged ones Fix moved aside, the ones
+// Restore replaced and Backup's copies, newest first by when they were kept.
+func Saved(path string) ([]string, error) {
+	var saved []string
+	for _, pattern := range []string{".broken-*", ".replaced-*", BackupPrefix + "*"} {
+		found, err := filepath.Glob(path + pattern)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range found {
+			if !strings.HasSuffix(f, "-wal") && !strings.HasSuffix(f, "-shm") {
+				saved = append(saved, f)
+			}
+		}
+	}
+	// The names end in a UTC time.
+	at := func(f string) string { return f[strings.LastIndex(f, "-")+1:] }
+	slices.SortFunc(saved, func(a, b string) int { return strings.Compare(at(b), at(a)) })
+	return saved, nil
+}
+
+// Inspect lists the sandboxes the catalog at path knows, damaged or not: a damaged one is read
+// the way Restore would rebuild it, from a copy, so path is left as it was. rows is how many
+// rows that keeps, and partial the tables that lose some.
+func Inspect(ctx context.Context, path string) (names []string, rows int, partial []string, err error) {
+	if Check(ctx, path) == nil {
+		if names, err := Sandboxes(ctx, path); err == nil {
+			return names, -1, nil, nil
+		}
+	}
+	work, err := os.MkdirTemp("", "msb.db.inspect-")
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	defer os.RemoveAll(work)
+	out, rows, partial, err := build(ctx, path, work)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	names, err = Sandboxes(ctx, out)
+	return names, rows, partial, err
+}
+
+// BackupPrefix names the copies Backup keeps next to the catalog: path + BackupPrefix + time.
+const BackupPrefix = ".backup-"
+
+// Backup keeps a copy of the catalog at path, as path.backup-<time>, and removes all but the
+// newest keep copies. It never opens path itself: SQLite's locks belong to the process, so
+// Studio's SQLite closing the file would drop the msb library's locks on it. It copies the
+// file and its -wal instead, and keeps the copy only when neither changed while it was
+// copied and the copy passes SQLite's integrity check; a damaged catalog is never kept.
+func Backup(ctx context.Context, path string, now time.Time, keep int) (string, error) {
+	work, err := workDir(path)
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(work)
+	var copied string
+	for try := 0; try < 3 && copied == ""; try++ {
+		if copied, err = snapshot(path, filepath.Join(work, fmt.Sprint(try))); err != nil {
+			return "", err
+		}
+	}
+	if copied == "" {
+		return "", errors.New("the database kept changing while it was copied")
+	}
+	if err := Check(ctx, copied); err != nil {
+		return "", fmt.Errorf("the copy fails its check, so it isn't kept: %w", err)
+	}
+	out := path + BackupPrefix + now.UTC().Format("20060102T150405Z")
+	db, err := open(copied)
+	if err != nil {
+		return "", err
+	}
+	// VACUUM INTO writes one self-contained file, with the WAL's pages in it.
+	_, err = db.ExecContext(ctx, "VACUUM INTO ?", out)
+	db.Close()
+	if err != nil {
+		os.Remove(out)
+		return "", err
+	}
+	old, err := filepath.Glob(path + BackupPrefix + "*")
+	if err == nil && len(old) > keep {
+		slices.Sort(old)
+		for _, f := range old[:len(old)-keep] {
+			os.Remove(f)
+		}
+	}
+	return out, nil
+}
+
+// snapshot copies path and its -wal file into dir, and returns the copy, or "" if either
+// changed while it was copied.
+func snapshot(path, dir string) (string, error) {
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return "", err
+	}
+	stat := func() (s [2]string) {
+		for i, suffix := range []string{"", "-wal"} {
+			if info, err := os.Stat(path + suffix); err == nil {
+				s[i] = fmt.Sprint(info.Size(), info.ModTime().UnixNano())
+			}
+		}
+		return s
+	}
+	before := stat()
+	dst := filepath.Join(dir, "msb.db")
+	for _, suffix := range []string{"", "-wal"} {
+		if err := copyFile(path+suffix, dst+suffix); err != nil && (suffix == "" || !errors.Is(err, os.ErrNotExist)) {
+			return "", err
+		}
+	}
+	if stat() != before {
+		return "", nil
+	}
+	return dst, nil
+}
+
+// Changed reports when the catalog at path or its -wal file last changed, to tell whether a
+// new backup is worth it.
+func Changed(path string) time.Time {
+	var at time.Time
+	for _, suffix := range []string{"", "-wal"} {
+		if info, err := os.Stat(path + suffix); err == nil && info.ModTime().After(at) {
+			at = info.ModTime()
+		}
+	}
+	return at
+}

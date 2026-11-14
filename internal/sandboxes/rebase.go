@@ -182,6 +182,7 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 		err = m.Store.EndRebase(cleanupCtx, op)
 	}
 	cancel()
+	m.vmsChanged()
 	if err != nil {
 		return fmt.Errorf("rebase done but cleanup is pending: %w", err)
 	}

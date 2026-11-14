@@ -100,9 +100,9 @@ func openDownload(dir, name string) (*os.File, agentproto.BrowserDownload, error
 		f.Close()
 		return nil, agentproto.BrowserDownload{}, errors.New("no such download")
 	}
-	if info.Size() > agentproto.MaxUploadBytes {
+	if info.Size() > agentproto.MaxPasteBytes {
 		f.Close()
-		return nil, agentproto.BrowserDownload{}, fmt.Errorf("a download is at most %d MiB", agentproto.MaxUploadBytes>>20)
+		return nil, agentproto.BrowserDownload{}, fmt.Errorf("a download is at most %d MiB", agentproto.MaxPasteBytes>>20)
 	}
 	return f, agentproto.BrowserDownload{Name: name, Size: info.Size(), Modified: info.ModTime().Unix()}, nil
 }

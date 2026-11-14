@@ -75,6 +75,9 @@ type Probes struct {
 	// that; repaired describes a repair Studio made to it when it started.
 	MSBDB func(ctx context.Context) (problem, repaired, fix string)
 
+	// LostVMs lists the sandboxes whose VM msb's catalog has no record of.
+	LostVMs func(ctx context.Context) ([]LostVM, error)
+
 	// MSBPath returns the installed msb executable, or an error if there is none.
 	MSBPath func() (string, error)
 	// Run runs a program and returns its combined output. A non-zero exit is an error.
@@ -114,6 +117,18 @@ type Probes struct {
 	SSHAgent func(ctx context.Context) (keys int, fix string, err error)
 }
 
+// LostVM is a sandbox whose VM msb's catalog has no record of, typically after its damaged
+// database was rebuilt from an older copy.
+type LostVM struct {
+	Sandbox string // the sandbox's name
+	VM      string // the VM Studio expects
+	// Disks is whether the VM's disks are still in microsandbox's home, so that the sandbox
+	// can be repaired.
+	Disks bool
+	// Known are the VMs of the sandbox's other generations msb still has a record of.
+	Known []string
+}
+
 // Options are what the checks look at.
 type Options struct {
 	DataDir    string
@@ -137,6 +152,9 @@ func Run(ctx context.Context, p Probes, o Options) Report {
 	checks = append(checks, checkMSB(ctx, p, o)...)
 	if p.MSBDB != nil {
 		checks = append(checks, checkMSBDB(ctx, p))
+	}
+	if p.LostVMs != nil {
+		checks = append(checks, checkLostVMs(ctx, p))
 	}
 	checks = append(checks, checkVirtualization(p)...)
 	if o.Image != "" {
@@ -191,6 +209,46 @@ func checkMSBDB(ctx context.Context, p Probes) Check {
 			"The damaged file stays where the message says until you delete it."
 	}
 	return c
+}
+
+// checkLostVMs reports the sandboxes msb's catalog has no VM for: they can't start. One whose
+// disks are kept is repaired from its page.
+func checkLostVMs(ctx context.Context, p Probes) Check {
+	c := Check{ID: "msb-vms", Name: "Sandbox VMs", Status: OK, Message: "microsandbox has every sandbox's VM"}
+	lost, err := p.LostVMs(ctx)
+	if err != nil {
+		return c.with(Warn, "could not compare Studio's sandboxes with microsandbox's: "+err.Error(), "")
+	}
+	if len(lost) == 0 {
+		return c
+	}
+	var each []string
+	repairable, gone := 0, 0
+	for _, l := range lost {
+		s := fmt.Sprintf("%s (%s", l.Sandbox, l.VM)
+		if len(l.Known) > 0 {
+			s += "; microsandbox knows only " + strings.Join(l.Known, ", ")
+		}
+		if l.Disks {
+			repairable++
+		} else {
+			gone++
+			s += "; its disks are gone too"
+		}
+		each = append(each, s+")")
+	}
+	msg := fmt.Sprintf("microsandbox has no record of the VM of %s, so %s can't start: %s",
+		plural(len(lost), "1 sandbox", fmt.Sprintf("%d sandboxes", len(lost))), plural(len(lost), "it", "they"), strings.Join(each, "; "))
+	var fix string
+	switch {
+	case gone == 0:
+		fix = "Open " + plural(repairable, "it", "each") + " in Studio and choose Repair: Studio gives the VM a new record around its kept disks and starts it."
+	case repairable == 0:
+		fix = "Their disks aren't in microsandbox's home. If microsandbox's home moved, start Studio with MSB_HOME set to it; otherwise delete " + plural(gone, "the sandbox", "the sandboxes") + "."
+	default:
+		fix = "Open the ones whose disks are kept in Studio and choose Repair. The others' disks aren't in microsandbox's home: if it moved, start Studio with MSB_HOME set to it."
+	}
+	return c.with(Fail, msg, fix)
 }
 
 func checkMSB(ctx context.Context, p Probes, o Options) []Check {

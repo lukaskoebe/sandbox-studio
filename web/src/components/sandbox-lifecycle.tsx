@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { PlayIcon } from "@phosphor-icons/react"
+import { PlayIcon, WrenchIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { phase, phaseDot } from "@/components/status-badge"
@@ -51,7 +51,12 @@ export function useSandboxLifecycle(env: string, sb: Sandbox) {
     "/api/environments/{env}/sandboxes/{id}/resume",
     { onSettled: invalidate, onError: onError("resume") }
   )
-  return { path, start, stop, suspend, resume, phase: phase(sb) }
+  const repair = $api.useMutation(
+    "post",
+    "/api/environments/{env}/sandboxes/{id}/repair-vm",
+    { onSettled: invalidate, onError: onError("repair") }
+  )
+  return { path, start, stop, suspend, resume, repair, phase: phase(sb) }
 }
 
 /**
@@ -67,11 +72,46 @@ export function wakeAction(sb: Sandbox): "start" | "resume" | undefined {
 }
 
 /**
- * Why a sandbox whose VM microsandbox no longer knows ("absent") can't start: a damaged
- * microsandbox database Studio rebuilt without it.
+ * Why a sandbox whose VM microsandbox no longer knows ("absent") can't start, typically a
+ * damaged microsandbox database rebuilt without it, and what to do: Repair when its disks
+ * are still on hand.
  */
-export const lostVM =
-  "microsandbox lost the record of this sandbox's VM, so it can't start. Its disks are kept: quit Studio and run `studio restore-msb-db` to rebuild microsandbox's database from the damaged one."
+export function lostVM(sb: Sandbox) {
+  return sb.repairable
+    ? "microsandbox lost the record of this sandbox's VM, so it can't start. Its disks are kept: Repair gives the VM a new record around them, unchanged, and starts it."
+    : "microsandbox lost the record of this sandbox's VM, and its disks aren't in microsandbox's home either, so it can't start."
+}
+
+/** Repair, for a sandbox whose VM microsandbox lost while its disks are kept. */
+export function RepairButton({
+  env,
+  sandbox,
+  size,
+  className,
+}: {
+  env: string
+  sandbox: Sandbox
+  size?: "sm" | "xs"
+  className?: string
+}) {
+  const { path, repair } = useSandboxLifecycle(env, sandbox)
+  if (sandbox.status !== "absent" || !sandbox.repairable) return null
+  return (
+    <Button
+      size={size}
+      className={className}
+      disabled={repair.isPending}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        repair.mutate(path)
+      }}
+    >
+      {repair.isPending ? <Spinner /> : <WrenchIcon />}
+      {repair.isPending ? "Repairing…" : "Repair"}
+    </Button>
+  )
+}
 
 /** Start or Resume, whichever brings the sandbox back; nothing while it runs. */
 export function WakeButton({
@@ -132,8 +172,13 @@ export function SandboxStateBanner({
           microsandbox lost the record of{" "}
           <span className="font-mono">{sandbox.name}</span>&apos;s VM, so it
           can&apos;t start.{" "}
-          <span className="text-muted-foreground">Its disks are kept.</span>
+          <span className="text-muted-foreground">
+            {sandbox.repairable
+              ? "Its disks are kept: repair it to start it again."
+              : "Its disks aren't in microsandbox's home either."}
+          </span>
         </span>
+        <RepairButton env={env} sandbox={sandbox} size="sm" />
       </div>
     )
   if (!action) return null

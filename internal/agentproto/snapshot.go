@@ -96,6 +96,9 @@ const (
 	// FilesGitRemotes lists the repositories of /workspace with their branch and their remotes
 	// through GitHost, without status: what ~/forge is about (docs/agent-cli.md#forge).
 	FilesGitRemotes = "git-remotes"
+	// FilesSpace is the free space of the disk holding the folder Path of /workspace
+	// (FilesReply.Free), which an upload asks before it sends a file there.
+	FilesSpace = "space"
 )
 
 // The areas of a git change: the index, the working tree, and files git doesn't track.
@@ -199,6 +202,8 @@ type FilesReply struct {
 	// when it was cut at MaxGitDiff.
 	Repos []GitRepo `json:"repos,omitempty"`
 	Diff  string    `json:"diff,omitempty"`
+	// Space: the bytes the agent user may still write on the folder's disk.
+	Free int64 `json:"free,omitempty"`
 	// Read.
 	Size     int64  `json:"size,omitempty"`
 	MimeType string `json:"mimeType,omitempty"`

@@ -133,7 +133,19 @@ small or move their bytes to msb exec.
 `POST /api/environments/{env}/sandboxes/{id}/files?path=&name=&conflict=` streams the body
 (`application/octet-stream`, with a Content-Length) to the guest as a `upload` stream: a
 request line `UploadRequest` with the folder, the name and the size, then exactly that many
-bytes, then one reply line. `agentproto.MaxUploadBytes` (100 MiB) bounds a file.
+bytes, then one reply line. A file has no bound but the free space on its folder's disk.
+
+- Before a file over 100 MiB goes, the host asks the guest for that free space (the `space`
+  files op, also `GET …/files/space`, which the Files panel asks before every batch) and
+  answers 507 when the file doesn't fit, before reading the body. A guest from before the op
+  answers "unknown files op" and takes at most 100 MiB, so that is a 409 that says to restart
+  the sandbox. The guest checks the space again (`fstatfs` of the folder) before it writes,
+  for what another writer took meanwhile.
+- A cancelled upload (the page aborts its request) or a dropped connection closes the stream;
+  the guest's copy fails and it removes the hidden `.studio-upload-*` file. The request may run
+  for up to 12 hours.
+- A file pasted into a terminal (`paste`) and a browser download copied into a sandbox stay
+  bounded by `agentproto.MaxPasteBytes` (100 MiB).
 
 - The folder is resolved beneath `/workspace` with `openat2` (`RESOLVE_BENEATH` and
   `RESOLVE_NO_SYMLINKS`), so no symlink on the way leads out of the workspace, and the folder

@@ -1777,7 +1777,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a file into a folder of the workspace
-         * @description Writes the body as the file name in the folder path (relative to /workspace; empty is /workspace itself). A file is at most 100 MiB and is owned by the agent user, mode 0644. Its name must be one file name. conflict decides a name already taken: fail (the default) answers 409 and writes nothing, replace overwrites a regular file, and keep writes it as "name (2).ext", the next free name. A folder or a link under the name is never replaced. The upload is written under a hidden name and renamed into place, so readers never see half a file.
+         * @description Writes the body as the file name in the folder path (relative to /workspace; empty is /workspace itself). A file can be as large as the free space on the folder's disk (GET …/files/space); a larger one answers 507 before any of it is sent. It is owned by the agent user, mode 0644. Its name must be one file name. conflict decides a name already taken: fail (the default) answers 409 and writes nothing, replace overwrites a regular file, and keep writes it as "name (2).ext", the next free name. A folder or a link under the name is never replaced. The upload is written under a hidden name and renamed into place, so readers never see half a file.
          */
         post: operations["uploadFile"];
         delete?: never;
@@ -1812,6 +1812,23 @@ export interface paths {
         };
         /** @description The files of the sandbox's workspace that a chat message can mention: in a git repository the files git knows, tracked or untracked but not ignored, and the ones it reports changed; elsewhere every file, past the folders of dependencies and caches. At most 20,000 paths. */
         get: operations["indexFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/files/space": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The free space on the disk of a folder of the sandbox's workspace: how large a file an upload there can be. A sandbox whose agent is from an older Studio answers 409: it takes uploads of at most 100 MiB until it restarts. */
+        get: operations["fileSpace"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2071,6 +2088,26 @@ export interface paths {
         get: operations["listRecordedRequests"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/repair-vm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give a sandbox whose VM microsandbox lost a new record around its disks, and start it
+         * @description For a sandbox with status absent and repairable set: microsandbox's database lost the VM's record, while the disks are still on hand. Studio has microsandbox make the VM again the way it made it, swaps in the kept disks unchanged, and starts it.
+         */
+        post: operations["repairSandboxVM"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4649,6 +4686,13 @@ export interface components {
             note?: string;
             teammate?: string;
         };
+        FileSpace: {
+            /**
+             * Format: int64
+             * @description Bytes the sandbox's user may still write there
+             */
+            free: number;
+        };
         FileTeammate: {
             /** @enum {string} */
             approvalScope?: "sandbox" | "teammate" | "environment";
@@ -6125,6 +6169,8 @@ export interface components {
             name: string;
             /** @description The create or fork that runs or failed */
             progress?: components["schemas"]["Progress"];
+            /** @description With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it */
+            repairable?: boolean;
             /** Format: date-time */
             startedAt?: string;
             /**
@@ -7372,6 +7418,8 @@ export interface components {
             name: string;
             /** @description The create or fork that runs or failed */
             progress?: components["schemas"]["Progress"];
+            /** @description With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it */
+            repairable?: boolean;
             /** Format: date-time */
             startedAt?: string;
             /**
@@ -12063,6 +12111,43 @@ export interface operations {
             };
         };
     };
+    fileSpace: {
+        parameters: {
+            query?: {
+                /** @description A folder of /workspace; empty for /workspace itself */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSpace"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     forkSandbox: {
         parameters: {
             query?: never;
@@ -12671,6 +12756,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Exchange"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    repairSandboxVM: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
                 };
             };
             /** @description Error */

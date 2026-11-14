@@ -150,6 +150,27 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   database or one a newer msb migrated (fix: `msb self downgrade <Studio's msb>`), and warns
   after a repair with what was kept and lost. Runtime calls that fail on the database answer
   503 with that fix instead of a bare SQLite error.
+- A rebuilt database can lack VMs that are still on disk, when the copy it came from is older
+  than them. Three things cover that:
+  - Studio backs msb's database up with `VACUUM INTO` as `msb.db.backup-<UTC time>`, keeping
+    ten: every five minutes when it changed, and soon after a create, fork, rebase, disk resize
+    or repair (`cmd/studio/runtime_host.go`, `msbdb.Backup`). The copy is taken from a snapshot
+    of the database and its `-wal` (retried while either changes), never from msb's open files,
+    and kept only when SQLite's quick check passes.
+  - The `msb-vms` doctor check compares Studio's catalog with msb's VMs and fails for a sandbox
+    whose VM msb doesn't know, saying which generations msb does know and whether the VM's
+    disks are still in `$MSB_HOME/sandboxes/<vm>`.
+  - `studio restore-msb-db` without a file lists the copy in place and every saved one
+    (`.broken-*`, `.replaced-*`, `.backup-*`) with how many of the VMs Studio expects each knows,
+    read from Studio's catalog read-only, and restores the one that knows most (the newest on a
+    tie). It keeps the one in place when no saved copy knows more.
+- **Repair** on a sandbox msb lost (`Manager.RepairVM`, `runtime.AdoptDisks`) gives the VM a new
+  record around its disks. The VM's directory moves to `$MSB_HOME/studio-repair/<vm>.<UTC time>/disks`,
+  msb makes the same VM again in transfer mode from the spec it was made with (the same image and
+  disk sizes, which msb checks against the disks when it starts), the new VM stops, and its
+  directory is swapped for the old one, root disk and checkpoint journals included. Then the
+  sandbox starts. A repair that fails removes the new record and puts the disks back; one cut
+  short by Studio stopping leaves them in `studio-repair`, where the next Repair finds them.
 - Startup (`cmd/studio/main.go`): data dir and its lock `studio.lock` (held: ask the running
   Studio for a login link with the control credential, open it and exit), a check of msb's own database
   (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent

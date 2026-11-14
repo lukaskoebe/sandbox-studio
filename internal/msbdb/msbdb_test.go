@@ -514,3 +514,57 @@ func TestVMName(t *testing.T) {
 		}
 	}
 }
+
+// A catalog in use keeps its newest rows in the -wal file; the backup has them, in one file,
+// and the oldest backups go.
+func TestBackupCopiesACatalogInUseWithItsWAL(t *testing.T) {
+	ctx := context.Background()
+	path := catalog(t)
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(wal)&_pragma=wal_autocheckpoint(0)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("INSERT INTO sandbox (name) VALUES ('ss-new-g2')"); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(path + "-wal"); err != nil || info.Size() == 0 {
+		t.Fatalf("no WAL: %v", err)
+	}
+	var made []string
+	for i := range 4 {
+		out, err := Backup(ctx, path, now.Add(time.Duration(i)*time.Minute), 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		made = append(made, out)
+	}
+	names, err := Sandboxes(ctx, made[3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(names, ",") != "ss-a,ss-new-g2" {
+		t.Fatalf("backup knows %v", names)
+	}
+	if _, err := os.Stat(made[3] + "-wal"); err == nil {
+		t.Error("the backup has a -wal file; it should be one file")
+	}
+	if _, err := os.Stat(made[0]); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the oldest backup is still there: %v", err)
+	}
+	saved, err := Saved(path)
+	if err != nil || len(saved) != 3 || saved[0] != made[3] {
+		t.Fatalf("Saved = %v, %v; want the three backups, newest first", saved, err)
+	}
+}
+
+func TestBackupKeepsNoDamagedCatalog(t *testing.T) {
+	path := catalog(t)
+	damageTail(t, path, 4096)
+	if _, err := Backup(context.Background(), path, now, 3); err == nil {
+		t.Fatal("a damaged catalog was backed up")
+	}
+	if found, _ := filepath.Glob(path + BackupPrefix + "*"); len(found) != 0 {
+		t.Fatalf("backups %v", found)
+	}
+}

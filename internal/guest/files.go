@@ -81,6 +81,14 @@ func browse(workspace string, owner [2]int, req agentproto.FilesRequest) (agentp
 			return agentproto.FilesReply{}, errors.New("no file to read")
 		}
 		return readFile(root, name, owner)
+	case agentproto.FilesSpace:
+		dir, err := unix.Openat2(root, name, beneath)
+		if err != nil {
+			return agentproto.FilesReply{}, browseError(err)
+		}
+		defer unix.Close(dir)
+		free, err := freeSpace(dir)
+		return agentproto.FilesReply{Free: free}, err
 	}
 	return agentproto.FilesReply{}, errors.New("unknown files op")
 }

@@ -1,5 +1,7 @@
 package agentproto
 
+import "fmt"
+
 // KindUpload writes a file the host streams into a folder of /workspace. The host writes one
 // UploadRequest line and then exactly Size bytes of the file; the guest replies with one
 // UploadReply line, or with an Error. The body is read to its end even when the request is
@@ -22,13 +24,15 @@ const (
 	ConflictKeep    = "keep" // write the file as the next free "name (2).ext"
 )
 
-// MaxUploadBytes bounds one uploaded file. MaxUploadDir and MaxUploadName bound the folder and
-// the name in bytes; they keep the request line far below the guest's limit for it, so the
-// host can always send a request the guest reads, and the body after it.
+// MaxPasteBytes bounds a file pasted into a terminal and a browser download copied into a
+// sandbox. An upload into the workspace has no bound but the free space, which FilesSpace asks
+// before it starts. MaxUploadDir and MaxUploadName bound the folder and the name in bytes; they
+// keep the request line far below the guest's limit for it, so the host can always send a
+// request the guest reads, and the body after it.
 const (
-	MaxUploadBytes = 100 << 20
-	MaxUploadDir   = 4096
-	MaxUploadName  = 255 // NAME_MAX: the longest name a directory entry can have
+	MaxPasteBytes = 100 << 20
+	MaxUploadDir  = 4096
+	MaxUploadName = 255 // NAME_MAX: the longest name a directory entry can have
 )
 
 // CodeExists marks an Error for an upload whose name is taken under ConflictFail.
@@ -54,4 +58,21 @@ type UploadRequest struct {
 type UploadReply struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
+}
+
+// FormatBytes writes n as the user reads a size: "512 B", "3.4 MiB", "12 GiB".
+func FormatBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	v, i := float64(n), -1
+	for v >= unit && i < 5 {
+		v /= unit
+		i++
+	}
+	if v >= 10 {
+		return fmt.Sprintf("%.0f %ciB", v, "KMGTPE"[i])
+	}
+	return fmt.Sprintf("%.1f %ciB", v, "KMGTPE"[i])
 }

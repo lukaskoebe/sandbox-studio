@@ -17,6 +17,22 @@
   - The copy reads several files at a time and writes to the disk while the next files arrive.
     A cold export of many small files took 0.7 s instead of 1.8 s on a test tree.
   - Studio's log says how long each phase took and how fast each tree copied.
+- Uploads into Files have no 100 MiB limit any more: a file can be as large as the free space
+  on the workspace's disk, which Studio checks before it sends anything. Each upload shows how
+  much is sent and has a cancel button (**Cancel all** for several); a cancelled upload leaves
+  nothing behind. A sandbox started by an older Studio takes 100 MiB at most until it
+  restarts, and says so.
+- Studio no longer leaves a sandbox stranded when microsandbox's database loses its VM, as
+  after a damaged database was rebuilt from an older copy:
+  - The sandbox's page and screen say so and offer **Repair**: microsandbox gets a new record
+    of the VM around the disks it kept, and the sandbox starts with its files, home and
+    checkpoints as they were.
+  - `studio doctor` and Settings fail the new **Sandbox VMs** check for such a sandbox, naming
+    the VM and the generations microsandbox does know.
+  - Studio backs microsandbox's database up every five minutes when it changed and soon after
+    a create, fork, rebase or disk resize, keeping ten copies.
+  - `studio restore-msb-db` picks the saved copy that knows the most of Studio's sandboxes,
+    instead of the newest one moved aside, and keeps the one in place when no copy knows more.
 - A sleeping browser's card keeps a long address on one truncated line instead of running
   out of the card, and so do **Wake on** and the waking spinner.
 

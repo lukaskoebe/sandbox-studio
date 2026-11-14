@@ -327,7 +327,8 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	served := make(chan struct{})
 	resume.Watchdog(served, log)
 	repairMSBDB(ctx, log)
-	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil))
+	msbBackups := backupMSBDB(ctx, log)
+	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil, nil))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
 		return err
 	}
@@ -468,18 +469,19 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go agentMem.RunBrowse(ctx, hub) // ~/memory copies in the connected sandboxes, rewritten as memory changes
 	rt := newRuntime(runtime.Options{Image: image, GuestDir: p.Guest()}, log)
 	mgr := &sandboxes.Manager{
-		Store:     st,
-		Runtime:   rt,
-		Templates: registry,
-		Hub:       hub,
-		Egress:    sandboxEgress(gw),
-		CA:        authority,
-		Transfers: transfers,
-		Secrets:   vault,
-		Paths:     p,
-		Log:       log,
-		Forget:    gitRemote.ForgetSandbox,
-		Bus:       bus,
+		Store:      st,
+		Runtime:    rt,
+		Templates:  registry,
+		Hub:        hub,
+		Egress:     sandboxEgress(gw),
+		CA:         authority,
+		Transfers:  transfers,
+		Secrets:    vault,
+		Paths:      p,
+		Log:        log,
+		Forget:     gitRemote.ForgetSandbox,
+		VMsChanged: msbBackups.Soon,
+		Bus:        bus,
 		// New sandboxes record the base they're made from; one on another base is outdated.
 		BaseImage:   image,
 		BaseVersion: version.Version,
@@ -551,7 +553,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		if err != nil {
 			log.Warn("doctor: count SSH agent forges", "err", err)
 		}
-		return doctorCheck(ctx, p.Data, image, addr, true, agentForges, embedder)
+		return doctorCheck(ctx, p.Data, image, addr, true, agentForges, embedder, st.AllSandboxes)
 	}}
 	if system.Autostart, err = autostart.Default(); err != nil {
 		log.Warn("autostart is unavailable", "err", err)

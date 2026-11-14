@@ -271,3 +271,48 @@ func TestMSBDB(t *testing.T) {
 		t.Fatalf("damaged: %s %+v", r.Status, c)
 	}
 }
+
+func findCheck(r Report, id string) (Check, bool) {
+	for _, c := range r.Checks {
+		if c.ID == id {
+			return c, true
+		}
+	}
+	return Check{}, false
+}
+
+// The case from a damaged database rebuilt from a copy older than a rebase: Studio expects the
+// new generation's VM, msb only knows the old one, and the new one's disks are kept.
+func TestLostVMsFailWithTheRepairAsTheFix(t *testing.T) {
+	p := healthy()
+	p.LostVMs = func(context.Context) ([]LostVM, error) {
+		return []LostVM{{Sandbox: "katara", VM: "ss-mjbm-g2", Disks: true, Known: []string{"ss-mjbm-g1"}}}, nil
+	}
+	c, ok := findCheck(Run(context.Background(), p, Options{}), "msb-vms")
+	if !ok || c.Status != Fail {
+		t.Fatalf("check %+v, want a failure", c)
+	}
+	for _, want := range []string{"katara", "ss-mjbm-g2", "knows only ss-mjbm-g1"} {
+		if !strings.Contains(c.Message, want) {
+			t.Errorf("message %q lacks %q", c.Message, want)
+		}
+	}
+	if !strings.Contains(c.Fix, "Repair") {
+		t.Errorf("fix %q doesn't say Repair", c.Fix)
+	}
+
+	p.LostVMs = func(context.Context) ([]LostVM, error) { return []LostVM{{Sandbox: "gone", VM: "ss-x-g1"}}, nil }
+	c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-vms")
+	if c.Status != Fail || !strings.Contains(c.Message, "disks are gone too") || strings.Contains(c.Fix, "Repair") {
+		t.Fatalf("lost disks: %+v", c)
+	}
+
+	p.LostVMs = func(context.Context) ([]LostVM, error) { return nil, nil }
+	if c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-vms"); c.Status != OK {
+		t.Fatalf("nothing lost: %+v", c)
+	}
+	p.LostVMs = func(context.Context) ([]LostVM, error) { return nil, errors.New("catalog busy") }
+	if c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-vms"); c.Status != Warn {
+		t.Fatalf("a failed comparison: %+v, want a warning", c)
+	}
+}

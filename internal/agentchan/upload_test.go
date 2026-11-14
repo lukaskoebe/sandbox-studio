@@ -42,8 +42,8 @@ func TestHubUpload(t *testing.T) {
 	if _, err := h.Upload(ctx, "sb1", agentproto.UploadRequest{Name: "short", Size: 10}, strings.NewReader("abc")); err == nil {
 		t.Fatal("a short body was sent as a whole file")
 	}
-	if _, err := h.Upload(ctx, "sb1", agentproto.UploadRequest{Name: "big", Size: agentproto.MaxUploadBytes + 1}, strings.NewReader("")); err == nil {
-		t.Fatal("an oversized file was accepted")
+	if _, err := h.Upload(ctx, "sb1", agentproto.UploadRequest{Name: "big", Size: agentproto.MaxPasteBytes + 1, Paste: true}, strings.NewReader("")); err == nil {
+		t.Fatal("an oversized paste was accepted")
 	}
 	// A request line the guest could not read is refused before anything is sent.
 	if _, err := h.Upload(ctx, "sb1", agentproto.UploadRequest{Dir: strings.Repeat("d/", agentproto.MaxUploadDir), Name: "a", Size: 1}, strings.NewReader("x")); err == nil {

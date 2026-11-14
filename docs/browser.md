@@ -615,8 +615,8 @@ on request:
   and the ephemeral sessions the calling sandbox opened; the browser window's **Downloads**
   button lists every session of the teammate's browser, while the browser runs.
 - **Copy.** A copy streams the file from the browser VM through the host into the target
-  sandbox's `downloads/` folder, with `Hub.Upload` (the upload path, the same name checks and
-  the 100 MiB limit). The sandbox's guest creates `downloads/` when it is missing and keeps an
+  sandbox's `downloads/` folder, with `Hub.Upload` (the upload path and its name checks); a
+  download is at most 100 MiB (`agentproto.MaxPasteBytes`). The sandbox's guest creates `downloads/` when it is missing and keeps an
   existing file: a taken name gets a free one, `name (2).ext`. The host copies bytes only: a
   download is never opened, run or extracted on the host, and the agent's tool result says it
   is data from the web.

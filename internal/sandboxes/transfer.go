@@ -299,6 +299,7 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, pick func(st
 			m.recordMergeBase(ctx, rec)
 		}
 		m.recordFork(ctx, sb, rec)
+		m.vmsChanged()
 		return nil
 	})
 	return m.acceptedView(ctx, rec), nil

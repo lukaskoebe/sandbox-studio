@@ -79,8 +79,8 @@ func (h *Hub) BrowserDownload(ctx context.Context, id string, req agentproto.Bro
 	if err := json.Unmarshal(line, &d); err != nil {
 		return err
 	}
-	if d.Size < 0 || d.Size > agentproto.MaxUploadBytes {
-		return fmt.Errorf("a download is at most %d MiB", agentproto.MaxUploadBytes>>20)
+	if d.Size < 0 || d.Size > agentproto.MaxPasteBytes {
+		return fmt.Errorf("a download is at most %d MiB", agentproto.MaxPasteBytes>>20)
 	}
 	return fn(d, io.LimitReader(br, d.Size))
 }

@@ -403,6 +403,23 @@ func (s *Server) registerChats(api huma.API) {
 		return &struct{ Body FileList }{FileList{Entries: orEmpty(reply.Entries), Truncated: reply.Truncated}}, nil
 	})
 
+	type spaceIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Path string `query:"path" maxLength:"4096" doc:"A folder of /workspace; empty for /workspace itself"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "fileSpace", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files/space", Tags: []string{"chats"},
+		Description: "The free space on the disk of a folder of the sandbox's workspace: how large a file an upload there can be. " +
+			"A sandbox whose agent is from an older Studio answers 409: it takes uploads of at most 100 MiB until it restarts.",
+	}, func(ctx context.Context, in *spaceIn) (*struct{ Body FileSpace }, error) {
+		free, err := s.workspaceSpace(ctx, in.Env, in.ID, in.Path)
+		if err != nil {
+			return nil, err
+		}
+		return &struct{ Body FileSpace }{FileSpace{Free: free}}, nil
+	})
+
 	type indexIn struct {
 		Env string `path:"env" doc:"Environment ID"`
 		ID  string `path:"id" doc:"Sandbox ID"`
@@ -565,6 +582,11 @@ func olderGuest(err error, what string) error {
 		return huma.Error409Conflict("restart the sandbox to " + what + ": its agent is from an older Studio")
 	}
 	return err
+}
+
+// FileSpace is the free space on the disk of a folder of the workspace.
+type FileSpace struct {
+	Free int64 `json:"free" doc:"Bytes the sandbox's user may still write there"`
 }
 
 // FileContent is a file of a sandbox's workspace.

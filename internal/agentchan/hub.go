@@ -502,8 +502,8 @@ func (e NameTakenError) Error() string { return string(e) }
 // exactly req.Size bytes. The guest replies once the file is in place, under the name it returns.
 func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error) {
 	var out agentproto.UploadReply
-	if req.Size < 0 || req.Size > agentproto.MaxUploadBytes {
-		return out, fmt.Errorf("a file is at most %d MiB", agentproto.MaxUploadBytes>>20)
+	if req.Size < 0 || (req.Paste && req.Size > agentproto.MaxPasteBytes) {
+		return out, fmt.Errorf("a pasted file is at most %d MiB", agentproto.MaxPasteBytes>>20)
 	}
 	if len(req.Dir) > agentproto.MaxUploadDir || len(req.Name) > agentproto.MaxUploadName {
 		return out, errors.New("the folder or the file name is too long")

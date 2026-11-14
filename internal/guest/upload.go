@@ -51,8 +51,8 @@ func serveUpload(st net.Conn, br *bufio.Reader, workspace, into string, owner [2
 	if into != "" {
 		req.Dir, req.CreateDir = into, true
 	}
-	if req.Size < 0 || req.Size > agentproto.MaxUploadBytes {
-		return replyError(st, fmt.Errorf("a file is at most %d MiB", agentproto.MaxUploadBytes>>20))
+	if req.Size < 0 || (into != "" && req.Size > agentproto.MaxPasteBytes) {
+		return replyError(st, fmt.Errorf("a pasted file is at most %d MiB", agentproto.MaxPasteBytes>>20))
 	}
 	body := &countingReader{r: br}
 	reply, err := storeUpload(workspace, owner, req, body)
@@ -110,6 +110,11 @@ func storeUpload(workspace string, owner [2]int, req agentproto.UploadRequest, b
 		return agentproto.UploadReply{}, browseError(err)
 	}
 	defer unix.Close(dir)
+	// The host asked for the space before it sent the file; this catches what another writer
+	// took meanwhile before any of it is written.
+	if free, err := freeSpace(dir); err == nil && req.Size > free {
+		return agentproto.UploadReply{}, noSpace(req.Size, free)
+	}
 
 	var suffix [6]byte
 	if _, err := rand.Read(suffix[:]); err != nil {
@@ -247,4 +252,19 @@ func splitUploadName(name string) (stem, ext string) {
 		return name, ""
 	}
 	return stem, ext
+}
+
+// freeSpace is the bytes the agent user may still write on the disk of the open folder dir:
+// what is left past the blocks the file system keeps for root.
+func freeSpace(dir int) (int64, error) {
+	var fs unix.Statfs_t
+	if err := unix.Fstatfs(dir, &fs); err != nil {
+		return 0, err
+	}
+	return int64(fs.Bavail) * int64(fs.Bsize), nil
+}
+
+// noSpace refuses a file of size bytes on a disk with free bytes left.
+func noSpace(size, free int64) error {
+	return fmt.Errorf("the file is %s and its disk has %s free: make room, or give the workspace a larger disk", agentproto.FormatBytes(size), agentproto.FormatBytes(free))
 }

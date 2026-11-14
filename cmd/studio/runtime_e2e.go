@@ -64,6 +64,11 @@ func hostProbes() doctor.Probes {
 	return p
 }
 
+// lostVMsProbe leaves the comparison out: the e2e build has no msb.
+func lostVMsProbe(func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.LostVM, error) {
+	return nil
+}
+
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return e2e.Egress{Gateway: gw} }
 
 // serveSSH has no VM to serve.
@@ -158,3 +163,10 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine,
 	fakeRuntime.Upstream = fakeUpstream
 	mux.Handle(e2e.ControlPrefix, fakeRuntime.Control())
 }
+
+// msbBackuper keeps no copies: the e2e build has no msb.
+type msbBackuper struct{}
+
+func (*msbBackuper) Soon() {}
+
+func backupMSBDB(context.Context, *slog.Logger) *msbBackuper { return &msbBackuper{} }

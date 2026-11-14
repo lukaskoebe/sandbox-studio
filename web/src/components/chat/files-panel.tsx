@@ -15,6 +15,7 @@ import {
   SidebarSimpleIcon,
   TextboxIcon,
   UploadSimpleIcon,
+  XIcon,
 } from "@phosphor-icons/react"
 import {
   AlertDialog,
@@ -57,8 +58,10 @@ import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { languageName } from "@/lib/highlight"
 import {
-  maxUploadBytes,
+  olderGuestUploadBytes,
+  UploadCancelled,
   uploadWorkspaceFile,
+  workspaceSpace,
   type UploadConflict,
 } from "@/lib/workspace-upload"
 import {
@@ -461,8 +464,10 @@ function PathField({
 type UploadItem = {
   id: number
   name: string
-  state: "waiting" | "uploading" | "done" | "failed"
-  percent: number
+  state: "waiting" | "uploading" | "done" | "failed" | "cancelled"
+  /** Bytes sent, of size. */
+  sent: number
+  size: number
   error?: string
 }
 
@@ -490,8 +495,9 @@ function droppedFiles(dt: DataTransfer) {
 }
 
 /**
- * The uploads into one folder. Files go one at a time, each with its progress. A name the
- * folder already has is asked about first: replace it, or keep both.
+ * The uploads into one folder. Files go one at a time, each with its progress and a Cancel. A
+ * name the folder already has is asked about first: replace it, or keep both. Before they go,
+ * the folder's disk is asked for its free space, and the files past it are refused.
  */
 function useFolderUploads({
   env,
@@ -511,6 +517,8 @@ function useFolderUploads({
     null
   )
   const nextId = useRef(0)
+  // The uploads not yet done, by item: aborting one cancels it, or skips it while it waits.
+  const running = useRef(new Map<number, AbortController>())
 
   const addItems = (list: Omit<UploadItem, "id">[]) => {
     const first = nextId.current
@@ -531,11 +539,15 @@ function useFolderUploads({
       plan.map(({ file }) => ({
         name: file.name,
         state: "waiting",
-        percent: 0,
+        sent: 0,
+        size: file.size,
       }))
     )
+    for (const id of ids) running.current.set(id, new AbortController())
     for (const [i, { file, conflict }] of plan.entries()) {
       const id = ids[i]
+      const abort = running.current.get(id)
+      if (!abort || abort.signal.aborted) continue
       update(id, { state: "uploading" })
       try {
         const saved = await uploadWorkspaceFile(
@@ -544,37 +556,75 @@ function useFolderUploads({
           dir,
           file,
           conflict,
-          (percent) => update(id, { percent })
+          (sent) => update(id, { sent }),
+          abort.signal
         )
         // Keep both saves the file under another name, which the list then shows.
-        update(id, { state: "done", percent: 100, name: saved.name })
+        update(id, { state: "done", sent: file.size, name: saved.name })
       } catch (err) {
-        update(id, { state: "failed", error: errorMessage(err) })
+        if (err instanceof UploadCancelled) update(id, { state: "cancelled" })
+        else update(id, { state: "failed", error: errorMessage(err) })
+      } finally {
+        running.current.delete(id)
       }
     }
     onDone()
   }
 
-  /** Queues the files of a drop, a picker or the menu for the folder. */
-  const start = (files: File[], folders: string[] = []) => {
-    const refused = [
-      ...folders.map((name) => ({
-        name,
-        error: "Folders aren't uploaded: drop the files in them instead",
-      })),
-      ...files
-        .filter((f) => f.size > maxUploadBytes)
-        .map((f) => ({
-          name: f.name,
-          error: `Larger than ${maxUploadBytes >> 20} MiB`,
-        })),
-    ]
-    if (refused.length > 0) {
-      addItems(
-        refused.map((item) => ({ ...item, state: "failed", percent: 0 }))
+  const cancel = (id: number) => {
+    running.current.get(id)?.abort()
+    running.current.delete(id)
+    // A waiting one is skipped; an uploading one says so once its request ends.
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id && item.state === "waiting"
+          ? { ...item, state: "cancelled" }
+          : item
       )
+    )
+  }
+  const cancelAll = () => {
+    for (const id of [...running.current.keys()]) cancel(id)
+  }
+
+  /** Queues the files of a drop, a picker or the menu for the folder. */
+  const start = async (files: File[], folders: string[] = []) => {
+    let free: number | null
+    try {
+      free = await workspaceSpace(env, sandboxId, dir)
+    } catch (err) {
+      free = Infinity // the upload itself says what is wrong
+      console.warn("space check", err)
     }
-    const accepted = files.filter((f) => f.size <= maxUploadBytes)
+    // The files go one after another, so each takes what the ones before it leave.
+    let left = free ?? Infinity
+    const accepted: File[] = []
+    const refused = folders.map((name) => ({
+      name,
+      size: 0,
+      error: "Folders aren't uploaded: drop the files in them instead",
+    }))
+    for (const f of files) {
+      if (free === null && f.size > olderGuestUploadBytes)
+        refused.push({
+          name: f.name,
+          size: f.size,
+          error: `Its agent is from an older Studio, which takes up to ${olderGuestUploadBytes >> 20} MiB: restart the computer to upload larger files`,
+        })
+      else if (f.size > left)
+        refused.push({
+          name: f.name,
+          size: f.size,
+          error: `${formatBytes(f.size)}, and the disk has ${formatBytes(Math.max(left, 0))} free: make room, or give the workspace a larger disk`,
+        })
+      else {
+        accepted.push(f)
+        left -= f.size
+      }
+    }
+    if (refused.length > 0) {
+      addItems(refused.map((item) => ({ ...item, state: "failed", sent: 0 })))
+    }
     if (accepted.length === 0) return
     const taken = accepted
       .map((f) => f.name)
@@ -595,8 +645,13 @@ function useFolderUploads({
 
   return {
     items,
-    clear: () => setItems([]),
-    start,
+    clear: () =>
+      setItems((prev) =>
+        prev.filter((i) => i.state === "waiting" || i.state === "uploading")
+      ),
+    start: (files: File[], folders?: string[]) => void start(files, folders),
+    cancel,
+    cancelAll,
     clash,
     cancelClash: () => setClash(null),
     decide,
@@ -608,18 +663,31 @@ const uploadStates = {
   uploading: "Uploading",
   done: "Uploaded",
   failed: "Failed",
+  cancelled: "Cancelled",
 } as const
+
+/** An upload's progress: "1.2 of 3.4 GB" for a large file, a percentage for a small one. */
+function uploadProgress(item: UploadItem) {
+  const percent = item.size > 0 ? Math.round((item.sent / item.size) * 100) : 0
+  if (item.size < 10 << 20) return `${percent}%`
+  return `${formatBytes(item.sent)} of ${formatBytes(item.size)} · ${percent}%`
+}
 
 function UploadList({
   items,
   onClear,
+  onCancel,
+  onCancelAll,
 }: {
   items: UploadItem[]
   onClear: () => void
+  onCancel: (id: number) => void
+  onCancelAll: () => void
 }) {
-  const busy = items.some(
-    (i) => i.state === "waiting" || i.state === "uploading"
-  )
+  const active = (i: UploadItem) =>
+    i.state === "waiting" || i.state === "uploading"
+  const busy = items.filter(active).length
+  const finished = items.length - busy
   return (
     <div className="grid gap-2 rounded-md bg-muted/40 p-2 ring-1 ring-foreground/10">
       <ul className="grid gap-1.5">
@@ -638,24 +706,44 @@ function UploadList({
                 )}
               >
                 {item.state === "uploading"
-                  ? `${Math.round(item.percent)}%`
+                  ? uploadProgress(item)
                   : uploadStates[item.state]}
               </span>
+              {active(item) && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="-my-1 shrink-0"
+                  aria-label={`Cancel the upload of ${item.name}`}
+                  title="Cancel"
+                  onClick={() => onCancel(item.id)}
+                >
+                  <XIcon />
+                </Button>
+              )}
             </div>
-            {item.state === "uploading" && <Progress value={item.percent} />}
+            {item.state === "uploading" && (
+              <Progress
+                value={item.size > 0 ? (item.sent / item.size) * 100 : 0}
+              />
+            )}
             {item.error && <p className="text-destructive">{item.error}</p>}
           </li>
         ))}
       </ul>
-      {!busy && (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="justify-self-end"
-          onClick={onClear}
-        >
-          Clear
-        </Button>
+      {(busy > 1 || finished > 0) && (
+        <div className="flex justify-end gap-1">
+          {busy > 1 && (
+            <Button variant="ghost" size="xs" onClick={onCancelAll}>
+              Cancel all
+            </Button>
+          )}
+          {finished > 0 && (
+            <Button variant="ghost" size="xs" onClick={onClear}>
+              Clear
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )
@@ -765,7 +853,12 @@ function NoFile({
       />
       {uploads.items.length > 0 && (
         <div className="w-full max-w-sm text-left text-foreground">
-          <UploadList items={uploads.items} onClear={uploads.clear} />
+          <UploadList
+            items={uploads.items}
+            onClear={uploads.clear}
+            onCancel={uploads.cancel}
+            onCancelAll={uploads.cancelAll}
+          />
         </div>
       )}
       <AlertDialog

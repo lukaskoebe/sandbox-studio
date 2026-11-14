@@ -484,6 +484,31 @@ func (s *Store) AllSandboxes(ctx context.Context) ([]Sandbox, error) {
 	return out, rows.Err()
 }
 
+// ReadSandboxes lists the sandboxes of the catalog at path across environments, reading it
+// only: `studio doctor` runs beside a running Studio, and may be a newer build than the one
+// that migrated the catalog.
+func ReadSandboxes(ctx context.Context, path string) ([]Sandbox, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, "SELECT "+sandboxCols+" FROM sandboxes ORDER BY created_at")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Sandbox{}
+	for rows.Next() {
+		sb, err := scanSandbox(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sb)
+	}
+	return out, rows.Err()
+}
+
 type dnsPortQueryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }

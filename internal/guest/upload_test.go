@@ -207,11 +207,30 @@ func TestServeUploadReadsRefusedBodies(t *testing.T) {
 	}
 }
 
-func TestServeUploadRefusesOversizedFiles(t *testing.T) {
-	line := streamUpload(t, t.TempDir(), agentproto.UploadRequest{Name: "big", Size: agentproto.MaxUploadBytes + 1}, "")
+func TestServeUploadRefusesOversizedPastes(t *testing.T) {
+	line := streamUploadInto(t, t.TempDir(), "pastes", agentproto.UploadRequest{Name: "big", Size: agentproto.MaxPasteBytes + 1}, "")
 	var reply agentproto.Error
-	if err := json.Unmarshal(line, &reply); err != nil || !strings.Contains(reply.Error, "MiB") {
+	if err := json.Unmarshal(line, &reply); err != nil || !strings.Contains(reply.Error, "100 MiB") {
 		t.Fatalf("reply %s, %v", line, err)
+	}
+}
+
+// An upload has no bound but its disk's free space, which is checked before anything is written.
+func TestStoreUploadRefusesAFileLargerThanTheFreeSpace(t *testing.T) {
+	ws := t.TempDir()
+	_, err := storeUpload(ws, uploadOwner, agentproto.UploadRequest{Name: "huge.iso", Size: 1 << 62}, strings.NewReader(""))
+	if err == nil || !strings.Contains(err.Error(), "free") {
+		t.Fatalf("err %v", err)
+	}
+	if entries, _ := os.ReadDir(ws); len(entries) != 0 {
+		t.Fatalf("a refused upload wrote %v", entries)
+	}
+	reply, err := browse(ws, uploadOwner, agentproto.FilesRequest{Op: agentproto.FilesSpace})
+	if err != nil || reply.Free <= 0 {
+		t.Fatalf("space %+v, %v", reply, err)
+	}
+	if _, err := browse(ws, uploadOwner, agentproto.FilesRequest{Op: agentproto.FilesSpace, Path: "missing"}); err == nil {
+		t.Fatal("the space of a missing folder")
 	}
 }
 

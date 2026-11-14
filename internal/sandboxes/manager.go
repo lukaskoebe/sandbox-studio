@@ -63,6 +63,9 @@ type Manager struct {
 	// Forget removes host-side state kept for a sandbox elsewhere (git staging repos) once
 	// it is deleted; nil keeps none.
 	Forget func(envID, id string) error
+	// VMsChanged, if set, is called after a rebase, a disk resize or a repair gave a sandbox a
+	// new VM record, for a backup of msb's catalog with it.
+	VMsChanged func()
 	// Bus, if set, gets an events.TopicSandboxes notice whenever a sandbox changes: its
 	// lifecycle, checkpoints, rebases, forks or history.
 	Bus *events.Bus
@@ -143,6 +146,7 @@ type View struct {
 	BaseVersion                string            `json:"baseVersion,omitempty" doc:"The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base"`
 	BaseOutdated               bool              `json:"baseOutdated,omitempty" doc:"Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date"`
 	LowDisks                   []agentproto.Disk `json:"lowDisks,omitempty" doc:"The sandbox's disks that are nearly full, as its guest said within the last minute while a tab was open; absent when none is"`
+	Repairable                 bool              `json:"repairable,omitempty" doc:"With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -433,6 +437,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 		if err != nil {
 			return m.removeFailedVM(ctx, rec, err, image != nil)
 		}
+		m.vmsChanged()
 		m.markStarted(ctx, rec)
 		m.recordEvent(ctx, eventFor(rec, store.EventCreate))
 		return nil
@@ -573,7 +578,10 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 
 // LostVM is why a sandbox whose VM microsandbox no longer knows can't start, and what to do.
 const LostVM = "microsandbox has no record of this sandbox's VM, so it can't start; its disks are kept. " +
-	"If Studio repaired microsandbox's database, quit Studio and run `studio restore-msb-db` to rebuild it from the damaged one"
+	"Repair it from its page: Studio gives the VM a new record around its disks"
+
+// LostVMAndDisks is LostVM for a sandbox whose disks aren't in microsandbox's home either.
+const LostVMAndDisks = "microsandbox has no record of this sandbox's VM, and its disks aren't in microsandbox's home either, so it can't start"
 
 // Start boots a stopped sandbox.
 func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
@@ -605,6 +613,11 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	} else if status == runtime.StatusSuspended {
 		return View{}, lifecycleError("the sandbox is suspended; resume it instead")
 	} else if status == runtime.StatusAbsent {
+		if ad, ok := m.Runtime.(vmAdopter); ok {
+			if _, err := ad.LostDisks(VMName(rec)); errors.Is(err, runtime.ErrNoDisks) {
+				return View{}, lifecycleError(LostVMAndDisks)
+			}
+		}
 		return View{}, lifecycleError(LostVM)
 	}
 	rec, err = m.startVM(ctx, rec)
@@ -847,7 +860,9 @@ func (m *Manager) withAgent(v View) View {
 		v.Agent = &AgentInfo{Version: hello.Version, Arch: hello.Arch}
 		v.LowDisks = m.LowDisks(v.ID)
 	}
-	return m.withProgress(v)
+	v = m.withProgress(v)
+	v.Repairable = m.repairable(v)
+	return v
 }
 
 // BaseOutdated is whether a sandbox or template on image runs an older base than new

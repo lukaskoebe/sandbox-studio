@@ -65,6 +65,11 @@ func (g *chatGuest) Files(_ context.Context, _ string, req agentproto.FilesReque
 		return agentproto.FilesReply{}, errors.New("unknown files root")
 	case req.Op == agentproto.FilesList && req.Path == "":
 		return agentproto.FilesReply{Entries: []agentproto.FileEntry{{Name: "src", Type: "dir"}, {Name: "a.txt", Type: "file", Size: 2}}}, nil
+	case req.Op == agentproto.FilesSpace && req.Path == "old":
+		// A guest from before the free space, which takes uploads of at most 100 MiB.
+		return agentproto.FilesReply{}, errors.New("unknown files op")
+	case req.Op == agentproto.FilesSpace:
+		return agentproto.FilesReply{Free: 1 << 30}, nil
 	case req.Op == agentproto.FilesRead && req.Path == "a.txt":
 		return agentproto.FilesReply{Size: 2, MimeType: "text/plain; charset=utf-8", Data: []byte("2\n")}, nil
 	}

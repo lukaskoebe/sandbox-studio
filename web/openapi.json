@@ -3687,6 +3687,20 @@
         ],
         "type": "object"
       },
+      "FileSpace": {
+        "additionalProperties": false,
+        "properties": {
+          "free": {
+            "description": "Bytes the sandbox's user may still write there",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "free"
+        ],
+        "type": "object"
+      },
       "FileTeammate": {
         "additionalProperties": false,
         "properties": {
@@ -8136,6 +8150,10 @@
             "$ref": "#/components/schemas/Progress",
             "description": "The create or fork that runs or failed"
           },
+          "repairable": {
+            "description": "With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it",
+            "type": "boolean"
+          },
           "startedAt": {
             "format": "date-time",
             "type": "string"
@@ -11626,6 +11644,10 @@
           "progress": {
             "$ref": "#/components/schemas/Progress",
             "description": "The create or fork that runs or failed"
+          },
+          "repairable": {
+            "description": "With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it",
+            "type": "boolean"
           },
           "startedAt": {
             "format": "date-time",
@@ -18906,7 +18928,7 @@
         ]
       },
       "post": {
-        "description": "Writes the body as the file name in the folder path (relative to /workspace; empty is /workspace itself). A file is at most 100 MiB and is owned by the agent user, mode 0644. Its name must be one file name. conflict decides a name already taken: fail (the default) answers 409 and writes nothing, replace overwrites a regular file, and keep writes it as \"name (2).ext\", the next free name. A folder or a link under the name is never replaced. The upload is written under a hidden name and renamed into place, so readers never see half a file.",
+        "description": "Writes the body as the file name in the folder path (relative to /workspace; empty is /workspace itself). A file can be as large as the free space on the folder's disk (GET …/files/space); a larger one answers 507 before any of it is sent. It is owned by the agent user, mode 0644. Its name must be one file name. conflict decides a name already taken: fail (the default) answers 409 and writes nothing, replace overwrites a regular file, and keep writes it as \"name (2).ext\", the next free name. A folder or a link under the name is never replaced. The upload is written under a hidden name and renamed into place, so readers never see half a file.",
         "operationId": "uploadFile",
         "parameters": [
           {
@@ -19109,6 +19131,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FileIndex"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/files/space": {
+      "get": {
+        "description": "The free space on the disk of a folder of the sandbox's workspace: how large a file an upload there can be. A sandbox whose agent is from an older Studio answers 409: it takes uploads of at most 100 MiB until it restarts.",
+        "operationId": "fileSpace",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A folder of /workspace; empty for /workspace itself",
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "description": "A folder of /workspace; empty for /workspace itself",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileSpace"
                 }
               }
             },
@@ -20223,6 +20309,60 @@
         },
         "tags": [
           "network"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/repair-vm": {
+      "post": {
+        "description": "For a sandbox with status absent and repairable set: microsandbox's database lost the VM's record, while the disks are still on hand. Studio has microsandbox make the VM again the way it made it, swaps in the kept disks unchanged, and starts it.",
+        "operationId": "repairSandboxVM",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Give a sandbox whose VM microsandbox lost a new record around its disks, and start it",
+        "tags": [
+          "sandboxes"
         ]
       }
     },

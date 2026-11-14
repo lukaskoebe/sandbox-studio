@@ -154,6 +154,25 @@ func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
 	return "", msbRepaired, ""
 }
 
+// lostVMsProbe is the doctor's comparison of Studio's sandboxes, from list, with the VMs msb's
+// catalog has.
+func lostVMsProbe(list func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.LostVM, error) {
+	return func(ctx context.Context) ([]doctor.LostVM, error) {
+		sbs, err := list(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(sbs) == 0 {
+			return nil, nil
+		}
+		statuses, err := runtime.New(runtime.Options{}).Statuses(ctx, sandboxes.VMPrefix)
+		if err != nil {
+			return nil, err
+		}
+		return findLostVMs(sbs, statuses, runtime.LostDisks), nil
+	}
+}
+
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return gw }
 
 func serveSSH(ctx context.Context, vm string, keys runtime.SSHKeys) error {
@@ -184,3 +203,56 @@ func hostLogins(string) *hostlogins.Finder {
 
 // registerControl adds the e2e control API to the API mux; production has none.
 func registerControl(*http.ServeMux, *store.Store, *policy.Engine, *gateway.Gateway) {}
+
+// msbBackupEvery is how often Studio looks whether msb's catalog changed since its last copy,
+// and msbBackupsKept how many copies it keeps.
+const (
+	msbBackupEvery = 5 * time.Minute
+	msbBackupsKept = 10
+)
+
+// msbBackuper keeps copies of msb's catalog next to it, so a catalog damaged later can be
+// restored with its sandboxes' current VMs: `studio restore-msb-db` picks the copy that
+// knows the most of them.
+type msbBackuper struct{ soon chan struct{} }
+
+// Soon asks for a copy now, after a change of a sandbox's VM.
+func (b *msbBackuper) Soon() {
+	select {
+	case b.soon <- struct{}{}:
+	default:
+	}
+}
+
+// backupMSBDB copies msb's catalog whenever it changed, every msbBackupEvery or when asked.
+func backupMSBDB(ctx context.Context, log *slog.Logger) *msbBackuper {
+	b := &msbBackuper{soon: make(chan struct{}, 1)}
+	path, err := msbdb.Path()
+	if err != nil {
+		return b
+	}
+	go func() {
+		var copied time.Time // when the catalog had last changed at the last copy
+		tick := time.NewTicker(msbBackupEvery)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			case <-b.soon:
+			}
+			changed := msbdb.Changed(path)
+			if changed.IsZero() || !changed.After(copied) {
+				continue
+			}
+			if out, err := msbdb.Backup(ctx, path, time.Now(), msbBackupsKept); err != nil {
+				log.Warn("could not back up microsandbox's database", "path", path, "err", err)
+			} else {
+				copied = changed
+				log.Debug("backed up microsandbox's database", "copy", out)
+			}
+		}
+	}()
+	return b
+}

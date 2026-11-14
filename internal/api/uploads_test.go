@@ -75,18 +75,33 @@ func TestUploadFileAPI(t *testing.T) {
 		t.Fatalf("missing sandbox: %d", rec.Code)
 	}
 
-	// Oversized files are refused from the declared length, before anything is read.
-	req := httptest.NewRequest("POST", files+"?name=big.bin", strings.NewReader(""))
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.ContentLength = agentproto.MaxUploadBytes + 1
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "100 MiB") {
-		t.Fatalf("oversized: %d %s", rec.Code, rec.Body)
+	// A file larger than the folder's disk has free is refused from the declared length,
+	// before anything is read, and so is one over 100 MiB for a guest that takes no more.
+	declared := func(url string, size int64) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", url, strings.NewReader(""))
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.ContentLength = size
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := declared(files+"?name=big.bin", 2<<30); rec.Code != http.StatusInsufficientStorage || !strings.Contains(rec.Body.String(), "1.0 GiB free") {
+		t.Fatalf("larger than the disk: %d %s", rec.Code, rec.Body)
+	}
+	rec = declared(files+"?name=big.bin&path=old", 200<<20)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "restart the sandbox") {
+		t.Fatalf("older guest: %d %s", rec.Code, rec.Body)
 	}
 	var problem map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
 		t.Fatalf("problem JSON: %v", err)
+	}
+	pastes := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/pastes"
+	if rec := declared(pastes+"?name=big.bin", agentproto.MaxPasteBytes+1); rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "100 MiB") {
+		t.Fatalf("oversized paste: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", files+"/space", ""); rec.Code != http.StatusOK || decode[FileSpace](t, rec).Free != 1<<30 {
+		t.Fatalf("space: %d %s", rec.Code, rec.Body)
 	}
 }
 

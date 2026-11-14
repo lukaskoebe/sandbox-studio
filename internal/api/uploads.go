@@ -18,8 +18,9 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
-// uploadTimeout bounds one upload; the size limit bounds how much it moves.
-const uploadTimeout = 30 * time.Minute
+// uploadTimeout bounds one upload. A file can be as large as the workspace's disk; closing the
+// page or cancelling the upload ends it sooner, and the guest removes what it wrote.
+const uploadTimeout = 12 * time.Hour
 
 // UploadedFile is a file an upload wrote into a sandbox's workspace.
 type UploadedFile struct {
@@ -35,7 +36,7 @@ type PastedFile struct {
 }
 
 // registerUploads adds the upload of a file into a folder of a sandbox's workspace, and of a
-// file pasted into a terminal. A file can be up to 100 MiB, which huma would buffer, so they are
+// file pasted into a terminal. Huma would buffer a file, which can be gigabytes, so they are
 // plain handlers documented in OpenAPI, as the exports are.
 func (s *Server) registerUploads(api huma.API, mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/environments/{env}/sandboxes/{id}/files", s.uploadFile)
@@ -53,7 +54,8 @@ func (s *Server) registerUploads(api huma.API, mux *http.ServeMux) {
 		Path: "/api/environments/{env}/sandboxes/{id}/files", Tags: []string{"chats"},
 		Summary: "Upload a file into a folder of the workspace",
 		Description: "Writes the body as the file name in the folder path (relative to /workspace; empty is /workspace itself). " +
-			"A file is at most 100 MiB and is owned by the agent user, mode 0644. Its name must be one file name. " +
+			"A file can be as large as the free space on the folder's disk (GET …/files/space); a larger one answers 507 before any of it is sent. " +
+			"It is owned by the agent user, mode 0644. Its name must be one file name. " +
 			"conflict decides a name already taken: fail (the default) answers 409 and writes nothing, replace overwrites a regular file, " +
 			"and keep writes it as \"name (2).ext\", the next free name. A folder or a link under the name is never replaced. " +
 			"The upload is written under a hidden name and renamed into place, so readers never see half a file.",
@@ -122,13 +124,25 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request, req agentproto.U
 	case r.ContentLength < 0:
 		s.writeProblem(w, "", huma.NewError(http.StatusLengthRequired, "the upload needs a Content-Length"))
 		return agentproto.UploadReply{}, false
-	case r.ContentLength > agentproto.MaxUploadBytes:
-		s.writeProblem(w, "", huma.NewError(http.StatusRequestEntityTooLarge, fmt.Sprintf("a file is at most %d MiB", agentproto.MaxUploadBytes>>20)))
+	case req.Paste && r.ContentLength > agentproto.MaxPasteBytes:
+		s.writeProblem(w, "", huma.NewError(http.StatusRequestEntityTooLarge, fmt.Sprintf("a pasted file is at most %d MiB", agentproto.MaxPasteBytes>>20)))
 		return agentproto.UploadReply{}, false
 	}
 	req.Size = r.ContentLength
 	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
 	defer cancel()
+	if !req.Paste && req.Size > agentproto.MaxPasteBytes {
+		// Refused now rather than after the guest read the whole body: a full disk, or a guest
+		// from before uploads had no bound, which refuses more than 100 MiB once it has it all.
+		free, err := s.workspaceSpace(ctx, r.PathValue("env"), r.PathValue("id"), req.Dir)
+		if err == nil && req.Size > free {
+			err = huma.NewError(http.StatusInsufficientStorage, fmt.Sprintf("the file is %s and its disk has %s free", agentproto.FormatBytes(req.Size), agentproto.FormatBytes(free)))
+		}
+		if err != nil {
+			s.writeProblem(w, "upload failed", err)
+			return agentproto.UploadReply{}, false
+		}
+	}
 	reply, err := s.workspaceUpload(ctx, r.PathValue("env"), r.PathValue("id"), req, r.Body)
 	if err != nil {
 		s.writeProblem(w, "upload failed", err)
@@ -164,4 +178,13 @@ func (s *Server) workspaceUpload(ctx context.Context, envID, id string, req agen
 		return reply, apiError(err)
 	}
 	return reply, huma.Error422UnprocessableEntity(err.Error())
+}
+
+// workspaceSpace is the free space on the disk of the workspace's folder dir.
+func (s *Server) workspaceSpace(ctx context.Context, envID, id, dir string) (int64, error) {
+	reply, err := s.workspaceFiles(ctx, envID, id, agentproto.FilesRequest{Op: agentproto.FilesSpace, Path: dir})
+	if err != nil {
+		return 0, olderGuest(err, "upload a file over 100 MiB")
+	}
+	return reply.Free, nil
 }

@@ -190,6 +190,8 @@ func browseIn(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 			}
 		}
 		return agentproto.FilesReply{}, errors.New("no such change")
+	case agentproto.FilesSpace:
+		return agentproto.FilesReply{Free: 20 << 30}, nil
 	case agentproto.FilesRead:
 		data, ok := workspace[name]
 		if !ok {
