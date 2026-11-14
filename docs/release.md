@@ -16,6 +16,28 @@ release one of the dry run's too, so formatting, lint, a failing test or a stale
 should never be what fails them. What only GitHub's runners can show (the macOS and Windows
 builds, the app starting on macOS, the smoke tests) is what the branch's runs are for.
 
+Then look at what changed. Tests check that the UI works, not that it looks right: a long
+address running out of a card passed every test. So every feature added or changed since the
+last release that shows in the UI gets looked at, in the e2e Studio (`bin/studio-e2e`, with
+the e2e specs' fakes), before the release branch:
+
+- List them from the `## Unreleased` section of the changelog and `git diff <last tag>
+  --stat -- web/src`: each new or changed screen, card, dialog, popover, menu and state
+  (empty, loading, error, long content).
+- Screenshot each one with a throwaway Playwright spec (`web/e2e/zz-*.spec.ts`, deleted
+  afterwards), in **light and dark**, **wide and narrow** (1280 and 390 px), and in the
+  **Pixel and Quiet** styles where its colours or type come from the style tokens. Give it
+  long content on purpose: a long URL, name, path or message, many items.
+- Look at every screenshot, not only the test's result: nothing overflows or is clipped,
+  text truncates where it should, nothing overlaps, contrast holds in both themes, and it
+  sits calmly with the rest of the app. Check scrollWidth against clientWidth where content
+  could run out, and turn what broke into an assertion in the real spec.
+- Interaction that a screenshot can't show (hover, focus rings, cursors, a popover's
+  position, a transition) gets driven in the spec and screenshotted mid-way.
+
+Fix what looks wrong on main like any other failure. A release whose UI changes weren't
+looked at isn't ready.
+
 1. Branch `release/v0.6.0` from main. On the branch, give the version's section in
    [CHANGELOG.md](../CHANGELOG.md) its date, commit, and push the branch:
 
