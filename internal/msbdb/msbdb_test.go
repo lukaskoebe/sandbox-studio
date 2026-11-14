@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -566,5 +567,40 @@ func TestBackupKeepsNoDamagedCatalog(t *testing.T) {
 	}
 	if found, _ := filepath.Glob(path + BackupPrefix + "*"); len(found) != 0 {
 		t.Fatalf("backups %v", found)
+	}
+}
+
+func TestKeepBeforeCopiesOncePerVersion(t *testing.T) {
+	ctx := context.Background()
+	path := catalog(t)
+	out, err := KeepBefore(ctx, path, "0.7.15", 2)
+	if err != nil || out != path+BeforePrefix+"0.7.15" {
+		t.Fatalf("KeepBefore = %q, %v", out, err)
+	}
+	if names, err := Sandboxes(ctx, out); err != nil || strings.Join(names, ",") != "ss-a" {
+		t.Fatalf("the copy knows %v, %v", names, err)
+	}
+	if again, err := KeepBefore(ctx, path, "0.7.15", 2); again != "" || err != nil {
+		t.Errorf("KeepBefore again = %q, %v", again, err)
+	}
+	for i, v := range []string{"0.7.16", "0.7.17"} {
+		old := time.Now().Add(time.Duration(i-3) * time.Hour)
+		if err := os.Chtimes(path+BeforePrefix+"0.7.15", old, old); err != nil && i == 0 {
+			t.Fatal(err)
+		}
+		if _, err := KeepBefore(ctx, path, v, 2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	found, _ := filepath.Glob(path + BeforePrefix + "*")
+	if len(found) != 2 || slices.Contains(found, path+BeforePrefix+"0.7.15") {
+		t.Errorf("copies %v, want the two newest", found)
+	}
+	// Neither a restore nor the backups' rotation takes them for their own.
+	if asides, _ := Asides(path); len(asides) != 0 {
+		t.Errorf("asides %v", asides)
+	}
+	if none, err := KeepBefore(ctx, filepath.Join(t.TempDir(), "msb.db"), "0.7.15", 2); none != "" || err != nil {
+		t.Errorf("KeepBefore without a catalog = %q, %v", none, err)
 	}
 }

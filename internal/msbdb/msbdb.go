@@ -546,33 +546,8 @@ const BackupPrefix = ".backup-"
 // file and its -wal instead, and keeps the copy only when neither changed while it was
 // copied and the copy passes SQLite's integrity check; a damaged catalog is never kept.
 func Backup(ctx context.Context, path string, now time.Time, keep int) (string, error) {
-	work, err := workDir(path)
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(work)
-	var copied string
-	for try := 0; try < 3 && copied == ""; try++ {
-		if copied, err = snapshot(path, filepath.Join(work, fmt.Sprint(try))); err != nil {
-			return "", err
-		}
-	}
-	if copied == "" {
-		return "", errors.New("the database kept changing while it was copied")
-	}
-	if err := Check(ctx, copied); err != nil {
-		return "", fmt.Errorf("the copy fails its check, so it isn't kept: %w", err)
-	}
 	out := path + BackupPrefix + now.UTC().Format("20060102T150405Z")
-	db, err := open(copied)
-	if err != nil {
-		return "", err
-	}
-	// VACUUM INTO writes one self-contained file, with the WAL's pages in it.
-	_, err = db.ExecContext(ctx, "VACUUM INTO ?", out)
-	db.Close()
-	if err != nil {
-		os.Remove(out)
+	if err := copyCatalog(ctx, path, out); err != nil {
 		return "", err
 	}
 	old, err := filepath.Glob(path + BackupPrefix + "*")
@@ -583,6 +558,81 @@ func Backup(ctx context.Context, path string, now time.Time, keep int) (string, 
 		}
 	}
 	return out, nil
+}
+
+// copyCatalog writes a checked, self-contained copy of the catalog at path to out, without
+// opening path: see Backup.
+func copyCatalog(ctx context.Context, path, out string) error {
+	work, err := workDir(path)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(work)
+	var copied string
+	for try := 0; try < 3 && copied == ""; try++ {
+		if copied, err = snapshot(path, filepath.Join(work, fmt.Sprint(try))); err != nil {
+			return err
+		}
+	}
+	if copied == "" {
+		return errors.New("the database kept changing while it was copied")
+	}
+	if err := Check(ctx, copied); err != nil {
+		return fmt.Errorf("the copy fails its check, so it isn't kept: %w", err)
+	}
+	db, err := open(copied)
+	if err != nil {
+		return err
+	}
+	// VACUUM INTO writes one self-contained file, with the WAL's pages in it.
+	_, err = db.ExecContext(ctx, "VACUUM INTO ?", out)
+	db.Close()
+	if err == nil {
+		// Only this account reads it, as msb keeps the catalog itself.
+		err = os.Chmod(out, 0o600)
+	}
+	if err != nil {
+		os.Remove(out)
+	}
+	return err
+}
+
+// BeforePrefix names the copy KeepBefore keeps: path + BeforePrefix + msb's version.
+const BeforePrefix = ".before-msb-"
+
+// KeepBefore keeps a copy of the catalog at path as it was before msb version first opened
+// it, as path.before-msb-<version>, once: a newer msb migrates the catalog, and no older one
+// can use it then. It keeps the copies of the newest keep versions it made and returns the
+// copy, or "" if there is no catalog or the copy exists already. Like Backup it never opens
+// path, so it is safe while other msb processes use it.
+func KeepBefore(ctx context.Context, path, version string, keep int) (string, error) {
+	out := path + BeforePrefix + version
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if _, err := os.Stat(out); err == nil {
+		return "", nil
+	}
+	if err := copyCatalog(ctx, path, out); err != nil {
+		return "", err
+	}
+	old, err := filepath.Glob(path + BeforePrefix + "*")
+	if err == nil && len(old) > keep {
+		// The oldest copies go first.
+		slices.SortFunc(old, func(a, b string) int { return modTime(a).Compare(modTime(b)) })
+		for _, f := range old[:len(old)-keep] {
+			os.Remove(f)
+		}
+	}
+	return out, nil
+}
+
+func modTime(path string) time.Time {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
 }
 
 // snapshot copies path and its -wal file into dir, and returns the copy, or "" if either
@@ -622,4 +672,23 @@ func Changed(path string) time.Time {
 		}
 	}
 	return at
+}
+
+// SandboxID returns the id of the catalog's record of the sandbox name, read only. msb binds
+// some of a sandbox's files, such as its snapshot ancestry, to that id. Only a process whose
+// msb library hasn't opened the catalog may call it: see Check.
+func SandboxID(ctx context.Context, path, name string) (int64, error) {
+	db, err := open(path, "mode=ro")
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	var id int64
+	if err := db.QueryRowContext(ctx, "SELECT id FROM sandbox WHERE name = ?", name).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("microsandbox's database has no record of %s", name)
+		}
+		return 0, classify(path, err)
+	}
+	return id, nil
 }

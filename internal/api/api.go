@@ -468,6 +468,7 @@ func apiError(err error) error {
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, runtime.ErrCheckpointRestoreUnavailable),
 		errors.Is(err, runtime.ErrLiveCheckpointUnsupported),
+		errors.Is(err, runtime.ErrRestartToUpgrade),
 		errors.Is(err, store.ErrConflict),
 		errors.Is(err, sandboxes.ErrBusy),
 		errors.Is(err, sandboxes.ErrCheckpointState),

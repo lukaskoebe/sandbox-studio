@@ -10,8 +10,11 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -67,6 +70,29 @@ func hostProbes() doctor.Probes {
 // msbHeldFix says what to do when it couldn't, because other processes had the database open.
 var msbRepaired, msbHeldFix string
 
+// prepareMSBHome makes microsandbox's home private to this account and checks the directories
+// above it the way msb 0.7.12 and later does, before Studio locks it or upgrades msb. msb
+// refuses a database that another account could swap out, and every msb call fails then; so
+// Studio stops here instead, before it changes anything, and an update rolls back to the
+// Studio that still works with the old msb.
+func prepareMSBHome(log *slog.Logger) error {
+	home, err := msbdb.Home()
+	if err != nil {
+		return nil
+	}
+	tightened, err := msbdb.PrepareHome(home)
+	if tightened {
+		log.Info("made microsandbox's home private to this account, as msb requires", "home", home)
+	}
+	if _, unsafe := errors.AsType[*msbdb.UnsafeHome](err); unsafe {
+		return err
+	}
+	if err != nil {
+		log.Warn("could not check microsandbox's home", "home", home, "err", err)
+	}
+	return nil
+}
+
 // lockMSB takes a lock in microsandbox's home for this Studio. Two Studios with different
 // data directories share it otherwise, and one repairing msb's database while the other uses
 // it damages the database.
@@ -76,7 +102,8 @@ func lockMSB() (release func() error, dir string, err error) {
 		return nil, "", err
 	}
 	dir = filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// msb makes its db directory private itself; this is the same mode before it does.
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, dir, err
 	}
 	release, err = store.TryLock(filepath.Join(dir, "studio.lock"))
@@ -128,6 +155,63 @@ func repairMSBDB(ctx context.Context, log *slog.Logger) {
 		"partial", r.Partial, "summary", msbRepaired)
 }
 
+// keepMSBDBBeforeUpgrade copies msb's catalog before this Studio's msb first opens it: a newer
+// msb migrates it, and the copy is what an older one could still use.
+func keepMSBDBBeforeUpgrade(ctx context.Context, log *slog.Logger) {
+	path, err := msbdb.Path()
+	if err != nil {
+		return
+	}
+	out, err := msbdb.KeepBefore(ctx, path, runtime.MSBVersion(), 2)
+	if err != nil {
+		log.Warn("could not copy microsandbox's database before this msb opens it", "path", path, "err", err)
+	} else if out != "" {
+		log.Info("copied microsandbox's database before this msb opens it", "copy", out)
+	}
+}
+
+func init() { runtime.CatalogID = catalogID }
+
+// catalogID asks a new process of this binary for the id of msb's record of the VM name:
+// this one's msb library has the catalog open, and only msb may open it here.
+func catalogID(ctx context.Context, name string) (int64, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, self, "msb-sandbox-id", name)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return 0, errors.New(msg)
+		}
+		return 0, err
+	}
+	return strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+}
+
+// runMSBSandboxID prints the id of msb's record of the VM name, for catalogID.
+func runMSBSandboxID(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: studio msb-sandbox-id NAME")
+		return 2
+	}
+	path, err := msbdb.Path()
+	if err == nil {
+		var id int64
+		if id, err = msbdb.SandboxID(context.Background(), path, args[0]); err == nil {
+			fmt.Println(id)
+			return 0
+		}
+	}
+	fmt.Fprintln(os.Stderr, err)
+	return 1
+}
+
 // msbOpened is set once this process's msb library has opened msb's database. From then on
 // only msb reads it here: SQLite's locks belong to the process, and Studio's own SQLite
 // closing the file would drop the library's locks with it, so that another msb process
@@ -137,6 +221,11 @@ var msbOpened atomic.Bool
 // checkMSBDB is the doctor's probe of msb's database: its integrity, while this process's
 // msb library hasn't opened it yet, then whether msb can read it.
 func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
+	if home, err := msbdb.Home(); err == nil {
+		if u, unsafe := errors.AsType[*msbdb.UnsafeHome](msbdb.CheckHome(home)); unsafe {
+			return strings.TrimSuffix(u.Error(), " "+u.Fix), "", u.Fix
+		}
+	}
 	if path, err := msbdb.Path(); err == nil && !msbOpened.Load() {
 		var d *msbdb.Damaged
 		if err := msbdb.Check(ctx, path); errors.As(err, &d) {
@@ -152,6 +241,28 @@ func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
 		return ce.Err.Error(), "", ce.Fix
 	}
 	return "", msbRepaired, ""
+}
+
+// storageProbe is the doctor's question to msb of how far it has moved the disks of Studio's
+// sandboxes, from list, to its protected layout.
+func storageProbe(list func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.StorageIssue, error) {
+	return func(ctx context.Context) ([]doctor.StorageIssue, error) {
+		states, err := runtime.StorageStates(ctx, sandboxes.VMPrefix)
+		if err != nil || len(states) == 0 {
+			return nil, err
+		}
+		names := map[string]string{}
+		if sbs, err := list(ctx); err == nil {
+			for _, sb := range sbs {
+				names[sandboxes.VMName(sb)] = sb.Name
+			}
+		}
+		issues := make([]doctor.StorageIssue, len(states))
+		for n, st := range states {
+			issues[n] = doctor.StorageIssue{Sandbox: names[st.VM], VM: st.VM, Status: st.Status, Running: st.Running, Reasons: st.Reasons}
+		}
+		return issues, nil
+	}
 }
 
 // lostVMsProbe is the doctor's comparison of Studio's sandboxes, from list, with the VMs msb's

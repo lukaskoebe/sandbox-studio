@@ -171,6 +171,27 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   directory is swapped for the old one, root disk and checkpoint journals included. Then the
   sandbox starts. A repair that fails removes the new record and puts the disks back; one cut
   short by Studio stopping leaves them in `studio-repair`, where the next Repair finds them.
+  Before the swap, the disks' `snapshot-lineage.json` (msb 0.7.12 and later: the VM's latest
+  snapshot, bound to the id of its catalog row) is bound to the new row, which a separate
+  `studio msb-sandbox-id <vm>` process reads, since this one's msb library has the catalog open.
+  Without that every checkpoint fails with "snapshot ancestry belongs to another sandbox
+  instance". Repair refuses disks whose `state-layout.json` isn't `ready`: msb was part way
+  through moving them to its protected layout.
+- msb 0.7.12 and later keep their catalog only below directories that no other account can
+  change (`private_storage`: owned by the user or root, not group- or world-writable unless
+  sticky, and on macOS no access list entry that lets another account change them, up to the
+  first directory only the user can enter). Studio checks the same before it touches msb
+  (`msbdb.PrepareHome`, after the update watchdog), makes `$MSB_HOME` itself 0700, and
+  otherwise returns an error naming the directory and the `chmod`, so that an update that
+  can't run rolls back; the `msb-db` doctor check says the same. Then, before the SDK opens the
+  catalog, `msbdb.KeepBefore` copies it once per msb version as `msb.db.before-msb-<version>`
+  (the newest two kept): a newer msb migrates it, and no older one can use it after.
+- The `msb-storage` doctor check asks msb (`DiagnoseStorage`) how far it has moved each
+  Studio VM's disks to its protected layout. On Linux and Windows msb moves them as a VM
+  starts, so a VM still running as the older msb started it (`eligible`, running) only needs a
+  restart; until then checkpoints fail with `runtime.ErrRestartToUpgrade` (409). On macOS
+  (`maintenance_required`) and for `recovery_required` the fix is `msb self repair --sandbox
+  <vm>` in a terminal, with the sandboxes stopped.
 - Startup (`cmd/studio/main.go`): data dir and its lock `studio.lock` (held: ask the running
   Studio for a login link with the control credential, open it and exit), a check of msb's own database
   (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent

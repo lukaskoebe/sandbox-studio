@@ -78,6 +78,10 @@ type Probes struct {
 	// LostVMs lists the sandboxes whose VM msb's catalog has no record of.
 	LostVMs func(ctx context.Context) ([]LostVM, error)
 
+	// Storage lists the sandboxes whose disks msb hasn't moved to the layout msb 0.7.12 and
+	// later keep them in.
+	Storage func(ctx context.Context) ([]StorageIssue, error)
+
 	// MSBPath returns the installed msb executable, or an error if there is none.
 	MSBPath func() (string, error)
 	// Run runs a program and returns its combined output. A non-zero exit is an error.
@@ -129,6 +133,18 @@ type LostVM struct {
 	Known []string
 }
 
+// StorageIssue is a sandbox whose disks msb hasn't moved to its protected layout, which
+// checkpoints, forks and disk resizes need.
+type StorageIssue struct {
+	Sandbox string // the sandbox's name
+	VM      string
+	// Status is msb's: eligible, in_progress, maintenance_required, recovery_required or
+	// unavailable.
+	Status  string
+	Running bool
+	Reasons []string
+}
+
 // Options are what the checks look at.
 type Options struct {
 	DataDir    string
@@ -155,6 +171,9 @@ func Run(ctx context.Context, p Probes, o Options) Report {
 	}
 	if p.LostVMs != nil {
 		checks = append(checks, checkLostVMs(ctx, p))
+	}
+	if p.Storage != nil {
+		checks = append(checks, checkStorage(ctx, p))
 	}
 	checks = append(checks, checkVirtualization(p)...)
 	if o.Image != "" {
@@ -251,6 +270,78 @@ func checkLostVMs(ctx context.Context, p Probes) Check {
 	return c.with(Fail, msg, fix)
 }
 
+// checkStorage reports the sandboxes whose disks msb has yet to move to the layout it keeps
+// them in since 0.7.12. On Linux and Windows it moves them as a VM starts, so a VM that still
+// runs as the older msb started it only needs a restart; on macOS msb self repair moves them.
+func checkStorage(ctx context.Context, p Probes) Check {
+	c := Check{ID: "msb-storage", Name: "Sandbox storage", Status: OK, Message: "microsandbox keeps every sandbox's disks in its current layout"}
+	issues, err := p.Storage(ctx)
+	if err != nil {
+		return c.with(Warn, "could not ask microsandbox how it keeps the sandboxes' disks: "+err.Error(), "")
+	}
+	msbCmd := "msb"
+	if p.MSBPath != nil {
+		if path, err := p.MSBPath(); err == nil {
+			msbCmd = path
+		}
+	}
+	var restart, repair, waiting []string
+	var repairVMs, waitingVMs []string
+	for _, i := range issues {
+		name := i.Sandbox
+		if name == "" {
+			name = i.VM
+		}
+		switch i.Status {
+		case "eligible":
+			if i.Running {
+				restart = append(restart, name)
+			} // a stopped one is moved when it starts
+		case "in_progress":
+			waiting = append(waiting, name)
+			waitingVMs = append(waitingVMs, i.VM)
+		default:
+			s := name
+			if len(i.Reasons) > 0 {
+				s += " (" + strings.Join(i.Reasons, "; ") + ")"
+			}
+			repair = append(repair, s)
+			repairVMs = append(repairVMs, i.VM)
+		}
+	}
+	var msgs, fixes []string
+	status := OK
+	if len(restart) > 0 {
+		status = Warn
+		msgs = append(msgs, fmt.Sprintf("%s still %s as the microsandbox before Studio's upgrade started %s, so checkpoints, forks and disk resizes fail",
+			strings.Join(restart, ", "), plural(len(restart), "runs", "run"), plural(len(restart), "it", "them")))
+		fixes = append(fixes, "Restart "+plural(len(restart), "it", "them")+": microsandbox moves the disks to its new layout as "+plural(len(restart), "it starts", "they start")+".")
+	}
+	if len(waiting) > 0 {
+		status = Warn
+		msgs = append(msgs, "microsandbox is moving the disks of "+strings.Join(waiting, ", "))
+		fixes = append(fixes, "If "+plural(len(waiting), "it doesn't", "they don't")+" start, run "+repairCommands(msbCmd, waitingVMs)+" in a terminal.")
+	}
+	if len(repair) > 0 {
+		status = Fail
+		msgs = append(msgs, "microsandbox must move the disks of "+strings.Join(repair, "; ")+" to its new layout before "+plural(len(repair), "it starts", "they start"))
+		fixes = append(fixes, "Stop the sandboxes, then run "+repairCommands(msbCmd, repairVMs)+" in a terminal: it shows what it moves and asks before it changes anything.")
+	}
+	if status == OK {
+		return c
+	}
+	return c.with(status, strings.Join(msgs, ". "), strings.Join(fixes, " "))
+}
+
+// repairCommands are the msb self repair commands for vms.
+func repairCommands(msbCmd string, vms []string) string {
+	cmds := make([]string, len(vms))
+	for n, vm := range vms {
+		cmds[n] = "`" + msbCmd + " self repair --sandbox " + vm + "`"
+	}
+	return strings.Join(cmds, ", ")
+}
+
 func checkMSB(ctx context.Context, p Probes, o Options) []Check {
 	if p.MSBPath == nil {
 		return nil
@@ -259,7 +350,7 @@ func checkMSB(ctx context.Context, p Probes, o Options) []Check {
 	if err != nil {
 		return []Check{{ID: "msb", Name: "microsandbox runtime", Status: Warn,
 			Message: "msb is not installed yet.",
-			Fix:     "Studio installs msb and libkrunfw into ~/.microsandbox when it starts; it needs network access the first time."}}
+			Fix:     "Studio installs msb and libkrunfw into microsandbox's home (MSB_HOME, or ~/.microsandbox) when it starts; it needs network access the first time."}}
 	}
 	version := Check{ID: "msb", Name: "microsandbox runtime", Status: OK, Message: "msb at " + path}
 	if p.Run == nil {
@@ -268,7 +359,7 @@ func checkMSB(ctx context.Context, p Probes, o Options) []Check {
 	out, err := p.Run(ctx, path, "--version")
 	if err != nil {
 		version.Status, version.Message = Fail, fmt.Sprintf("msb at %s does not run: %s", path, firstLine(out, err))
-		version.Fix = "Delete ~/.microsandbox/bin/msb and start Studio again to reinstall it."
+		version.Fix = "Delete " + path + " and start Studio again to reinstall it."
 		return []Check{version}
 	}
 	got := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(out), "msb"))
@@ -276,7 +367,7 @@ func checkMSB(ctx context.Context, p Probes, o Options) []Check {
 	if o.MSBVersion != "" && got != strings.TrimPrefix(o.MSBVersion, "v") {
 		version.Status = Warn
 		version.Message += fmt.Sprintf("; Studio is built for %s", o.MSBVersion)
-		version.Fix = "Studio upgrades an older msb in ~/.microsandbox when it starts, which needs network access: restart Studio. " +
+		version.Fix = "Studio upgrades an older msb in microsandbox's home when it starts, which needs network access: restart Studio. " +
 			"For a newer msb, run `msb self downgrade` to match."
 	}
 	doctor := Check{ID: "msb-doctor", Name: "msb doctor", Status: OK, Message: "msb's own host checks passed."}

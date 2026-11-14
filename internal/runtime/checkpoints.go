@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	msb "github.com/superradcompany/microsandbox/sdk/go"
@@ -17,6 +18,19 @@ var ErrCheckpointRestoreUnavailable = errors.New("checkpoint restore is unavaila
 // ErrLiveCheckpointUnsupported means a running sandbox was created with systemd as its init,
 // whose processes microsandbox can't freeze for a consistent snapshot.
 var ErrLiveCheckpointUnsupported = errors.New("this sandbox was created with systemd as its init, so it must be stopped before a checkpoint")
+
+// ErrRestartToUpgrade means the sandbox's VM still runs as the msb before an upgrade made it,
+// which keeps it from checkpoints and forks until it restarts on the new one.
+var ErrRestartToUpgrade = errors.New("this sandbox still runs as microsandbox did before Studio upgraded it: restart the sandbox, and then checkpoints and forks work again")
+
+// upgradeError returns err as ErrRestartToUpgrade if msb refused a VM that still runs as an
+// older msb started it, else err.
+func upgradeError(err error) error {
+	if err != nil && strings.Contains(err.Error(), "not running with protected sandbox state") {
+		return fmt.Errorf("%w (%v)", ErrRestartToUpgrade, err)
+	}
+	return err
+}
 
 // CheckpointRestoreSupported reports whether a restored sandbox can keep its egress. SDK
 // v0.7.7 restores a disk snapshot with msb's default network: restore accepts policy rules
@@ -53,7 +67,7 @@ func (r *Runtime) CreateCheckpoint(ctx context.Context, vmName, sandboxID, check
 		Force:       false,
 	})
 	if err != nil {
-		return fmt.Errorf("create checkpoint: %w", err)
+		return upgradeError(fmt.Errorf("create checkpoint: %w", err))
 	}
 	return nil
 }

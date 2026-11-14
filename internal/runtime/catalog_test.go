@@ -12,6 +12,7 @@ func TestCatalogErrorNamesTheFix(t *testing.T) {
 		{"connect to /h/.microsandbox/db/msb.db: error returned from database: (code: 26) file is not a database", "is damaged", "Restart Studio"},
 		{"runtime error: database schema is newer than this msb binary or has an unknown migration prefix; refusing to change an unrecognized catalog", "a newer msb", "msb self downgrade " + MSBVersion()},
 		{"connect to /h/.microsandbox/db/msb.db: unable to open database file", "can't be opened", "writable"},
+		{"io error: catalog ancestor /home/u/.claude permits path substitution; use a storage root protected from other accounts", "where other accounts could change it", "chmod g-w,o-w"},
 	} {
 		err := catalogError(errors.New(tc.msg))
 		var ce *CatalogError

@@ -316,3 +316,28 @@ func TestLostVMsFailWithTheRepairAsTheFix(t *testing.T) {
 		t.Fatalf("a failed comparison: %+v, want a warning", c)
 	}
 }
+
+func TestStorageSaysWhichSandboxesToRestartOrRepair(t *testing.T) {
+	p := healthy()
+	p.MSBPath = func() (string, error) { return "/h/.microsandbox/bin/msb", nil }
+	issues := []StorageIssue{
+		{Sandbox: "katara", VM: "ss-k-g1", Status: "eligible", Running: true},
+		{Sandbox: "idle", VM: "ss-i-g1", Status: "eligible"},
+	}
+	p.Storage = func(context.Context) ([]StorageIssue, error) { return issues, nil }
+	c, ok := findCheck(Run(context.Background(), p, Options{}), "msb-storage")
+	if !ok || c.Status != Warn || !strings.Contains(c.Message, "katara still runs") || strings.Contains(c.Message, "idle") ||
+		!strings.Contains(c.Fix, "Restart it") {
+		t.Fatalf("a running VM to restart: %+v", c)
+	}
+	issues = append(issues, StorageIssue{Sandbox: "mac", VM: "ss-m-g1", Status: "maintenance_required", Reasons: []string{"legacy disks"}})
+	c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-storage")
+	if c.Status != Fail || !strings.Contains(c.Message, "mac (legacy disks)") ||
+		!strings.Contains(c.Fix, "`/h/.microsandbox/bin/msb self repair --sandbox ss-m-g1`") {
+		t.Fatalf("a VM to repair: %+v", c)
+	}
+	issues = issues[1:2]
+	if c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-storage"); c.Status != OK {
+		t.Errorf("only a stopped VM that moves as it starts: %+v", c)
+	}
+}

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Studio uses microsandbox 0.7.15, which fixes three security advisories (GHSA-3f94,
+  GHSA-34hr, GHSA-cvr8) and keeps its database and the sandboxes' disks where no other account
+  can swap them. Once it has opened microsandbox's database, an older Studio can't use it:
+  - microsandbox refuses a home that another account could change, such as one below a
+    group-writable directory. Studio checks that before it touches microsandbox, makes the home
+    itself private, and otherwise stops with the directory and the `chmod` that fixes it; after
+    an update, that brings the previous Studio back instead.
+  - Studio copies microsandbox's database to `msb.db.before-msb-0.7.15` before the new
+    version first opens it.
+  - A sandbox still running as the older microsandbox started it can't take checkpoints until
+    it restarts, and says so; microsandbox moves its disks to the new layout as it starts.
+    `studio doctor` and Settings list such sandboxes in the new **Sandbox storage** check, with
+    the `msb self repair` a macOS sandbox needs before it starts.
+  - **Repair** keeps the checkpoint history of the disks it adopts, so the repaired sandbox
+    can take checkpoints, and leaves disks alone that microsandbox was part way through moving.
+  - Studio's copies of microsandbox's database are readable only by you.
+- Studio's Go and web dependencies are updated, among them Caddy 2.11.9, huma 2.40 and
+  React 19.3.1.
 - While you drive a teammate's browser, the cursor follows the page: a pointer over links, a
   text cursor over fields and text, and the page's own cursors such as grab or resize. The
   page is asked as the mouse moves, by a fixed read-only script in the browser VM.

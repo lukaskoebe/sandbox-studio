@@ -35,6 +35,7 @@ func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, a
 	p := hostProbes()
 	if sandboxList != nil {
 		p.LostVMs = lostVMsProbe(sandboxList)
+		p.Storage = storageProbe(sandboxList)
 	}
 	if embedder != nil {
 		p.Embedder = func() (bool, string, string) {

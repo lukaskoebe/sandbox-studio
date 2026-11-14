@@ -157,6 +157,8 @@ func main() {
 		os.Exit(runSSHProxy(context.Background(), *addr, flag.Args()[1:]))
 	case "restore-msb-db":
 		os.Exit(runRestoreMSBDB(os.Stdout, *addr, flag.Args()[1:]))
+	case "msb-sandbox-id": // for Repair, which can't read msb's database in Studio's process
+		os.Exit(runMSBSandboxID(flag.Args()[1:]))
 	}
 	if flag.Arg(0) == "login-url" {
 		link, err := requestLoginURL(context.Background(), *addr)
@@ -326,6 +328,12 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	}()
 	served := make(chan struct{})
 	resume.Watchdog(served, log)
+	// msb refuses a home that other accounts could tamper with. Stop before msb or its
+	// database changes, so that an update rolls back to the Studio that still works.
+	if err := prepareMSBHome(log); err != nil {
+		return err
+	}
+	keepMSBDBBeforeUpgrade(ctx, log)
 	repairMSBDB(ctx, log)
 	msbBackups := backupMSBDB(ctx, log)
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil, nil))

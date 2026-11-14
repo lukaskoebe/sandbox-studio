@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -17,6 +18,16 @@ import (
 // adoptDir is where AdoptDisks keeps a VM's directory while msb makes it a new record, in
 // microsandbox's home so that moving it there is a rename.
 const adoptDir = "studio-repair"
+
+// CatalogID returns the id of msb's record of the VM name. Once this process's msb library has
+// opened the catalog, only msb may open it here (SQLite's locks belong to the process), so the
+// host build asks a separate process. AdoptDisks needs it for a VM with snapshot ancestry.
+var CatalogID func(ctx context.Context, name string) (int64, error)
+
+// lineageFile is where msb 0.7.12 and later keep a VM's latest snapshot, the parent of its
+// next one, bound to the id of the VM's record: a cursor of another record fails every
+// checkpoint with "snapshot ancestry belongs to another sandbox instance".
+const lineageFile = "snapshot-lineage.json"
 
 // ErrNoDisks means msb has no record of a VM and no directory of its disks is left either.
 var ErrNoDisks = errors.New("the VM's disks are gone too")
@@ -105,6 +116,11 @@ func (r *Runtime) AdoptDisks(ctx context.Context, name string, spec Spec, agentS
 	if err != nil {
 		return err
 	}
+	if why, err := unfinishedLayout(disks); err != nil {
+		return err
+	} else if why != "" {
+		return fmt.Errorf("Studio leaves the disks in %s as they are: %s. Run `msb self repair --sandbox %s` in a terminal", disks, why, name)
+	}
 	dir, err := VMDirectory(name)
 	if err != nil {
 		return err
@@ -127,8 +143,9 @@ func (r *Runtime) AdoptDisks(ctx context.Context, name string, spec Spec, agentS
 			return fmt.Errorf("move a leftover directory aside: %w", err)
 		}
 	}
+	swapped := false // once the disks are msb's directory again, undoing would remove them
 	defer func() {
-		if err == nil {
+		if err == nil || swapped {
 			return
 		}
 		// Undo the new record, whose directory holds only empty disks, and put the old disks
@@ -156,6 +173,11 @@ func (r *Runtime) AdoptDisks(ctx context.Context, name string, spec Spec, agentS
 	if err := r.Stop(ctx, name); err != nil {
 		return fmt.Errorf("stop the new VM: %w", err)
 	}
+	// The disks' snapshot ancestry names the lost record: bind it to the new one, before the
+	// disks are back in place, so that a failure still leaves them aside.
+	if err := r.rebindLineage(ctx, disks, name); err != nil {
+		return err
+	}
 	fresh := filepath.Join(aside, "new")
 	if err := os.Rename(dir, fresh); err != nil {
 		return fmt.Errorf("move the new VM's directory aside: %w", err)
@@ -166,11 +188,72 @@ func (r *Runtime) AdoptDisks(ctx context.Context, name string, spec Spec, agentS
 		}
 		return fmt.Errorf("put the disks in place: %w", err)
 	}
+	swapped = true
 	// What is left aside is the new VM's empty disks and leftovers.
 	if err := os.RemoveAll(aside); err != nil {
 		return fmt.Errorf("the VM has its disks back, but %s could not be removed: %w", aside, err)
 	}
 	_ = os.Remove(filepath.Join(home, adoptDir)) // only when empty
+	return nil
+}
+
+// rebindLineage binds the snapshot ancestry in the VM directory dir to msb's record of name,
+// keeping the snapshot it names. A directory without ancestry is left as it is.
+func (r *Runtime) rebindLineage(ctx context.Context, dir, name string) error {
+	path := filepath.Join(dir, lineageFile)
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read the VM's snapshot ancestry: %w", err)
+	}
+	var cursor struct {
+		SandboxID  int64  `json:"sandbox_id"`
+		SnapshotID string `json:"snapshot_id"`
+	}
+	if err := json.Unmarshal(b, &cursor); err != nil || cursor.SnapshotID == "" {
+		return fmt.Errorf("the VM's snapshot ancestry %s can't be read: %v", path, err)
+	}
+	if CatalogID == nil {
+		return errors.New("Studio can't read the id of msb's new record of the VM here")
+	}
+	id, err := CatalogID(ctx, name)
+	if err != nil {
+		return fmt.Errorf("read the id of msb's new record of the VM: %w", err)
+	}
+	if id == cursor.SandboxID {
+		return nil
+	}
+	cursor.SandboxID = id
+	b, err = json.Marshal(cursor)
+	if err != nil {
+		return err
+	}
+	// As msb writes it: a whole new file, renamed over the old one.
+	tmp, err := os.CreateTemp(dir, ".snapshot-lineage-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("bind the VM's snapshot ancestry to its new record: %w", err)
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
 	return nil
 }
 

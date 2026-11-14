@@ -47,6 +47,13 @@ func ensureRuntime(context.Context) (*runtime.Upgrade, error) { return nil, nil 
 
 func repairMSBDB(context.Context, *slog.Logger) {}
 
+// prepareMSBHome leaves msb's home alone: the e2e build has no msb.
+func prepareMSBHome(*slog.Logger) error { return nil }
+
+func runMSBSandboxID([]string) int { return 1 }
+
+func keepMSBDBBeforeUpgrade(context.Context, *slog.Logger) {}
+
 // lockMSB takes no lock: the e2e build has no msb, and must not touch the real one's home.
 func lockMSB() (func() error, string, error) { return func() error { return nil }, "", nil }
 
@@ -62,6 +69,11 @@ func hostProbes() doctor.Probes {
 	p.ImageCached = func(context.Context, string) (bool, error) { return true, nil }
 	p.ImagePullable = nil
 	return p
+}
+
+// storageProbe leaves the question out: the e2e build has no msb.
+func storageProbe(func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.StorageIssue, error) {
+	return nil
 }
 
 // lostVMsProbe leaves the comparison out: the e2e build has no msb.

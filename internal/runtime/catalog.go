@@ -44,6 +44,12 @@ func catalogError(err error) error {
 		return &CatalogError{Err: fmt.Errorf("a newer msb than the %s Studio uses has upgraded microsandbox's database: %w", v, err),
 			Fix: fmt.Sprintf("Run `msb self downgrade %s` with the msb that upgraded it (`~/.microsandbox/bin/msb --version` shows if that is Studio's); "+
 				"it backs the database up first. Then restart Studio", v)}
+	case strings.Contains(msg, "permits path substitution"), strings.Contains(msg, "mutation-granting ACL"),
+		strings.Contains(msg, "is not owned by this account"), strings.Contains(msg, "cannot make catalog storage"):
+		// msb 0.7.12 and later keep their database only where no other account can swap it.
+		return &CatalogError{Err: fmt.Errorf("microsandbox refuses to use its database where other accounts could change it: %w", err),
+			Fix: "Make the directory the message names writable only by you, such as with `chmod g-w,o-w` on it, " +
+				"or start Studio with MSB_HOME set to a directory that only you can write to. Then restart Studio"}
 	case strings.Contains(msg, "/db/msb.db"):
 		return &CatalogError{Err: fmt.Errorf("microsandbox's database can't be opened: %w", err),
 			Fix: "Check that ~/.microsandbox/db is yours and writable, and that the disk has room"}
