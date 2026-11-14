@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.23.0 — 2026-11-14
 
 - Studio uses microsandbox 0.7.15, which fixes three security advisories (GHSA-3f94,
   GHSA-34hr, GHSA-cvr8) and keeps its database and the sandboxes' disks where no other account
