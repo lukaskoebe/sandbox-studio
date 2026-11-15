@@ -80,7 +80,7 @@ test("adding a teammate without a provider explains why and leads to the provide
   await expect(dialog).toBeHidden()
 })
 
-test("a teammate without a computer is offered one, and the screen's menu forks it or adds another", async ({
+test("a teammate without a computer is offered one, the screen's menu forks it and the crumb adds another", async ({
   page,
   api,
   env,
@@ -96,14 +96,22 @@ test("a teammate without a computer is offered one, and the screen's menu forks 
 
   const sandbox = sandboxName("rail")
   await api.createSandbox(sandbox, id)
-  const screen = page.getByRole("region", { name: `${sandbox}'s screen` })
-  await expect(screen).toBeVisible({ timeout: 15_000 })
-  await screen.getByRole("button", { name: `More for ${sandbox}` }).click()
-  await expect(
-    page.getByRole("menuitem", { name: "Fork", exact: true })
-  ).toBeVisible()
+  // The home lists it as a card, whose Terminal opens the desk on it.
   await page
-    .getByRole("menuitem", { name: `Another computer for ${name}` })
+    .getByRole("button", { name: `Terminal of ${sandbox}` })
+    .click({ timeout: 15_000 })
+  const screen = page.getByRole("region", { name: `${sandbox}'s screen` })
+  await expect(screen).toBeVisible()
+  await screen.getByRole("button", { name: `More for ${sandbox}` }).click()
+  await expect(page.getByRole("menuitem", { name: "Fork…" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  // Another computer is the crumb's: it switches between them.
+  await page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("button", { name: `Switch computer: ${sandbox}` })
+    .click()
+  await page
+    .getByRole("menuitem", { name: `Give ${name} another computer…` })
     .click()
   await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
 })
@@ -144,12 +152,13 @@ test("a teammate's status counts what runs in its terminals", async ({
   )
   await expect(sessions.getByLabel("working")).toBeVisible()
 
-  // A dev server that printed long ago isn't work.
+  // A dev server that printed long ago isn't work; the home's header says so.
   await api.setTerminal(sb, "2", {
     command: "npm",
     foreground: ["npm run dev"],
     idle: 120,
   })
+  await page.goto(`/e/${env}/teammates/${id}`)
   await expect(header).toContainText("Idle · npm run dev running", {
     timeout: 15_000,
   })
@@ -167,7 +176,8 @@ test("the screen enlarges to take the page, and the conversation comes back", as
   const id = await addTeammate(api, env, name)
   const sandbox = sandboxName("wide")
   await api.createSandbox(sandbox, id)
-  await page.goto(`/e/${env}/teammates/${id}`)
+  // The desk: the computer beside the home.
+  await page.goto(`/e/${env}/teammates/${id}?tab=terminal`)
   const screen = page.getByRole("region", { name: `${sandbox}'s screen` })
   await expect(screen).toBeVisible({ timeout: 15_000 })
   const composer = page.getByPlaceholder(`Message ${name}…`)
@@ -248,7 +258,7 @@ test("a teammate's settings have one save bar for the changes in every section, 
   await page.keyboard.press("Escape")
   await ask.getByRole("button", { name: "Leave" }).click()
   await expect(
-    page.getByRole("dialog", { name: `${name}'s settings` })
+    page.getByRole("region", { name: `${name}'s settings` })
   ).toBeHidden()
   expect((await teammate())?.role).toBe("Reviewer")
 })
@@ -302,22 +312,27 @@ test("a computer pinned beside a chat says the chat works elsewhere", async ({
   await page.goto(`/e/${env}/teammates/${teammate}?thread=${chat.id}`)
   const onShop = page.getByRole("region", { name: `${shop}'s screen` })
   await expect(onShop).toBeVisible({ timeout: 15_000 })
-  await onShop.getByTitle(new RegExp(`^${shop}:`)).click()
-  await expect(
-    page.getByRole("menuitem", { name: new RegExp(shop) })
-  ).toContainText("the open chat's")
+  // The breadcrumb's chip names the computer and switches it; the screen has no switcher.
+  const crumbs = page.getByRole("navigation", { name: "Where you are" })
+  await expect(onShop.getByTitle(new RegExp(`^${shop}:`))).toHaveCount(0)
+  await crumbs.getByRole("button", { name: `Switch computer: ${shop}` }).click()
   await page.getByRole("menuitem", { name: new RegExp(docs) }).click()
 
   const onDocs = page.getByRole("region", { name: `${docs}'s screen` })
   await expect(onDocs.getByRole("status")).toHaveText(
     `The open chat works on ${shop}. This screen shows ${docs}.Show ${shop}`
   )
+  await crumbs.getByRole("button", { name: `Switch computer: ${docs}` }).click()
+  await expect(
+    page.getByRole("menuitem", { name: new RegExp(shop) })
+  ).toContainText("this thread's")
+  await page.keyboard.press("Escape")
   await onDocs.getByRole("button", { name: `Show ${shop}` }).click()
   await expect(onShop).toBeVisible()
   await expect(onShop.getByRole("status")).toHaveCount(0)
 
   // The chat's own chip shows its computer again too.
-  await onShop.getByTitle(new RegExp(`^${shop}:`)).click()
+  await crumbs.getByRole("button", { name: `Switch computer: ${shop}` }).click()
   await page.getByRole("menuitem", { name: new RegExp(docs) }).click()
   await page.getByRole("button", { name: `on ${shop} · Show` }).click()
   await expect(onShop).toBeVisible()
@@ -390,5 +405,5 @@ test("a teammate's settings show what it knows and works on, its own rules, and 
   await page.getByRole("button", { name: /^Network rules/ }).click()
   const rules = page.locator("#teammate-rules-panel")
   await rules.getByRole("link", { name: new RegExp(host) }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/network\\?rule=`))
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/network\\?rule=`))
 })

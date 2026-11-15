@@ -17,7 +17,7 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
   await tab.click()
 
   const repo = screen.getByRole("region", { name: "Repository workspace" })
-  await expect(repo.getByRole("heading", { level: 3 })).toContainText(
+  await expect(repo.getByRole("heading", { level: 4 })).toContainText(
     "fix-coupon"
   )
   await expect(
@@ -43,6 +43,15 @@ test("Changes shows git's view of the computer, and a change opens its diff and 
   await expect(
     area("Staged").getByRole("button", { name: /checkout\/\s*coupon\.ts/ })
   ).toHaveAttribute("aria-current", "true")
+
+  // The repository folds to its count even though its first change shows only by default.
+  const fold = repo.getByRole("button", { name: /^workspace/ })
+  await fold.click()
+  await expect(fold).toHaveAttribute("aria-expanded", "false")
+  await expect(fold).toContainText("5 files")
+  await expect(area("Staged")).toBeHidden()
+  await fold.click()
+  await expect(area("Staged")).toBeVisible()
 
   // A change shows its diff beside the rail, and Open in Files shows the file in Files.
   await area("Not staged")

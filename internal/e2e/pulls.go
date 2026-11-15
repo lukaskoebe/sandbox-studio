@@ -13,7 +13,8 @@ import (
 )
 
 // The upstream's Forgejo API: the account e2e-user with the repositories acme/web and acme/api,
-// and on every repository a pull request 1, "Apply coupon codes", opened by someone else.
+// and on every repository a pull request 1, "Apply coupon codes", opened by someone else from
+// feature/coupons, whose CI passed.
 // Reviews and conversation comments posted to it are kept for the tests (GET /api/e2e/reviews).
 
 const pullDiff = `diff --git a/web/coupon.ts b/web/coupon.ts
@@ -35,6 +36,9 @@ type PostedReview struct {
 }
 
 var pullsPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/pulls$`)
+
+// statusPath is a commit's combined status; every commit's CI passed.
+var statusPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+/commits/[^/]+/status$`)
 
 var pullPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/(pulls|issues)/1(\.diff|/commits|/files|/reviews|/comments)?$`)
 
@@ -97,6 +101,10 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 			"html_url": "https://" + repo + "/pulls/1", "user": map[string]string{"login": "someone"},
 			"base": map[string]string{"ref": "main"}, "head": map[string]string{"ref": "feature/coupons"},
 			"updated_at": "2026-10-27T09:00:00Z"}})
+		return true
+	}
+	if statusPath.MatchString(r.URL.Path) {
+		send(map[string]any{"state": "success", "statuses": []map[string]any{{"context": "ci/test", "status": "success", "description": "All tests passed"}}})
 		return true
 	}
 	m := pullPath.FindStringSubmatch(r.URL.Path)

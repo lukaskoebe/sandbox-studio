@@ -40,7 +40,7 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
   await profile.click()
   await card.getByRole("button", { name: "Settings", exact: true }).click()
   await expect(page).toHaveURL(/[?&]profile=settings/)
-  const settings = page.getByRole("dialog", { name: `${name}'s settings` })
+  const settings = page.getByRole("region", { name: `${name}'s settings` })
   // Each section is a card that opens to its fields, one at a time, kept in the URL.
   await settings
     .getByRole("button", { name: `Identity ${name}`, exact: true })
@@ -83,8 +83,14 @@ test("a collapsed sidebar opens Home and every teammate", async ({
   await page.goto(`/e/${env}/sandboxes/${id}`)
   const sidebar = page.locator('[data-slot="sidebar"]')
   await expect(sidebar).toHaveAttribute("data-state", "expanded")
-  // The rail, not Ctrl+B: the screen's terminal takes the shortcut once it has focus.
-  await page.locator('[data-slot="sidebar-rail"]').click()
+  // Dragged past its minimum, not Ctrl+B: the screen's terminal takes the shortcut once it
+  // has focus.
+  const edge = page.getByRole("separator", { name: "Resize the sidebar" })
+  const box = (await edge.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + 200)
+  await page.mouse.down()
+  await page.mouse.move(box.x - 300, box.y + 200, { steps: 6 })
+  await page.mouse.up()
   await expect(sidebar).toHaveAttribute("data-state", "collapsed")
 
   // The groups' hidden labels sit over the rows above them, and must not take their clicks.
@@ -93,6 +99,45 @@ test("a collapsed sidebar opens Home and every teammate", async ({
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/[^/?]+`))
   await rows.filter({ hasText: "Home" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
+})
+
+test("the sidebar's edge drags between its ends, remembers it, and double-click resets it", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}`)
+  const sidebar = page.locator('[data-slot="sidebar-container"]')
+  const edge = page.getByRole("separator", { name: "Resize the sidebar" })
+  const width = async () => (await sidebar.boundingBox())!.width
+  await expect.poll(width).toBe(256)
+  const drag = async (dx: number) => {
+    const box = (await edge.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + 200)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + 200, {
+      steps: 6,
+    })
+    await page.mouse.up()
+  }
+  await drag(400)
+  await expect.poll(width).toBe(360)
+  await drag(-140)
+  await expect.poll(width).toBe(220)
+  await page.reload()
+  await expect.poll(width).toBe(220)
+  // With focus, the arrow keys move it.
+  await edge.focus()
+  await page.keyboard.press("ArrowRight")
+  await expect.poll(width).toBe(236)
+  await edge.dblclick()
+  await expect.poll(width).toBe(256)
+  // Enter folds it to its icons and opens it again.
+  await edge.press("Enter")
+  await expect(
+    page.locator('[data-slot="sidebar"][data-state="collapsed"]')
+  ).toHaveCount(1)
+  await edge.press("Enter")
+  await expect.poll(width).toBe(256)
 })
 
 test("teaching a teammate puts the fact on its home, where it can be forgotten", async ({
@@ -167,9 +212,6 @@ test("old addresses redirect to the pages that replaced them", async ({
   for (const [from, to, label] of [
     ["providers", "providers", "AI providers"],
     ["builds", "templates", "Templates"],
-    ["secrets", "secrets", "Secrets"],
-    ["memory", "memory", "Shared memory"],
-    ["git", "activity?kind=git", "Activity"],
     ["settings", "general", "General"],
     ["settings/git", "forges", "Git forges"],
     ["?settings=git", "forges", "Git forges"],
@@ -185,6 +227,23 @@ test("old addresses redirect to the pages that replaced them", async ({
         .getByRole("navigation", { name: "Settings" })
         .getByRole("link", { name: label, exact: true })
     ).toHaveAttribute("aria-current", "page")
+  }
+  // The environment's pages, which left Settings, are the sidebar's; ?settings= for one of them
+  // and the old git page open it there.
+  for (const [from, to, label] of [
+    ["?settings=secrets", "secrets", "Secrets"],
+    ["?settings=memory", "memory", "Memory"],
+    ["git", "activity?kind=git", "Activity"],
+  ] as const) {
+    await page.goto(`/e/${env}${from.startsWith("?") ? "" : "/"}${from}`)
+    await expect(page).toHaveURL(
+      new RegExp(`/e/${env}/${to.replace("?", "\\?")}$`)
+    )
+    await expect(
+      page
+        .locator('[data-sidebar="sidebar"]')
+        .getByRole("link", { name: label, exact: true })
+    ).toHaveAttribute("data-active", "")
   }
 })
 
@@ -203,4 +262,52 @@ test("a page opened while Studio is down connects by itself once it answers", as
   await expect(
     page.getByRole("heading", { name: "Home", level: 1 })
   ).toBeVisible({ timeout: 10_000 })
+})
+
+test("the conversation and the screen split where they are dragged to, and past its minimum the screen takes the page", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Split ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const sb = await api.createSandbox(sandboxName("split"), id)
+  await api.guestReady(sb)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${sb}/chats`
+  ))!
+  await page.setViewportSize({ width: 1400, height: 900 })
+  // The desk's home is a narrower panel of its own.
+  await page.goto(`/e/${env}/teammates/${id}?tab=terminal`)
+  const home = page.getByRole("separator", { name: "Resize the home" })
+  await expect(home).toBeVisible()
+  const deskLeft = (await home.boundingBox())!.x
+  await page.goto(`/e/${env}/teammates/${id}?thread=${chat.id}`)
+  const edge = page.getByRole("separator", { name: "Resize the conversation" })
+  await expect(edge).toBeVisible()
+  const conversation = page.getByRole("textbox", { name: "Message" })
+  const left = async () => (await edge.boundingBox())!.x
+  const drag = async (dx: number) => {
+    const box = (await edge.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + 300)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + 300, {
+      steps: 6,
+    })
+    await page.mouse.up()
+  }
+  const before = await left()
+  expect(before).toBeGreaterThan(deskLeft + 50)
+  await drag(120)
+  await expect.poll(left).toBeGreaterThan(before + 100)
+  await page.reload()
+  await expect.poll(left).toBeGreaterThan(before + 100)
+  await edge.dblclick()
+  await expect.poll(left).toBeLessThan(before + 4)
+  await drag(-1000)
+  await expect(page).toHaveURL(/[?&]full=1|[?&]full=true/)
+  await expect(conversation).toBeHidden()
+  await page.getByRole("button", { name: "Show the conversation" }).click()
+  await expect(edge).toBeVisible()
 })

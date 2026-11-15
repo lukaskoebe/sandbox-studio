@@ -87,6 +87,8 @@ type Service struct {
 	// forge is ~/forge's state (forgefiles.go).
 	forgeOnce sync.Once
 	forge     *forgeFiles
+	// pushPRs keeps what pushes' pull requests were lately (pushpr.go).
+	pushPRs pushPRCache
 }
 
 func (s *Service) httpClient() *http.Client {

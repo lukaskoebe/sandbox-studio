@@ -27,7 +27,7 @@ test("a secret reaches the guest only as its placeholder", async ({
   }
   page.on("response", record)
 
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await page.getByRole("button", { name: "Add secret" }).first().click()
   const dialog = page.getByRole("dialog", { name: "Add secret" })
   await dialog.getByLabel("Name", { exact: true }).fill(name)
@@ -94,7 +94,7 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
   await add(own, { sandboxId })
 
   // The Secrets page has a section per scope, named after its teammate or sandbox.
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   const section = (name: string) => page.getByRole("region", { name })
   const environment = section("Environment")
   await expect(environment.getByRole("row", { name: shared })).toBeVisible()
@@ -170,12 +170,12 @@ test("a secret a host keeps refusing asks to be updated", async ({
       .filter({ hasText: `registry.example.org keeps refusing ${secret}` })
     await expect(card.getByText(/probably wrong or expired/)).toBeVisible()
     await card.getByRole("button", { name: "Update secret" }).click()
-    await expect(page).toHaveURL(/\/settings\/secrets\?edit=/)
+    await expect(page).toHaveURL(/\/e\/[^/]+\/secrets\?edit=/)
     const dialog = page.getByRole("dialog", { name: "Edit secret" })
     await expect(dialog.getByLabel("Name", { exact: true })).toHaveValue(secret)
     await expect(card).toHaveCount(0)
     await page.keyboard.press("Escape")
-    await expect(page).toHaveURL(/\/settings\/secrets$/)
+    await expect(page).toHaveURL(/\/e\/[^/]+\/secrets$/)
   } finally {
     await api.request.delete(`/api/environments/${env}/secrets/${created.id}`)
   }
@@ -191,7 +191,7 @@ test("an AWS access key gives a sandbox a profile, and its credentials are asked
   const id = await api.createSandbox(name)
   const secret = `E2E_AWS_${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await page.getByRole("button", { name: "Add secret" }).first().click()
   const dialog = page.getByRole("dialog", { name: "Add secret" })
   await dialog.getByLabel("Kind", { exact: true }).click()

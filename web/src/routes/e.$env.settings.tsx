@@ -9,7 +9,6 @@ import {
 import { EnvironmentLabel } from "@/components/page-header"
 import { settingsGroups, settingsPaths } from "@/components/settings/link"
 import { Input } from "@/components/ui/input"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings")({
@@ -54,7 +53,6 @@ function SettingsLayout() {
           data-slot="page-header"
           className="flex h-14 shrink-0 items-center gap-2 px-3 md:px-4"
         >
-          <SidebarTrigger className="md:hidden" />
           <h1 className="text-sm">Settings</h1>
           <EnvironmentLabel env={env} />
         </header>

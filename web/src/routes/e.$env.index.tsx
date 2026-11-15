@@ -543,7 +543,7 @@ function Earlier({ env }: { env: string }) {
           All chats
         </Link>
         <Link
-          to="/e/$env/settings/activity"
+          to="/e/$env/activity"
           params={{ env }}
           className="text-xs text-primary underline-offset-4 hover:underline"
         >

@@ -174,7 +174,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * What became of a push's pull request
+         * @description Asks the push's forge for the pull request Studio opened for it, or else the one from the pushed branch: its state, the sum of its CI checks and how many comments it has. Answers are kept for a minute. found is false, with a note, when there is none to read, such as for a push to the default branch or a forge without an API.
+         */
+        get: operations["getPushPullRequest"];
         put?: never;
         /**
          * Open a pushed branch's pull request
@@ -5855,6 +5859,28 @@ export interface components {
             /** @description The pull request's title; empty keeps the proposed one */
             title?: string;
         };
+        PushPR: {
+            /**
+             * @description The sum of its head commit's CI checks; empty when they couldn't be read
+             * @enum {string}
+             */
+            checks?: "none" | "pending" | "success" | "failure";
+            /**
+             * Format: int64
+             * @description Its conversation comments, line comments and reviews with words
+             */
+            comments: number;
+            found: boolean;
+            note?: string;
+            /** Format: int64 */
+            number?: number;
+            /**
+             * @description Its state on the forge
+             * @enum {string}
+             */
+            state?: "open" | "merged" | "closed";
+            url?: string;
+        };
         PushReview: {
             /** Format: int64 */
             additions: number;
@@ -7852,6 +7878,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedbackOut"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPushPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID of a git push or its pull request */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushPR"];
                 };
             };
             /** @description Error */

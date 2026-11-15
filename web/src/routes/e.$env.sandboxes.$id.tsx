@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react"
 import { createFileRoute, redirect } from "@tanstack/react-router"
-import { WarningIcon } from "@phosphor-icons/react"
+import {
+  ArrowLineLeftIcon,
+  ArrowLineRightIcon,
+  WarningIcon,
+} from "@phosphor-icons/react"
 import { LowDiskStatus } from "@/components/low-disk"
 import { BackToSetup, fromSetup } from "@/components/back-to-setup"
 import { ComputerScreen, type ScreenChange } from "@/components/computer/screen"
@@ -10,15 +14,17 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { SidebarTrigger } from "@/components/ui/sidebar"
+import { ThreadDot } from "@/components/teammate/home"
+import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, errorStatus, isReady } from "@/lib/api/client"
 import { screenSearch, type ScreenSearch } from "@/lib/computer"
-import { formatAge } from "@/lib/utils"
+import { programName, sortTerminals } from "@/lib/terminals"
+import { cn, formatAge } from "@/lib/utils"
 
 /**
  * A computer without a teammate: its screen at full width (docs/design/teammate-computer.md). A
- * teammate's computer is on the teammate's page, so its address redirects there.
+ * teammate's computer is on the teammate's desk, so its address redirects there.
  */
 export const Route = createFileRoute("/e/$env/sandboxes/$id")({
   validateSearch: (
@@ -52,13 +58,17 @@ export const Route = createFileRoute("/e/$env/sandboxes/$id")({
       .catch(() => undefined)
     if (teammates && !teammates.some((t) => t.id === owner)) return
     const s = location.search as Record<string, unknown>
+    const thread = typeof s.chat === "string" && s.chat ? s.chat : undefined
+    const screen = screenSearch(s)
+    // Without a thread, the teammate's desk: the computer open beside its home.
     throw redirect({
       to: "/e/$env/teammates/$id",
       params: { env, id: owner },
       search: {
-        ...screenSearch(s),
+        ...screen,
+        ...(!thread && !screen.tab ? { tab: "terminal" as const } : {}),
         computer: params.id,
-        ...(typeof s.chat === "string" && s.chat ? { thread: s.chat } : {}),
+        ...(thread ? { thread } : {}),
         ...fromSetup(s),
       },
       replace: true,
@@ -122,15 +132,6 @@ function SandboxPage() {
       },
     }
   )
-  const sandboxes = $api.useQuery(
-    "get",
-    "/api/environments/{env}/sandboxes",
-    { params: { path: { env } } },
-    { refetchInterval: 5000 }
-  )
-  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
-    params: { path: { env } },
-  })
   const sb = sandbox.data
   if (!sb || (sandbox.isError && errorStatus(sandbox.error) === 404)) {
     if (sandbox.isPending) return <Spinner className="m-auto" />
@@ -144,13 +145,6 @@ function SandboxPage() {
     )
   }
 
-  // The switcher offers the other computers without a teammate.
-  const plain = (sandboxes.data ?? []).filter(
-    (s) =>
-      !s.teammateId ||
-      (teammates.data && !teammates.data.some((t) => t.id === s.teammateId))
-  )
-  const computers = plain.some((s) => s.id === sb.id) ? plain : [sb, ...plain]
   const change = ({ computer, fold: _, push, ...rest }: ScreenChange) => {
     if (computer && computer !== id) {
       void navigate({
@@ -183,17 +177,154 @@ function SandboxPage() {
       />
       <LowDiskStatus env={env} sandbox={sb} />
       <div className="flex min-h-0 flex-1">
+        <TerminalsPanel
+          env={env}
+          sandbox={sb.id}
+          open={
+            search.tab === "terminal" || !search.tab
+              ? (search.term ?? "main")
+              : undefined
+          }
+          onOpen={(term) => change({ tab: "terminal", term, push: true })}
+        />
         <ComputerScreen
           key={sb.id}
           env={env}
           sandbox={sb}
-          computers={computers}
           search={search}
           onChange={change}
           solo
-          lead={<SidebarTrigger className="md:hidden" />}
         />
       </div>
     </>
+  )
+}
+
+const panelKey = "studio.computer-terminals"
+
+/**
+ * The computer's terminal sessions as threads beside its screen, as a teammate's desk lists its
+ * threads; folded to a rail until opened, which this browser remembers.
+ */
+function TerminalsPanel({
+  env,
+  sandbox,
+  open,
+  onOpen,
+}: {
+  env: string
+  sandbox: string
+  /** The session the screen's terminal shows. */
+  open?: string
+  onOpen: (term: string) => void
+}) {
+  const [shown, setShown] = useState(() => {
+    try {
+      return localStorage.getItem(panelKey) === "open"
+    } catch {
+      return false
+    }
+  })
+  const terminals = $api.useQuery("get", "/api/environments/{env}/terminals", {
+    params: { path: { env } },
+  })
+  const list = sortTerminals(
+    terminals.data?.find((t) => t.sandboxId === sandbox)?.terminals ?? []
+  )
+  // With no session in the URL the screen shows "main", or the first there is.
+  const current =
+    open === "main" && !list.some((t) => t.name === "main")
+      ? list.at(0)?.name
+      : open
+  const show = (on: boolean) => {
+    setShown(on)
+    try {
+      localStorage.setItem(panelKey, on ? "open" : "folded")
+    } catch {
+      // The panel just starts folded next time.
+    }
+  }
+  if (!shown)
+    return (
+      <section
+        aria-label="Terminals"
+        className="hidden w-10 shrink-0 flex-col items-center gap-1 border-r py-2 md:flex"
+      >
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Show the terminals"
+          title="Show the terminals"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => show(true)}
+        >
+          <ArrowLineRightIcon />
+        </Button>
+        {list.some((t) => t.harness) && (
+          <ThreadDot status="terminal" className="mt-1" />
+        )}
+      </section>
+    )
+  return (
+    <section
+      aria-label="Terminals"
+      className="hidden w-64 shrink-0 flex-col border-r md:flex"
+    >
+      <header className="flex h-12 shrink-0 items-center pr-1.5 pl-3">
+        <h2 className="font-heading text-sm font-semibold">Terminals</h2>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Fold the terminals"
+          title="Fold the terminals"
+          className="ml-auto text-muted-foreground hover:text-foreground"
+          onClick={() => show(false)}
+        >
+          <ArrowLineLeftIcon />
+        </Button>
+      </header>
+      <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-2 pb-2">
+        {list.map((t) => (
+          <button
+            key={t.name}
+            type="button"
+            aria-current={t.name === current || undefined}
+            onClick={() => onOpen(t.name)}
+            className={cn(
+              "flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
+              t.name === current && "bg-muted"
+            )}
+          >
+            <span className="flex w-3.5 shrink-0 justify-center">
+              {t.harness ? (
+                <ThreadDot status="terminal" />
+              ) : (
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    t.state === "idle"
+                      ? "ring-1 ring-muted-foreground/60 ring-inset"
+                      : "bg-(--st-running)"
+                  )}
+                />
+              )}
+            </span>
+            <span className="grid min-w-0 flex-1 leading-tight">
+              <span className="truncate">{t.title || t.label || t.name}</span>
+              <span className="truncate font-mono text-caption text-muted-foreground">
+                {[t.program && programName(t.program), t.state]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </span>
+          </button>
+        ))}
+        {terminals.data && list.length === 0 && (
+          <p className="px-2 text-xs text-muted-foreground">
+            No terminal sessions yet.
+          </p>
+        )}
+      </div>
+    </section>
   )
 }

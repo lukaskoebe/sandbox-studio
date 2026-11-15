@@ -329,7 +329,10 @@ test("a message on the teammate's home starts a thread and opens it", async ({
 
   await page.goto(`/e/${env}/teammates/${teammate}`)
   const main = page.getByRole("main")
-  await expect(main.getByText(`Starts a new thread on ${sbName}`)).toBeVisible()
+  await expect(main.getByText("Starts a new thread on")).toBeVisible()
+  await expect(
+    main.getByRole("button", { name: `Computer: ${sbName}` })
+  ).toBeVisible()
   const box = main.getByRole("textbox", { name: "Message" })
   await box.fill("Please run the tests")
   await box.press("Enter")
@@ -373,19 +376,21 @@ test("a chat says when its sandbox is suspended or stopped, and starts it", asyn
   await lifecycle("stop")
   await expect(banner).toContainText(`${sbName} is stopped.`)
 
-  // The teammate is offline, and its computer's screen starts it.
+  // The teammate's home says it is offline, and its computer's screen on its desk starts it.
   await page.goto(`/e/${env}/teammates/${teammate}`)
   const header = main.locator("header").first()
   await expect(header).toContainText("Offline")
+  await page.goto(`/e/${env}/teammates/${teammate}?tab=terminal`)
   const screen = main.getByRole("region", { name: `${sbName}'s screen` })
   await expect(screen).toContainText(`${sbName} is off`)
   // The teammate's browser has a VM of its own, so its tab stays.
   await expect(screen.getByRole("tab", { name: "Browser" })).toBeVisible()
   await screen.getByRole("button", { name: "Start", exact: true }).click()
-  await expect(header).not.toContainText("Offline", { timeout: 20_000 })
   await expect(
     screen.getByRole("button", { name: "Start", exact: true })
-  ).toHaveCount(0)
+  ).toHaveCount(0, { timeout: 20_000 })
+  await page.goto(`/e/${env}/teammates/${teammate}`)
+  await expect(header).not.toContainText("Offline", { timeout: 20_000 })
 })
 
 test("a message's changes show each file's diff", async ({

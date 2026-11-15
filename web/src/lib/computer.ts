@@ -9,6 +9,7 @@ export const screenTabs = [
   "preview",
   "files",
   "changes",
+  "details",
 ] as const
 export type ScreenTab = (typeof screenTabs)[number]
 
@@ -105,6 +106,32 @@ export function teammateSearch(s: Record<string, unknown>): TeammateSearch {
   }
 }
 
+/**
+ * The computer a teammate's screen shows: the one asked for, else the open thread's, else the one
+ * last picked here, else where the work happens.
+ */
+export function screenComputer<TSandbox extends { id: string }>(
+  owned: TSandbox[],
+  chats: { sandboxId?: string | null; state: string; updatedAt: string }[],
+  asked?: string,
+  threadComputer?: string | null,
+  remembered?: string | null
+): TSandbox | undefined {
+  const latest = [...chats].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  )
+  const find = (id?: string | null) =>
+    id ? owned.find((s) => s.id === id) : undefined
+  return (
+    find(asked) ??
+    find(threadComputer) ??
+    find(remembered) ??
+    find(latest.find((c) => c.state === "running")?.sandboxId) ??
+    find(latest.at(0)?.sandboxId) ??
+    owned.at(0)
+  )
+}
+
 const lastComputerKey = (env: string, teammate: string) =>
   `studio.computer.${env}.${teammate}`
 
@@ -126,4 +153,26 @@ export function rememberComputer(env: string, teammate: string, id: string) {
   } catch {
     // Storage can be unavailable (private windows); the page then picks by the chats.
   }
+}
+
+/** The computers in order, each fork after its base and one step further in. */
+export function forkTree<
+  TSandbox extends { id: string; name: string; forkOf?: string },
+>(all: TSandbox[]): { sandbox: TSandbox; depth: number }[] {
+  const ids = new Set(all.map((sb) => sb.id))
+  const byName = (a: TSandbox, b: TSandbox) => a.name.localeCompare(b.name)
+  const children = new Map<string, TSandbox[]>()
+  for (const sb of all)
+    if (sb.forkOf && ids.has(sb.forkOf))
+      children.set(sb.forkOf, [...(children.get(sb.forkOf) ?? []), sb])
+  const out: { sandbox: TSandbox; depth: number }[] = []
+  const walk = (sb: TSandbox, depth: number) => {
+    out.push({ sandbox: sb, depth })
+    for (const c of (children.get(sb.id) ?? []).sort(byName)) walk(c, depth + 1)
+  }
+  for (const sb of all
+    .filter((s) => !s.forkOf || !ids.has(s.forkOf))
+    .sort(byName))
+    walk(sb, 0)
+  return out
 }

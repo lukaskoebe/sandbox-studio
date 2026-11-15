@@ -88,7 +88,7 @@ test("another page still floats a sandbox's request, with how long it is held", 
   await api.dismissApprovals()
   const id = await api.createSandbox(sandboxName("wait"))
   const host = freshHost("float")
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await api.connect(id, host)
 
   const card = approvals(page)
@@ -140,7 +140,7 @@ test("a connection that gave up is answered for the next attempt", async ({
   await expect(gone).toBeHidden()
 
   // The answer was a rule, and only the one it was meant for.
-  await page.goto(`/e/${env}/settings/network?q=later-`)
+  await page.goto(`/e/${env}/network?q=later-`)
   await expect(
     page.getByRole("cell", { name: later, exact: true })
   ).toBeVisible()
@@ -156,7 +156,7 @@ test("a floating card says when its connection gave up", async ({
   const host = freshHost("card")
   await holdsEnded(page)
   await api.connect(id, host)
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
 
   const card = approvals(page)
     .getByTestId("approval-card")
@@ -200,7 +200,7 @@ test("connections held while Studio isn't in front notify once per sandbox", asy
   const name = sandboxName("away")
   const id = await api.createSandbox(name)
   await inTheBackground(page)
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await expect(page.getByRole("heading").first()).toBeVisible()
 
   const hosts = [freshHost("a"), freshHost("b"), freshHost("c"), freshHost("d")]
@@ -268,7 +268,7 @@ test("app: a notification's Allow all answers what it named, and nothing after",
           }
       )
   }
-  await page.goto(`/e/${env}/settings/secrets?studio-app=notify`)
+  await page.goto(`/e/${env}/secrets?studio-app=notify`)
   await expect(page.getByRole("heading").first()).toBeVisible()
 
   const hosts = [freshHost("named"), freshHost("named")]

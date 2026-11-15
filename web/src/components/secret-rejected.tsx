@@ -27,7 +27,7 @@ export function SecretRejectedDecision({ approval }: { approval: Approval }) {
             void navigate({ to: "/e/$env/settings/providers", params: { env } })
           else
             void navigate({
-              to: "/e/$env/settings/secrets",
+              to: "/e/$env/secrets",
               params: { env },
               search: { edit: r.secretId },
             })

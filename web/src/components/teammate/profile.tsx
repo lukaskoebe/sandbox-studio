@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import {
   ArrowLeftIcon,
   CaretRightIcon,
+  ChatCircleIcon,
   ClockIcon,
   CopyIcon,
   GlobeIcon,
@@ -417,31 +418,90 @@ const sheets: Record<
   },
 }
 
+/**
+ * A teammate's settings as a page of its own, in place of the conversation and the screen:
+ * Profile, Knowledge, and Routine and access, as rows that open one at a time. Its memory and
+ * tasks open over it as sheets, which lead back here.
+ */
+export function ProfileSettingsPage({
+  env,
+  teammate,
+  section,
+  fromSetup,
+  onOpen,
+  onView,
+}: {
+  env: string
+  teammate: Teammate
+  section?: string
+  fromSetup?: boolean
+  onOpen: Open
+  /** Opens the teammate's memory or tasks, from the row of that name. */
+  onView: (view: "memory" | "tasks") => void
+}) {
+  const meta = sheets.settings
+  return (
+    <ScrollArea
+      role="region"
+      aria-label={meta.title(teammate.name)}
+      className="min-h-0 flex-1"
+      viewportClassName="px-4 pt-6 pb-10 md:px-8"
+    >
+      <div className="mx-auto grid w-full max-w-3xl min-w-0 gap-5">
+        <header className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-2">
+          <div className="grid min-w-0 flex-1 gap-1">
+            <h1 className="flex min-w-0 items-center gap-2.5 text-title font-semibold">
+              <TeammateAvatar
+                name={teammate.name}
+                avatar={teammate.avatar}
+                className="size-7 text-xs"
+              />
+              <span className="truncate">{meta.title(teammate.name)}</span>
+            </h1>
+            <p className="text-xs text-muted-foreground">{meta.description}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => onOpen(undefined)}>
+            <ChatCircleIcon />
+            Conversation
+          </Button>
+        </header>
+        <TeammateSettings
+          env={env}
+          id={teammate.id}
+          open={section}
+          onOpen={(s) => onOpen("settings", s)}
+          onView={onView}
+          fromSetup={fromSetup}
+        />
+      </div>
+    </ScrollArea>
+  )
+}
+
 /** The whole of one part of the profile, wide, over the page. */
 export function ProfileSheet({
   env,
   teammate,
   view,
   section,
-  fromSetup,
+  back,
   onOpen,
 }: {
   env: string
   teammate: Teammate
   view?: ProfileView
-  /** The settings row that is open, or the memory's page or group. */
+  /** The memory's page or group that is open. */
   section?: string
-  fromSetup?: boolean
+  /** The settings row the sheet was opened from, which its back button returns to. */
+  back?: string
   onOpen: Open
 }) {
   // The sheet keeps its content while it slides out.
   const [shown, setShown] = useState<Exclude<ProfileView, "card">>()
-  const open = view !== undefined && view !== "card"
+  // The settings are a page of their own (ProfileSettingsPage).
+  const open = view === "tasks" || view === "memory"
   if (open && view !== shown) setShown(view)
   const meta = shown ? sheets[shown] : undefined
-  // Memory or tasks opened from a settings row lead back to that row.
-  const [back, setBack] = useState<string>()
-  if (back !== undefined && !open) setBack(undefined)
 
   return (
     <Sheet open={open} onOpenChange={(on) => !on && onOpen(undefined)}>
@@ -456,7 +516,7 @@ export function ProfileSheet({
           <>
             <SheetHeader className="border-b px-5 py-4">
               <SheetTitle className="flex items-center gap-2.5 text-sm">
-                {back !== undefined && shown !== "settings" && (
+                {back !== undefined && (
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -490,19 +550,6 @@ export function ProfileSheet({
                   id={teammate.id}
                   open={section}
                   onOpen={(s) => onOpen("memory", s)}
-                />
-              )}
-              {shown === "settings" && (
-                <TeammateSettings
-                  env={env}
-                  id={teammate.id}
-                  open={section}
-                  onOpen={(s) => onOpen("settings", s)}
-                  onView={(v) => {
-                    setBack(v)
-                    onOpen(v)
-                  }}
-                  fromSetup={fromSetup}
                 />
               )}
             </ScrollArea>

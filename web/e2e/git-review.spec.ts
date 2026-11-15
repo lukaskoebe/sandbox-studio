@@ -84,7 +84,7 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
 
   // Settings → Activity lists the push with its outcome and links to its page, which shows
   // the decided review without the buttons.
-  await page.goto(`/e/${env}/settings/activity?kind=git`)
+  await page.goto(`/e/${env}/activity?kind=git`)
   const row = page.getByRole("row").filter({ hasText: "team/app" })
   await expect(row).toContainText("pushed")
   await row.getByRole("link").click()
@@ -288,9 +288,7 @@ test("a review that doesn't exist says so", async ({ page, env }) => {
   await page.goto(`/e/${env}/git/reviews/no-such-review`)
   await expect(page.getByText("No such review")).toBeVisible()
   await page.getByRole("link", { name: "All pushes" }).click()
-  await expect(page).toHaveURL(
-    new RegExp(`/e/${env}/settings/activity\\?kind=git$`)
-  )
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/activity\\?kind=git$`))
 })
 
 // Review feedback goes straight to the agent: line comments and the outcome as a prompt of
@@ -915,4 +913,120 @@ test("a push's commits open to their own changes", async ({
   await expect(
     panel.locator("[data-line]").filter({ hasText: "hello from one commit" })
   ).toBeVisible()
+})
+
+// Changes holds its parts in sections that fold, per computer. A review link opens its section
+// and folds the others for that visit only; an allowed push moves to Pushed for a day.
+test("a review link opens Changes on its section, and the allowed push moves to Pushed", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const name = sandboxName("sections")
+  const id = await api.createSandbox(name)
+  await api.guestReady(id)
+  const pushed = await api.push(id, {
+    url: forge.url,
+    file: "hello.txt",
+    content: "hello from the sandbox\n",
+    message: "Add a greeting",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+  const waiting = await api.json<
+    { id: string; sandboxId?: string; kind: string }[]
+  >("GET", `/api/environments/${env}/approvals`)
+  const review = waiting!.find(
+    (a) => a.sandboxId === id && a.kind === "git.push"
+  )!
+
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&review=${review.id}`)
+  const rail = page
+    .getByRole("region", { name: `${name}'s screen` })
+    .getByLabel("Changes", { exact: true })
+  const header = (label: string) =>
+    rail
+      .getByRole("region", { name: label, exact: true })
+      .getByRole("button", { name: new RegExp(`^${label}`) })
+  await expect(rail.getByRole("status")).toContainText(
+    "Opened from a review link"
+  )
+  await expect(header("Waiting for you")).toHaveAttribute(
+    "aria-expanded",
+    "true"
+  )
+  await expect(header("Repositories")).toHaveAttribute("aria-expanded", "false")
+  await rail.getByRole("button", { name: "Show all" }).click()
+  await expect(rail.getByRole("status")).toBeHidden()
+  await expect(header("Repositories")).toHaveAttribute("aria-expanded", "true")
+
+  // [ and ] move between the sections' headers.
+  await page.locator("body").press("]")
+  await expect(header("Waiting for you")).toBeFocused()
+  await page.keyboard.press("]")
+  await expect(header("Repositories")).toBeFocused()
+  await page.keyboard.press("[")
+  await expect(header("Waiting for you")).toBeFocused()
+
+  await page.getByRole("button", { name: "Approve and push" }).click()
+  await expect(header("Pushed")).toBeVisible()
+  await expect(
+    rail.getByRole("region", { name: "Waiting for you" })
+  ).toHaveCount(0)
+  await expect(rail.getByRole("region", { name: "Pushed" })).toContainText(
+    "Push to main"
+  )
+
+  // A fold is kept for the computer, and a visit's folds are not.
+  await header("Repositories").click()
+  await expect(header("Repositories")).toHaveAttribute("aria-expanded", "false")
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)
+  await expect(header("Repositories")).toHaveAttribute("aria-expanded", "false")
+  await expect(header("Pushed")).toHaveAttribute("aria-expanded", "true")
+  await header("Repositories").click()
+})
+
+test("a pushed branch shows its pull request's state, checks and comments in Pushed", async ({
+  page,
+  api,
+  env,
+}) => {
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const forge = `fj-${suffix}`
+  const host = `forgejo-${suffix}.example.com`
+  await api.createUpstream(`${host}/acme/web`)
+  await api.json("POST", `/api/environments/${env}/forges`, {
+    name: forge,
+    kind: "forgejo",
+    baseUrl: `https://${host}`,
+    token: "e2e-forge-token",
+  })
+  const name = sandboxName("pushed-pr")
+  const id = await api.createSandbox(name)
+  await api.guestReady(id)
+  // The fake forge's pull request 1 is from feature/coupons, and its CI passed.
+  const pushed = await api.push(id, {
+    url: `https://git.studio.internal/${forge}/acme/web.git`,
+    branch: "feature/coupons",
+    from: "main",
+    file: "coupon.ts",
+    content: "export const coupon = true\n",
+    message: "Apply coupons",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+  const approval = /approval (\S+)\)/.exec(pushed.output)![1]
+  await api.json(
+    "POST",
+    `/api/environments/${env}/approvals/${approval}/decide`,
+    { action: "allow" }
+  )
+
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)
+  const row = page
+    .getByRole("region", { name: "Pushed", exact: true })
+    .getByRole("button", { name: /Push to feature\/coupons/ })
+  await expect(row).toContainText("#1")
+  await expect(row).toContainText("open")
+  await expect(row).toContainText("checks passed")
 })

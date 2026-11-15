@@ -29,11 +29,17 @@ the e2e specs' fakes), before the release branch:
   **Pixel and Quiet** styles where its colours or type come from the style tokens. Give it
   long content on purpose: a long URL, name, path or message, many items.
 - Look at every screenshot, not only the test's result: nothing overflows or is clipped,
-  text truncates where it should, nothing overlaps, contrast holds in both themes, and it
-  sits calmly with the rest of the app. Check scrollWidth against clientWidth where content
+  text truncates where it should, nothing overlaps, contrast holds in both themes, bars side
+  by side line up (the sidebar's header and the page's top row), and it sits calmly with the
+  rest of the app. Check scrollWidth against clientWidth where content
   could run out, and turn what broke into an assertion in the real spec.
 - Interaction that a screenshot can't show (hover, focus rings, cursors, a popover's
   position, a transition) gets driven in the spec and screenshotted mid-way.
+- Look for functionality that is now there twice: the same control or information twice on
+  one screen (two switchers for the same computer, a status in the header and again in a
+  panel, two buttons that do one thing), and a new feature that repeats one elsewhere in the
+  app. A change that adds a way to do something often leaves the old one standing, and each
+  test passes on its own. Keep one, or say in the design doc why both stay.
 
 Fix what looks wrong on main like any other failure. A release whose UI changes weren't
 looked at isn't ready.

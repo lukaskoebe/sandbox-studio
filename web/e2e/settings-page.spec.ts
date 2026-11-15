@@ -39,14 +39,19 @@ test("the settings nav opens sections by URL, by click and by search", async ({
     "page"
   )
 
-  await nav.getByRole("link", { name: "Network", exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/network$`))
+  // The environment's pages left Settings for the sidebar's Environment group.
+  await expect(nav.getByRole("link", { name: "Network" })).toHaveCount(0)
+  await nav.getByRole("link", { name: "Git forges", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/forges$`))
+  const sidebar = page.locator('[data-sidebar="sidebar"]')
+  await sidebar.getByRole("link", { name: "Network", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/network$`))
   await expect(
     page.getByRole("heading", { name: "Rules", exact: true })
   ).toBeVisible()
 
-  await nav.getByRole("link", { name: "Activity", exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/activity$`))
+  await sidebar.getByRole("link", { name: "Activity", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/activity$`))
   await page.getByRole("link", { name: "Git", exact: true }).click()
   await expect(page).toHaveURL(/[?&]kind=git/)
   await expect(
@@ -54,28 +59,31 @@ test("the settings nav opens sections by URL, by click and by search", async ({
   ).toHaveAttribute("aria-pressed", "true")
 
   // The search finds a section by what it holds, not only by its name.
+  await page.goto(`/e/${env}/settings`)
   await page.getByRole("searchbox", { name: "Search settings" }).fill("gitlab")
   await expect(nav.getByRole("link")).toHaveText(["Git forges"])
   await page.getByRole("searchbox", { name: "Search settings" }).fill("zzz")
   await expect(nav.getByText("No setting matches.")).toBeVisible()
 })
 
-test("the old network addresses lead to Settings and Home", async ({
+test("the old network and settings addresses lead to the new pages", async ({
   page,
   env,
 }) => {
-  await page.goto(`/e/${env}/network`)
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/network$`))
+  await page.goto(`/e/${env}/settings/network?q=example`)
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/network\\?q=example$`))
+  await page.goto(`/e/${env}/settings/secrets`)
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/secrets$`))
+  await page.goto(`/e/${env}/settings/memory`)
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/memory$`))
+  await page.goto(`/e/${env}/settings/activity?kind=git`)
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/activity\\?kind=git$`))
   await page.goto(`/e/${env}/network/rules?q=example`)
-  await expect(page).toHaveURL(
-    new RegExp(`/e/${env}/settings/network\\?q=example$`)
-  )
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/network\\?q=example$`))
   await page.goto(`/e/${env}/network/requests`)
   await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
   await page.goto(`/e/${env}/network/activity`)
-  await expect(page).toHaveURL(
-    new RegExp(`/e/${env}/settings/activity\\?kind=network$`)
-  )
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/activity\\?kind=network$`))
 })
 
 test("rules group by registrable domain, and the filters live in the URL", async ({
@@ -90,7 +98,7 @@ test("rules group by registrable domain, and the filters live in the URL", async
     await api.createSandbox(sandboxName("rules"))
   )
 
-  await page.goto(`/e/${env}/settings/network`)
+  await page.goto(`/e/${env}/network`)
   const host = (name: string) => page.getByRole("cell", { name, exact: true })
   await expect(host(rules.api)).toBeVisible()
   await expect(host(rules.cdn)).toBeVisible()
@@ -129,7 +137,7 @@ test("rules group by registrable domain, and the filters live in the URL", async
   await expect(host(rules.www)).toBeVisible()
 })
 
-test("every settings section fits a 390px screen", async ({
+test("every settings section and environment page fits a 390px screen", async ({
   page,
   api,
   env,
@@ -137,12 +145,23 @@ test("every settings section fits a 390px screen", async ({
   await page.setViewportSize({ width: 390, height: 844 })
   await seedRules(api, env, await api.createSandbox(sandboxName("narrow")))
 
-  for (const [section, heading] of [
-    ["general", "General"],
+  for (const [path, heading] of [
     ["network", "Network"],
     ["secrets", "Secrets"],
     ["memory", "Shared memory"],
     ["activity", "Activity"],
+  ] as const) {
+    await page.goto(`/e/${env}/${path}`)
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }).first()
+    ).toBeVisible()
+    const width = await page.evaluate(
+      () => document.documentElement.scrollWidth
+    )
+    expect(width, `${path} scrolls sideways`).toBeLessThanOrEqual(390)
+  }
+  for (const [section, heading] of [
+    ["general", "General"],
     ["providers", "AI providers"],
     ["forges", "Git forges"],
     ["templates", "Templates"],
@@ -183,7 +202,7 @@ test("the origin and unused filters live in the URL", async ({
   const host = (name: string) => page.getByRole("cell", { name, exact: true })
 
   // Rules made through the API are manual, so the approval origin leaves them out.
-  await page.goto(`/e/${env}/settings/network`)
+  await page.goto(`/e/${env}/network`)
   await expect(host(rules.api)).toBeVisible()
   await page.getByRole("combobox", { name: "Origin" }).click()
   await page.getByRole("option", { name: "Approval", exact: true }).click()

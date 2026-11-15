@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test"
+import type { Locator, Page } from "@playwright/test"
 import { addTeammate, expect, sandboxName, terminal, test } from "./fixtures"
 
 /** The session the URL names; the router quotes a name that reads as a number. */
@@ -18,7 +18,15 @@ async function screenOf(page: Page, env: string, id: string, name: string) {
   return screen
 }
 
-test("a computer opens on its screen, with its facts in its menu", async ({
+/** The screen's Details tab, which holds what the computer's ⋯ menu doesn't. */
+async function detailsOf(screen: Locator, name: string) {
+  await screen.getByRole("tab", { name: "Details" }).click()
+  const details = screen.getByRole("region", { name: `${name}'s details` })
+  await expect(details).toBeVisible()
+  return details
+}
+
+test("a computer opens on its screen, with its facts in its menu and its Details", async ({
   page,
   api,
   env,
@@ -38,8 +46,32 @@ test("a computer opens on its screen, with its facts in its menu", async ({
   await screen.getByRole("button", { name: `More for ${name}` }).click()
   const menu = page.getByRole("menu")
   await expect(menu).toContainText(/\d+ CPU · [\d.]+ GiB/)
-  await expect(menu.getByText("Memory", { exact: true })).toBeVisible()
-  await page.keyboard.press("Escape")
+  await menu
+    .getByRole("menuitem", { name: /Everything else is in Details/ })
+    .click()
+  const details = screen.getByRole("region", { name: `${name}'s details` })
+  await expect(screen.getByRole("tab", { name: "Details" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  for (const card of [
+    "State",
+    "Disks",
+    "Ports and previews",
+    "Reach it",
+    "Checkpoints",
+    "History",
+    "Maintenance",
+  ])
+    await expect(details.getByRole("region", { name: card })).toBeVisible()
+  await expect(
+    details.getByRole("region", { name: "State" }).getByText("Memory", {
+      exact: true,
+    })
+  ).toBeVisible()
+  await expect(details.getByRole("region", { name: "History" })).toContainText(
+    id
+  )
 })
 
 // The strip over the terminal lists its sessions by what runs in them, opens a new shell,
@@ -105,16 +137,15 @@ test("the terminal's tabs open, switch, rename and close sessions", async ({
   await expect(screen.getByLabel("2 sessions")).toHaveCount(0)
 })
 
-test("Connections opens from the computer's menu as a sheet", async ({
+test("Connections opens from the computer's Details as a sheet", async ({
   page,
   api,
   env,
 }) => {
   const name = sandboxName("conns")
   const id = await api.createSandbox(name)
-  const screen = await screenOf(page, env, id, name)
-  await screen.getByRole("button", { name: `More for ${name}` }).click()
-  await page.getByRole("menuitem", { name: "Connections" }).click()
+  const details = await detailsOf(await screenOf(page, env, id, name), name)
+  await details.getByRole("button", { name: "Show its connections…" }).click()
   const sheet = page.getByRole("dialog", { name: "Connections" })
   await expect(sheet).toBeVisible()
   await page.keyboard.press("Escape")
@@ -126,23 +157,15 @@ test("the computer's menu lists its actions", async ({ page, api, env }) => {
   const id = await api.createSandbox(name)
   const screen = await screenOf(page, env, id, name)
   await screen.getByRole("button", { name: `More for ${name}` }).click()
-  for (const action of [
+  // Five actions, and a way to the rest.
+  await expect(page.getByRole("menuitem")).toHaveText([
     "Checkpoint now",
-    "Fork",
-    "Use as a base",
-    "Connections",
-    "Rebase",
-    "Export",
+    "Fork…",
+    "Connect over SSH",
     "Suspend",
-    `Delete ${name}`,
+    `Delete ${name}…`,
+    "Everything else is in Details",
   ])
-    await expect(
-      page.getByRole("menuitem", { name: action, exact: true })
-    ).toBeVisible()
-  await expect(
-    page.getByRole("menuitem", { name: /^Checkpoints/ })
-  ).toBeVisible()
-  await expect(page.getByRole("menuitem", { name: /^Resources/ })).toBeVisible()
   await page.keyboard.press("Escape")
 })
 
@@ -154,10 +177,9 @@ test("a running computer takes what fits now and the rest on a restart", async (
 }) => {
   const name = sandboxName("resize")
   const id = await api.createSandbox(name)
-  const screen = await screenOf(page, env, id, name)
-  const more = screen.getByRole("button", { name: `More for ${name}` })
-  await more.click()
-  await page.getByRole("menuitem", { name: /^Resources/ }).click()
+  const details = await detailsOf(await screenOf(page, env, id, name), name)
+  const state = details.getByRole("region", { name: "State" })
+  await state.getByRole("button", { name: "Resources…" }).click()
   const dialog = page.getByRole("dialog", { name: `Resources of ${name}` })
   await dialog.getByLabel("CPUs").fill("3")
   await dialog.getByLabel("Memory (MiB)").fill("12288")
@@ -175,56 +197,47 @@ test("a running computer takes what fits now and the rest on a restart", async (
     )
   ).toBeVisible()
 
-  await more.click()
   await expect(
-    page.getByRole("menuitem", {
-      name: /^Resources\s*3 CPU · 4 GiB · 12 GiB after restart$/,
-    })
+    state.getByText("3 CPU · 4 GiB · 12 GiB after restart", { exact: true })
   ).toBeVisible()
-  await page.getByRole("menuitem", { name: /^Resources/ }).click()
+  await state.getByRole("button", { name: "Resources…" }).click()
   await expect(
     dialog.getByText("Has 4 GiB now, 12 GiB after a restart.")
   ).toBeVisible()
   await dialog.getByRole("button", { name: "Save and restart" }).click()
   await expect(page.getByText("Restarted with 3 CPU · 12 GiB.")).toBeVisible()
-  await more.click()
-  await expect(
-    page.getByRole("menuitem", { name: /^Resources\s*3 CPU · 12 GiB$/ })
-  ).toBeVisible()
-  await page.keyboard.press("Escape")
+  await expect(state.getByText("3 CPU · 12 GiB", { exact: true })).toBeVisible()
 })
 
-test("the computer's menu opens fork and rebase, and links the export", async ({
+test("the computer's Details open fork and rebase, and link the export", async ({
   page,
   api,
   env,
 }) => {
   const name = sandboxName("menu-dialogs")
   const id = await api.createSandbox(name)
-  const screen = await screenOf(page, env, id, name)
-  const more = screen.getByRole("button", { name: `More for ${name}` })
+  const details = await detailsOf(await screenOf(page, env, id, name), name)
+  const maintenance = details.getByRole("region", { name: "Maintenance" })
   // The fake runtime doesn't copy disks, so a fork or rebase is only checked to open its dialog.
   for (const action of ["Fork", "Rebase"]) {
-    await more.click()
-    await page.getByRole("menuitem", { name: action, exact: true }).click()
+    await maintenance.getByRole("button", { name: `${action}…` }).click()
     const dialog = page.getByRole("dialog", { name: `${action} ${name}` })
     await expect(dialog).toBeVisible()
     await page.keyboard.press("Escape")
     await expect(dialog).toBeHidden()
   }
 
-  await more.click()
-  const exported = page.getByRole("menuitem", { name: "Export", exact: true })
+  const exported = maintenance.getByRole("link", { name: "Export" })
   await expect(exported).toHaveAttribute(
     "href",
     `/api/environments/${env}/sandboxes/${id}/export`
   )
   await expect(exported).toHaveAttribute("download", `${name}.studio-sandbox`)
-  await page.keyboard.press("Escape")
 })
 
 // A sandbox made by an older Studio runs that release's base image: its menu says so and
-// rebases it onto the current one, and Home lists it until the notice is dismissed.
+// rebases it onto the current one from its Details, and Home lists it until the notice is
+// dismissed.
 test("a computer on an older base says so and rebases onto the current one", async ({
   page,
   api,
@@ -244,14 +257,14 @@ test("a computer on an older base says so and rebases onto the current one", asy
     "title",
     `More for ${name}: built on an older base`
   )
-  await more.click()
-  await expect(page.getByText("Built on an older base")).toBeVisible()
-  await expect(
-    page.getByText("From v0.7.0. Rebase for the newer harness versions", {
-      exact: false,
-    })
-  ).toBeVisible()
-  await page.getByRole("button", { name: "Rebase…" }).click()
+  const details = await detailsOf(screen, name)
+  const older = details.getByRole("status").filter({
+    hasText: "Built on an older base",
+  })
+  await expect(older).toContainText(
+    "Built on an older base, v0.7.0. Rebase for the newer harness versions"
+  )
+  await older.getByRole("button", { name: "Rebase…" }).click()
   const dialog = page.getByRole("dialog", { name: `Rebase ${name}` })
   await expect(
     dialog.getByRole("radio", { name: "The current base image" })
@@ -377,7 +390,7 @@ test("the screen fits a 390px screen", async ({ page, api, env }) => {
   expect(await fits()).toBe(true)
 })
 
-test("the computer's menu shows CPU and memory use while it runs", async ({
+test("the computer's Details show CPU and memory use while it runs", async ({
   page,
   api,
   env,
@@ -395,22 +408,21 @@ test("the computer's menu shows CPU and memory use while it runs", async ({
   expect(use!.memoryBytes).toBe(768 << 20)
 
   const screen = await screenOf(page, env, id, name)
-  const more = screen.getByRole("button", { name: `More for ${name}` })
-  await more.click()
-  const menu = page.getByRole("menu")
+  const state = (await detailsOf(screen, name)).getByRole("region", {
+    name: "State",
+  })
   await expect(
-    menu.getByText(`${Math.round(use!.cpuPercent)}%`, { exact: true })
+    state.getByText(`${Math.round(use!.cpuPercent)} % of ${use!.cpus} cores`, {
+      exact: true,
+    })
   ).toBeVisible()
-  await expect(menu.getByText(/^0\.8 \/ [\d.]+ GiB$/)).toBeVisible()
-  await page.keyboard.press("Escape")
+  await expect(state.getByText(/^0\.8 \/ [\d.]+ GiB$/)).toBeVisible()
 
   await screen
     .getByRole("button", { name: `Stop ${name}; its disk is kept` })
     .click()
-  await expect(screen.getByText(`${name} is off`)).toBeVisible()
-  await more.click()
-  await expect(menu.getByText("Memory", { exact: true })).toHaveCount(0)
-  await page.keyboard.press("Escape")
+  await expect(state).toContainText("Stopped")
+  await expect(state.getByText("Memory", { exact: true })).toHaveCount(0)
   const stopped = await api.request.get(
     `/api/environments/${env}/sandboxes/${id}/usage`
   )
@@ -421,14 +433,14 @@ test("the computer's menu shows CPU and memory use while it runs", async ({
 test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
   const name = sandboxName("sched")
   const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
   const openHistory = async () => {
-    await page
-      .getByRole("region", { name: `${name}'s screen` })
-      .getByRole("button", { name: `More for ${name}` })
+    await (
+      await detailsOf(screen, name)
+    )
+      .getByRole("button", { name: "All checkpoints and history…" })
       .click()
-    await page.getByRole("menuitem", { name: /^Checkpoints/ }).click()
   }
-  await screenOf(page, env, id, name)
   await openHistory()
   const section = page.getByRole("region", { name: "Checkpoints" })
   await section.getByRole("combobox", { name: "Take checkpoints" }).click()
@@ -468,13 +480,16 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   api,
   env,
 }) => {
+  // Another test's approvals stack in the corner, over the maintenance buttons.
+  await api.dismissApprovals()
   const name = sandboxName("base")
   const id = await api.createSandbox(name)
   const screen = await screenOf(page, env, id, name)
-  const more = screen.getByRole("button", { name: `More for ${name}` })
+  const maintenance = (await detailsOf(screen, name)).getByRole("region", {
+    name: "Maintenance",
+  })
 
-  await more.click()
-  await page.getByRole("menuitem", { name: "Use as a base" }).click()
+  await maintenance.getByRole("button", { name: "Use as a base…" }).click()
   const setup = page.getByRole("dialog", { name: `Use ${name} as a base` })
   await setup.getByRole("checkbox", { name: /on-fork\.sh/ }).click()
   await setup.getByRole("button", { name: "Use as a base" }).click()
@@ -483,8 +498,7 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await expect(mark.first()).toBeVisible()
 
   // Docker needs the base stopped, so the fork dialog holds that choice while it runs.
-  await more.click()
-  await page.getByRole("menuitem", { name: "Fork", exact: true }).click()
+  await maintenance.getByRole("button", { name: "Fork…" }).click()
   let fork = page.getByRole("dialog", { name: `Fork ${name}` })
   const docker = fork.getByRole("checkbox", { name: /Docker/ })
   await expect(docker).toBeDisabled()
@@ -517,8 +531,7 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   ).toBeVisible()
 
   // A stopped base can give its Docker images. The request says what the dialog says.
-  await more.click()
-  await page.getByRole("menuitem", { name: "Fork", exact: true }).click()
+  await maintenance.getByRole("button", { name: "Fork…" }).click()
   fork = page.getByRole("dialog", { name: `Fork ${name}` })
   await expect(fork.getByRole("checkbox", { name: /Docker/ })).toBeChecked()
   await fork.getByRole("checkbox", { name: /mise use/ }).click()
@@ -551,8 +564,9 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   })
   await page.keyboard.press("Escape")
 
-  await more.click()
-  await page.getByRole("menuitem", { name: "Base settings" }).click()
+  await maintenance
+    .getByRole("button", { name: "Change the base settings…" })
+    .click()
   const settings = page.getByRole("dialog", {
     name: `Base settings for ${name}`,
   })
@@ -566,9 +580,9 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await expect(create.getByLabel("Start from")).toHaveCount(0)
 })
 
-// A computer's teammate changes while it is stopped: the menu says who owns it, and the dialog
+// A computer's teammate changes while it is stopped: its Details say who owns it, and the dialog
 // holds the choice while the computer runs.
-test("a stopped computer gets another teammate from its menu", async ({
+test("a stopped computer gets another teammate from its Details", async ({
   page,
   api,
   env,
@@ -578,10 +592,12 @@ test("a stopped computer gets another teammate from its menu", async ({
   const name = sandboxName("owner")
   const id = await api.createSandbox(name)
   const screen = await screenOf(page, env, id, name)
-  const more = screen.getByRole("button", { name: `More for ${name}` })
+  const reach = (await detailsOf(screen, name)).getByRole("region", {
+    name: "Reach it",
+  })
+  await expect(reach).toContainText("None, it is yours")
 
-  await more.click()
-  await page.getByRole("menuitem", { name: /^Teammate/ }).click()
+  await reach.getByRole("button", { name: "Change its teammate…" }).click()
   const dialog = page.getByRole("dialog", { name: `Teammate of ${name}` })
   await expect(dialog).toContainText(
     "Stop the computer to change its teammate."
@@ -595,21 +611,20 @@ test("a stopped computer gets another teammate from its menu", async ({
   await expect(
     screen.getByRole("button", { name: `Start ${name}` })
   ).toBeVisible()
-  await more.click()
-  await page.getByRole("menuitem", { name: /^Teammate/ }).click()
+  await reach.getByRole("button", { name: "Change its teammate…" }).click()
   await dialog.getByLabel("Teammate").click()
   await page.getByRole("option", { name: teammate }).click()
   await dialog.getByRole("button", { name: "Change" }).click()
   await expect(dialog).toBeHidden()
-  // A teammate's computer is on the teammate's page, and its menu names the owner.
+  // A teammate's computer is on the teammate's page, and its Details name the owner.
   await expect(page).toHaveURL(
     new RegExp(`/e/${env}/teammates/${owner}\\?.*computer=${id}`)
   )
-  await page.getByRole("button", { name: `More for ${name}` }).click()
-  await expect(
-    page.getByRole("menuitem", { name: `Teammate ${teammate}` })
-  ).toBeVisible()
-  await page.getByRole("menuitem", { name: /^Teammate/ }).click()
+  const theirs = page
+    .getByRole("region", { name: `${name}'s details` })
+    .getByRole("region", { name: "Reach it" })
+  await expect(theirs).toContainText(teammate)
+  await theirs.getByRole("button", { name: "Change its teammate…" }).click()
   await dialog.getByLabel("Teammate").click()
   await page.getByRole("option", { name: "None" }).click()
   await dialog.getByRole("button", { name: "Change" }).click()

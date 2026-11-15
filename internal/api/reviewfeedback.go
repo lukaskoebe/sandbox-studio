@@ -217,3 +217,26 @@ func (s *Server) registerOpenPullRequest(api huma.API) {
 		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 	})
 }
+
+func (s *Server) registerPushPullRequest(api huma.API) {
+	type prIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID of a git push or its pull request"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getPushPullRequest", Method: http.MethodGet, Path: "/api/environments/{env}/approvals/{id}/pull-request", Tags: []string{"git"},
+		Summary: "What became of a push's pull request",
+		Description: "Asks the push's forge for the pull request Studio opened for it, or else the one from the pushed branch: its state, " +
+			"the sum of its CI checks and how many comments it has. Answers are kept for a minute. found is false, with a note, when " +
+			"there is none to read, such as for a push to the default branch or a forge without an API.",
+	}, func(ctx context.Context, in *prIn) (*struct{ Body gitreview.PushPR }, error) {
+		if s.Git == nil {
+			return nil, huma.Error503ServiceUnavailable("git review is not available")
+		}
+		pr, err := s.Git.PushPullRequest(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &struct{ Body gitreview.PushPR }{pr}, nil
+	})
+}

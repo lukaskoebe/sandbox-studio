@@ -49,6 +49,33 @@ async function clickPage(page: Page, x: number, y: number) {
   )
 }
 
+// Opens url from the address bar, and waits until the browser has: a click sent before then
+// lands on the old page, whose field the new one forgets.
+async function open(page: Page, api: Api, tm: string, url: string) {
+  const opened = async () =>
+    (
+      await api.json<{ browser?: { sessions: { history: string[] }[] } }>(
+        "GET",
+        `/api/e2e/teammates/${tm}/browser`
+      )
+    )?.browser?.sessions[0]?.history.length ?? 0
+  const before = await opened()
+  const address = page.getByLabel("Browser address")
+  await address.fill(url)
+  await address.press("Enter")
+  await expect.poll(opened).toBeGreaterThan(before)
+}
+
+// Clicks into the password field and waits for the page to say it is one: what is typed
+// before that answer is not followed, so no password would be offered.
+async function clickPassword(page: Page) {
+  const looked = page.waitForResponse((r) =>
+    r.url().includes("/browser/element")
+  )
+  await clickPage(page, ...passwordField)
+  await looked
+}
+
 // The fake sign-in form: the password field spans (40,166)-(600,202), Sign in (40,286)-(200,326).
 const passwordField = [300, 184] as const
 const signInButton = [120, 306] as const
@@ -65,7 +92,7 @@ test("a password typed into the live view is saved as a browser login", async ({
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   const { name, host, logins } = await signInPage(page, api, env)
   await page.waitForTimeout(300) // the frame of the new page
-  await clickPage(page, ...passwordField)
+  await clickPassword(page)
   await page.keyboard.type("hunter3")
   await page.keyboard.press("Backspace")
   await page.keyboard.type("2")
@@ -102,7 +129,7 @@ test("a password typed into the live view is saved as a browser login", async ({
   await address.fill(`https://${host}/login`)
   await address.press("Enter")
   await page.waitForTimeout(300)
-  await clickPage(page, ...passwordField)
+  await clickPassword(page)
   await page.keyboard.type("hunter2")
   await page.keyboard.press("Enter")
   await page.waitForTimeout(1000)
@@ -128,7 +155,7 @@ test("a password typed into the live view is saved as a browser login", async ({
   await page.keyboard.press("Escape")
 
   // Settings → Secrets lists it under the teammate's browser logins.
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   const section = page.getByRole("region", {
     name: `${name}'s browser logins`,
   })
@@ -144,10 +171,10 @@ test("a password is not offered after an edit it can't follow, or once told neve
   api,
   env,
 }) => {
-  const { host } = await signInPage(page, api, env)
+  const { host, tm } = await signInPage(page, api, env)
   const card = page.getByRole("form", { name: "Save password" })
   await page.waitForTimeout(300)
-  await clickPage(page, ...passwordField)
+  await clickPassword(page)
   await page.keyboard.type("abc")
   await page.keyboard.press("ArrowLeft")
   await page.keyboard.type("x")
@@ -155,20 +182,15 @@ test("a password is not offered after an edit it can't follow, or once told neve
   await page.waitForTimeout(1000)
   await expect(card).toHaveCount(0)
 
-  const address = page.getByLabel("Browser address")
-  await address.fill(`https://${host}/login`)
-  await address.press("Enter")
-  await page.waitForTimeout(300)
-  await clickPage(page, ...passwordField)
+  await open(page, api, tm, `https://${host}/login`)
+  await clickPassword(page)
   await page.keyboard.type("secret")
   await page.keyboard.press("Enter")
   await card.getByRole("button", { name: "Never for this site" }).click()
   await expect(card).toBeHidden()
 
-  await address.fill(`https://${host}/login`)
-  await address.press("Enter")
-  await page.waitForTimeout(300)
-  await clickPage(page, ...passwordField)
+  await open(page, api, tm, `https://${host}/login`)
+  await clickPassword(page)
   await page.keyboard.type("secret2")
   await page.keyboard.press("Enter")
   await page.waitForTimeout(1000)

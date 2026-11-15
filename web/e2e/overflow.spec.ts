@@ -46,9 +46,10 @@ for (const [width, path] of [
     await api.connect(id, host)
 
     await page.goto(`/e/${env}${path}`)
-    // Below sm (640 px) the stack folds into its pill, which opens the card.
+    // Below sm (640 px) the stack folds into a button in the crumb row, which opens the card.
     if (path && width < 640)
-      await approvals(page)
+      await page
+        .getByRole("navigation", { name: "Where you are" })
         .getByRole("button", { name: "1 approval", exact: true })
         .click()
     const card = approvals(page)
@@ -156,7 +157,7 @@ for (const width of [390, 1440])
     })
 
     await page.goto(`/e/${env}/teammates/${id}?profile=settings`)
-    const sheet = page.getByRole("dialog", { name: `${name}'s settings` })
+    const sheet = page.getByRole("region", { name: `${name}'s settings` })
     await expect(sheet.getByRole("button", { name: /^Soul/ })).toBeVisible()
     expect(await overflowing(sheet)).toEqual([])
   })

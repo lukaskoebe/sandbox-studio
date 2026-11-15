@@ -67,7 +67,7 @@ test("notifications: an approval notifies while Studio's window is not in front,
   })
   const id = await api.createSandbox(sandboxName("notify"))
   const host = `notify-${Math.random().toString(36).slice(2, 8)}.example.org`
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await expect(page.getByRole("heading", { name: "Secrets" })).toBeVisible()
   await api.connect(id, host)
   await expect

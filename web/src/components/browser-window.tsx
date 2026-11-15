@@ -601,7 +601,7 @@ export function BrowserWindow({
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
-                render={<Link to="/e/$env/settings/network" params={{ env }} />}
+                render={<Link to="/e/$env/network" params={{ env }} />}
               >
                 <ShieldCheckIcon />
                 Network rules
@@ -663,7 +663,7 @@ export function BrowserWindow({
             className="shrink-0"
             render={
               <Link
-                to="/e/$env/settings/network"
+                to="/e/$env/network"
                 params={{ env }}
                 search={{ rule: blocked.ruleId }}
               />

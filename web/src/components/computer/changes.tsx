@@ -1,9 +1,22 @@
-import { useEffect, useMemo, type ReactNode } from "react"
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   ArrowLeftIcon,
+  BellIcon,
   CaretRightIcon,
+  ChatCircleIcon,
+  CheckCircleIcon,
+  CircleDashedIcon,
   GitBranchIcon,
+  GitPullRequestIcon,
+  XCircleIcon,
 } from "@phosphor-icons/react"
 import { ChangesPanel } from "@/components/chat/changes-panel"
 import { requestLabel } from "@/components/chat/chat-thread"
@@ -13,17 +26,27 @@ import {
   firstChange,
   GitRail,
   gitChangedPaths,
-  RailLabel,
   RailRow,
   type useGitStatus,
 } from "@/components/computer/git-changes"
+import {
+  RailSection,
+  useRailFolds,
+  useSectionKeys,
+} from "@/components/computer/rail-sections"
 import { ErrorBoundary } from "@/components/error-boundary"
+import {
+  ResizeHandle,
+  railSplit,
+  useElementWidth,
+  useStoredSize,
+} from "@/components/resize-handle"
 import { GitReview, gitReviewDescription } from "@/components/git-review"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { cn } from "@/lib/utils"
-import type { Approval, Sandbox } from "@/lib/api/client"
+import { $api, type Approval, type Sandbox } from "@/lib/api/client"
 import {
   changeCount,
   type Chat,
@@ -75,6 +98,146 @@ function useRefreshOnTurnEnd(
 /** What the Changes tab shows beside its rail: a push's review, a change, or the thread's. */
 export type ChangesPick = { review?: string; change?: string }
 
+/** How long an allowed push stays in the Pushed section. */
+const pushedFor = 24 * 60 * 60 * 1000
+
+/** This computer's pushes and pull requests allowed in the last day, newest first. */
+function usePushed(env: string, sandboxId: string) {
+  const approved = $api.useQuery(
+    "get",
+    "/api/environments/{env}/approvals",
+    { params: { path: { env }, query: { status: "approved" } } },
+    { refetchInterval: 15_000 }
+  )
+  return useMemo(() => {
+    const since = Date.now() - pushedFor
+    return (approved.data ?? [])
+      .filter(
+        (a) =>
+          a.sandboxId === sandboxId &&
+          (a.kind === "git.push" || a.kind === "git.pr") &&
+          Date.parse(a.updatedAt) >= since
+      )
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  }, [approved.data, sandboxId])
+}
+
+/** A pushed row's words: where it went, and what became of it. */
+function pushedLine(a: Approval) {
+  const push = a.git?.push
+  const branch = (push?.ref ?? "").replace(/^refs\/heads\//, "") || "push"
+  const pr = push?.prUrl?.match(/(\d+)\/?$/)?.[1]
+  if (a.kind === "git.pr")
+    return {
+      what: `Pull request from ${a.git?.pullRequest?.head ?? branch}`,
+      state: pr ? `#${pr}` : "opened",
+      failed: false,
+    }
+  const failed = push?.state === "failed"
+  return {
+    what: `Push to ${branch}`,
+    state: failed ? "failed" : pr ? `#${pr}` : "pushed",
+    failed,
+  }
+}
+
+const prStates = {
+  open: { label: "open", className: "text-(--st-running)" },
+  merged: { label: "merged", className: "text-(--acc-git)" },
+  closed: { label: "closed", className: "text-muted-foreground" },
+} as const
+
+const checkStates = {
+  pending: {
+    icon: CircleDashedIcon,
+    label: "checks running",
+    className: "text-(--st-waiting)",
+  },
+  success: {
+    icon: CheckCircleIcon,
+    label: "checks passed",
+    className: "text-(--st-running)",
+  },
+  failure: {
+    icon: XCircleIcon,
+    label: "checks failed",
+    className: "text-(--st-failed)",
+  },
+} as const
+
+/**
+ * A row of the Pushed section: where the push went and, once its forge says, its pull request's
+ * number and state, the sum of its checks and its comments. The forge is asked once a minute.
+ */
+function PushedRow({
+  env,
+  approval: a,
+  current,
+  onClick,
+}: {
+  env: string
+  approval: Approval
+  current: boolean
+  onClick: () => void
+}) {
+  const line = pushedLine(a)
+  const pr = $api.useQuery(
+    "get",
+    "/api/environments/{env}/approvals/{id}/pull-request",
+    { params: { path: { env, id: a.id } } },
+    { enabled: !line.failed, refetchInterval: 60_000, retry: false }
+  ).data
+  const state = pr?.found && pr.state ? prStates[pr.state] : undefined
+  const checks =
+    pr?.found && pr.checks && pr.checks !== "none"
+      ? checkStates[pr.checks]
+      : undefined
+  return (
+    <RailRow current={current} onClick={onClick}>
+      <GitPullRequestIcon className="size-3.5 shrink-0 text-(--acc-git)" />
+      <span className="min-w-0 flex-1 truncate">{line.what}</span>
+      {pr?.found ? (
+        <span className="flex shrink-0 items-center gap-1.5 font-mono text-meta text-muted-foreground">
+          <span>#{pr.number}</span>
+          {state && <span className={state.className}>{state.label}</span>}
+          {checks && (
+            <span
+              className={cn("inline-flex", checks.className)}
+              title={checks.label}
+            >
+              <checks.icon aria-hidden className="size-3.5" />
+              <span className="sr-only">{checks.label}</span>
+            </span>
+          )}
+          {pr.comments > 0 && (
+            <span
+              className="inline-flex items-center gap-0.5"
+              title={`${pr.comments} ${pr.comments === 1 ? "comment" : "comments"}`}
+            >
+              <ChatCircleIcon aria-hidden className="size-3.5" />
+              {pr.comments}
+              <span className="sr-only">
+                {pr.comments === 1 ? " comment" : " comments"}
+              </span>
+            </span>
+          )}
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "shrink-0 font-mono text-meta",
+            line.failed ? "text-destructive" : "text-muted-foreground"
+          )}
+        >
+          {line.state}
+        </span>
+      )}
+    </RailRow>
+  )
+}
+
+type SectionId = "waiting" | "pushed" | "repositories" | "thread"
+
 /**
  * The screen's Changes tab, git's view of the computer (mock A): a rail with the pushes that
  * wait for review, each repository of /workspace with its branch and what is staged, not
@@ -108,9 +271,11 @@ export function ChangesView({
   thread?: ScreenThread
 }) {
   const changedTurns = useChangedTurns(thread)
-  const approval = reviews.find((a) => a.id === review)
+  const pushed = usePushed(env, sb.id)
+  const approval =
+    reviews.find((a) => a.id === review) ?? pushed.find((a) => a.id === review)
   // The tab decides the review in view, so the floating stack leaves its card out.
-  useClaimApprovals(approval ? [approval.id] : [])
+  useClaimApprovals(approval?.status === "pending" ? [approval.id] : [])
   useRefreshOnTurnEnd(thread, gitPaths)
   const turn =
     changedTurns.find((t) => t.id === thread?.turnId) ?? changedTurns.at(0)
@@ -128,7 +293,7 @@ export function ChangesView({
       variant="ghost"
       size="sm"
       className="m-2 mb-0 justify-self-start text-muted-foreground @2xl:hidden"
-      onClick={() => onPick({})}
+      onClick={() => pick({})}
     >
       <ArrowLeftIcon />
       Changes
@@ -182,23 +347,99 @@ export function ChangesView({
       />
     )
 
+  const folds = useRailFolds(sb.id)
+  // A review link, as from a notification, opens its section and folds the others until the
+  // user asks for all of them or leaves the tab. A pick in the rail is not a link.
+  const pickedHere = useRef<string | undefined>(undefined)
+  type Visit = { opened: Set<SectionId>; closed: Set<SectionId> }
+  const visitFor = (id?: string): Visit | undefined =>
+    id ? { opened: new Set(), closed: new Set() } : undefined
+  // The link's section: a push still waiting, or one already decided.
+  const mark: SectionId =
+    approval && approval.status !== "pending" ? "pushed" : "waiting"
+  const [visit, setVisit] = useState(() => visitFor(review))
+  const [lastReview, setLastReview] = useState(review)
+  if (review !== lastReview) {
+    setLastReview(review)
+    if (review && review !== pickedHere.current) setVisit(visitFor(review))
+  }
+  const pick = (p: ChangesPick) => {
+    pickedHere.current = p.review
+    onPick(p)
+  }
+  const fold = (id: SectionId) => ({
+    open: visit
+      ? !visit.closed.has(id) && (id === mark || visit.opened.has(id))
+      : folds.section(id),
+    onOpenChange: (open: boolean) => {
+      if (!visit) return folds.setSection(id, open)
+      const opened = new Set(visit.opened)
+      const closed = new Set(visit.closed)
+      if (open) {
+        opened.add(id)
+        closed.delete(id)
+      } else {
+        opened.delete(id)
+        closed.add(id)
+      }
+      setVisit({ opened, closed })
+    },
+    marked: !!visit && id === mark,
+  })
+  const railRef = useRef<HTMLDivElement>(null)
+  useSectionKeys(railRef)
+  const repos = git.data?.repos ?? []
+  const changed = repos.reduce((n, r) => n + (r.changes?.length ?? 0), 0)
+  const repoCount =
+    repos.length === 0
+      ? undefined
+      : `${repos.length} · ${changed} ${changed === 1 ? "file" : "files"}`
+
+  const [box, boxWidth] = useElementWidth<HTMLDivElement>()
+  const [rail, setRail] = useStoredSize(railSplit.key, railSplit.default)
+  const railMax = Math.max(
+    railSplit.min,
+    Math.min(railSplit.max, boxWidth - railSplit.contentMin)
+  )
+  const railWidth = Math.min(Math.max(rail, railSplit.min), railMax)
+
   return (
-    <div className="@container flex min-h-0 min-w-0 flex-1">
+    <div ref={box} className="@container flex min-h-0 min-w-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1">
         <ScrollArea
           aria-label="Changes"
           className={cn(
-            "min-h-0 w-full flex-1 @2xl:w-68 @2xl:flex-none @2xl:border-r",
+            "min-h-0 w-full flex-1 @2xl:w-(--rail) @2xl:flex-none @2xl:border-r",
             picked && "hidden @2xl:block"
           )}
+          style={{ "--rail": `${railWidth}px` } as CSSProperties}
         >
-          <div className="grid min-w-0 text-xs">
-            {reviews.length > 0 && (
-              <section
-                aria-label="Waiting for you"
-                className="min-w-0 border-b pb-1.5"
+          <div ref={railRef} className="grid min-w-0 text-xs">
+            {visit && (
+              <div
+                role="status"
+                className="flex items-start gap-2 border-b bg-muted/40 px-3 py-2 text-muted-foreground"
               >
-                <RailLabel level={3}>Waiting for you</RailLabel>
+                <BellIcon className="mt-px size-3.5 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  Opened from a review link. The other sections are folded for
+                  this visit.
+                </span>
+                <button
+                  type="button"
+                  className="shrink-0 text-foreground underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring/30"
+                  onClick={() => setVisit(undefined)}
+                >
+                  Show all
+                </button>
+              </div>
+            )}
+            {reviews.length > 0 && (
+              <RailSection
+                label="Waiting for you"
+                count={reviews.length}
+                {...fold("waiting")}
+              >
                 <ul className="min-w-0">
                   {reviews.map((a) => {
                     const branch =
@@ -210,7 +451,7 @@ export function ChangesView({
                         <RailRow
                           current={shown === `review:${a.id}`}
                           aria-label={`Review the push to ${branch}`}
-                          onClick={() => onPick({ review: a.id })}
+                          onClick={() => pick({ review: a.id })}
                         >
                           <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
                           <span className="min-w-0 flex-1 truncate">
@@ -224,22 +465,54 @@ export function ChangesView({
                     )
                   })}
                 </ul>
-              </section>
+              </RailSection>
             )}
-            <GitRail
-              status={git}
-              open={shown}
-              idle={!picked}
-              onOpen={(key) => onPick({ change: key })}
-            />
+            {pushed.length > 0 && (
+              <RailSection
+                label="Pushed"
+                count={pushed.length}
+                {...fold("pushed")}
+              >
+                <ul className="min-w-0">
+                  {pushed.map((a) => (
+                    <li key={a.id} className="min-w-0">
+                      <PushedRow
+                        env={env}
+                        approval={a}
+                        current={shown === `review:${a.id}`}
+                        onClick={() => pick({ review: a.id })}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </RailSection>
+            )}
+            <RailSection
+              label="Repositories"
+              count={repoCount}
+              {...fold("repositories")}
+            >
+              <GitRail
+                status={git}
+                open={shown}
+                idle={!picked}
+                onOpen={(key) => pick({ change: key })}
+                repoOpen={folds.repo}
+                onRepoOpenChange={folds.setRepo}
+              />
+            </RailSection>
             {thread && (
-              <section aria-label="This thread" className="min-w-0 pb-1.5">
-                <RailLabel level={3}>This thread</RailLabel>
+              <RailSection
+                label="This thread"
+                count={`${changedTurns.length} ${changedTurns.length === 1 ? "request" : "requests"}`}
+                {...fold("thread")}
+              >
                 <RailRow
                   current={shown === "thread"}
                   idle={!picked}
-                  onClick={() => onPick({ change: "thread" })}
+                  onClick={() => pick({ change: "thread" })}
                 >
+                  <ChatCircleIcon className="size-3.5 shrink-0 text-(--acc-chat)" />
                   <span className="min-w-0 flex-1 truncate">
                     {changedTurns.length === 0
                       ? "No files changed yet"
@@ -247,10 +520,20 @@ export function ChangesView({
                   </span>
                   <CaretRightIcon className="size-3 shrink-0 text-muted-foreground" />
                 </RailRow>
-              </section>
+              </RailSection>
             )}
           </div>
         </ScrollArea>
+        <ResizeHandle
+          label="the list of changes"
+          side="left"
+          size={railWidth}
+          min={railSplit.min}
+          max={railMax}
+          defaultSize={railSplit.default}
+          onResize={setRail}
+          className="-mx-1 hidden @2xl:block"
+        />
         <div
           className={cn(
             "min-h-0 min-w-0 flex-1 flex-col",

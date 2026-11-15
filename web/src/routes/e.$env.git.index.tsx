@@ -5,7 +5,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router"
 export const Route = createFileRoute("/e/$env/git/")({
   beforeLoad: ({ params }) => {
     throw redirect({
-      to: "/e/$env/settings/activity",
+      to: "/e/$env/activity",
       params,
       search: { kind: "git" },
       replace: true,

@@ -1,11 +1,13 @@
-import { useEffect } from "react"
+import { type CSSProperties, useEffect } from "react"
 import {
   Outlet,
   createFileRoute,
   notFound,
   redirect,
 } from "@tanstack/react-router"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebar, sidebarWidth } from "@/components/app-sidebar"
+import { Breadcrumbs } from "@/components/breadcrumbs"
+import { useStoredFlag, useStoredSize } from "@/components/resize-handle"
 import { oldSettingsSection, settingsPaths } from "@/components/settings/link"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { WindowBar } from "@/components/window-bar"
@@ -50,15 +52,32 @@ function EnvironmentLayout() {
     ? { height: viewportHeight, minHeight: viewportHeight }
     : undefined
   useEffect(() => rememberEnvironment(env), [env])
+  // Both kept in this browser: how wide the sidebar is, and whether it is folded to its icons.
+  const [width, setWidth] = useStoredSize(
+    "studio.sidebar-width",
+    sidebarWidth.default
+  )
+  const [open, setOpen] = useStoredFlag("studio.sidebar-open", true)
+  const clamped = Math.min(Math.max(width, sidebarWidth.min), sidebarWidth.max)
 
   return (
-    <SidebarProvider style={viewportStyle}>
-      <AppSidebar env={env} />
+    <SidebarProvider
+      open={open}
+      onOpenChange={setOpen}
+      style={
+        {
+          ...viewportStyle,
+          "--sidebar-width": `${clamped}px`,
+        } as CSSProperties
+      }
+    >
+      <AppSidebar env={env} width={clamped} onWidth={setWidth} />
       <SidebarInset
         className="h-svh min-w-0 overflow-hidden"
         style={viewportHeight ? { height: viewportHeight } : undefined}
       >
         <WindowBar />
+        <Breadcrumbs env={env} />
         <div className="relative flex min-h-0 w-full flex-1 flex-col">
           <Outlet />
         </div>

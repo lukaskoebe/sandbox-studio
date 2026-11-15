@@ -2,6 +2,35 @@ import type { ComponentProps } from "react"
 import { Link, useParams } from "@tanstack/react-router"
 
 /**
+ * The environment's own pages, which the sidebar lists under Environment: used every day, and
+ * Network can have requests waiting. The keywords are what search finds a page by besides its
+ * name.
+ */
+export const environmentPages = [
+  {
+    id: "network",
+    label: "Network",
+    keywords:
+      "rules level security hosts allow deny internet requests connections",
+  },
+  {
+    id: "secrets",
+    label: "Secrets",
+    keywords: "keys tokens vault credentials passwords",
+  },
+  {
+    id: "memory",
+    label: "Memory",
+    keywords: "shared facts pages conflicts knowledge",
+  },
+  {
+    id: "activity",
+    label: "Activity",
+    keywords: "log history decisions pushes reviews requests",
+  },
+] as const
+
+/**
  * The Settings page's sections, in the order its nav lists them: what belongs to this
  * environment, the accounts Studio uses, and this computer. The keywords are what the nav's
  * search finds a section by besides its name.
@@ -14,26 +43,6 @@ export const settingsGroups = [
         id: "general",
         label: "General",
         keywords: "start at login setup environment file export import",
-      },
-      {
-        id: "network",
-        label: "Network",
-        keywords: "rules level security hosts allow deny internet",
-      },
-      {
-        id: "secrets",
-        label: "Secrets",
-        keywords: "keys tokens vault credentials passwords",
-      },
-      {
-        id: "memory",
-        label: "Shared memory",
-        keywords: "facts pages conflicts knowledge",
-      },
-      {
-        id: "activity",
-        label: "Activity",
-        keywords: "log history decisions pushes reviews requests",
       },
     ],
   },
@@ -75,16 +84,18 @@ export const settingsGroups = [
   },
 ] as const
 
+/** A Settings section, or one of the environment's pages that used to be one. */
 export type SettingsSection =
-  (typeof settingsGroups)[number]["sections"][number]["id"]
+  | (typeof settingsGroups)[number]["sections"][number]["id"]
+  | (typeof environmentPages)[number]["id"]
 
-/** Each section's address. */
+/** Each section's and environment page's address. */
 export const settingsPaths = {
   general: "/e/$env/settings/general",
-  network: "/e/$env/settings/network",
-  secrets: "/e/$env/settings/secrets",
-  memory: "/e/$env/settings/memory",
-  activity: "/e/$env/settings/activity",
+  network: "/e/$env/network",
+  secrets: "/e/$env/secrets",
+  memory: "/e/$env/memory",
+  activity: "/e/$env/activity",
   providers: "/e/$env/settings/providers",
   forges: "/e/$env/settings/forges",
   templates: "/e/$env/settings/templates",
@@ -105,7 +116,7 @@ export function oldSettingsSection(v: unknown): SettingsSection | undefined {
     : undefined
 }
 
-/** Opens a section of the Settings page of the environment on show. */
+/** Opens a section of the Settings page, or an environment page, of the environment on show. */
 export function SettingsLink({
   section,
   ...props

@@ -1,4 +1,10 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Link } from "@tanstack/react-router"
@@ -75,6 +81,67 @@ import { appAllowAllEvent, appNotifies, notifyApp } from "@/lib/desktop"
 /** Cards the open stack lists; the rest are one link away. */
 const maxCards = 3
 
+/** The open stack's cards, which the pill and the crumb row's button name. */
+const panelId = "approval-stack-cards"
+
+// Whether the stack is open, and whether a crumb row holds its button, which on a phone takes
+// the pill's place: up there it covers no composer or terminal keys.
+let stackOpen = false
+let buttonHosts = 0
+const stackListeners = new Set<() => void>()
+const subscribeStack = (l: () => void) => {
+  stackListeners.add(l)
+  return () => void stackListeners.delete(l)
+}
+const emitStack = () => stackListeners.forEach((l) => l())
+const setStackOpen = (open: boolean) => {
+  stackOpen = open
+  emitStack()
+}
+const useStackOpen = () => useSyncExternalStore(subscribeStack, () => stackOpen)
+const useButtonHosted = () =>
+  useSyncExternalStore(subscribeStack, () => buttonHosts > 0)
+
+/** The approvals the stack shows: those pending that the page doesn't show in place. */
+function useStackItems() {
+  const pending = usePendingApprovals()
+  const claimed = useClaimedApprovals()
+  const all = pending.data ?? []
+  return { all, items: all.filter((a) => !claimed.has(a.id)) }
+}
+
+/**
+ * The stack's button for the crumb row on a phone: the count of approvals, which opens their
+ * cards below the row. It shows nothing while none wait.
+ */
+export function ApprovalsButton({ className }: { className?: string }) {
+  const { items } = useStackItems()
+  const expanded = useStackOpen()
+  useEffect(() => {
+    buttonHosts++
+    emitStack()
+    return () => {
+      buttonHosts--
+      emitStack()
+    }
+  }, [])
+  if (items.length === 0) return null
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-expanded={expanded}
+      aria-controls={panelId}
+      onClick={() => setStackOpen(!expanded)}
+      className={cn("h-7 shrink-0 gap-1.5 px-1.5 text-xs", className)}
+    >
+      <WaitingCount count={items.length} />
+      {items.length === 1 ? "approval" : "approvals"}
+      {expanded ? <CaretUpIcon aria-hidden /> : <CaretDownIcon aria-hidden />}
+    </Button>
+  )
+}
+
 /**
  * Pending approvals, shown on every page: a held connection waits on the answer, a staged
  * git push waits for review. Approvals the page already shows in place are left out
@@ -86,19 +153,17 @@ const maxCards = 3
  */
 export function ApprovalStack() {
   const pending = usePendingApprovals()
+  const { all, items } = useStackItems()
   const envs = $api.useQuery("get", "/api/environments")
   const notifications = useNotifications(pending.data)
-  const [expanded, setExpanded] = useState(false)
-  const panelId = useId()
+  const expanded = useStackOpen()
+  const hosted = useButtonHosted()
   // Requests the user chose to review one by one, which then no longer group.
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
-  const all = pending.data ?? []
   useTitleCount(all.length)
 
   // What the page shows in place (a chat's permission cards, Home's and a teammate's cards,
   // the browser's questions) stays out of the stack.
-  const claimed = useClaimedApprovals()
-  const items = all.filter((a) => !claimed.has(a.id))
   const { sheet, review } = useApprovalReview(all)
   const cards = approvalCards(items, split)
   if (cards.length === 0) return sheet
@@ -106,12 +171,16 @@ export function ApprovalStack() {
     envs.data?.find((e) => e.id === a.environmentId)?.name
 
   // One card needs no pill on a wide page, so it shows there; below sm the CSS hides it until the
-  // pill opens it. Several cards start folded.
+  // pill opens it. Several cards start folded. On a phone with a crumb row, its button stands in
+  // for the pill and the cards open below the row.
   const single = cards.length === 1
   return (
     <section
       aria-label="Approvals"
-      className="fixed right-4 bottom-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2"
+      className={cn(
+        "fixed right-4 bottom-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2",
+        hosted && "max-sm:top-12 max-sm:bottom-auto"
+      )}
     >
       <ScrollArea
         id={panelId}
@@ -139,7 +208,7 @@ export function ApprovalStack() {
           onSplit={(ids) => {
             setSplit((prev) => new Set([...prev, ...ids]))
             // The hosts become cards of their own, which would fold the stack away.
-            setExpanded(true)
+            setStackOpen(true)
           }}
         />
       </ScrollArea>
@@ -148,8 +217,12 @@ export function ApprovalStack() {
         size="sm"
         aria-expanded={expanded}
         aria-controls={panelId}
-        onClick={() => setExpanded((o) => !o)}
-        className={cn("rounded-full bg-card shadow-lg", single && "sm:hidden")}
+        onClick={() => setStackOpen(!expanded)}
+        className={cn(
+          "rounded-full bg-card shadow-lg",
+          single && "sm:hidden",
+          hosted && "max-sm:hidden"
+        )}
       >
         <WaitingCount count={items.length} />
         {items.length === 1 ? "approval" : "approvals"}

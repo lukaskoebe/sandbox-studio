@@ -13,7 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as EEnvRouteImport } from './routes/e.$env'
 import { Route as EEnvIndexRouteImport } from './routes/e.$env.index'
+import { Route as EEnvActivityRouteImport } from './routes/e.$env.activity'
 import { Route as EEnvBrowserRouteImport } from './routes/e.$env.browser'
+import { Route as EEnvComputersRouteImport } from './routes/e.$env.computers'
 import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
 import { Route as EEnvSettingsRouteImport } from './routes/e.$env.settings'
@@ -70,9 +72,19 @@ const EEnvIndexRoute = EEnvIndexRouteImport.update({
   path: '/',
   getParentRoute: () => EEnvRoute,
 } as any)
+const EEnvActivityRoute = EEnvActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => EEnvRoute,
+} as any)
 const EEnvBrowserRoute = EEnvBrowserRouteImport.update({
   id: '/browser',
   path: '/browser',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvComputersRoute = EEnvComputersRouteImport.update({
+  id: '/computers',
+  path: '/computers',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvProvidersRoute = EEnvProvidersRouteImport.update({
@@ -255,7 +267,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/setup': typeof SetupRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/e/$env/activity': typeof EEnvActivityRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
+  '/e/$env/computers': typeof EEnvComputersRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
@@ -296,7 +310,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/setup': typeof SetupRoute
+  '/e/$env/activity': typeof EEnvActivityRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
+  '/e/$env/computers': typeof EEnvComputersRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env': typeof EEnvIndexRoute
@@ -338,7 +354,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/setup': typeof SetupRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/e/$env/activity': typeof EEnvActivityRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
+  '/e/$env/computers': typeof EEnvComputersRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
@@ -382,7 +400,9 @@ export interface FileRouteTypes {
     | '/'
     | '/setup'
     | '/e/$env'
+    | '/e/$env/activity'
     | '/e/$env/browser'
+    | '/e/$env/computers'
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
@@ -423,7 +443,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/setup'
+    | '/e/$env/activity'
     | '/e/$env/browser'
+    | '/e/$env/computers'
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env'
@@ -464,7 +486,9 @@ export interface FileRouteTypes {
     | '/'
     | '/setup'
     | '/e/$env'
+    | '/e/$env/activity'
     | '/e/$env/browser'
+    | '/e/$env/computers'
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
@@ -539,11 +563,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvIndexRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/e/$env/activity': {
+      id: '/e/$env/activity'
+      path: '/activity'
+      fullPath: '/e/$env/activity'
+      preLoaderRoute: typeof EEnvActivityRouteImport
+      parentRoute: typeof EEnvRoute
+    }
     '/e/$env/browser': {
       id: '/e/$env/browser'
       path: '/browser'
       fullPath: '/e/$env/browser'
       preLoaderRoute: typeof EEnvBrowserRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/computers': {
+      id: '/e/$env/computers'
+      path: '/computers'
+      fullPath: '/e/$env/computers'
+      preLoaderRoute: typeof EEnvComputersRouteImport
       parentRoute: typeof EEnvRoute
     }
     '/e/$env/providers': {
@@ -855,7 +893,9 @@ const EEnvTeammatesIdRouteWithChildren = EEnvTeammatesIdRoute._addFileChildren(
 )
 
 interface EEnvRouteChildren {
+  EEnvActivityRoute: typeof EEnvActivityRoute
   EEnvBrowserRoute: typeof EEnvBrowserRoute
+  EEnvComputersRoute: typeof EEnvComputersRoute
   EEnvProvidersRoute: typeof EEnvProvidersRoute
   EEnvSecretsRoute: typeof EEnvSecretsRoute
   EEnvSettingsRoute: typeof EEnvSettingsRouteWithChildren
@@ -880,7 +920,9 @@ interface EEnvRouteChildren {
 }
 
 const EEnvRouteChildren: EEnvRouteChildren = {
+  EEnvActivityRoute: EEnvActivityRoute,
   EEnvBrowserRoute: EEnvBrowserRoute,
+  EEnvComputersRoute: EEnvComputersRoute,
   EEnvProvidersRoute: EEnvProvidersRoute,
   EEnvSecretsRoute: EEnvSecretsRoute,
   EEnvSettingsRoute: EEnvSettingsRouteWithChildren,

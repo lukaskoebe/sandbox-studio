@@ -27,6 +27,7 @@ import {
   sessionKeys,
   sortTerminals,
   terminalCommand,
+  terminalURL,
 } from "@/lib/terminals"
 import { useTerminalTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -254,7 +255,7 @@ export function Terminals({
         {mounted.map((name) => (
           <Terminal
             key={name}
-            url={`/api/environments/${env}/sandboxes/${sb.id}/terminals/${name}/attach`}
+            url={terminalURL(env, sb.id, name)}
             active={visible && name === current}
             suspended={suspended}
             onExit={() => drop(name)}

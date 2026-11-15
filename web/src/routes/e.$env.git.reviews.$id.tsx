@@ -80,7 +80,7 @@ function GitReviewPage() {
                   size="sm"
                   render={
                     <Link
-                      to="/e/$env/settings/activity"
+                      to="/e/$env/activity"
                       params={{ env }}
                       search={{ kind: "git" }}
                     />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { isMac } from "@/lib/keys"
 import { toast } from "sonner"
 import { ClipboardTextIcon, CopyIcon } from "@phosphor-icons/react"
 import { Terminal as XTerm } from "@xterm/xterm"
@@ -133,9 +134,6 @@ function applyControlKey(data: string): string | null {
   return data
 }
 
-const isMac =
-  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
-
 /** How long after the user's own input a program in the terminal may write the clipboard. */
 const clipboardWriteWindowMs = 2000
 
@@ -165,6 +163,17 @@ function terminalClipboard(
       return copyText(text).then(onCopied, () => undefined)
     },
   }
+}
+
+/** Each open terminal's text by its attach URL: what Bring in sends a teammate. */
+const screens = new Map<string, (lines: number) => string>()
+
+/**
+ * The last lines of an open terminal, as its scrollback and screen show them, trailing blank
+ * lines dropped; undefined while no terminal of that URL is open in this tab.
+ */
+export function terminalText(url: string, lines = 120): string | undefined {
+  return screens.get(url)?.(lines)
 }
 
 /** The images on the clipboard, as files. */
@@ -427,6 +436,20 @@ export function Terminal({
     }
     termRef.current = term
     fitRef.current = fit
+    screens.set(url, (lines) => {
+      const buf = term.buffer.active
+      const out: string[] = []
+      for (let i = 0; i < buf.length; i++) {
+        const line = buf.getLine(i)
+        if (!line) continue
+        const text = line.translateToString(true)
+        // A wrapped line continues the one before it.
+        if (line.isWrapped && out.length) out[out.length - 1] += text
+        else out.push(text)
+      }
+      while (out.length && !out[out.length - 1].trim()) out.pop()
+      return out.slice(-lines).join("\n")
+    })
 
     const encoder = new TextEncoder()
     let ws: WebSocket | null = null
@@ -576,6 +599,7 @@ export function Terminal({
       pasteEventPendingRef.current = false
       subs.forEach((s) => s.dispose())
       ws?.close()
+      screens.delete(url)
       term.dispose()
     }
   }, [consumeCtrl, copySelection, pasteFiles, showCopied, url])

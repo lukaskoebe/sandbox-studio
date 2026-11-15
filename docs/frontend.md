@@ -123,14 +123,44 @@ Activity with `?kind=network`, `/git` to Settings → Activity with `?kind=git`,
 `/memory`, `/providers` and `/builds` to their sections. `/browser` redirects to the teammate
 browsers above; `/browser?teammate=<id>` opens that teammate's browser.
 
-The sidebar has the environment switcher and Home, then Teammates, each with one word for what
-it is doing (working, no computer, stopped …) or the count of what waits on it, then Your
-computers, the sandboxes without a teammate, each with its status dot, and a footer with
-Settings, the version and the theme switch. Teammates' + adds a teammate; Your computers' +
-makes a computer without one or imports one. A teammate is waiting on you while one of its
-approvals is pending (a browser action or credential, a memory share, or a tool permission in
-one of its chats), and working while one of its chats runs. The Settings page names the
-environment in its header.
+The sidebar (`components/app-sidebar.tsx`) has the environment switcher, Search (the palette,
+⌘K or Ctrl+K: `components/command-palette.tsx`) and Home, then Teammates, each with one word for
+what it is doing (working, no computer, stopped …) or the count of what waits on it, and under
+it its threads (`lib/threads.ts`): every one that runs, waits or is in the terminal, its agents
+working in a terminal with no chat (marked `>_`), and the two latest others of the last day,
+each with its state and, for a teammate with more than one computer, the computer; then "All N
+threads" to its home. On hover a teammate shows `>_`, a terminal on the computer last used for
+it, and +, Start work. Your computers lists the sandboxes without a teammate, each with its
+status dot; Environment has Computers (every computer, with their count), Network, Secrets,
+Memory and Activity; the footer has Settings, the version and the theme switch. Teammates' +
+adds a teammate; Your computers' + makes a computer without one or imports one. A teammate is
+waiting on you while one of its approvals is pending (a browser action or credential, a memory
+share, or a tool permission in one of its chats), and working while one of its chats runs. The
+Settings page names the environment in its header.
+
+Above every page a row of breadcrumbs (`components/breadcrumbs.tsx`) says where it is: Home,
+Environment › a page, Settings › a section, Computers › a computer of the user's own, or a
+teammate › the open thread followed, on its desk and in a thread, by a chip for the computer it
+shows ("on ● docs-site"). Each part with a caret opens its neighbours; the chip's menu has the
+teammate's computers, Give it another computer and All computers. What the computer's tabs show
+is on the computer, not in the row.
+
+Environment › Computers (`components/computers-page.tsx`) lists every computer with its forks
+under their base: state, who uses it, the thread on it now (a chat that runs or waits, else the
+teammate's agent in a terminal, else the latest chat), its disk and when it was last used,
+and the computer's ⋯. All, Running, Yours and Bases filter it; Import and New computer add one,
+and Rebase all appears while some run an older base image. A row opens a teammate's computer on
+its desk and the user's own on its page, which has its terminal sessions in a panel beside the
+screen, folded until opened.
+
+Start work (`components/teammate/start-work.tsx`, opened by `lib/start-work.ts` from the
+teammate's header, the sidebar's + and the palette) asks how the teammate should work: in a
+chat (a new thread with the message), its harness in a terminal (a session of its own that the
+user can type along in), or just the computer, opened on its terminal; on which of its
+computers, or in a fresh fork of it, which it makes and waits for. Bring X in, on the desk,
+opens it as a chat on the computer shown, with the terminal's last lines and the uncommitted
+changes coming along unless unticked.
+
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
 
@@ -139,8 +169,10 @@ row and the page in one centred column, without a rule under the header.
 
 ### A teammate and its computer
 
-The teammate's page (`components/teammate/`) has the conversation on the left and the screen of
-the computer it works on to the right ([design](design/teammate-computer.md)). Everything it
+The teammate's page (`components/teammate/`) has three states ([design](design/teammate-computer.md)):
+its home, which takes the page with its computers beside the threads and the screen folded to a
+rail; its desk, a computer open with the home narrowed to a panel beside it (`tab=` with no
+thread); and a thread, the conversation on the left and the screen to the right. Everything it
 shows is in the URL's search, so Back, Forward and links work: `thread`, `computer`, `tab`,
 `term`, `review`, `fold`, `full`, `profile` (`card`, `tasks`, `memory`, `settings`), `open` (the open
 settings card) and `from=setup`. Esc closes the profile or a menu first, then leaves the thread.
@@ -152,7 +184,12 @@ settings card) and `from=setup`. Esc closes the profile or a menu first, then le
   seen: `lib/chat-seen.ts`, revs in localStorage), the small events between them (facts it
   learned, with Forget; tasks; terminal work; check-ins), what it browses now, and what waits
   for you, a row each, whose Answer opens the card in place and Review opens a push on Changes.
-  One composer starts a thread on the computer on the screen, adds a task, or teaches a fact.
+  One composer starts a thread on the computer on the screen (or another it picks), adds a
+  task, or teaches a fact. Beside them, on a wide page, its computers as cards: state, what
+  runs there, and Terminal, Browser and Files, each opening the desk on that tab.
+- The desk: the home in brief beside the open computer: Start work, Bring X in, what waits,
+  the threads with their state, its agents in terminals, its computers, and the composer.
+  Expand gives the home the page again, Fold leaves the computer the page.
 - A thread: Back to the teammate, its title and state, and ⋯ to continue it in the agent's
   terminal or delete it; then the chat and its composer. Its changes and terminal show on the
   screen.
@@ -176,9 +213,10 @@ settings card) and `from=setup`. Esc closes the profile or a menu first, then le
   as they change (check-ins on or off, network level, browser) stay as they are.
 
 The screen (`components/computer/screen.tsx`) is the same for a teammate's computer and for one
-without a teammate, which has it at full width. Its bezel has the computer's name, a switcher
-between the owner's computers with forks under the one they came from and Another computer;
-the tabs Terminal, Browser (a teammate's own browser), Preview (while previews are on), Files
+without a teammate, which has it at full width. The breadcrumb row names the computer and
+switches it (on a teammate's page its "on …" chip, whose menu has the owner's computers with
+forks under the one they came from, Give … another computer and All computers), so the bezel
+has no switcher of its own. The bezel has the tabs Terminal, Browser (a teammate's own browser), Preview (while previews are on), Files
 and Changes, each with a dot while something on it waits for you; power (Stop, Start or Resume);
 ⋯; enlarge (a teammate's page on a wide screen) and fold. Under it the display:
 

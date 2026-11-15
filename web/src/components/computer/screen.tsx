@@ -11,25 +11,22 @@ import {
   ArrowsInSimpleIcon,
   ArrowsOutSimpleIcon,
   BrowserIcon,
-  CaretDownIcon,
   FolderIcon,
   GitDiffIcon,
-  GitForkIcon,
+  InfoIcon,
   MonitorIcon,
-  PlusIcon,
   PowerIcon,
   TerminalWindowIcon,
   WarningIcon,
   type Icon,
 } from "@phosphor-icons/react"
-import { BaseMark } from "@/components/base-dialog"
 import { BrowserRail, type RailTab } from "@/components/browser-rail"
 import { BrowserWindow, type BrowserReplay } from "@/components/browser-window"
 import { ChangesView, FilesView } from "@/components/computer/changes"
 import { gitChangeCount, useGitStatus } from "@/components/computer/git-changes"
 import { ComputerMenu } from "@/components/computer/computer-menu"
+import { ComputerDetails } from "@/components/computer/details"
 import { Terminals } from "@/components/computer/terminals"
-import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { PreviewPanel, PreviewsOff } from "@/components/chat/preview-panel"
 import { isGitApproval } from "@/components/git-review"
 import { MergeBanner } from "@/components/merge-fork"
@@ -46,15 +43,6 @@ import {
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
 import { WaitingChip } from "@/components/waiting-chip"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
@@ -84,19 +72,19 @@ const tabMeta: Record<ScreenTab, { label: string; icon: Icon }> = {
   preview: { label: "Preview", icon: MonitorIcon },
   files: { label: "Files", icon: FolderIcon },
   changes: { label: "Changes", icon: GitDiffIcon },
+  details: { label: "Details", icon: InfoIcon },
 }
 
 /**
- * A computer drawn as one screen (docs/design/teammate-computer.md): a bezel with the computer's
- * name, which switches between the owner's computers, the tabs Terminal, Browser (a teammate's
- * own), Preview and Changes, power, ⋯, enlarge and fold; under it the display. A computer that
+ * A computer drawn as one screen (docs/design/teammate-computer.md): a bezel with the tabs
+ * Terminal, Browser (a teammate's own), Preview and Changes, power, ⋯, enlarge and fold; under
+ * it the display. The breadcrumb row names the computer and switches it. A computer that
  * is off shows a dark glass with Start; its teammate's browser, which runs in a VM of its own,
  * stays a tab beside it. Folded, the screen is a strip of tab icons.
  */
 export function ComputerScreen({
   env,
   sandbox: sb,
-  computers,
   owner,
   search,
   onChange,
@@ -108,8 +96,6 @@ export function ComputerScreen({
 }: {
   env: string
   sandbox: Sandbox
-  /** The computers the switcher offers: the owner's, or the plain ones. */
-  computers: Sandbox[]
   owner?: Teammate
   search: ScreenSearch
   onChange: (change: ScreenChange) => void
@@ -155,13 +141,17 @@ export function ComputerScreen({
     ...(previewTab ? (["preview"] as const) : []),
     "files",
     "changes",
+    "details",
   ]
   const on = p === "ready"
+  // Details works while the computer is off, and the teammate's browser runs in a VM of its own.
   const shown: ScreenTab[] = on
     ? tabs
     : owner && sb.status !== "creating" && sb.status !== "failed"
-      ? ["terminal", "browser"]
-      : []
+      ? ["terminal", "browser", "details"]
+      : sb.status !== "creating"
+        ? ["terminal", "details"]
+        : []
   const tab = shown.find((t) => t === search.tab) ?? "terminal"
   // The Terminals tab's own query: the Terminal tab counts its sessions.
   const terminals = $api.useQuery(
@@ -182,6 +172,7 @@ export function ComputerScreen({
   const dots: Partial<Record<ScreenTab, boolean>> = {
     changes: reviews.length > 0,
     browser: browserAsks > 0,
+    details: !!sb.baseOutdated,
   }
   // A browser replay and its activity stay while the tab is switched away and back.
   const [replay, setReplay] = useState<BrowserReplay | null>(null)
@@ -240,15 +231,9 @@ export function ComputerScreen({
     >
       <div className="@container flex min-h-0 flex-1 flex-col rounded-3xl border bg-sidebar px-1.5 pb-1.5 dark:bg-[#0b0f11]">
         <div className="flex h-11 shrink-0 items-center gap-2 pl-0.5">
+          {/* The breadcrumb row names the computer and switches it (its chip on a teammate's
+              page), so the bezel holds only what the screen does. */}
           {lead}
-          <Switcher
-            env={env}
-            sandbox={sb}
-            computers={computers}
-            owner={owner}
-            chatComputer={chatComputer?.id ?? thread?.chat.sandboxId}
-            onPick={(id) => onChange({ computer: id })}
-          />
           <WaitingChip env={env} sandbox={sb} />
           {shown.length ? (
             <div
@@ -281,14 +266,14 @@ export function ComputerScreen({
                       active &&
                         "bg-background font-medium text-foreground shadow-[0_1px_2px_rgb(0_0_0/8%),0_0_0_1px_color-mix(in_oklab,var(--border)_70%,transparent)] dark:bg-accent",
                       // A narrow screen names only the shown tab; a phone's names none,
-                      // to leave room for the computer's name.
-                      active ? "@max-[26rem]:px-2" : "@max-[38rem]:px-2"
+                      // to leave room for its buttons.
+                      active ? "@max-[26rem]:px-2" : "@max-[46rem]:px-2"
                     )}
                   >
                     <M.icon className="size-3.5" />
                     <span
                       className={
-                        active ? "@max-[26rem]:hidden" : "@max-[38rem]:hidden"
+                        active ? "@max-[26rem]:hidden" : "@max-[46rem]:hidden"
                       }
                     >
                       {M.label}
@@ -322,7 +307,12 @@ export function ComputerScreen({
           )}
           <div className="flex items-center gap-px">
             <Power env={env} sandbox={sb} />
-            <ComputerMenu env={env} sandbox={sb} owner={owner} />
+            <ComputerMenu
+              env={env}
+              sandbox={sb}
+              owner={owner}
+              onDetails={() => onChange({ tab: "details" })}
+            />
             {enlargeable && (
               <Button
                 variant="ghost"
@@ -376,10 +366,19 @@ export function ComputerScreen({
         <MergeBanner env={env} sandbox={sb} />
         <RebaseFailedAlert env={env} sandbox={sb} />
         <Display
-          off={!on && tab !== "browser"}
+          off={!on && tab !== "browser" && tab !== "details"}
           terminal={on && tab === "terminal"}
         >
-          {sb.status === "creating" || sb.status === "failed" ? (
+          {tab === "details" ? (
+            <ErrorBoundary label="the details" resetKey={sb.id}>
+              <ComputerDetails
+                env={env}
+                sandbox={sb}
+                owner={owner}
+                onPreview={(port) => onChange({ tab: "preview", port })}
+              />
+            </ErrorBoundary>
+          ) : sb.status === "creating" || sb.status === "failed" ? (
             <SandboxProgress
               sandbox={sb}
               action={
@@ -576,111 +575,6 @@ function Display({
     >
       {children}
     </div>
-  )
-}
-
-/**
- * The computer's name on the bezel, with its status dot: it switches between the computers it
- * lists, forks under the one they came from, and adds another for a teammate. While a thread is
- * open the screen follows it; another computer picked is pinned beside it.
- */
-function Switcher({
-  env,
-  sandbox: sb,
-  computers,
-  owner,
-  chatComputer,
-  onPick,
-}: {
-  env: string
-  sandbox: Sandbox
-  computers: Sandbox[]
-  owner?: Teammate
-  /** The open thread's computer. */
-  chatComputer?: string
-  onPick: (id: string) => void
-}) {
-  const [adding, setAdding] = useState(false)
-  // Forks follow the computer they came from.
-  const ordered: Sandbox[] = []
-  const ids = new Set(computers.map((c) => c.id))
-  const visit = (c: Sandbox) => {
-    ordered.push(c)
-    for (const f of computers.filter((x) => x.forkOf === c.id)) visit(f)
-  }
-  for (const c of computers.filter((x) => !x.forkOf || !ids.has(x.forkOf)))
-    visit(c)
-  const p = phase(sb)
-  if (computers.length <= 1 && !owner)
-    return (
-      <span className="flex h-[30px] min-w-0 items-center gap-2 px-2">
-        <StatusDot {...phaseDot(p)} compact />
-        <span className="truncate font-mono text-title font-semibold">
-          {sb.name}
-        </span>
-        {sb.forkDefaults && <BaseMark />}
-      </span>
-    )
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          title={`${sb.name}: ${phaseDot(p).label}`}
-          className="flex h-[30px] min-w-0 items-center gap-2 rounded-md px-2 hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
-        >
-          <StatusDot {...phaseDot(p)} compact />
-          <span className="truncate font-mono text-title font-semibold">
-            {sb.name}
-          </span>
-          {sb.forkDefaults && <BaseMark />}
-          <CaretDownIcon className="size-3 shrink-0 text-muted-foreground" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>
-              {owner ? `${owner.name}'s computers` : "Your computers"}
-            </DropdownMenuLabel>
-            {ordered.map((c) => (
-              <DropdownMenuItem
-                key={c.id}
-                aria-current={c.id === sb.id || undefined}
-                className={cn(c.forkOf && ids.has(c.forkOf) && "pl-5")}
-                onClick={() => onPick(c.id)}
-              >
-                {c.forkOf && ids.has(c.forkOf) ? (
-                  <GitForkIcon className="text-muted-foreground" />
-                ) : (
-                  <StatusDot {...phaseDot(phase(c))} compact />
-                )}
-                <span className="min-w-0 truncate font-mono">{c.name}</span>
-                <span className="ml-auto text-caption whitespace-nowrap text-muted-foreground">
-                  {c.id === chatComputer
-                    ? "the open chat's"
-                    : phaseDot(phase(c)).label}
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-          {owner && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setAdding(true)}>
-                <PlusIcon />
-                Another computer for {owner.name}
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {owner && (
-        <CreateSandboxDialog
-          env={env}
-          teammate={owner.id}
-          open={adding}
-          onOpenChange={setAdding}
-        />
-      )}
-    </>
   )
 }
 

@@ -1,9 +1,8 @@
 import { Link } from "@tanstack/react-router"
-import { CaretDownIcon, GearIcon } from "@phosphor-icons/react"
+import { CaretDownIcon, GearIcon, PlusIcon } from "@phosphor-icons/react"
 import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
 import { Readiness } from "@/components/teammate-readiness"
 import { Button } from "@/components/ui/button"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
   activityDetail,
   presenceLabels,
@@ -14,16 +13,19 @@ import { harnessLabels } from "@/lib/teammates"
 
 /**
  * The top of the teammate's home: who it is, the agent it runs and what it does now. The name,
- * with a caret that says it opens, opens its profile card; Settings, at the end, its settings.
+ * with a caret that says it opens, opens its profile card; Start work asks where and how it
+ * should work; Settings, at the end, its settings.
  */
 export function TeammateHeader({
   env,
   teammate,
   onProfile,
+  onStartWork,
 }: {
   env: string
   teammate: Teammate
   onProfile: (view: "card" | "settings") => void
+  onStartWork?: () => void
 }) {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
@@ -34,7 +36,6 @@ export function TeammateHeader({
   const terminal = activity.terminal
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 px-3 md:px-4">
-      <SidebarTrigger className="md:hidden" />
       <button
         type="button"
         onClick={() => onProfile("card")}
@@ -91,6 +92,12 @@ export function TeammateHeader({
             )}
           </span>
         </span>
+        {onStartWork && (
+          <Button size="sm" onClick={onStartWork}>
+            <PlusIcon />
+            Start work
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"

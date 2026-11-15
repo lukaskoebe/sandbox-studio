@@ -1,11 +1,10 @@
 import type { ReactNode } from "react"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
 import { $api } from "@/lib/api/client"
 
 /**
- * A page's title row, without a rule under it, as the teammate page's. The sidebar's toggle is
- * here on phones; on wider screens the sidebar's own rail folds it.
+ * A page's title row, without a rule under it, as the teammate page's. On phones the sidebar's
+ * toggle is in the breadcrumb row above it.
  */
 export function PageHeader({ children }: { children: ReactNode }) {
   return (
@@ -13,7 +12,6 @@ export function PageHeader({ children }: { children: ReactNode }) {
       data-slot="page-header"
       className="flex h-14 shrink-0 items-center gap-2 px-3 md:px-4"
     >
-      <SidebarTrigger className="md:hidden" />
       {children}
     </header>
   )

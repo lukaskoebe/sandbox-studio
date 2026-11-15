@@ -24,7 +24,7 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
   await expect(page.getByText(/compan(y|ies) networks?/i)).toHaveCount(0)
 
   await page.getByLabel("Host", { exact: true }).fill(host)
-  await page.getByLabel("Ports").fill("22")
+  await page.getByRole("textbox", { name: "Ports" }).fill("22")
   await page.getByRole("button", { name: "Add", exact: true }).click()
   const list = page.getByRole("list", { name: "Local network" })
   await expect(list).toContainText(host)
@@ -37,7 +37,7 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
   const octet = 2 + Math.floor(Math.random() * 250)
   const addr = `192.168.231.${octet}`
   await page.getByLabel("Host", { exact: true }).fill(addr)
-  await page.getByLabel("Ports").fill("22")
+  await page.getByRole("textbox", { name: "Ports" }).fill("22")
   await page.getByRole("button", { name: "Add", exact: true }).click()
   await expect(list).toContainText(
     `Sandboxes connect to 192-168-231-${octet}.lan.studio.internal`
@@ -92,7 +92,7 @@ test("a rule no sandbox can reach says so, and why", async ({
   api,
   env,
 }) => {
-  await page.goto(`/e/${env}/settings/network`)
+  await page.goto(`/e/${env}/network`)
   await page.getByRole("button", { name: "Add rule", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Host", { exact: true }).fill("127.0.0.1")
@@ -120,7 +120,7 @@ test("a proxy rule's Advanced fields are saved with the rule", async ({
   env,
 }) => {
   const host = freshName("proxied", "example.org")
-  await page.goto(`/e/${env}/settings/network`)
+  await page.goto(`/e/${env}/network`)
   await page.getByRole("button", { name: "Add rule", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Host", { exact: true }).fill(host)

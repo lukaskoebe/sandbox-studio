@@ -10,7 +10,7 @@ test("a memory conflict that doesn't exist says so", async ({ page, env }) => {
     .getByRole("main")
     .getByRole("link", { name: "Shared memory", exact: true })
     .click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/memory$`))
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/memory$`))
 })
 
 test("a build that doesn't exist says so", async ({ page, env }) => {

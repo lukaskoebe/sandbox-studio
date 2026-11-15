@@ -86,7 +86,9 @@ change it.
   the browser window's questions on its page and Home. The stack leaves claimed IDs out, so a
   card shows in one place even when several views are on the page. More than one card, or a narrow page, folds
   the stack into an "N approvals" pill that opens the cards on click
-  ([UI style](design/ui-style.md)). The pending count goes into the page title.
+  ([UI style](design/ui-style.md)). On a phone the pill is a button in the breadcrumb row
+  (`ApprovalsButton`), whose cards open below the row, so nothing floats over a composer or
+  the terminal's keys. The pending count goes into the page title.
 - A network approval's Options have two rows: who the decision covers and for how long. For a
   browser request, Who is "<teammate>'s browser", "All browsers" or "Browsers and sandboxes"
   (only the last leaves out `browserOnly`), and For is "Always", "1 hour", "This session" or

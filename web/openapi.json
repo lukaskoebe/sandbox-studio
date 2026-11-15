@@ -7386,6 +7386,53 @@
         ],
         "type": "object"
       },
+      "PushPR": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "description": "The sum of its head commit's CI checks; empty when they couldn't be read",
+            "enum": [
+              "none",
+              "pending",
+              "success",
+              "failure"
+            ],
+            "type": "string"
+          },
+          "comments": {
+            "description": "Its conversation comments, line comments and reviews with words",
+            "format": "int64",
+            "type": "integer"
+          },
+          "found": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "description": "Its state on the forge",
+            "enum": [
+              "open",
+              "merged",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "found",
+          "comments"
+        ],
+        "type": "object"
+      },
       "PushReview": {
         "additionalProperties": false,
         "properties": {
@@ -12404,6 +12451,58 @@
       }
     },
     "/api/environments/{env}/approvals/{id}/pull-request": {
+      "get": {
+        "description": "Asks the push's forge for the pull request Studio opened for it, or else the one from the pushed branch: its state, the sum of its CI checks and how many comments it has. Answers are kept for a minute. found is false, with a note, when there is none to read, such as for a push to the default branch or a forge without an API.",
+        "operationId": "getPushPullRequest",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Approval ID of a git push or its pull request",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Approval ID of a git push or its pull request",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushPR"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What became of a push's pull request",
+        "tags": [
+          "git"
+        ]
+      },
       "post": {
         "description": "Opens the pull request of a push approved without one, or whose pull request failed to open or was not approved. 409 when the push isn't pushed, went to the default branch, or its pull request is open or waiting for approval; 502 when the forge refuses it. If one turns out to be open from the branch already, the push records that it updates it.",
         "operationId": "openPullRequest",

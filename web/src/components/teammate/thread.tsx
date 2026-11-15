@@ -30,7 +30,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
 import {
   $api,
@@ -73,7 +72,6 @@ export function TeammateThread({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 px-3 md:px-4">
-        <SidebarTrigger className="md:hidden" />
         <Button
           variant="outline"
           size="sm"

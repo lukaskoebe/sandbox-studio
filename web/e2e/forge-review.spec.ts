@@ -183,7 +183,7 @@ test("a teammate's pull request review waits for approval and posts as edited", 
   )
 
   // Activity links to the decided review, which says where it was posted.
-  await page.goto(`/e/${env}/settings/activity?kind=git`)
+  await page.goto(`/e/${env}/activity?kind=git`)
   // Other tests in the environment review the same pull request.
   const rows = page.getByRole("row").filter({ hasText: "acme/web#1" })
   await expect(
@@ -214,7 +214,7 @@ test("discarding a review posts nothing and keeps the note", async ({
   await page.getByRole("button", { name: "Discard the review" }).click()
   await expect(card).toBeHidden()
 
-  await page.goto(`/e/${env}/settings/activity?kind=git`)
+  await page.goto(`/e/${env}/activity?kind=git`)
   await expect(
     page.getByRole("row").filter({ hasText: "acme/web#1" }).filter({
       hasText: "Discarded · Note: Not blocking; leave it to the author.",
@@ -278,7 +278,7 @@ test("a teammate's comment on a pull request waits for approval and posts as edi
   expect(status.settled).toBe(true)
   expect(status.result.url).toContain("#issuecomment-")
 
-  await page.goto(`/e/${env}/settings/activity?kind=git`)
+  await page.goto(`/e/${env}/activity?kind=git`)
   await expect(
     page
       .getByRole("row")

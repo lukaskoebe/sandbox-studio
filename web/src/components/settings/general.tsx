@@ -410,7 +410,7 @@ function ImportReport({
           {secrets.map((item) => (
             <li key={`secret-${item.name}-${item.teammate ?? ""}`}>
               <Link
-                to="/e/$env/settings/secrets"
+                to="/e/$env/secrets"
                 params={{ env }}
                 className="underline underline-offset-4"
               >

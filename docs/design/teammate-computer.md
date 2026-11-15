@@ -17,7 +17,20 @@ that opens from the name. A plain sandbox is the same screen at full width.
 ## Two levels
 
 There are two: **teammate (or plain computer) → thread**. Everything else is a state of the same
-page, kept in the URL as search params so Back, Forward and links work:
+page, kept in the URL as search params so Back, Forward and links work.
+
+On a wide screen the page has three states (mocks J2 and J3 of the 2026-11-14 hierarchy round):
+
+- **Home**: no thread and no tab. The home takes the page, with the teammate's computers as
+  cards beside the threads; the screen is folded to a rail.
+- **Desk**: no thread, a tab open. The computer takes most of the page and the home is a panel
+  beside it, with Start work, Bring X in, the threads in brief and the computers. Expand goes
+  back to the home, Fold leaves the computer the page.
+- **Thread**: the conversation on the left, the screen on the right unless folded.
+
+The sidebar lists each teammate's live threads and the latest others under it, not its
+computers; every computer is on Environment › Computers, and the breadcrumb names the computer
+a thread or the desk shows as a chip after the crumbs.
 
 | Param | Values | Default |
 |---|---|---|
@@ -25,7 +38,7 @@ page, kept in the URL as search params so Back, Forward and links work:
 | `computer` | a sandbox ID of the teammate | the thread's sandbox, else the one worked in last, else the first |
 | `tab` | `terminal`, `browser`, `preview`, `changes` | `terminal` (`browser` while the teammate drives it and nothing else was picked) |
 | `term` | a terminal session name | `main` |
-| `fold` | `1` | the screen is shown |
+| `fold` | `1` | in a thread the screen is shown; with no thread and no tab it is folded (the home) |
 | `full` | `1`: the screen takes the page, the conversation is a strip | side by side |
 | `profile` | `card`, `tasks`, `memory`, `settings` (`open=` a settings card) | closed |
 | `review` | an approval ID, on `changes` | the oldest waiting push of the computer |
@@ -33,8 +46,10 @@ page, kept in the URL as search params so Back, Forward and links work:
 Esc closes the profile or a menu first, then leaves the thread.
 
 A plain computer's page, `/sandboxes/$id`, takes the screen's params (`tab`, `term`, `review`),
-and `from=setup` for the way back to the guided setup. The address of a teammate's computer
-redirects to the teammate's page with `computer=`, and the old workspace address,
+and `from=setup` for the way back to the guided setup. Its terminal sessions are a panel beside
+the screen, folded until opened. The address of a teammate's computer redirects to the
+teammate's desk with `computer=` (and `tab=terminal` unless it names a tab or a chat), and the
+old workspace address,
 `/sandboxes/$id/work`, to the screen on the tab its link named.
 
 ## Where every piece goes
@@ -47,14 +62,14 @@ redirects to the teammate's page with `computer=`, and the old workspace address
 | Rail: Now, Computer card(s), Earlier chats, Knows, Check-ins | Now is the presence word and the working card. The computer *is* the screen. Earlier chats are the cards. Knows and Check-ins are in the profile. |
 | Composer modes Message / Task / Teach, New chat, sandbox picker | One composer. At home it starts a new thread on the computer shown; in a thread it replies (or queues while a turn runs). Teach and New task live in the profile. |
 | Waiting for you (approval cards) | A compact row each at the end of home: the kind's tile, what is asked, where and how long ago. Answer opens the card in place; Review opens a push on Changes and a memory conflict in its sheet. Inline in the thread that asked, too. |
-| Sandbox page header: owner / name, state pill, Wake, Checkpoint, ⋯ | Bezel: the computer switcher with a status dot (forks indented under their source), the tabs, power, ⋯, enlarge and fold. |
+| Sandbox page header: owner / name, state pill, Wake, Checkpoint, ⋯ | Bezel: the tabs, power, ⋯, enlarge and fold. The computer's name, status dot and switcher (forks indented under their source) are in the breadcrumb row: the "on …" chip on a teammate's page, the computer crumb on a plain one. The bezel had a switcher too until 2026-11-15; two switchers for one computer were one too many, and the bezel's was cut to "sh…" on phones. |
 | Sandbox ⋯ menu, details pill, Checkpoint button, status bar | The computer menu (⋯): name, template, size and uptime; CPU and memory meters; Checkpoint now; History and checkpoints; Fork; Merge into …; Rebase; Resources; Connections; Export; Another computer; Suspend or Resume; Delete. Ports are a chip on Preview; the ID and generation are in History. |
 | Workspace tab strip (chat, terminal and review tabs) | Chats are threads. Terminal sessions sit behind a `main ▾` chip on the Terminal tab (new shell, close); a thread's Continue in the terminal opens the teammate's harness in one. Reviews are on Changes. |
 | Side panels Browser / Connections / Files | Browser is a tab. Files and changes are on Changes, under any waiting push. Connections opens from ⋯ as a side sheet. |
 | Previews dropdown | The Preview tab: the framed app with a port chip, Open in a new tab, Open fresh. Hidden while previews are off, unless a link asks for it (`?tab=preview`), when it says previews are off and offers to turn them on. |
 | Chat page `/chats/$chat` | Redirects a teammate's chat to `?thread=`. Its header actions (open in terminal, delete) move to the thread header's ⋯. |
 | Merge banner | Above the display, on the screen of the fork. |
-| Sidebar tree: teammate → sandbox → sessions, New chat, All chats | Home; Teammates (avatar, name, one status word or waiting count); Your computers (plain sandboxes with a status dot); footer Settings, version, theme. New chat becomes the composer; All chats stays reachable from Home. |
+| Sidebar tree: teammate → sandbox → sessions, New chat, All chats | Search; Home; Teammates (avatar, name, one status word or waiting count, and under each its live and latest threads; on hover `>_` and Start work); Your computers (plain sandboxes with a status dot); Environment (Computers, Network, Secrets, Memory, Activity); footer Settings, version, theme. New chat becomes the composer and Start work; All chats stays reachable from Home. |
 
 Iris without a computer gets a dashed screen, "Iris has no computer yet", with *Give Iris a
 computer*. A stopped computer shows a dark glass screen with Start (and the checkpoint it keeps).

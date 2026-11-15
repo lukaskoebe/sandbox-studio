@@ -26,7 +26,7 @@ test("memory pages link each other: a link opens its page, which lists what link
     compiled: "Deploys go through staging first.",
   })
 
-  await page.goto(`/e/${id}/settings/memory`)
+  await page.goto(`/e/${id}/memory`)
   const index = page.getByRole("navigation", { name: "Memory index" })
   // The link to a page that doesn't exist is a loose end, with what needs the user.
   await index.getByRole("button", { name: /^Needs you/ }).click()
@@ -117,7 +117,7 @@ test("memory is an index and a reader: pages folded by kind, a page's facts by k
     text: "The office moved in October",
   })
 
-  await page.goto(`/e/${id}/settings/memory?open=page:${shop.id}`)
+  await page.goto(`/e/${id}/memory?open=page:${shop.id}`)
   const index = page.getByRole("navigation", { name: "Memory index" })
   await expect(
     index.getByRole("button", { name: /^Projects/ })
@@ -130,11 +130,11 @@ test("memory is an index and a reader: pages folded by kind, a page's facts by k
     "true"
   )
   // Ten show, newest first: the preference and nine decisions.
-  await expect(page.getByText(/^Webshop decision number/)).toHaveCount(9)
+  await expect(page.getByText(/^Webshop decision number \d+$/)).toHaveCount(9)
   await page.getByRole("button", { name: "Show 2 more" }).click()
-  await expect(page.getByText(/^Webshop decision number/)).toHaveCount(11)
+  await expect(page.getByText(/^Webshop decision number \d+$/)).toHaveCount(11)
   await kinds.getByRole("button", { name: "Preferences 1" }).click()
-  await expect(page.getByText(/^Webshop decision number/)).toHaveCount(0)
+  await expect(page.getByText(/^Webshop decision number \d+$/)).toHaveCount(0)
   await expect(
     page.getByText("The webshop prefers hosted checkout")
   ).toBeVisible()
@@ -168,7 +168,7 @@ test("memory is an index and a reader: pages folded by kind, a page's facts by k
 
   // On a narrow screen the index comes first, and a page opens over it.
   await page.setViewportSize({ width: 560, height: 900 })
-  await page.goto(`/e/${id}/settings/memory`)
+  await page.goto(`/e/${id}/memory`)
   await expect(index).toBeVisible()
   await index.getByRole("button", { name: /^The webshop/ }).click()
   await expect(index).toBeHidden()

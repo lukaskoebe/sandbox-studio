@@ -296,6 +296,6 @@ export function ForkChoiceFields({
 }
 
 /** "<name>-fork", shortened so the result stays within the 40-character limit. */
-function forkName(name: string) {
+export function forkName(name: string) {
   return `${name.slice(0, 35).replace(/-+$/, "")}-fork`
 }

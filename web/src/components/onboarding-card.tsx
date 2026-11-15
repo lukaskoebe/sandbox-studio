@@ -120,9 +120,7 @@ export function OnboardingCard({ env }: { env: string }) {
                   <Button
                     size="xs"
                     variant="outline"
-                    render={
-                      <Link to="/e/$env/settings/secrets" params={{ env }} />
-                    }
+                    render={<Link to="/e/$env/secrets" params={{ env }} />}
                   >
                     Try it
                   </Button>

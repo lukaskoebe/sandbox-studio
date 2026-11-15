@@ -6,17 +6,29 @@ import {
 } from "@phosphor-icons/react"
 import { ComputerScreen, type ScreenChange } from "@/components/computer/screen"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import {
+  ResizeHandle,
+  useElementWidth,
+  useStoredSize,
+} from "@/components/resize-handle"
 import { useWideScreen } from "@/components/side-panel"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateHome, teammateApprovals } from "@/components/teammate/home"
-import { ProfileCard, ProfileSheet } from "@/components/teammate/profile"
+import {
+  ProfileCard,
+  ProfileSettingsPage,
+  ProfileSheet,
+} from "@/components/teammate/profile"
 import { TeammateThread } from "@/components/teammate/thread"
+import { phase } from "@/components/status-badge"
+import { openStartWork } from "@/lib/start-work"
 import { Button } from "@/components/ui/button"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Teammate } from "@/lib/api/client"
 import { useChat, type Chat } from "@/lib/chats"
 import {
   lastComputer,
+  screenComputer,
   rememberComputer,
   type ProfileView,
   type TeammateSearch,
@@ -26,10 +38,11 @@ import { cn } from "@/lib/utils"
 export type SearchChange = Partial<Record<keyof TeammateSearch, unknown>>
 
 /**
- * A teammate and its computer side by side (docs/design/teammate-computer.md): the conversation
- * on the left, its threads or the one open, and the screen of the computer it works on to the
- * right. The screen can fold, or take the page with the conversation a strip beside it. The
- * profile opens over the conversation. Esc closes what is on top, then the thread.
+ * A teammate's page (docs/design/teammate-computer.md) is one layout in three states: its home,
+ * with the computer folded to a rail at the right; its desk, the same home narrowed to a panel
+ * beside the open computer, with no thread and no chat; and a thread, whose chat takes the
+ * home's place while the computer side stays as it was. Either side folds to a rail. The
+ * profile opens over the left side. Esc closes what is on top, then the thread.
  */
 export function TeammatePage({
   env,
@@ -63,21 +76,13 @@ export function TeammatePage({
   const thread = search.thread
     ? (log.chat ?? mine.find((c) => c.id === search.thread))
     : undefined
-  const latest = [...mine].sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt)
+  const computer = screenComputer(
+    owned,
+    mine,
+    search.computer,
+    thread?.sandboxId,
+    lastComputer(env, id)
   )
-  // The screen shows the computer asked for, else the thread's, else the one last picked here,
-  // else where the work happens.
-  const remembered = lastComputer(env, id)
-  const computer =
-    owned.find((s) => s.id === search.computer) ??
-    owned.find((s) => s.id === thread?.sandboxId) ??
-    owned.find((s) => s.id === remembered) ??
-    owned.find(
-      (s) => s.id === latest.find((c) => c.state === "running")?.sandboxId
-    ) ??
-    owned.find((s) => s.id === latest.at(0)?.sandboxId) ??
-    owned.at(0)
   // The screen follows the open thread, unless the user pinned another computer beside it;
   // the thread's computer is then off the screen.
   const threadComputer = owned.find((s) => s.id === thread?.sandboxId)
@@ -110,16 +115,25 @@ export function TeammatePage({
     setShownTab(search.tab)
     if (!wide && search.tab) setOverlay(true)
   }
-  const folded = wide ? !!search.fold : !overlay
+  // Without a thread the screen opens only for a tab: the home has the page otherwise.
+  const folded = wide
+    ? !!search.fold || (!search.thread && !search.tab)
+    : !overlay
   // On narrow screens the open screen covers the conversation anyway.
   const full = wide && !folded && !!search.full
 
   const screen = (change: ScreenChange) => {
     const { fold, full: enlarge, push, ...rest } = change
-    // Folding and enlarging undo each other.
+    // Folding and enlarging undo each other. Opening the screen from the home opens a tab.
     if (fold !== undefined || enlarge !== undefined) {
       if (wide)
-        onSearch({ fold: fold || undefined, full: enlarge || undefined })
+        onSearch({
+          fold: fold || undefined,
+          full: enlarge || undefined,
+          ...(folded && !fold && !rest.tab && !search.tab
+            ? { tab: "terminal" }
+            : {}),
+        })
       else if (fold !== undefined) setOverlay(!fold)
     }
     if (Object.keys(rest).length === 0) return
@@ -144,15 +158,40 @@ export function TeammatePage({
       push && "quiet"
     )
   }
+  // The computer side stays as it is: folded from the home, open from the desk.
   const openThread = (chat: Chat) =>
     onSearch(
       {
         thread: chat.id,
         computer: chat.sandboxId === computer?.id ? search.computer : undefined,
+        fold: folded || undefined,
+        full: undefined,
       },
       true
     )
-  const leaveThread = () => onSearch({ thread: undefined }, true)
+  const leaveThread = () =>
+    onSearch(
+      {
+        thread: undefined,
+        ...(!folded && !search.tab ? { tab: "terminal" } : {}),
+      },
+      true
+    )
+  const startWork = (bring?: boolean) =>
+    openStartWork({
+      teammate: id,
+      computer: computer?.id,
+      ...(bring
+        ? { mode: "chat", bring: { term: search.term ?? "main" } }
+        : {}),
+    })
+  // The desk: the home narrowed to a panel beside the open computer, no thread open.
+  const desk = wide && !search.thread && !folded && !full
+  // Memory or tasks opened from a settings row lead back to that row.
+  const [settingsBack, setSettingsBack] = useState<string>()
+  const backable = search.profile === "memory" || search.profile === "tasks"
+  if (settingsBack !== undefined && !backable && search.profile !== "settings")
+    setSettingsBack(undefined)
   const profile = (view: ProfileView | undefined, section?: string) =>
     onSearch({
       profile: view,
@@ -169,7 +208,7 @@ export function TeammatePage({
         t?.closest(
           "input, textarea, select, [contenteditable], .xterm, [role=dialog], [role=menu], [role=listbox]"
         ) &&
-        !t.closest('[aria-label$="\'s profile"]')
+        !t.closest('[aria-label$="\'s profile"], [aria-label$="\'s settings"]')
       )
         return
       if (document.querySelector("[data-open][role=dialog], [role=menu]"))
@@ -185,8 +224,58 @@ export function TeammatePage({
     return () => window.removeEventListener("keydown", onKey)
   })
 
+  // The conversation's share of the page beside the screen, kept in this browser; dragged past
+  // its minimum, the screen takes the page.
+  const [box, boxWidth] = useElementWidth<HTMLDivElement>()
+  const [threadShare, setThreadShare] = useStoredSize(
+    "studio.conversation-share",
+    conversationSplit.share
+  )
+  // The desk's home is a narrower panel, with a share of its own.
+  const [deskShare, setDeskShare] = useStoredSize(
+    "studio.desk-share",
+    deskSplit.share
+  )
+  const sizes = desk ? deskSplit : conversationSplit
+  const share = desk ? deskShare : threadShare
+  const setShare = desk ? setDeskShare : setThreadShare
+  const split = wide && !!computer && !folded && !full && boxWidth > 0
+  const maxConversation = Math.max(sizes.min, boxWidth - sizes.screenMin)
+  const conversationWidth = Math.round(
+    Math.min(Math.max(share * boxWidth, sizes.min), maxConversation)
+  )
+
+  const sheet = (
+    <ProfileSheet
+      env={env}
+      teammate={teammate}
+      view={search.profile}
+      section={search.open}
+      back={settingsBack}
+      onOpen={profile}
+    />
+  )
+  // The settings are a page of their own, in place of the conversation and the screen.
+  if (search.profile === "settings")
+    return (
+      <div className="relative flex min-h-0 flex-1">
+        <ProfileSettingsPage
+          env={env}
+          teammate={teammate}
+          section={search.open}
+          fromSetup={search.from === "setup"}
+          onOpen={profile}
+          onView={(v) => {
+            setSettingsBack(v)
+            profile(v)
+          }}
+        />
+        {sheet}
+      </div>
+    )
+
   return (
-    <div className="relative flex min-h-0 flex-1">
+    <div ref={box} className="relative flex min-h-0 flex-1">
       {full && (
         <ConversationStrip
           teammate={teammate}
@@ -199,12 +288,16 @@ export function TeammatePage({
         className={cn(
           "relative flex min-h-0 min-w-0 flex-col",
           !computer
-            ? "flex-[1.25]"
+            ? search.thread
+              ? "flex-[1.25]"
+              : "flex-1"
             : folded
               ? "flex-1"
               : "flex-1 lg:min-w-[25rem]",
-          full && "hidden"
+          full && "hidden",
+          split && "flex-none"
         )}
+        style={split ? { width: conversationWidth } : undefined}
       >
         {search.thread ? (
           <TeammateThread
@@ -212,7 +305,8 @@ export function TeammatePage({
             env={env}
             teammate={teammate}
             log={log}
-            computer={owned.length > 1 ? threadComputer?.name : undefined}
+            // The crumb row names the thread's computer; this says only that it is off the screen.
+            computer={offScreen?.name}
             onShowComputer={
               offScreen ? () => screen({ computer: offScreen.id }) : undefined
             }
@@ -248,12 +342,23 @@ export function TeammatePage({
             computer={computer}
             waiting={waiting}
             watching={!folded && search.tab === "browser"}
+            compact={desk}
+            loaded={!!sandboxes.data}
             onThread={openThread}
             onProfile={(view) => profile(view)}
             onWatch={() => screen({ tab: "browser" })}
             onReview={(a) =>
               screen({ tab: "changes", review: a.id, computer: a.sandboxId })
             }
+            onStartWork={() => startWork()}
+            onBringIn={
+              desk && computer && phase(computer) === "ready"
+                ? () => startWork(true)
+                : undefined
+            }
+            onOpenComputer={(c, tab) => screen({ computer: c.id, tab })}
+            onExpand={() => screen({ fold: true })}
+            onFold={() => screen({ full: true })}
           />
         )}
         {search.profile === "card" && (
@@ -269,11 +374,28 @@ export function TeammatePage({
           />
         )}
       </div>
+      {split && (
+        <ResizeHandle
+          label={desk ? "the home" : "the conversation"}
+          side="left"
+          size={conversationWidth}
+          min={sizes.min}
+          max={maxConversation}
+          defaultSize={Math.round(sizes.share * boxWidth)}
+          onResize={(px) => setShare(px / boxWidth)}
+          onFold={(fold) => fold && screen({ full: true })}
+          className="-mx-1"
+        />
+      )}
       {computer ? (
         <div
           className={cn(
             "flex min-h-0",
-            folded ? "shrink-0" : full ? "flex-1" : "flex-[1.25]",
+            folded
+              ? "shrink-0"
+              : full || split
+                ? "min-w-0 flex-1"
+                : "flex-[1.25]",
             !wide && !folded && "absolute inset-0 z-20 bg-background shadow-lg"
           )}
         >
@@ -281,7 +403,6 @@ export function TeammatePage({
             key={computer.id}
             env={env}
             sandbox={computer}
-            computers={owned}
             owner={teammate}
             search={{ ...search, fold: folded, full }}
             enlargeable={wide}
@@ -301,21 +422,22 @@ export function TeammatePage({
           />
         </div>
       ) : (
-        sandboxes.data && (
+        // The home says so itself, with a card to give it one.
+        sandboxes.data &&
+        search.thread && (
           <NoComputer env={env} teammate={teammate} hidden={!wide} />
         )
       )}
-      <ProfileSheet
-        env={env}
-        teammate={teammate}
-        view={search.profile}
-        section={search.open}
-        fromSetup={search.from === "setup"}
-        onOpen={profile}
-      />
+      {sheet}
     </div>
   )
 }
+
+/** The conversation beside the screen: its default share of the page and the ends it drags to. */
+const conversationSplit = { share: 0.444, min: 320, screenMin: 480 }
+
+/** The desk's home beside the computer: a narrow panel by default. */
+const deskSplit = { share: 0.3, min: 300, screenMin: 480 }
 
 /** The conversation while the screen takes the page: the teammate, and the way back. */
 function ConversationStrip({

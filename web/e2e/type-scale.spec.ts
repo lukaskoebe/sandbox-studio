@@ -84,7 +84,7 @@ test("every page's text is on the type scale, in both styles", async ({
       "/chats",
       "/memory",
       "/settings/general",
-      "/settings/network",
+      "/network",
       "/settings/git",
     ]) {
       await page.goto(`/e/${env}${path}`)

@@ -99,7 +99,7 @@ export function ConnectionsPanel({
       <p className="px-4 pt-3 pb-2 text-xs text-muted-foreground">
         Where {sandbox.name} connects, newest first. The rules are in{" "}
         <Link
-          to="/e/$env/settings/network"
+          to="/e/$env/network"
           params={{ env }}
           className="underline underline-offset-4 hover:text-foreground"
         >

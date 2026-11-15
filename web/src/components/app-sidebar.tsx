@@ -1,17 +1,26 @@
-import { useState } from "react"
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router"
+import { useCallback, useState } from "react"
+import {
+  Link,
+  useMatchRoute,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { BaseMark } from "@/components/base-dialog"
 import {
   CaretUpDownIcon,
   CheckIcon,
-  CubeIcon,
+  DesktopTowerIcon,
   GearIcon,
+  MagnifyingGlassIcon,
   PlusIcon,
+  TerminalIcon,
   TrayIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
+import { CommandPalette } from "@/components/command-palette"
+import { EnvironmentIcon } from "@/components/environment-icon"
 import {
   Sidebar,
   SidebarContent,
@@ -25,11 +34,23 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
-  SidebarRail,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
-import { SettingsLink } from "@/components/settings/link"
+import {
+  SettingsLink,
+  environmentPages,
+  settingsPaths,
+} from "@/components/settings/link"
+import { ResizeHandle } from "@/components/resize-handle"
+import { isNetworkApproval } from "@/lib/approval-kinds"
+import { openPalette } from "@/lib/palette"
+import { modKey } from "@/lib/keys"
+import { Kbd } from "@/components/ui/kbd"
 import { appWindow } from "@/lib/desktop"
-import { cn } from "@/lib/utils"
+import { cn, formatAge } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   DropdownMenu,
@@ -55,7 +76,8 @@ import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
-import { teammateApprovals } from "@/components/teammate/home"
+import { teammateApprovals, ThreadDot } from "@/components/teammate/home"
+import { StartWorkDialog } from "@/components/teammate/start-work"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
@@ -68,21 +90,49 @@ import {
   type Sandbox,
   type Teammate,
 } from "@/lib/api/client"
-import type { Chat } from "@/lib/chats"
+import { chatTitle, type Chat } from "@/lib/chats"
+import { lastComputer, screenComputer } from "@/lib/computer"
+import { openStartWork } from "@/lib/start-work"
 import { programName } from "@/lib/terminals"
+import {
+  agentTerminals,
+  chatApprovals,
+  chatStatus,
+  sidebarChats,
+  statusLabels,
+  type AgentTerminal,
+  type ThreadStatus,
+} from "@/lib/threads"
 
 /** The section labels, in the style's label type; the size replaces SidebarGroupLabel's text-xs. */
 const groupLabel = "h-6 section-label text-(length:--label-size)"
 
+/** The sidebar's width, as it starts and as double-clicking its edge puts it back. */
+export const sidebarWidth = { default: 256, min: 180, max: 360, folded: 48 }
+
 /**
- * The environment's places (docs/design/teammate-computer.md): Home, with what waits for you;
- * the teammates, each with one word for what it is doing or what waits; and your computers, the
- * sandboxes without a teammate. Threads and terminals are on the pages, not in here.
+ * The environment's places (docs/design/teammate-computer.md): Search, which opens the palette;
+ * Home, with what waits for you; the teammates, each with one word for what it is doing or what
+ * waits and under it its live threads and the last few; the user's own computers; and the
+ * environment's pages, Computers first, which lists every computer. A teammate's computers are
+ * on its page, not in here. Its edge drags between sidebarWidth's ends, and dragged past the
+ * minimum it folds to its icons, as ⌘B does.
  */
-export function AppSidebar({ env }: { env: string }) {
+export function AppSidebar({
+  env,
+  width,
+  onWidth,
+}: {
+  env: string
+  width: number
+  onWidth: (px: number) => void
+}) {
+  const { state, setOpen } = useSidebar()
   const [creating, setCreating] = useState(false)
   const [importing, setImporting] = useState(false)
   const [addingTeammate, setAddingTeammate] = useState(false)
+  const openTeammateDialog = useCallback(() => setAddingTeammate(true), [])
+  const openComputerDialog = useCallback(() => setCreating(true), [])
   const sandboxes = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes",
@@ -105,6 +155,9 @@ export function AppSidebar({ env }: { env: string }) {
     { params: { path: { env } } },
     { refetchInterval: 5000 }
   )
+  const terminals = $api.useQuery("get", "/api/environments/{env}/terminals", {
+    params: { path: { env } },
+  })
   const approvals = usePendingApprovals()
   const pending = (approvals.data ?? []).filter((a) => a.environmentId === env)
   const matchRoute = useMatchRoute()
@@ -114,180 +167,267 @@ export function AppSidebar({ env }: { env: string }) {
     fuzzy: true,
   })
   const all = sandboxes.data ?? []
-  // A sandbox whose teammate is gone counts as without one; until the teammates load, only
-  // a sandbox that never had one does.
-  const unowned = all.filter(
-    (sb) =>
-      !sb.teammateId ||
-      (teammates.data && !teammates.data.some((p) => p.id === sb.teammateId))
-  )
+  // A sandbox whose teammate is gone counts as without one.
+  const ownerOf = (sb: Sandbox) =>
+    teammates.data?.find((p) => p.id === sb.teammateId)
+  const networkWaiting = pending.filter(isNetworkApproval).length
+  const yours = all.filter((sb) => !ownerOf(sb))
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader
-        className={cn(
-          "h-(--wb-header) justify-center border-b border-sidebar-border px-2 py-0",
-          // The window's buttons sit above it on macOS.
-          appWindow === "inset" && "mt-7"
-        )}
-      >
-        <EnvironmentSwitcher env={env} />
-      </SidebarHeader>
-      <SidebarContent className="gap-0">
-        <SidebarGroup className="py-2">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Home"
-                isActive={!!matchRoute({ to: "/e/$env", params: { env } })}
+    <>
+      <Sidebar collapsible="icon">
+        <SidebarHeader
+          className={cn(
+            "h-(--wb-header) justify-center border-b border-sidebar-border px-2 py-0",
+            // The window's buttons sit above it on macOS.
+            appWindow === "inset" && "mt-7"
+          )}
+        >
+          <EnvironmentSwitcher env={env} />
+        </SidebarHeader>
+        <SidebarContent className="gap-0">
+          <SidebarGroup className="py-2">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={`Search (${modKey}K)`}
+                  className="mb-1 border border-border bg-card text-muted-foreground group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent hover:text-foreground"
+                  onClick={openPalette}
+                >
+                  <MagnifyingGlassIcon />
+                  <span className="min-w-0 flex-1 truncate">Search</span>
+                  <Kbd className="group-data-[collapsible=icon]:hidden">
+                    {modKey}K
+                  </Kbd>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Home"
+                  isActive={!!matchRoute({ to: "/e/$env", params: { env } })}
+                  render={
+                    <Link
+                      to="/e/$env"
+                      params={{ env }}
+                      activeOptions={{ exact: true }}
+                    />
+                  }
+                >
+                  <TrayIcon />
+                  <span className="min-w-0 flex-1 truncate">Home</span>
+                  <WaitingCount count={pending.length} />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel
+              className={groupLabel}
+              render={<Link to="/e/$env/teammates" params={{ env }} />}
+            >
+              Teammates
+            </SidebarGroupLabel>
+            <SidebarGroupAction
+              className="top-1.5"
+              title="New teammate"
+              onClick={() => setAddingTeammate(true)}
+            >
+              <PlusIcon />
+            </SidebarGroupAction>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {/* Only the first try shows the skeleton: pages that load teammates retry a
+                  failed list, and the sidebar says it failed meanwhile. */}
+                {teammates.isPending &&
+                  teammates.failureCount === 0 &&
+                  Array.from({ length: 2 }, (_, i) => (
+                    <SidebarMenuItem key={i}>
+                      <SidebarMenuSkeleton showIcon />
+                    </SidebarMenuItem>
+                  ))}
+                {!teammates.data && teammates.failureCount > 0 && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      size="sm"
+                      tooltip={errorMessage(
+                        teammates.error ?? teammates.failureReason
+                      )}
+                      title={errorMessage(
+                        teammates.error ?? teammates.failureReason
+                      )}
+                      disabled={teammates.isFetching}
+                      onClick={() => void teammates.refetch()}
+                    >
+                      <WarningIcon className="text-destructive" />
+                      <span className="min-w-0 flex-1 truncate">
+                        Teammates didn't load
+                      </span>
+                      <span className="text-caption text-muted-foreground">
+                        {teammates.isFetching ? "retrying" : "retry"}
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+                {teammates.data?.map((p) => {
+                  const computers = all.filter((sb) => sb.teammateId === p.id)
+                  return (
+                    <TeammateRow
+                      key={p.id}
+                      env={env}
+                      teammate={p}
+                      computers={computers}
+                      chats={chats.data ?? []}
+                      pending={pending}
+                      terminals={agentTerminals(
+                        terminals.data,
+                        new Set(computers.map((sb) => sb.id))
+                      )}
+                    />
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel className={groupLabel}>
+              Your computers
+            </SidebarGroupLabel>
+            <DropdownMenu>
+              <DropdownMenuTrigger
                 render={
-                  <Link
-                    to="/e/$env"
-                    params={{ env }}
-                    activeOptions={{ exact: true }}
+                  <SidebarGroupAction
+                    className="top-1.5 data-popup-open:bg-sidebar-accent"
+                    title="New computer"
                   />
                 }
               >
-                <TrayIcon />
-                <span className="min-w-0 flex-1 truncate">Home</span>
-                <WaitingCount count={pending.length} />
+                <PlusIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-60">
+                <DropdownMenuItem onClick={() => setCreating(true)}>
+                  <MenuText
+                    title="New computer"
+                    hint="A sandbox of your own, without a teammate"
+                  />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setImporting(true)}>
+                  <MenuText
+                    title="Import a computer"
+                    hint="From an export file"
+                  />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {yours.map((sb) => (
+                  <ComputerRow
+                    key={sb.id}
+                    env={env}
+                    sandbox={sb}
+                    pending={pending}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel className={groupLabel}>
+              Environment
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Computers"
+                    isActive={
+                      !!matchRoute({ to: "/e/$env/computers", params: { env } })
+                    }
+                    render={<Link to="/e/$env/computers" params={{ env }} />}
+                  >
+                    <DesktopTowerIcon />
+                    <span className="min-w-0 flex-1 truncate">Computers</span>
+                    {all.length > 0 && (
+                      <span className="font-mono text-caption text-muted-foreground">
+                        {all.length}
+                      </span>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {environmentPages.map((page) => {
+                  const waiting = page.id === "network" ? networkWaiting : 0
+                  return (
+                    <SidebarMenuItem key={page.id}>
+                      <SidebarMenuButton
+                        tooltip={page.label}
+                        isActive={
+                          !!matchRoute({
+                            to: settingsPaths[page.id],
+                            params: { env },
+                            fuzzy: true,
+                          })
+                        }
+                        render={<SettingsLink section={page.id} />}
+                      >
+                        <EnvironmentIcon page={page.id} />
+                        <span className="min-w-0 flex-1 truncate">
+                          {page.label}
+                        </span>
+                        {waiting > 0 && (
+                          <span className="text-caption text-(--st-waiting-fg)">
+                            {waiting} waiting
+                          </span>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="gap-1 border-t border-sidebar-border p-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="sm"
+                tooltip="Settings"
+                isActive={settingsOpen}
+                render={<SettingsLink section="general" />}
+              >
+                <GearIcon />
+                <span>Settings</span>
+                {updates.data?.available && (
+                  <span className="ml-auto text-meta text-primary">
+                    Update available
+                  </span>
+                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-        </SidebarGroup>
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel
-            className={groupLabel}
-            render={<Link to="/e/$env/teammates" params={{ env }} />}
-          >
-            Teammates
-          </SidebarGroupLabel>
-          <SidebarGroupAction
-            className="top-1.5"
-            title="New teammate"
-            onClick={() => setAddingTeammate(true)}
-          >
-            <PlusIcon />
-          </SidebarGroupAction>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {/* Only the first try shows the skeleton: pages that load teammates retry a
-                  failed list, and the sidebar says it failed meanwhile. */}
-              {teammates.isPending &&
-                teammates.failureCount === 0 &&
-                Array.from({ length: 2 }, (_, i) => (
-                  <SidebarMenuItem key={i}>
-                    <SidebarMenuSkeleton showIcon />
-                  </SidebarMenuItem>
-                ))}
-              {!teammates.data && teammates.failureCount > 0 && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    size="sm"
-                    tooltip={errorMessage(
-                      teammates.error ?? teammates.failureReason
-                    )}
-                    title={errorMessage(
-                      teammates.error ?? teammates.failureReason
-                    )}
-                    disabled={teammates.isFetching}
-                    onClick={() => void teammates.refetch()}
-                  >
-                    <WarningIcon className="text-destructive" />
-                    <span className="min-w-0 flex-1 truncate">
-                      Teammates didn't load
-                    </span>
-                    <span className="text-caption text-muted-foreground">
-                      {teammates.isFetching ? "retrying" : "retry"}
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {teammates.data?.map((p) => (
-                <TeammateRow
-                  key={p.id}
-                  env={env}
-                  teammate={p}
-                  computers={all.filter((sb) => sb.teammateId === p.id)}
-                  chats={chats.data ?? []}
-                  pending={pending}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel className={groupLabel}>
-            Your computers
-          </SidebarGroupLabel>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <SidebarGroupAction
-                  className="top-1.5 data-popup-open:bg-sidebar-accent"
-                  title="New computer"
-                />
-              }
-            >
-              <PlusIcon />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-60">
-              <DropdownMenuItem onClick={() => setCreating(true)}>
-                <MenuText
-                  title="New computer"
-                  hint="A sandbox of your own, without a teammate"
-                />
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setImporting(true)}>
-                <MenuText
-                  title="Import a computer"
-                  hint="From an export file"
-                />
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {unowned.map((sb) => (
-                <ComputerRow
-                  key={sb.id}
-                  env={env}
-                  sandbox={sb}
-                  pending={pending}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="gap-1 border-t border-sidebar-border p-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="sm"
-              tooltip="Settings"
-              isActive={settingsOpen}
-              render={<SettingsLink section="general" />}
-            >
-              <GearIcon />
-              <span>Settings</span>
-              {updates.data?.available && (
-                <span className="ml-auto text-meta text-primary">
-                  Update available
-                </span>
-              )}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
-          <p className="min-w-0 truncate text-meta text-muted-foreground">
-            Sandbox Studio{" "}
-            <span className="font-mono">{health.data?.version}</span>
-          </p>
-          <ThemeToggle />
-        </div>
-      </SidebarFooter>
-      <SidebarRail />
+          <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
+            <p className="min-w-0 truncate text-meta text-muted-foreground">
+              Sandbox Studio{" "}
+              <span className="font-mono">{health.data?.version}</span>
+            </p>
+            <ThemeToggle />
+          </div>
+        </SidebarFooter>
+        <ResizeHandle
+          label="the sidebar"
+          side="left"
+          size={width}
+          min={sidebarWidth.min}
+          max={sidebarWidth.max}
+          defaultSize={sidebarWidth.default}
+          onResize={onWidth}
+          folded={state === "collapsed"}
+          foldedSize={sidebarWidth.folded}
+          onFold={(folded) => setOpen(!folded)}
+          className="absolute inset-y-0 -right-1 hidden md:block"
+        />
+      </Sidebar>
+      {/* Outside the sidebar, which on phones is a drawer that is not there while it is shut. */}
       <CreateSandboxDialog
         env={env}
         open={creating}
@@ -304,7 +444,17 @@ export function AppSidebar({ env }: { env: string }) {
         open={addingTeammate}
         onOpenChange={setAddingTeammate}
       />
-    </Sidebar>
+      <StartWorkDialog env={env} />
+      <CommandPalette
+        env={env}
+        teammates={teammates.data ?? []}
+        sandboxes={all}
+        chats={chats.data ?? []}
+        pending={pending}
+        onNewTeammate={openTeammateDialog}
+        onNewComputer={openComputerDialog}
+      />
+    </>
   )
 }
 
@@ -319,7 +469,10 @@ function MenuText({ title, hint }: { title: string; hint: string }) {
 
 /**
  * A teammate: its avatar and name, and on the right what waits for you, else one word for what
- * it is doing or why it can't (working, no computer, stopped). Nothing while it is idle.
+ * it is doing or why it can't (working, no computer, stopped); nothing while it is idle. On
+ * hover, >_ opens the terminal of the computer last used for it and + asks what to start.
+ * Under it, its threads: every one that runs or waits, its agents in terminals, and the latest
+ * others of the last day; the rest are on its home.
  */
 function TeammateRow({
   env,
@@ -327,14 +480,28 @@ function TeammateRow({
   computers,
   chats,
   pending,
+  terminals,
 }: {
   env: string
   teammate: Teammate
   computers: Sandbox[]
   chats: Chat[]
   pending: Approval[]
+  /** Its agents in terminals of its computers, with no chat behind them. */
+  terminals: AgentTerminal[]
 }) {
   const matchRoute = useMatchRoute()
+  const search: {
+    thread?: string
+    computer?: string
+    tab?: string
+    term?: string
+  } = useSearch({ strict: false })
+  const onPage = !!matchRoute({
+    to: "/e/$env/teammates/$id",
+    params: { env, id: teammate.id },
+    fuzzy: true,
+  })
   const waiting = teammateApprovals(
     pending,
     env,
@@ -343,9 +510,9 @@ function TeammateRow({
   ).length
   // A harness printing in one of its terminals is work too; another program there isn't.
   const terminal = useActivity(env)(teammate.id).terminal
+  const mine = chats.filter((c) => c.teammateId === teammate.id)
   const working =
-    chats.some((c) => c.teammateId === teammate.id && c.state === "running") ||
-    terminal?.state === "working"
+    mine.some((c) => c.state === "running") || terminal?.state === "working"
   const busy = !working && terminal?.state === "busy"
   const up = computers.find((sb) => phase(sb) === "ready")
   const status = working
@@ -357,57 +524,214 @@ function TeammateRow({
           ? programName(terminal.program)
           : undefined
         : phaseDot(phase(computers[0])).label.toLowerCase()
+  const asks = (c: Chat) => chatApprovals(c, pending, mine).length
+  const listed = sidebarChats(mine, asks, onPage ? search.thread : undefined)
+  const nameOf = (id?: string) => computers.find((sb) => sb.id === id)?.name
+  const openTerminal = (t: AgentTerminal) =>
+    onPage &&
+    !search.thread &&
+    search.tab === "terminal" &&
+    search.computer === t.sandboxId &&
+    search.term === t.name
+  const home = onPage && !search.thread && !terminals.some(openTerminal)
+  const desk = computers.length
+    ? screenComputer(
+        computers,
+        mine,
+        undefined,
+        undefined,
+        lastComputer(env, teammate.id)
+      )
+    : undefined
+  const action =
+    "flex size-5 items-center justify-center rounded-[calc(var(--radius-sm)-2px)] text-sidebar-foreground outline-hidden hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring [&>svg]:size-3.5"
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        tooltip={teammate.name}
-        // The avatar is wider than an icon; collapsed, the padding keeps it in the middle.
-        className="group-data-[collapsible=icon]:p-1.5!"
-        isActive={
-          !!matchRoute({
-            to: "/e/$env/teammates/$id",
-            params: { env, id: teammate.id },
-            fuzzy: true,
-          })
-        }
-        render={
-          <Link to="/e/$env/teammates/$id" params={{ env, id: teammate.id }} />
-        }
-      >
-        <TeammateAvatar
-          name={teammate.name}
-          avatar={teammate.avatar}
-          className="size-5 text-[0.5625rem]"
-        />
-        <span className="min-w-0 flex-1 truncate">{teammate.name}</span>
-        {waiting > 0 ? (
-          <WaitingCount count={waiting} />
-        ) : (
-          status && (
-            <span
-              title={busy ? `${terminal.program} running` : undefined}
-              className={
-                working || busy
-                  ? "flex max-w-24 items-center gap-1.5 text-caption text-muted-foreground"
-                  : "text-caption text-muted-foreground"
-              }
+    <>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          tooltip={teammate.name}
+          // The avatar is wider than an icon; collapsed, the padding keeps it in the middle.
+          className="group-data-[collapsible=icon]:p-1.5!"
+          isActive={home}
+          render={
+            <Link
+              to="/e/$env/teammates/$id"
+              params={{ env, id: teammate.id }}
+            />
+          }
+        >
+          <TeammateAvatar
+            name={teammate.name}
+            avatar={teammate.avatar}
+            className="size-5 text-[0.5625rem]"
+          />
+          <span className="min-w-0 flex-1 truncate">{teammate.name}</span>
+          <span className="flex min-w-0 items-center md:group-focus-within/menu-item:opacity-0 md:group-hover/menu-item:opacity-0">
+            {waiting > 0 ? (
+              <WaitingCount count={waiting} />
+            ) : (
+              status && (
+                <span
+                  title={busy ? `${terminal.program} running` : undefined}
+                  className={
+                    working || busy
+                      ? "flex max-w-24 items-center gap-1.5 text-caption text-muted-foreground"
+                      : "text-caption text-muted-foreground"
+                  }
+                >
+                  {working && (
+                    <span className="size-1.5 animate-pulse rounded-full bg-(--st-running)" />
+                  )}
+                  {busy && (
+                    <span className="size-1.5 shrink-0 rounded-full ring-1 ring-current ring-inset" />
+                  )}
+                  <span className="truncate">{status}</span>
+                </span>
+              )
+            )}
+          </span>
+        </SidebarMenuButton>
+        <span className="absolute top-1.5 right-1 flex items-center gap-0.5 group-data-[collapsible=icon]:hidden max-md:hidden md:opacity-0 md:group-focus-within/menu-item:opacity-100 md:group-hover/menu-item:opacity-100">
+          {desk && (
+            <Link
+              to="/e/$env/teammates/$id"
+              params={{ env, id: teammate.id }}
+              search={{ computer: desk.id, tab: "terminal" }}
+              aria-label={`A terminal on ${desk.name}`}
+              title={`A terminal on ${desk.name}`}
+              className={action}
             >
-              {working && (
-                <span className="size-1.5 animate-pulse rounded-full bg-(--st-running)" />
-              )}
-              {busy && (
-                <span className="size-1.5 shrink-0 rounded-full ring-1 ring-current ring-inset" />
-              )}
-              <span className="truncate">{status}</span>
-            </span>
-          )
-        )}
-      </SidebarMenuButton>
-    </SidebarMenuItem>
+              <TerminalIcon />
+            </Link>
+          )}
+          <button
+            type="button"
+            aria-label={`Start work with ${teammate.name}`}
+            title={`Start work with ${teammate.name}`}
+            className={action}
+            onClick={() => openStartWork({ teammate: teammate.id })}
+          >
+            <PlusIcon />
+          </button>
+        </span>
+      </SidebarMenuItem>
+      {(listed.length > 0 || terminals.length > 0) && (
+        <li className="list-none">
+          <SidebarMenuSub
+            aria-label={`${teammate.name}'s threads`}
+            className="mr-0 gap-px pr-0"
+          >
+            {terminals.map((t) => (
+              <ThreadRow
+                key={`${t.sandboxId}-${t.name}`}
+                status="terminal"
+                title={t.title || `${teammate.name} in a terminal`}
+                meta={[
+                  t.state === "working" ? "working" : "in the terminal",
+                  computers.length > 1 && nameOf(t.sandboxId),
+                ]}
+                active={openTerminal(t)}
+                link={
+                  <Link
+                    to="/e/$env/teammates/$id"
+                    params={{ env, id: teammate.id }}
+                    search={{
+                      computer: t.sandboxId,
+                      tab: "terminal",
+                      term: t.name,
+                    }}
+                  />
+                }
+              />
+            ))}
+            {listed.map((c) => {
+              const n = asks(c)
+              const st = chatStatus(c, n)
+              return (
+                <ThreadRow
+                  key={c.id}
+                  status={st}
+                  title={chatTitle(c)}
+                  meta={[
+                    st === "done" || st === "ended"
+                      ? `${statusLabels[st]} ${formatAge(c.updatedAt)}`
+                      : statusLabels[st],
+                    computers.length > 1 && nameOf(c.sandboxId),
+                  ]}
+                  waiting={n}
+                  active={onPage && search.thread === c.id}
+                  link={
+                    <Link
+                      to="/e/$env/teammates/$id"
+                      params={{ env, id: teammate.id }}
+                      search={{ thread: c.id }}
+                    />
+                  }
+                />
+              )
+            })}
+            {mine.length > listed.length && (
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton
+                  size="sm"
+                  className="pl-7 text-muted-foreground"
+                  render={
+                    <Link
+                      to="/e/$env/teammates/$id"
+                      params={{ env, id: teammate.id }}
+                    />
+                  }
+                >
+                  All {mine.length} threads
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            )}
+          </SidebarMenuSub>
+        </li>
+      )}
+    </>
   )
 }
 
-/** A computer without a teammate: its name, what waits on it, and its status as a dot. */
+/** A thread under its teammate: its state, its title, and what it does where. */
+function ThreadRow({
+  status,
+  title,
+  meta,
+  waiting = 0,
+  active,
+  link,
+}: {
+  status: ThreadStatus
+  title: string
+  meta: (string | false | undefined)[]
+  waiting?: number
+  active: boolean
+  link: React.ReactElement
+}) {
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        isActive={active}
+        render={link}
+        className="h-auto items-start gap-2 py-1"
+      >
+        <span className="flex h-4 w-3 shrink-0 items-center justify-center">
+          <ThreadDot status={status} />
+        </span>
+        <span className="grid min-w-0 flex-1 leading-tight">
+          <span className="truncate">{title}</span>
+          <span className="truncate text-caption text-muted-foreground">
+            {meta.filter(Boolean).join(" · ")}
+          </span>
+        </span>
+        <WaitingCount count={waiting} className="mt-px" />
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
+  )
+}
+
+/** One of the user's own computers: its status as a dot, its name, and what waits on it. */
 function ComputerRow({
   env,
   sandbox: sb,
@@ -434,16 +758,20 @@ function ComputerRow({
         className="font-mono"
         render={<Link to="/e/$env/sandboxes/$id" params={{ env, id: sb.id }} />}
       >
-        <CubeIcon />
-        <span className="min-w-0 flex-1 truncate">{sb.name}</span>
+        {/* The row's name starts with the computer's; its state is said after it. */}
+        <span
+          aria-hidden
+          title={phaseDot(p).label}
+          className="flex size-4 shrink-0 items-center justify-center"
+        >
+          <StatusDot {...phaseDot(p)} compact />
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {sb.name}
+          <span className="sr-only">, {phaseDot(p).label}</span>
+        </span>
         {sb.forkDefaults && <BaseMark />}
-        {waiting > 0 ? (
-          <WaitingCount count={waiting} />
-        ) : (
-          <span title={phaseDot(p).label} className="flex px-1">
-            <StatusDot {...phaseDot(p)} compact />
-          </span>
-        )}
+        <WaitingCount count={waiting} />
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

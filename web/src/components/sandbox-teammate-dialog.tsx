@@ -14,22 +14,26 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateField } from "@/components/teammate-field"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
+import type { ScreenTab } from "@/lib/computer"
 
 /**
  * Gives a stopped computer another teammate, or none. The new owner's rules, secrets and
  * harness files apply from its next start; the home stays as it is. A teammate's computer is on
- * its page, so the change goes there, or to the plain computer's page for none.
+ * its page, so the change goes there, or to the plain computer's page for none, on the screen
+ * tab it was changed from.
  */
 export function SandboxTeammateDialog({
   env,
   sandbox: sb,
   open,
   onOpenChange,
+  tab,
 }: {
   env: string
   sandbox: Sandbox
   open: boolean
   onOpenChange: (open: boolean) => void
+  tab?: ScreenTab
 }) {
   const [teammateId, setTeammateId] = useState(sb.teammateId ?? "")
   const queryClient = useQueryClient()
@@ -49,12 +53,13 @@ export function SandboxTeammateDialog({
           navigate({
             to: "/e/$env/teammates/$id",
             params: { env, id: changed.teammateId },
-            search: { computer: sb.id },
+            search: { computer: sb.id, tab },
           })
         else
           navigate({
             to: "/e/$env/sandboxes/$id",
             params: { env, id: sb.id },
+            search: { tab },
           })
       },
       onError: (err) =>

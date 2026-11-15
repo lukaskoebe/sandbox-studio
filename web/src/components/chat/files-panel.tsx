@@ -40,6 +40,12 @@ import {
   placeOf,
   tmpRoot,
 } from "@/components/chat/files-tree"
+import {
+  ResizeHandle,
+  railSplit,
+  useElementWidth,
+  useStoredSize,
+} from "@/components/resize-handle"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -105,6 +111,13 @@ export function FilesPanel({
   const root = useRef<HTMLDivElement>(null)
   const find = useRef<HTMLInputElement>(null)
   const narrow = useNarrow(root)
+  const [rail, setRail] = useStoredSize(railSplit.key, railSplit.default)
+  const [panel, panelWidth] = useElementWidth<HTMLDivElement>()
+  const railMax = Math.max(
+    railSplit.min,
+    Math.min(railSplit.max, panelWidth - railSplit.contentMin)
+  )
+  const railWidth = Math.min(Math.max(rail, railSplit.min), railMax)
   const [hidden, setHidden] = useState(treeHidden)
   const [over, setOver] = useState(false)
   const tree = narrow ? over : !hidden
@@ -204,7 +217,10 @@ export function FilesPanel({
           className={narrow ? "w-32" : "w-56"}
         />
       </div>
-      <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-md ring-1 ring-foreground/10">
+      <div
+        ref={panel}
+        className="relative flex min-h-0 flex-1 overflow-hidden rounded-md ring-1 ring-foreground/10"
+      >
         {tree && (
           <>
             {narrow && (
@@ -221,8 +237,9 @@ export function FilesPanel({
                 "border-r bg-background",
                 narrow
                   ? "absolute inset-y-0 left-0 z-20 w-[min(250px,85%)] shadow-md"
-                  : "w-[250px] shrink-0"
+                  : "shrink-0"
               )}
+              style={narrow ? undefined : { width: railWidth }}
               viewportClassName="py-1"
             >
               <FilesTree
@@ -235,6 +252,18 @@ export function FilesPanel({
                 changed={changed}
               />
             </ScrollArea>
+            {!narrow && (
+              <ResizeHandle
+                label="the file tree"
+                side="left"
+                size={railWidth}
+                min={railSplit.min}
+                max={railMax}
+                defaultSize={railSplit.default}
+                onResize={setRail}
+                className="-mx-1"
+              />
+            )}
           </>
         )}
         {file ? (

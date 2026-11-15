@@ -1,9 +1,9 @@
 import type { ComponentProps } from "react"
 import { ColumnPage } from "@/components/column-page"
 
-/** A settings section. The Settings nav has the sidebar's toggle on phones, so it does not. */
+/** A settings section, in the Settings page's column. */
 export function SettingsPage(
-  props: Omit<ComponentProps<typeof ColumnPage>, "toggle" | "narrow">
+  props: Omit<ComponentProps<typeof ColumnPage>, "narrow">
 ) {
-  return <ColumnPage {...props} toggle={false} />
+  return <ColumnPage {...props} />
 }

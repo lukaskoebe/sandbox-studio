@@ -1,22 +1,13 @@
 import { useState } from "react"
 import {
-  ArrowClockwiseIcon,
-  ClockCounterClockwiseIcon,
-  CpuIcon,
   DotsThreeIcon,
-  DownloadSimpleIcon,
   FloppyDiskIcon,
   GitForkIcon,
-  StackIcon,
-  GitMergeIcon,
-  HardDriveIcon,
+  InfoIcon,
   PauseIcon,
   PlayIcon,
-  PlugsConnectedIcon,
-  PlusIcon,
   TerminalIcon,
   TrashIcon,
-  UserIcon,
 } from "@phosphor-icons/react"
 import { SaveCheckpointDialog } from "@/components/checkpoints-section"
 import { ConnectionsSheet } from "@/components/connections-panel"
@@ -26,16 +17,15 @@ import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { MergeForkDialog } from "@/components/merge-fork"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { ResizeDisksDialog } from "@/components/resize-disks-dialog"
-import { canCopyDisks } from "@/components/status-badge"
 import {
   ResizeSandboxDialog,
   sandboxSize,
-  sizeLabel,
 } from "@/components/resize-sandbox-dialog"
 import { formatMiB, HistorySheet } from "@/components/sandbox-details"
 import { useSandboxLifecycle } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxDialog } from "@/components/sandbox-options-menu"
 import { SandboxTeammateDialog } from "@/components/sandbox-teammate-dialog"
+import type { ScreenTab } from "@/lib/computer"
 import { SSHDialog } from "@/components/ssh-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,16 +37,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
-import {
-  $api,
-  type Sandbox,
-  type SandboxUsage,
-  type Teammate,
-} from "@/lib/api/client"
+import { $api, type Sandbox, type Teammate } from "@/lib/api/client"
 import { shortTemplate } from "@/lib/lineage"
-import { cn, formatAge, formatUptime } from "@/lib/utils"
+import { formatUptime } from "@/lib/utils"
 
-type Dialog =
+export type ComputerDialog =
   | "checkpoint"
   | "history"
   | "fork"
@@ -72,51 +57,28 @@ type Dialog =
   | "delete"
 
 /**
- * The computer's ⋯ on the screen's bezel: what it is and what it uses, then what is off the
- * everyday path: checkpoints, fork and merge, rebase, resources and disks, its connections, SSH,
- * export, another computer, suspend and delete. Power has its own button beside it.
+ * The computer's ⋯ on the screen's bezel: what it is, then five quick actions: checkpoint now,
+ * fork, SSH, suspend or resume, and delete. The rest is on the Details tab, and power has its own
+ * button beside it.
  */
 export function ComputerMenu({
   env,
   sandbox: sb,
   owner,
+  onDetails,
 }: {
   env: string
   sandbox: Sandbox
   owner?: Teammate
+  /** Opens the screen's Details tab, which has the rest. */
+  onDetails: () => void
 }) {
-  const [dialog, setDialog] = useState<Dialog>()
+  const [dialog, setDialog] = useState<ComputerDialog>()
   const [menuOpen, setMenuOpen] = useState(false)
   const { path, suspend, resume, phase: p } = useSandboxLifecycle(env, sb)
   const building = sb.status === "creating" || sb.status === "failed"
   const available = sb.status === "running" || sb.status === "stopped"
-  const copies = canCopyDisks(sb)
   const running = sb.status === "running"
-  const usage = $api.useQuery(
-    "get",
-    "/api/environments/{env}/sandboxes/{id}/usage",
-    { params: { path: { env, id: sb.id } } },
-    { enabled: running, refetchInterval: running ? 5000 : false, retry: false }
-  )
-  const checkpoints = $api.useQuery(
-    "get",
-    "/api/environments/{env}/sandboxes/{id}/checkpoints",
-    { params: { path: { env, id: sb.id } } },
-    { enabled: !building }
-  )
-  const latest = [...(checkpoints.data ?? [])]
-    .filter((c) => c.state === "ready")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .at(0)
-  // A fork can be merged back while the sandbox it was forked from exists.
-  const sandboxes = $api.useQuery(
-    "get",
-    "/api/environments/{env}/sandboxes",
-    { params: { path: { env } } },
-    { enabled: !!sb.forkOf }
-  )
-  const source = sandboxes.data?.find((s) => s.id === sb.forkOf)
-  const close = (open: boolean) => !open && setDialog(undefined)
   const facts = [
     shortTemplate(sb.templateId, sb.templateName),
     `${sandboxSize(sb).now.cpus} CPU`,
@@ -167,180 +129,38 @@ export function ComputerMenu({
               {facts.join(" · ")}
             </span>
           </div>
-          {running && usage.data && <Meters usage={usage.data} />}
-          {sb.baseOutdated && !building && (
-            <div className="mx-1 mb-1 grid gap-1 border border-(--st-waiting)/40 bg-(--st-waiting)/10 p-2.5">
-              <span className="font-mono text-caption font-semibold text-(--st-waiting-fg) dark:text-(--st-waiting)">
-                Built on an older base
-              </span>
-              <span className="text-xs">
-                {sb.baseVersion ? `From ${sb.baseVersion}. ` : ""}
-                Rebase for the newer harness versions and chat adapters, and
-                Debian&apos;s security updates.
-              </span>
-              <Button
-                size="sm"
-                className="mt-1 justify-self-start"
-                disabled={!copies}
-                onClick={() => {
-                  setMenuOpen(false)
-                  setDialog("rebase")
-                }}
-              >
-                Rebase…
-              </Button>
-            </div>
-          )}
-          {!building && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  disabled={p !== "ready" && p !== "stopped"}
-                  onClick={() => setDialog("checkpoint")}
-                >
-                  <FloppyDiskIcon />
-                  Checkpoint now
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDialog("history")}>
-                  <ClockCounterClockwiseIcon />
-                  Checkpoints
-                  {latest && (
-                    <span className="ml-auto max-w-32 truncate font-mono text-caption text-muted-foreground">
-                      {latest.name} · {formatAge(latest.createdAt)}
-                    </span>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!available}
-                  title={
-                    available
-                      ? "Copy this computer into a new one, to try something risky"
-                      : "Only a running or stopped computer can be forked"
-                  }
-                  onClick={() => setDialog("fork")}
-                >
-                  <GitForkIcon />
-                  Fork
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  title="Keep this computer as the starting point for new ones"
-                  onClick={() => setDialog("base")}
-                >
-                  <StackIcon />
-                  {sb.forkDefaults ? "Base settings" : "Use as a base"}
-                </DropdownMenuItem>
-                {source && (
-                  <DropdownMenuItem
-                    disabled={!running}
-                    title={
-                      running
-                        ? `Merge what changed here into ${source.name}`
-                        : "Start this computer to merge it"
-                    }
-                    onClick={() => setDialog("merge")}
-                  >
-                    <GitMergeIcon />
-                    <span className="truncate">
-                      Merge into{" "}
-                      <span className="font-mono">{source.name}</span>
-                    </span>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setDialog("connections")}>
-                  <PlugsConnectedIcon />
-                  Connections
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  title="Reach this computer from ssh, scp or an editor that works over SSH"
-                  onClick={() => setDialog("ssh")}
-                >
-                  <TerminalIcon />
-                  Connect over SSH
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  title="Give this computer another teammate, or none"
-                  onClick={() => setDialog("teammate")}
-                >
-                  <UserIcon />
-                  Teammate
-                  <span className="ml-auto truncate text-caption text-muted-foreground">
-                    {owner?.name ?? "None"}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={
-                    p !== "ready" && p !== "stopped" && p !== "suspended"
-                  }
-                  onClick={() => setDialog("resources")}
-                >
-                  <CpuIcon />
-                  Resources
-                  <span className="ml-auto text-caption text-muted-foreground">
-                    {sizeLabel(sb)}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!copies}
-                  title={
-                    copies
-                      ? "Give the workspace, Docker and home disks other sizes"
-                      : "This computer has no VM to copy its disks from"
-                  }
-                  onClick={() => setDialog("disks")}
-                >
-                  <HardDriveIcon />
-                  Disks
-                  <span className="ml-auto text-caption text-muted-foreground">
-                    {formatMiB(sb.workspaceMiB)} · {formatMiB(sb.dockerMiB)}
-                    {sb.homeMiB ? ` · ${formatMiB(sb.homeMiB)}` : ""}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!copies}
-                  title={
-                    copies
-                      ? "Move this computer onto the current base or another template"
-                      : "This computer has no VM to copy its disks from"
-                  }
-                  onClick={() => setDialog("rebase")}
-                >
-                  <ArrowClockwiseIcon />
-                  Rebase
-                </DropdownMenuItem>
-                {available ? (
-                  <DropdownMenuItem
-                    render={
-                      <a
-                        href={`/api/environments/${encodeURIComponent(env)}/sandboxes/${encodeURIComponent(sb.id)}/export`}
-                        download={`${sb.name}.studio-sandbox`}
-                        title="Downloads the template, resources, /workspace and /home/agent; secrets, checkpoints and Docker state are left out."
-                      />
-                    }
-                  >
-                    <DownloadSimpleIcon />
-                    Export
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem disabled>
-                    <DownloadSimpleIcon />
-                    Export
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuGroup>
-            </>
-          )}
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            {owner && (
-              <DropdownMenuItem onClick={() => setDialog("another")}>
-                <PlusIcon />
-                Another computer for {owner.name}
+            {!building && (
+              <DropdownMenuItem
+                disabled={p !== "ready" && p !== "stopped"}
+                onClick={() => setDialog("checkpoint")}
+              >
+                <FloppyDiskIcon />
+                Checkpoint now
               </DropdownMenuItem>
             )}
+            {!building && (
+              <DropdownMenuItem
+                disabled={!available}
+                title={
+                  available
+                    ? "Copy this computer into a new one, to try something risky"
+                    : "Only a running or stopped computer can be forked"
+                }
+                onClick={() => setDialog("fork")}
+              >
+                <GitForkIcon />
+                Fork…
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              title="Reach this computer from ssh, scp or an editor that works over SSH"
+              onClick={() => setDialog("ssh")}
+            >
+              <TerminalIcon />
+              Connect over SSH
+            </DropdownMenuItem>
             {!building && p === "suspended" && (
               <DropdownMenuItem
                 disabled={resume.isPending}
@@ -365,18 +185,76 @@ export function ComputerMenu({
               onClick={() => setDialog("delete")}
             >
               <TrashIcon />
-              Delete <span className="font-mono">{sb.name}</span>
+              Delete <span className="font-mono">{sb.name}</span>…
             </DropdownMenuItem>
           </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onDetails}>
+            <InfoIcon />
+            Everything else is in Details
+            {sb.baseOutdated && (
+              <span
+                aria-label="built on an older base"
+                className="ml-auto size-1.5 rounded-full bg-(--st-waiting)"
+              />
+            )}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {/* Rendered beside the menu: the menu closes when an item is chosen. */}
+      <ComputerDialogs
+        env={env}
+        sandbox={sb}
+        owner={owner}
+        dialog={dialog}
+        onClose={() => setDialog(undefined)}
+      />
+    </>
+  )
+}
+
+/**
+ * The dialogs and sheets the computer's ⋯ menu and its Details tab open, one at a time.
+ */
+export function ComputerDialogs({
+  env,
+  sandbox: sb,
+  owner,
+  dialog,
+  onClose,
+  tab,
+}: {
+  env: string
+  sandbox: Sandbox
+  owner?: Teammate
+  dialog?: ComputerDialog
+  onClose: () => void
+  /** The screen tab they were opened from, which a move to another page keeps. */
+  tab?: ScreenTab
+}) {
+  const building = sb.status === "creating" || sb.status === "failed"
+  const checkpoints = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/checkpoints",
+    { params: { path: { env, id: sb.id } } },
+    { enabled: !building }
+  )
+  const sandboxes = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes",
+    { params: { path: { env } } },
+    { enabled: !!sb.forkOf }
+  )
+  const source = sandboxes.data?.find((s) => s.id === sb.forkOf)
+  const close = (open: boolean) => !open && onClose()
+  return (
+    <>
       {dialog === "checkpoint" && (
         <SaveCheckpointDialog
           environmentId={env}
           sandboxId={sb.id}
           taken={(checkpoints.data ?? []).map((c) => c.name)}
-          onClose={() => setDialog(undefined)}
+          onClose={onClose}
         />
       )}
       <HistorySheet
@@ -434,6 +312,7 @@ export function ComputerMenu({
           sandbox={sb}
           open
           onOpenChange={close}
+          tab={tab}
         />
       )}
       {owner && (
@@ -451,45 +330,5 @@ export function ComputerMenu({
         onOpenChange={close}
       />
     </>
-  )
-}
-
-/** CPU and memory as two quiet bars, as msb sampled them over the last few seconds. */
-function Meters({ usage }: { usage: SandboxUsage }) {
-  const GiB = 1 << 30
-  const mem = (b: number) => (b / GiB).toFixed(1).replace(/\.0$/, "")
-  const rows = [
-    {
-      label: "CPU",
-      share: usage.cpuPercent / 100,
-      value: `${Math.round(usage.cpuPercent)}%`,
-    },
-    {
-      label: "Memory",
-      share: usage.memoryBytes / Math.max(usage.memoryTotalBytes, 1),
-      value: `${mem(usage.memoryBytes)} / ${mem(usage.memoryTotalBytes)} GiB`,
-    },
-  ]
-  return (
-    <div className="grid gap-1.5 px-2 pb-2">
-      {rows.map((r) => (
-        <div
-          key={r.label}
-          className="grid grid-cols-[4rem_minmax(0,1fr)_5.5rem] items-center gap-2 text-caption"
-        >
-          <span className="text-muted-foreground">{r.label}</span>
-          <span className="h-1 overflow-hidden rounded-full bg-muted">
-            <span
-              className={cn(
-                "block h-full rounded-full bg-muted-foreground/60",
-                r.share > 0.85 && "bg-(--st-waiting)"
-              )}
-              style={{ width: `${Math.min(100, Math.max(2, r.share * 100))}%` }}
-            />
-          </span>
-          <span className="text-right font-mono tabular-nums">{r.value}</span>
-        </div>
-      ))}
-    </div>
   )
 }

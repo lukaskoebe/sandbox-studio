@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  CaretRightIcon,
   FolderOpenIcon,
   GitBranchIcon,
 } from "@phosphor-icons/react"
@@ -128,25 +129,21 @@ export function RailRow({
   )
 }
 
-/** A rail section's label, with a count at its end. */
+/** A part of a repository in the rail, such as Staged, with a count at its end. */
 export function RailLabel({
   children,
   count,
-  level = 4,
 }: {
   children: ReactNode
   count?: number
-  /** A section of the rail is 3, a part of a repository 4. */
-  level?: 3 | 4
 }) {
-  const H = level === 3 ? "h3" : "h4"
   return (
-    <H className="flex items-center gap-2 px-3 pt-2 pb-1 text-caption font-medium text-muted-foreground">
+    <h5 className="flex items-center gap-2 px-3 pt-2 pb-1 pl-8 text-caption font-medium text-muted-foreground">
       {children}
       {count !== undefined && (
         <span className="ml-auto font-mono text-meta">{count}</span>
       )}
-    </H>
+    </h5>
   )
 }
 
@@ -161,6 +158,8 @@ export function GitRail({
   open,
   idle,
   onOpen,
+  repoOpen = () => true,
+  onRepoOpenChange,
 }: {
   status: ReturnType<typeof useGitStatus>
   /** The change shown, by its changeKey. */
@@ -168,6 +167,10 @@ export function GitRail({
   /** The change shown is only the first, as nothing is picked. */
   idle?: boolean
   onOpen: (key: string) => void
+  /** Whether a repository, by its path and place in the list, is unfolded. */
+  repoOpen?: (path: string, index: number) => boolean
+  /** Folds or unfolds a repository; without it, repositories don't fold. */
+  onRepoOpenChange?: (path: string, open: boolean) => void
 }) {
   const note = (text: string) => (
     <p className="px-3 py-2 text-muted-foreground">{text}</p>
@@ -180,9 +183,25 @@ export function GitRail({
     return note("There's no git repository in /workspace.")
   return (
     <>
-      {repos.map((r) => (
-        <Repo key={r.path} repo={r} open={open} idle={idle} onOpen={onOpen} />
-      ))}
+      {repos.map((r, i) => {
+        // The repository with the change you picked stays unfolded; the first change, shown
+        // only because nothing is picked, doesn't hold its repository open.
+        const holds =
+          !idle && (r.changes ?? []).some((c) => changeKey(r.path, c) === open)
+        return (
+          <Repo
+            key={r.path}
+            repo={r}
+            open={open}
+            idle={idle}
+            onOpen={onOpen}
+            unfolded={holds || repoOpen(r.path, i)}
+            onUnfoldedChange={
+              onRepoOpenChange && ((o) => onRepoOpenChange(r.path, o))
+            }
+          />
+        )
+      })}
       {status.data.truncated &&
         note("And more repositories, too many to list here.")}
     </>
@@ -194,80 +213,122 @@ function Repo({
   open,
   idle,
   onOpen,
+  unfolded,
+  onUnfoldedChange,
 }: {
   repo: GitRepo
   open?: string
   idle?: boolean
   onOpen: (key: string) => void
+  unfolded: boolean
+  onUnfoldedChange?: (unfolded: boolean) => void
 }) {
   const changes = r.changes ?? []
   const name = r.path || "workspace"
-  return (
-    <section
-      aria-label={`Repository ${name}`}
-      className="min-w-0 border-b pb-1.5"
-    >
-      <h3 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2">
-        <span className="font-mono font-medium">{name}</span>
-        <span className="inline-flex min-w-0 items-center gap-1 text-(--acc-git)">
-          <GitBranchIcon className="size-3.5 shrink-0" />
-          <span className="truncate font-mono">
-            {r.branch || (r.head ? `detached at ${r.head.slice(0, 7)}` : "—")}
-          </span>
+  // A repository with nothing to commit has nothing to fold away.
+  const folds = !!onUnfoldedChange && changes.length > 0 && !r.error
+  const listed = !folds || unfolded
+  const head = (
+    <>
+      {folds && (
+        <CaretRightIcon
+          className={cn(
+            "size-3 shrink-0 text-muted-foreground transition-transform",
+            unfolded && "rotate-90"
+          )}
+        />
+      )}
+      <span className="font-mono font-medium">{name}</span>
+      <span className="inline-flex min-w-0 items-center gap-1 text-(--acc-git)">
+        <GitBranchIcon className="size-3.5 shrink-0" />
+        <span className="truncate font-mono">
+          {r.branch || (r.head ? `detached at ${r.head.slice(0, 7)}` : "—")}
         </span>
-        {r.ahead > 0 && (
-          <span
-            className="inline-flex items-center font-mono text-meta text-muted-foreground"
-            title={`${r.ahead} ${r.ahead === 1 ? "commit" : "commits"} ${r.upstream ?? "its upstream"} doesn't have`}
+      </span>
+      {r.ahead > 0 && (
+        <span
+          className="inline-flex items-center font-mono text-meta text-muted-foreground"
+          title={`${r.ahead} ${r.ahead === 1 ? "commit" : "commits"} ${r.upstream ?? "its upstream"} doesn't have`}
+        >
+          <ArrowUpIcon className="size-3" />
+          {r.ahead}
+        </span>
+      )}
+      {r.behind > 0 && (
+        <span
+          className="inline-flex items-center font-mono text-meta text-muted-foreground"
+          title={`${r.behind} ${r.behind === 1 ? "commit" : "commits"} behind ${r.upstream ?? "its upstream"}`}
+        >
+          <ArrowDownIcon className="size-3" />
+          {r.behind}
+        </span>
+      )}
+      {folds && !unfolded && (
+        <span className="ml-auto font-mono text-meta text-muted-foreground">
+          {changes.length} {changes.length === 1 ? "file" : "files"}
+        </span>
+      )}
+    </>
+  )
+  const headClass =
+    "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5"
+  return (
+    <section aria-label={`Repository ${name}`} className="min-w-0 pb-1">
+      <h4>
+        {folds ? (
+          <button
+            type="button"
+            aria-expanded={unfolded}
+            onClick={() => onUnfoldedChange(!unfolded)}
+            className={cn(
+              headClass,
+              "w-full text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
+            )}
           >
-            <ArrowUpIcon className="size-3" />
-            {r.ahead}
-          </span>
+            {head}
+          </button>
+        ) : (
+          <span className={headClass}>{head}</span>
         )}
-        {r.behind > 0 && (
-          <span
-            className="inline-flex items-center font-mono text-meta text-muted-foreground"
-            title={`${r.behind} ${r.behind === 1 ? "commit" : "commits"} behind ${r.upstream ?? "its upstream"}`}
-          >
-            <ArrowDownIcon className="size-3" />
-            {r.behind}
-          </span>
-        )}
-      </h3>
+      </h4>
       {r.error && (
         <p className="px-3 py-2 text-muted-foreground">
           Can't read it: {r.error}
         </p>
       )}
       {!r.error && changes.length === 0 && (
-        <p className="px-3 py-2 text-muted-foreground">Nothing to commit.</p>
+        <p className="px-3 pb-1.5 pl-8 text-muted-foreground">
+          Nothing to commit
+        </p>
       )}
-      {areas.map(({ area, label }) => {
-        const shown = changes.filter((c) => c.area === area)
-        if (shown.length === 0) return null
-        return (
-          <div key={area} className="min-w-0">
-            <RailLabel count={shown.length}>{label}</RailLabel>
-            <ul aria-label={label} className="min-w-0">
-              {shown.map((c) => {
-                const key = changeKey(r.path, c)
-                return (
-                  <li key={c.path} className="min-w-0">
-                    <RailRow
-                      current={open === key}
-                      idle={idle}
-                      onClick={() => onOpen(key)}
-                    >
-                      <ChangeLine change={c} />
-                    </RailRow>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )
-      })}
-      {r.truncated && (
+      {listed &&
+        areas.map(({ area, label }) => {
+          const shown = changes.filter((c) => c.area === area)
+          if (shown.length === 0) return null
+          return (
+            <div key={area} className="min-w-0">
+              <RailLabel count={shown.length}>{label}</RailLabel>
+              <ul aria-label={label} className="min-w-0">
+                {shown.map((c) => {
+                  const key = changeKey(r.path, c)
+                  return (
+                    <li key={c.path} className="min-w-0">
+                      <RailRow
+                        current={open === key}
+                        idle={idle}
+                        onClick={() => onOpen(key)}
+                        className="pl-8"
+                      >
+                        <ChangeLine change={c} />
+                      </RailRow>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )
+        })}
+      {listed && r.truncated && (
         <p className="px-3 py-1 text-muted-foreground">
           And more changes, too many to list here.
         </p>

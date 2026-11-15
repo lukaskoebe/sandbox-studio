@@ -142,6 +142,11 @@ func TestRestoreMSBDBPicksTheSavedCatalogThatKnowsStudiosVMs(t *testing.T) {
 	writeCatalog(t, path+".replaced-20261113T111025Z", g2, "ss-other-g1")
 	writeCatalog(t, path, g1, "ss-other-g1")
 	const addr = "127.0.0.1:1"
+	// The machine's own VMs, of other msb homes, are none of this test's business.
+	runningVMs = func(string) []msbdb.VM { return nil }
+	t.Cleanup(func() { runningVMs = msbdb.RunningVMs })
+	msbHolders = func(string) []int { return nil }
+	t.Cleanup(func() { msbHolders = msbdb.Holders })
 
 	var out bytes.Buffer
 	if status := runRestoreMSBDB(&out, addr, []string{"-replace"}); status != 0 {

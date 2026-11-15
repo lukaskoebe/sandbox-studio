@@ -97,6 +97,9 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   cards into an "N approvals" pill, a
   small outline button with the count chip (`WaitingCount`) and a caret. The pill opens the
   list above it on click, up to three cards and a "+N more" link, and closes on the next click.
+  Below 640 px, on a page with the breadcrumb row, the pill moves into that row beside Search
+  and the cards open below it: at the bottom it covered the composer's send button and the
+  terminal's keys. Pages without the row keep the floating pill.
   Click alone opens it: a hover would open it over content as the pointer passes. The pill is a
   disclosure button (`aria-expanded`, `aria-controls`), so keyboard and screen-reader users get
   the same states. Enable notifications sits at the top of the open list.
@@ -208,7 +211,7 @@ primitives above and keeps the e2e selectors it had.
   and what happened lately (decisions and chats started).
 - **Done: computers.** A teammate's computer is the screen beside the conversation on the
   teammate's page; a computer without a teammate is the same screen at full width. The bezel
-  holds the name, power and ⋯, and the tabs are Terminal, Browser, Preview and Changes
+  holds power and ⋯ (the breadcrumb row names the computer and switches it), and the tabs are Terminal, Browser, Preview and Changes
   (`docs/design/teammate-computer.md`).
 - **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
 - **Done: secrets.** A section per scope (environment, each teammate, each sandbox) with a `SectionHeader` and a table; the columns line up from one section to the next.

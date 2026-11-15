@@ -75,7 +75,7 @@ export function TeammateSecrets({
         environment's of the same name, and a sandbox's replace both. All
         secrets are in{" "}
         <Link
-          to="/e/$env/settings/secrets"
+          to="/e/$env/secrets"
           params={{ env }}
           className="underline underline-offset-4"
         >

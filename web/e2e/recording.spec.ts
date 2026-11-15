@@ -14,8 +14,8 @@ test("the Connections panel records a computer's intercepted requests", async ({
   await expect(
     screen.getByRole("tablist", { name: `${name}'s screen` })
   ).toBeVisible()
-  await screen.getByRole("button", { name: `More for ${name}` }).click()
-  await page.getByRole("menuitem", { name: "Connections" }).click()
+  await screen.getByRole("tab", { name: "Details" }).click()
+  await screen.getByRole("button", { name: "Show its connections…" }).click()
   const sheet = page.getByRole("dialog", { name: "Connections" })
 
   const record = sheet.getByRole("switch", {

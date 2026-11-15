@@ -391,7 +391,7 @@ function RuleLine({ env, rule }: { env: string; rule: Rule }) {
   return (
     <li>
       <Link
-        to="/e/$env/settings/network"
+        to="/e/$env/network"
         params={{ env }}
         search={{ rule: rule.id }}
         className="flex min-w-0 items-baseline gap-2 rounded-sm px-1.5 py-1 text-xs hover:bg-muted"
@@ -458,7 +458,7 @@ export function TeammateRules({ env, id }: { env: string; id: string }) {
           variant="outline"
           render={
             <Link
-              to="/e/$env/settings/network"
+              to="/e/$env/network"
               params={{ env }}
               search={{ scope: "teammate" }}
             />

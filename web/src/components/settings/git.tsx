@@ -179,7 +179,7 @@ export function GitSettings({
         <p className="text-xs text-muted-foreground">
           The pushes and pull requests sandboxes made are in{" "}
           <Link
-            to="/e/$env/settings/activity"
+            to="/e/$env/activity"
             params={{ env }}
             search={{ kind: "git" }}
             className="underline underline-offset-4"

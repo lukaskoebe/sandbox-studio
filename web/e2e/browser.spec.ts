@@ -263,7 +263,7 @@ test("a page a deny rule blocks says so, with a link to the rule", async ({
     await expect(
       dialog.getByRole("textbox", { name: "Host", exact: true })
     ).toHaveValue(`*.${host}`)
-    await expect(page).toHaveURL(/\/settings\/network$/)
+    await expect(page).toHaveURL(/\/e\/[^/]+\/network$/)
   } finally {
     await api.json("DELETE", `/api/environments/${env}/rules/${rule.id}`)
   }

@@ -52,7 +52,7 @@ function levelExamples(
 ): [ReactNode, ReactNode] {
   const curated = (
     <Link
-      to="/e/$env/settings/network"
+      to="/e/$env/network"
       params={{ env }}
       hash="curated-list"
       className="underline underline-offset-4"

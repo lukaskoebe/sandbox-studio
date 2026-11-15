@@ -48,7 +48,7 @@ test("Home's Get to know Studio card starts a first task in a new chat", async (
   if (!o.features.find((f) => f.key === "secret")?.happened)
     await expect(card.getByRole("link", { name: "Try it" })).toHaveAttribute(
       "href",
-      `/e/${env}/settings/secrets`
+      `/e/${env}/secrets`
     )
 
   // The first starter is picked; Start opens a new chat with it to edit.
@@ -121,7 +121,7 @@ test("a feature's tip shows the first time it happens, once, and Settings shows 
   await expect(tip).toBeHidden()
 
   // The Secrets page explains itself at Add secret; Stop tips closes every tip.
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await expect(tip).toHaveAttribute("data-feature", "secret")
   await tip.getByRole("button", { name: "Stop tips" }).click()
   await expect(tip).toBeHidden()
@@ -141,7 +141,7 @@ test("a feature's tip shows the first time it happens, once, and Settings shows 
   // Settings → General shows them again.
   await page.goto(`/e/${env}/settings`)
   await page.getByRole("button", { name: "Show tips again" }).click()
-  await page.goto(`/e/${env}/settings/secrets`)
+  await page.goto(`/e/${env}/secrets`)
   await expect(tip).toHaveAttribute("data-feature", "secret")
   await api.dismissApprovals()
 })
