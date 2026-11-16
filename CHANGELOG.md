@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.24.0 — 2026-11-16
 
 - Fixes from v0.23.0, which copied microsandbox's database every five minutes and after each
   create or fork from inside Studio's own process. Closing those copies dropped the locks
