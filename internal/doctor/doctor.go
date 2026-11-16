@@ -82,6 +82,9 @@ type Probes struct {
 	// later keep them in.
 	Storage func(ctx context.Context) ([]StorageIssue, error)
 
+	// Leftovers lists the VMs msb keeps under Studio's names that no sandbox of Studio's uses.
+	Leftovers func(ctx context.Context) ([]LeftoverVM, error)
+
 	// MSBPath returns the installed msb executable, or an error if there is none.
 	MSBPath func() (string, error)
 	// Run runs a program and returns its combined output. A non-zero exit is an error.
@@ -133,6 +136,16 @@ type LostVM struct {
 	Known []string
 }
 
+// LeftoverVM is a VM msb keeps under one of Studio's names that no sandbox of Studio's uses:
+// left over from a create, fork or rebase whose cleanup didn't get through to msb.
+type LeftoverVM struct {
+	VM     string // the VM's name
+	Status string // msb's status of it: running, stopped, …
+	// Sandbox is the name of the sandbox it is an older VM of, or "" when no sandbox of
+	// Studio's has its id.
+	Sandbox string
+}
+
 // StorageIssue is a sandbox whose disks msb hasn't moved to its protected layout, which
 // checkpoints, forks and disk resizes need.
 type StorageIssue struct {
@@ -143,6 +156,9 @@ type StorageIssue struct {
 	Status  string
 	Running bool
 	Reasons []string
+	// Leftover is whether no sandbox of Studio's uses the VM: the Leftover VMs check
+	// reports it, to be removed rather than repaired.
+	Leftover bool
 }
 
 // Options are what the checks look at.
@@ -171,6 +187,9 @@ func Run(ctx context.Context, p Probes, o Options) Report {
 	}
 	if p.LostVMs != nil {
 		checks = append(checks, checkLostVMs(ctx, p))
+	}
+	if p.Leftovers != nil {
+		checks = append(checks, checkLeftovers(ctx, p))
 	}
 	if p.Storage != nil {
 		checks = append(checks, checkStorage(ctx, p))
@@ -270,24 +289,66 @@ func checkLostVMs(ctx context.Context, p Probes) Check {
 	return c.with(Fail, msg, fix)
 }
 
+// checkLeftovers reports the VMs msb keeps under Studio's names that no sandbox uses. They
+// take disk space, and one that seems to run can stop msb moving other disks: msb self repair
+// refuses with "cannot exclude a writer in sandbox …" while it can't rule it out.
+func checkLeftovers(ctx context.Context, p Probes) Check {
+	c := Check{ID: "msb-leftovers", Name: "Leftover VMs", Status: OK, Message: "every VM microsandbox keeps for Studio belongs to a sandbox"}
+	left, err := p.Leftovers(ctx)
+	if err != nil {
+		return c.with(Warn, "could not compare microsandbox's VMs with Studio's sandboxes: "+err.Error(), "")
+	}
+	if len(left) == 0 {
+		return c
+	}
+	each := make([]string, len(left))
+	vms := make([]string, len(left))
+	for n, l := range left {
+		vms[n] = l.VM
+		what := l.Status
+		if l.Sandbox != "" {
+			what = "an older VM of " + l.Sandbox + ", " + what
+		}
+		each[n] = fmt.Sprintf("%s (%s)", l.VM, what)
+	}
+	msg := fmt.Sprintf("microsandbox keeps %s that no sandbox of Studio's uses, left over from creates, forks or rebases that failed: %s",
+		plural(len(left), "1 VM", fmt.Sprintf("%d VMs", len(left))), strings.Join(each, ", "))
+	fix := "Studio doesn't need " + plural(len(left), "it", "them") + " unless its data was reset or restored from an older copy, and microsandbox may refuse to move other disks while " +
+		plural(len(left), "it seems", "they seem") + " to run. Remove " + plural(len(left), "it", "them") + " in a terminal with `" + msbCommand(p) + " remove --force " +
+		strings.Join(vms, " ") + "`, which stops and deletes " + plural(len(left), "it", "them") + " with " + plural(len(left), "its", "their") + " disks."
+	return c.with(Warn, msg, fix)
+}
+
+// msbCommand is how a fix names msb: its path when Studio knows it.
+func msbCommand(p Probes) string {
+	if p.MSBPath != nil {
+		if path, err := p.MSBPath(); err == nil {
+			return path
+		}
+	}
+	return "msb"
+}
+
 // checkStorage reports the sandboxes whose disks msb has yet to move to the layout it keeps
 // them in since 0.7.12. On Linux and Windows it moves them as a VM starts, so a VM that still
-// runs as the older msb started it only needs a restart; on macOS msb self repair moves them.
+// runs as the older msb started it only needs a restart; on macOS Studio's Move disks, or msb
+// self repair, moves them.
 func checkStorage(ctx context.Context, p Probes) Check {
 	c := Check{ID: "msb-storage", Name: "Sandbox storage", Status: OK, Message: "microsandbox keeps every sandbox's disks in its current layout"}
 	issues, err := p.Storage(ctx)
 	if err != nil {
 		return c.with(Warn, "could not ask microsandbox how it keeps the sandboxes' disks: "+err.Error(), "")
 	}
-	msbCmd := "msb"
-	if p.MSBPath != nil {
-		if path, err := p.MSBPath(); err == nil {
-			msbCmd = path
-		}
-	}
-	var restart, repair, waiting []string
+	msbCmd := msbCommand(p)
+	var restart, repair, waiting, leftovers []string
 	var repairVMs, waitingVMs []string
 	for _, i := range issues {
+		if i.Leftover {
+			if i.Status != "eligible" || i.Running {
+				leftovers = append(leftovers, i.VM)
+			}
+			continue
+		}
 		name := i.Sandbox
 		if name == "" {
 			name = i.VM
@@ -325,7 +386,12 @@ func checkStorage(ctx context.Context, p Probes) Check {
 	if len(repair) > 0 {
 		status = Fail
 		msgs = append(msgs, "microsandbox must move the disks of "+strings.Join(repair, "; ")+" to its new layout before "+plural(len(repair), "it starts", "they start"))
-		fixes = append(fixes, "Stop the sandboxes, then run "+repairCommands(msbCmd, repairVMs)+" in a terminal: it shows what it moves and asks before it changes anything.")
+		fixes = append(fixes, "Move disks, in the notice on Home and on Computers, stops "+plural(len(repair), "it", "them")+", moves the disks, keeping the originals, "+
+			"and starts again what ran. Or stop the sandboxes and run "+repairCommands(msbCmd, repairVMs)+" in a terminal: it shows what it moves and asks before it changes anything.")
+	}
+	if len(leftovers) > 0 && (len(repair) > 0 || len(waiting) > 0) {
+		fixes = append([]string{"First remove " + strings.Join(leftovers, ", ") + ", as Leftover VMs says: no sandbox uses " + plural(len(leftovers), "it", "them") +
+			", and microsandbox won't move disks while " + plural(len(leftovers), "it seems", "one of them seems") + " to run."}, fixes...)
 	}
 	if status == OK {
 		return c

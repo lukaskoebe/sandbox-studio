@@ -154,7 +154,7 @@ its desk and the user's own on its page, which has its terminal sessions in a pa
 screen, folded until opened.
 
 Start work (`components/teammate/start-work.tsx`, opened by `lib/start-work.ts` from the
-teammate's header, the sidebar's + and the palette) asks how the teammate should work: in a
+teammate's Now card, the sidebar's + and the palette) asks how the teammate should work: in a
 chat (a new thread with the message), its harness in a terminal (a session of its own that the
 user can type along in), or just the computer, opened on its terminal; on which of its
 computers, or in a fresh fork of it, which it makes and waits for. Bring X in, on the desk,
@@ -171,31 +171,42 @@ row and the page in one centred column, without a rule under the header.
 
 The teammate's page (`components/teammate/`) has three states ([design](design/teammate-computer.md)):
 its home, which takes the page with its computers beside the threads and the screen folded to a
-rail; its desk, a computer open with the home narrowed to a panel beside it (`tab=` with no
+rail (none on a phone); its desk, a computer open with the home narrowed to a panel beside it (`tab=` with no
 thread); and a thread, the conversation on the left and the screen to the right. Everything it
 shows is in the URL's search, so Back, Forward and links work: `thread`, `computer`, `tab`,
 `term`, `review`, `fold`, `full`, `profile` (`card`, `tasks`, `memory`, `settings`), `open` (the open
 settings card) and `from=setup`. Esc closes the profile or a menu first, then leaves the thread.
+The page has no header of its own: the crumb row's teammate is its only name, and its menu
+switches teammate and opens the Profile, the Threads and the Settings.
 
-- Home: the header (avatar, name, role and harness, what keeps it from working, its presence
-  word and what it is busy with: a thread, or a harness or program in a terminal, which links
-  to it; `hooks/use-teammate-presence.ts`), the threads as cards grouped by day (title, a chip for another computer, the last
+The rim between the home or the conversation and the screen drags. From the home's rail a little
+drag opens the desk; past the panel's minimum the screen takes the page (`full`), and past its
+maximum the screen folds to the rail again (`fold`), so the same rim reaches all three.
+Double-click resets the split; the arrows move it, and past either end fold or expand.
+
+- Home: first the **Now** card (`<name> now`): its presence word and since when, or what waits
+  for you, with what keeps it from working (`hooks/use-teammate-presence.ts`) and Start work;
+  then the waiting rows (Answer opens the card in place, Review opens a push on Changes), the
+  threads it is working in and its agents in terminals, each with Open, and what it browses.
+  With nothing alive it is one line, which names a harness or program in a terminal and links
+  to it. Below it the threads as cards, newest day first (title, a chip for another computer, the last
   answer, the number of requests, its state, and New while it has changes this browser hasn't
   seen: `lib/chat-seen.ts`, revs in localStorage), the small events between them (facts it
-  learned, with Forget; tasks; terminal work; check-ins), what it browses now, and what waits
-  for you, a row each, whose Answer opens the card in place and Review opens a push on Changes.
-  One composer starts a thread on the computer on the screen (or another it picks), adds a
-  task, or teaches a fact. Beside them, on a wide page, its computers as cards: state, what
-  runs there, and Terminal, Browser and Files, each opening the desk on that tab.
+  learned, with Forget; tasks; terminal work; check-ins). One composer starts a thread on the
+  computer on the screen (or another it picks), adds a task, or teaches a fact. Beside the
+  threads on a wide page, above them on a narrow one, its computers as stacked cards: state, the
+  thread there (two lines at most), and Terminal, Browser and Files, each opening the desk on
+  that tab; then a dashed Give X another computer. A narrow page shows the first two and All N
+  computers.
 - The desk: the home in brief beside the open computer: Start work, Bring X in, what waits,
   the threads with their state, its agents in terminals, its computers, and the composer.
   Expand gives the home the page again, Fold leaves the computer the page.
 - A thread: Back to the teammate, its title and state, and ⋯ to continue it in the agent's
   terminal or delete it; then the chat and its composer. Its changes and terminal show on the
   screen.
-- The profile: the name, with a caret, opens a card with the open tasks, what it knows, its
-  computers and its settings; each opens as a sheet. **Settings** at the end of the header opens
-  the settings sheet at once. The sheet uses the card's rows, an icon, the label, what it is
+- The profile: Profile in the crumb's teammate menu opens a card with the open tasks, what it
+  knows, its computers and its settings; each opens as a sheet. **Settings** in the same menu
+  opens the settings sheet at once. The sheet uses the card's rows, an icon, the label, what it is
   set to and a caret, each opening to its fields underneath, under the card's section labels:
   Profile (identity, agent, git identity, approvals, soul), Knowledge (memory: its pages,
   facts, facts this week and last dream, Open its memory, Add a fact, Dream now, and the
@@ -265,11 +276,15 @@ way back; the conversation stays mounted behind it, so a draft and the scroll ar
 or the bezel's Shrink gives it back. Folding and enlarging undo each other. Below 1024px it
 is that strip, and opens over the conversation.
 
-Sheets remain for detail opened from outside its context: the git push review (from the
-approval stack), a memory conflict (from the approval stack and the Conflicts tab of Settings →
-Shared memory) and a build's log (from Settings → Templates). Each of those sheets has "Open as
-page", which leads to the item's own page above; Home's activity, Settings → Activity, Settings
-→ Templates and the memory conflicts tab link there too. A page for an item that doesn't exist
+Review on a git approval's card, in the stack or on Home, opens it on its computer's Changes
+tab (`useOpenGitReview` in `components/git-review.tsx`): beside the open thread when the computer
+is that teammate's, else through the computer's address, which leads a teammate's computer to
+its desk. The review's own page (`/e/$env/git/reviews/$id`) stays for decided pushes, the TUI
+and a computer that is gone. Sheets remain for detail opened from outside its context: a memory
+conflict (from the approval stack and the Conflicts tab of Settings → Shared memory) and a
+build's log (from Settings → Templates). Each of those sheets has "Open as page", which leads
+to the item's own page above; Home's activity, Settings → Activity, Settings → Templates and
+the memory conflicts tab link there too. A page for an item that doesn't exist
 says so, and one already decided shows the outcome without the buttons. The chat page of a chat
 the list doesn't know keeps a resizable side panel for its changes and files
 (`components/side-panel.tsx`), its width in local storage (`studio.panel.chat`).

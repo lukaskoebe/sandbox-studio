@@ -223,6 +223,17 @@ export function BrowserLive({
   // The page's size in CSS pixels, from the frames, and their device pixels per CSS pixel.
   const [frameSize, setFrameSize] = useState<PageSize>()
   const canDrive = driving && inputEnabled && !frozen
+  // A wheel over the page scrolls the page in the VM, not this one. React's wheel listener
+  // is passive and can't keep the event from scrolling the view around it; on a Mac that
+  // view, which can't scroll, bounces with every turn of the wheel, and a sideways swipe
+  // would go back in its history.
+  useEffect(() => {
+    const el = canvas.current
+    if (!el || !canDrive) return
+    const keep = (e: WheelEvent) => e.preventDefault()
+    el.addEventListener("wheel", keep, { passive: false })
+    return () => el.removeEventListener("wheel", keep)
+  }, [canDrive])
   // The cursor the page shows under the mouse, asked as it moves, scrolls and clicks.
   const pageCursor = usePageCursor(cursorAt, canDrive && state === "live")
   const lastMouse = useRef<{ x: number; y: number } | undefined>(undefined)

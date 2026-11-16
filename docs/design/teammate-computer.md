@@ -21,12 +21,19 @@ page, kept in the URL as search params so Back, Forward and links work.
 
 On a wide screen the page has three states (mocks J2 and J3 of the 2026-11-14 hierarchy round):
 
-- **Home**: no thread and no tab. The home takes the page, with the teammate's computers as
-  cards beside the threads; the screen is folded to a rail.
+- **Home**: no thread and no tab. The home takes the page: the Now card on top (what waits for
+  you, what it works on, Start work), then the threads, newest first, with the teammate's
+  computers as stacked cards beside them; the screen is folded to a rail. A phone has no rail,
+  and the cards come before the threads (mocks R1 and PA, 2026-11-15/16).
 - **Desk**: no thread, a tab open. The computer takes most of the page and the home is a panel
   beside it, with Start work, Bring X in, the threads in brief and the computers. Expand goes
   back to the home, Fold leaves the computer the page.
 - **Thread**: the conversation on the left, the screen on the right unless folded.
+
+The rim of the rail, the desk's panel and the conversation is one drag: a little out of the rail
+opens the desk, past the panel's minimum the screen takes the page, past its maximum it folds
+again. The page has no header (Q3, 2026-11-16: the avatar and name twice, one under the other,
+was one too many); the crumb's teammate menu has Profile, Threads and Settings.
 
 The sidebar lists each teammate's live threads and the latest others under it, not its
 computers; every computer is on Environment › Computers, and the breadcrumb names the computer
@@ -56,7 +63,7 @@ old workspace address,
 
 | Today | In H |
 |---|---|
-| Teammate header: avatar, name, role · harness · presence, Wake, Readiness, ⋯ | The name and role open the profile; one presence word on the right. Readiness problems show as a line in the profile and above the composer. Wake is the bezel's power button. The teammate ⋯ menu (pause, delete …) moves to the profile's foot. |
+| Teammate header: avatar, name, role · harness · presence, Wake, Readiness, ⋯ | Gone since 2026-11-16: the presence word, what keeps it from working and Start work are the home's Now card, Profile and Settings are in the crumb's teammate menu. Readiness problems also show above the composer. Wake is the bezel's power button. The teammate ⋯ menu (pause, delete …) is at the profile's foot. |
 | Tabs Conversation / Tasks / Memory / Browser / Settings | Conversation is the page. Browser is a screen tab. Tasks, Memory and Settings are profile sections. `/teammates/$id/{chats,tasks,memory,settings,browser}` redirect to the matching params. |
 | The conversation's flat turn list | Home lists the chats as thread cards grouped by day (title, an "on docs-site" chip for another computer, the last answer, the number of turns and the state), with the small events between them: learned facts, tasks, terminal summaries, check-ins. Opening a card opens the thread. |
 | Rail: Now, Computer card(s), Earlier chats, Knows, Check-ins | Now is the presence word and the working card. The computer *is* the screen. Earlier chats are the cards. Knows and Check-ins are in the profile. |
@@ -86,8 +93,9 @@ A computer that is creating shows its progress on the screen.
 - `components/computer/changes.tsx`: the Files tab, and the Changes tab: waiting pushes, git's
   view of each repository (`git-changes.tsx`), and what the thread changed. Files was a chip of
   Changes until the feedback of 2026-11-12 split them.
-- `components/teammate/page.tsx`, `home.tsx` (cards, events, waiting, composer), `thread.tsx`,
-  `header.tsx` and `profile.tsx` with its `tasks.tsx`, `memory.tsx` and `settings.tsx`.
+- `components/teammate/page.tsx`, `home.tsx` (Now card, cards, events, waiting, composer),
+  `thread.tsx` and `profile.tsx` with its `tasks.tsx`, `memory.tsx` and `settings.tsx`.
+  `header.tsx` went with Q3; its presence line is the Now card's.
 - `components/column-page.tsx`: the title row and centred column of Home and every settings
   section, without a rule under the header, as here.
 - `sandbox-workspace.tsx`, `sandbox-page.tsx`, `sandbox-usage.tsx`, `browser-panel.tsx`,

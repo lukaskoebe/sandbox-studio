@@ -36,6 +36,7 @@ func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, a
 	if sandboxList != nil {
 		p.LostVMs = lostVMsProbe(sandboxList)
 		p.Storage = storageProbe(sandboxList)
+		p.Leftovers = leftoversProbe(sandboxList)
 	}
 	if embedder != nil {
 		p.Embedder = func() (bool, string, string) {
@@ -303,6 +304,45 @@ func findLostVMs(sbs []store.Sandbox, statuses map[string]runtime.Status, lostDi
 		lost = append(lost, l)
 	}
 	return lost
+}
+
+// findLeftoverVMs lists the VMs among statuses, msb's VMs by name, that no sandbox of sbs
+// uses: see leftoverVM.
+func findLeftoverVMs(sbs []store.Sandbox, statuses map[string]runtime.Status) []doctor.LeftoverVM {
+	byID := sandboxesByID(sbs)
+	var left []doctor.LeftoverVM
+	for name, status := range statuses {
+		if sandbox, ok := leftoverVM(byID, name); ok {
+			left = append(left, doctor.LeftoverVM{VM: name, Status: string(status), Sandbox: sandbox})
+		}
+	}
+	slices.SortFunc(left, func(a, b doctor.LeftoverVM) int { return strings.Compare(a.VM, b.VM) })
+	return left
+}
+
+// leftoverVM reports whether vm, a VM msb keeps, is one no sandbox of byID uses: one whose
+// sandbox Studio has no record of, or an older generation of a sandbox's, whose name it
+// returns. A newer generation is no leftover: it is a rebase's or a restore's, still being
+// made. Nor is any VM while Studio has no sandboxes at all: its data is new, or the VMs are
+// another Studio's that shares microsandbox's home.
+func leftoverVM(byID map[string]store.Sandbox, vm string) (sandbox string, ok bool) {
+	id, generation, named := sandboxes.ParseVMName(vm)
+	if !named || len(byID) == 0 {
+		return "", false
+	}
+	sb, known := byID[id]
+	if !known {
+		return "", true
+	}
+	return sb.Name, generation < sb.Generation
+}
+
+func sandboxesByID(sbs []store.Sandbox) map[string]store.Sandbox {
+	byID := make(map[string]store.Sandbox, len(sbs))
+	for _, sb := range sbs {
+		byID[sb.ID] = sb
+	}
+	return byID
 }
 
 // expectedVMs are the VMs Studio's catalog expects msb to have, read without changing it; none

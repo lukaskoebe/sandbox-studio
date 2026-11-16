@@ -418,6 +418,21 @@ test("the live view shows the page's cursor under the mouse while you drive", as
   await expect.poll(cursor).toBe("pointer")
   await hover(620, 30)
   await expect.poll(cursor).toBe("default")
+
+  // A wheel over the page scrolls the page in the VM, and nothing else: on a Mac the view
+  // around it would bounce, as it can't scroll.
+  const kept = await canvas.evaluate(
+    (el) =>
+      !el.dispatchEvent(
+        new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true })
+      )
+  )
+  expect(kept).toBe(true)
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).overscrollBehaviorY
+    )
+  ).toBe("none")
 })
 
 // Fit the page to this view gives the page the size of the view's body, one pixel to one, and

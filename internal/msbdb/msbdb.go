@@ -17,10 +17,54 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+// ErrSealed means the catalog's files were to be opened in a process whose msb library has the
+// catalog open. A file a process closes drops every POSIX lock the process holds on it, the
+// library's SQLite locks too; without them another msb process (a VM's, an SSH proxy's, a
+// command's) that closes the catalog takes itself for its last user, checkpoints it and deletes
+// its WAL under the library, and what the library writes from then on is lost to everyone else:
+// a new sandbox's record, so that its VM fails with "insert run: FOREIGN KEY constraint failed".
+var ErrSealed = errors.New("this process's msb library has microsandbox's catalog open, so Studio must not open the catalog's files here; " +
+	"read them in another process")
+
+var sealed atomic.Bool
+
+// Seal marks this process as one whose msb library has the catalog open, or is about to open
+// it. From then on the package refuses to open or copy the catalog's files in this process:
+// see ErrSealed.
+func Seal() { sealed.Store(true) }
+
+// Sealed reports whether Seal was called in this process.
+func Sealed() bool { return sealed.Load() }
+
+// guard refuses to open path in a sealed process if it is one of the live catalog's files:
+// msb.db, its -wal or its -shm. Other files, such as the copies Backup keeps, are fine.
+func guard(path string) error {
+	if !sealed.Load() {
+		return nil
+	}
+	catalog, err := Path()
+	if err != nil {
+		return ErrSealed
+	}
+	info, statErr := os.Stat(path)
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if filepath.Clean(path) == filepath.Clean(catalog+suffix) {
+			return ErrSealed
+		}
+		if statErr == nil {
+			if live, err := os.Stat(catalog + suffix); err == nil && os.SameFile(info, live) {
+				return ErrSealed
+			}
+		}
+	}
+	return nil
+}
 
 // Path returns msb's catalog: $MSB_HOME/db/msb.db, or ~/.microsandbox/db/msb.db.
 func Path() (string, error) {
@@ -106,6 +150,9 @@ func classify(path string, err error) error {
 }
 
 func open(path string, query ...string) (*sql.DB, error) {
+	if err := guard(path); err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", "file:"+path+"?"+strings.Join(append(query, "_pragma=busy_timeout(5000)"), "&"))
 	if err != nil {
 		return nil, err
@@ -478,6 +525,9 @@ func refused(err error) bool {
 }
 
 func copyFile(from, to string) error {
+	if err := guard(from); err != nil {
+		return err
+	}
 	in, err := os.Open(from)
 	if err != nil {
 		return err
@@ -541,10 +591,14 @@ func Inspect(ctx context.Context, path string) (names []string, rows int, partia
 const BackupPrefix = ".backup-"
 
 // Backup keeps a copy of the catalog at path, as path.backup-<time>, and removes all but the
-// newest keep copies. It never opens path itself: SQLite's locks belong to the process, so
-// Studio's SQLite closing the file would drop the msb library's locks on it. It copies the
-// file and its -wal instead, and keeps the copy only when neither changed while it was
-// copied and the copy passes SQLite's integrity check; a damaged catalog is never kept.
+// newest keep copies. It doesn't open path with SQLite, which could change it: it copies the
+// file and its -wal, and keeps the copy only when neither changed while it was copied and the
+// copy passes SQLite's integrity check; a damaged catalog is never kept.
+//
+// It must not run in a process whose msb library has the catalog open: closing the files it
+// read drops all of that process's POSIX locks on them, the library's SQLite locks too, so
+// another msb process could delete the WAL under the library. Studio runs it in a process
+// of its own (`studio msb-backup`).
 func Backup(ctx context.Context, path string, now time.Time, keep int) (string, error) {
 	out := path + BackupPrefix + now.UTC().Format("20060102T150405Z")
 	if err := copyCatalog(ctx, path, out); err != nil {
@@ -603,8 +657,9 @@ const BeforePrefix = ".before-msb-"
 // KeepBefore keeps a copy of the catalog at path as it was before msb version first opened
 // it, as path.before-msb-<version>, once: a newer msb migrates the catalog, and no older one
 // can use it then. It keeps the copies of the newest keep versions it made and returns the
-// copy, or "" if there is no catalog or the copy exists already. Like Backup it never opens
-// path, so it is safe while other msb processes use it.
+// copy, or "" if there is no catalog or the copy exists already. Like Backup it doesn't open
+// path with SQLite, so other msb processes may use it meanwhile, and like Backup it must run
+// before this process's msb library opens the catalog, or in another process.
 func KeepBefore(ctx context.Context, path, version string, keep int) (string, error) {
 	out := path + BeforePrefix + version
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {

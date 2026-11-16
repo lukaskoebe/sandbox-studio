@@ -339,6 +339,50 @@ func (s *Server) registerSandboxes(api huma.API) {
 		return &sandboxOut{v}, apiError(err)
 	})
 
+	type disksToMoveOut struct {
+		Body struct {
+			Sandboxes []sandboxes.DiskMove `json:"sandboxes" nullable:"false" doc:"Every sandbox, in every environment, and every VM Studio drives itself, whose disks microsandbox keeps in its old layout"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "listDisksToMove", Method: http.MethodGet, Path: "/api/system/move-disks", Tags: []string{"sandboxes"},
+		Summary:     "What moveSandboxDisks would move",
+		Description: "Empty unless microsandbox refuses to start or copy a sandbox until its disks move to its new layout, as on macOS after the update to microsandbox 0.7.15. It answers from what microsandbox said in the last 30 seconds.",
+	}, func(ctx context.Context, _ *struct{}) (*disksToMoveOut, error) {
+		list, err := s.Sandboxes.DisksToMove(ctx)
+		out := &disksToMoveOut{}
+		out.Body.Sandboxes = list
+		if out.Body.Sandboxes == nil {
+			out.Body.Sandboxes = []sandboxes.DiskMove{}
+		}
+		return out, apiError(err)
+	})
+	type moveDisksIn struct {
+		Body struct {
+			WritersStopped bool `json:"writersStopped" doc:"The person's word that no Studio or msb from before the update still runs, here or with another microsandbox home, and that none starts until the move ends"`
+		}
+	}
+	type moveDisksOut struct {
+		Body struct {
+			Moved []sandboxes.MovedDisks `json:"moved" nullable:"false" doc:"Each sandbox whose disks were to move, by name, with why it failed if it did"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "moveSandboxDisks", Method: http.MethodPost, Path: "/api/system/move-disks", Tags: []string{"sandboxes"},
+		Summary: "Move the disks microsandbox keeps in its old layout, for every sandbox listDisksToMove lists",
+		Description: "microsandbox 0.7.12 and later won't start or copy a sandbox whose disks are in the layout from before, and on macOS move them only when told that nothing from before the upgrade still writes to them. " +
+			"Studio holds every such sandbox, in every environment, and the VMs it drives itself, such as teammates' browsers, stops the ones that run, has microsandbox move each one's disks, keeping the originals, and starts again the sandboxes that ran; its own VMs start when it next needs them. " +
+			"It answers when all are done; a sandbox that fails is listed with its error and the others go on.",
+	}, func(ctx context.Context, in *moveDisksIn) (*moveDisksOut, error) {
+		moved, err := s.Sandboxes.MoveDisks(context.WithoutCancel(ctx), in.Body.WritersStopped)
+		out := &moveDisksOut{}
+		out.Body.Moved = moved
+		if out.Body.Moved == nil {
+			out.Body.Moved = []sandboxes.MovedDisks{}
+		}
+		return out, apiError(err)
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "stopSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/stop", Tags: []string{"sandboxes"},
 	}, func(ctx context.Context, in *sandboxPath) (*sandboxOut, error) {
@@ -469,7 +513,7 @@ func apiError(err error) error {
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, runtime.ErrCheckpointRestoreUnavailable),
 		errors.Is(err, runtime.ErrLiveCheckpointUnsupported),
-		errors.Is(err, runtime.ErrRestartToUpgrade),
+		errors.Is(err, runtime.ErrRestartToUpgrade), errors.Is(err, runtime.ErrMoveDisks),
 		errors.Is(err, store.ErrConflict),
 		errors.Is(err, sandboxes.ErrBusy),
 		errors.Is(err, sandboxes.ErrCheckpointState),
@@ -485,7 +529,7 @@ func apiError(err error) error {
 	case errors.Is(err, chat.ErrNoImages):
 		// The location tells the web that the text alone would go.
 		return huma.Error422UnprocessableEntity(err.Error(), &huma.ErrorDetail{Location: "body.attachments", Message: "the agent can't take images"})
-	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
+	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec), errors.Is(err, sandboxes.ErrWritersRunning),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern), errors.Is(err, policy.ErrExpired),
 		errors.Is(err, policy.ErrNoteTooLong),
 		errors.Is(err, policy.ErrNotSite), errors.Is(err, policy.ErrNotBrowser), errors.Is(err, policy.ErrNotRequest), errors.Is(err, policy.ErrInvalidRequest),
@@ -497,12 +541,12 @@ func apiError(err error) error {
 	case errors.Is(err, sandboxes.ErrCheckpointName), errors.Is(err, sandboxes.ErrCheckpointSchedule), errors.Is(err, sandboxes.ErrTerminalTitle):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, gitreview.ErrNoPullRequest), errors.Is(err, gitreview.ErrPullRequestSet), errors.Is(err, gitreview.ErrNotPushed),
-		errors.Is(err, gitreview.ErrNotFailed):
+		errors.Is(err, gitreview.ErrNotFailed), errors.Is(err, sandboxes.ErrAgentLeft):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, gitreview.ErrNotReview), errors.Is(err, integrations.ErrAction),
 		errors.Is(err, sandboxes.ErrNotAgentTerminal):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, policy.ErrDecided), errors.Is(err, policy.ErrNotReviewed):
+	case errors.Is(err, policy.ErrDecided), errors.Is(err, policy.ErrNotReviewed), errors.Is(err, gitreview.ErrDecided):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, runtime.ErrCatalog):
 		return huma.Error503ServiceUnavailable(err.Error())

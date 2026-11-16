@@ -292,13 +292,17 @@ func (g *Guest) handle(st net.Conn) {
 
 // runTmux fakes the tmux commands Studio uses to type into an agent's terminal
 // (sandboxes.Manager.SendToAgent): a paste and an Enter show on the session's terminals.
+// if-shell -F runs its command when the session's program is the one it names.
 func (g *Guest) runTmux(req agentproto.RunRequest) agentproto.RunResult {
-	a := req.Args
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.buffers == nil {
 		g.buffers = map[string]string{}
 	}
+	return g.tmuxLocked(req.Args, req.Stdin)
+}
+
+func (g *Guest) tmuxLocked(a []string, stdin string) agentproto.RunResult {
 	show := func(name, text string) agentproto.RunResult {
 		s, ok := g.sessions[name]
 		if !ok {
@@ -313,7 +317,26 @@ func (g *Guest) runTmux(req agentproto.RunRequest) agentproto.RunResult {
 	}
 	switch {
 	case len(a) == 5 && a[0] == "tmux" && a[1] == "load-buffer" && a[4] == "-":
-		g.buffers[a[3]] = req.Stdin
+		g.buffers[a[3]] = stdin
+		return agentproto.RunResult{}
+	case len(a) >= 7 && a[0] == "tmux" && a[1] == "if-shell" && a[2] == "-F" && a[3] == "-t":
+		s, ok := g.sessions[a[4]]
+		if !ok {
+			return agentproto.RunResult{ExitCode: 1, Stderr: "can't find session: " + a[4]}
+		}
+		want, ok := strings.CutPrefix(a[5], "#{==:#{pane_current_command},")
+		if !ok || !strings.HasSuffix(want, "}") {
+			break
+		}
+		switch {
+		case s.Command == strings.TrimSuffix(want, "}"):
+			return g.tmuxLocked(append([]string{"tmux"}, strings.Fields(a[6])...), "")
+		case len(a) > 7:
+			return g.tmuxLocked(append([]string{"tmux"}, strings.Fields(a[7])...), "")
+		}
+		return agentproto.RunResult{}
+	case len(a) == 4 && a[0] == "tmux" && a[1] == "delete-buffer":
+		delete(g.buffers, a[3])
 		return agentproto.RunResult{}
 	case len(a) == 8 && a[0] == "tmux" && a[1] == "paste-buffer":
 		text := g.buffers[a[5]]

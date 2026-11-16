@@ -247,6 +247,9 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, pick func(st
 	if status != runtime.StatusRunning && status != runtime.StatusStopped {
 		return View{}, ErrLifecycleState
 	}
+	if err := m.checkDisksMoved(ctx, sb); err != nil {
+		return View{}, err
+	}
 	opts := pick(sb)
 	if opts.Docker && status != runtime.StatusStopped {
 		return View{}, lifecycleError("stop the computer to copy its Docker images")
@@ -407,6 +410,7 @@ func (m *Manager) removeFailedFork(ctx context.Context, rec store.Sandbox, cause
 	cleanupCtx, cancel := cleanupContext(ctx)
 	defer cancel()
 	if err := m.Runtime.Remove(cleanupCtx, VMName(rec)); err != nil {
+		m.Log.Error("could not remove the VM of a failed fork; deleting the sandbox tries again", "sandbox", rec.ID, "vm", VMName(rec), "err", err)
 		return errors.Join(cause, fmt.Errorf("fork cleanup failed; its record is kept: %w", err))
 	}
 	m.Hub.Close(rec.ID)

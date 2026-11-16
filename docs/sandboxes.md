@@ -63,6 +63,43 @@ Rebasing such a sandbox onto a current template gives it a home disk and copies 
 over. Rebasing a sandbox that has a home disk onto a template without one is refused, and so
 is a disk resize of a sandbox with no home disk, since the resize replaces the root layer.
 
+### Disk layout
+
+The microsandbox Studio uses since v0.23.0 (0.7.15) keeps a sandbox's disks in a protected layout. On Linux they move
+when the sandbox next starts; until then a sandbox still running as the older msb started it
+can't take checkpoints. On a Mac, microsandbox moves them only when told that nothing from
+before the update still writes to them (`maintenance_required`). Until then it refuses to start
+or copy the sandbox ("legacy storage requires explicit maintenance recovery").
+
+Studio asks msb which sandboxes need that (`DiagnoseStorage`, trusted for 30 seconds), and their
+`oldDiskLayout` says so. Start, rebase and fork are refused with `runtime.ErrMoveDisks` (409) before
+they change anything. Without that check, a rebase would stop a running sandbox it then couldn't
+start again. Home and Computers show a **Disk layout** notice with **Move disks…**, and so do the
+stopped sandbox's screen and its chats. The rebase dialog says so too.
+
+The move covers every VM Studio made whose disks are in the old layout, in every environment:
+sandboxes, teammates' browsers, Studio's login and utility VMs, and template builds.
+`GET /api/system/move-disks` lists them with their state. Studio's own VMs are named by
+what they are for ("Iris's browser") and marked `own`. The notice and the dialog read that
+list, asking again every 30 seconds while it isn't empty.
+
+The dialog asks the person to confirm that no Studio or msb from before the update still runs
+(`writersStopped`); without that, `POST /api/system/move-disks` refuses with 422. It also
+refuses with 409, before it touches anything, while msb is already moving a VM's disks or a VM
+of Studio's that no record has, such as one a failed fork or rebase left, still runs in the old
+layout; that refusal names them with `msb remove --force <vm>…`. When msb itself refuses a move
+because another VM seems to run ("cannot exclude a writer in sandbox '<vm>'"), the error names that
+VM and the same command. Then Studio:
+
+1. stops every one of those VMs that runs;
+2. moves each one's disks with `RecoverStorage`, which keeps the originals beside them;
+3. starts again the sandboxes that ran. Studio's own VMs stay stopped until Studio next needs
+   them.
+
+A VM that fails to stop or move is reported with the reason, and the rest still move. When msb finds more
+than one version of a disk, the error says to run `msb self repair --sandbox <vm>` in a terminal,
+which shows the versions. `studio doctor`'s `msb-storage` check names the same fix.
+
 ## Network
 
 Fixed at creation (`runtime.Create`):
@@ -117,6 +154,16 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
 
 - A create or fork that fails keeps its record in state `failed`, with the step and the
   error. Its VM is removed. A failed sandbox can't be started; deleting it is the way out.
+  A VM whose start just failed can still hold its sandbox for a moment (msb: "startup cleanup
+  pending: runtime still owns sandbox"), so `Runtime.Remove` tries again for about 15 seconds
+  while msb says the VM still runs or holds it, killing it before each new try, as
+  `msb remove --force` does. A removal that still fails is logged with the VM's name, and
+  deleting the sandbox tries again. Any VM msb keeps under Studio's names that no sandbox
+  uses (its sandbox is gone, or it is an older generation) is listed by the `msb-leftovers`
+  doctor check, with `msb remove --force <vm>…` as the fix: on macOS one msb still counts as
+  running stops msb moving other disks ("cannot exclude a writer in sandbox …"), and Move
+  disks names it too. Studio doesn't remove such VMs itself: after its data was reset or
+  restored from an older copy, they may hold work no record knows of.
   The error of a create from a template never carries the private image or credential.
 - A sandbox whose create, fork or rebase runs is busy: lifecycle actions, and forks and
   rebases of it, are refused until the operation ends.

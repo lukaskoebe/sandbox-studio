@@ -570,10 +570,30 @@ func (s *Store) gitPushes(ctx context.Context, where string, args ...any) ([]Git
 }
 
 // SettleGitPush moves a push from state from to state to, recording result and note. It
-// returns ErrNotFound unless the push was in state from, so only one caller settles it.
+// returns ErrNotFound unless the push was in state from, so only one caller settles it. A
+// push rejected or failed, or one whose note changed, is told again: comments left while it
+// waited may have reached a prompt already, but not the outcome or the new note.
 func (s *Store) SettleGitPush(ctx context.Context, envID, id, from, to, result, note string) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE git_pushes SET state = ?, result = ?, note = ?, updated_at = ?
-		WHERE environment_id = ? AND id = ? AND state = ?`, to, result, note, now(), envID, id, from)
+	untold := to == PushRejected || to == PushFailed
+	res, err := s.db.ExecContext(ctx, `UPDATE git_pushes SET state = ?, result = ?, note = ?, updated_at = ?,
+		notified_at = CASE WHEN ? OR note != ? THEN NULL ELSE notified_at END,
+		delivered_at = CASE WHEN ? AND state != ? THEN NULL ELSE delivered_at END
+		WHERE environment_id = ? AND id = ? AND state = ?`, to, result, note, now(), untold, note, untold, to, envID, id, from)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// LeaveGitPushNote records the reviewer's comments on a push that still waits, for its agent
+// to read (git_push_status, approval_status) and for its sandbox's next prompt, which tells
+// them once. It returns ErrNotFound unless the push waits.
+func (s *Store) LeaveGitPushNote(ctx context.Context, envID, id, note string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE git_pushes SET note = ?, notified_at = NULL, updated_at = ?
+		WHERE environment_id = ? AND id = ? AND state = ?`, note, now(), envID, id, PushPending)
 	if err != nil {
 		return err
 	}
@@ -590,14 +610,14 @@ func (s *Store) MarkGitPushDelivered(ctx context.Context, envID, id string) erro
 	return err
 }
 
-// UnnotifiedGitPushes lists the rejected or failed pushes of one sandbox that no chat prompt
-// has carried yet.
+// UnnotifiedGitPushes lists the pushes of one sandbox whose news no chat prompt has carried
+// yet: rejected or failed ones, and ones waiting or pushed that the reviewer commented on.
 func (s *Store) UnnotifiedGitPushes(ctx context.Context, envID, sandboxID string) ([]GitPush, error) {
-	return s.gitPushes(ctx, `environment_id = ? AND sandbox_id = ? AND state IN ('rejected', 'failed')
-		AND notified_at IS NULL`, envID, sandboxID)
+	return s.gitPushes(ctx, `environment_id = ? AND sandbox_id = ? AND notified_at IS NULL
+		AND (state IN ('rejected', 'failed') OR (state IN ('pending', 'pushed') AND note != ''))`, envID, sandboxID)
 }
 
-// MarkGitPushNotified records that a chat prompt carried the note of a rejected or failed push.
+// MarkGitPushNotified records that a chat prompt carried a push's news.
 func (s *Store) MarkGitPushNotified(ctx context.Context, envID, id string) error {
 	_, err := s.db.ExecContext(ctx, "UPDATE git_pushes SET notified_at = ? WHERE environment_id = ? AND id = ? AND notified_at IS NULL",
 		now(), envID, id)

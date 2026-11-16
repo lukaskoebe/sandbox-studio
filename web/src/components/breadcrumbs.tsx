@@ -15,6 +15,7 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   TrayIcon,
+  UserCircleIcon,
 } from "@phosphor-icons/react"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { EnvironmentIcon } from "@/components/environment-icon"
@@ -206,6 +207,18 @@ export function Breadcrumbs({ env }: { env: string }) {
       })),
       { rule: true as const },
       { heading: t.name },
+      {
+        // Its card opens over the page it is on: its home, a thread or the desk.
+        label: "Profile",
+        lead: <UserCircleIcon />,
+        current: search.profile === "card",
+        run: () =>
+          goTeammate(t.id, {
+            ...(params.id === t.id ? search : {}),
+            profile: "card",
+            open: undefined,
+          }),
+      },
       {
         label: "Threads",
         right: String(allChats.filter((c) => c.teammateId === t.id).length),

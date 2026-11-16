@@ -427,6 +427,44 @@ func TestCLIWaitForAnApproval(t *testing.T) {
 	}
 }
 
+// Comments the reviewer leaves on a push while it waits end `studio wait` with 75, printing
+// them; comments there already when it began don't, so waiting again waits for the decision.
+func TestCLIWaitReturnsWhenTheReviewerComments(t *testing.T) {
+	reads, note, settled := 0, "", false
+	f := &fakeCaller{reply: func(method string, raw json.RawMessage) (any, error) {
+		reads++
+		if reads == 3 {
+			note = "rename x.txt"
+		}
+		if settled {
+			return map[string]any{"approval": "ap1", "status": "approved", "settled": true, "result": map[string]any{"status": "pushed", "note": note}}, nil
+		}
+		out := map[string]any{"approval": "ap1", "kind": "git.push", "status": "pending", "settled": false}
+		if note != "" {
+			out["result"] = map[string]any{"status": "pending", "note": note}
+		}
+		return out, nil
+	}}
+	r := runCLI(t, f, "", nil, "wait", "ap1")
+	if r.code != ExitWaiting || reads != 3 || !strings.Contains(r.stdout, "rename x.txt") || !strings.Contains(r.stderr, "the reviewer commented") {
+		t.Fatalf("code %d, reads %d, stdout %q, stderr %q", r.code, reads, r.stdout, r.stderr)
+	}
+	// Waiting again with the same comments waits for the decision.
+	f.reply = func(method string, raw json.RawMessage) (any, error) {
+		reads++
+		if reads == 6 {
+			settled = true
+		}
+		if settled {
+			return map[string]any{"approval": "ap1", "status": "approved", "settled": true, "result": map[string]any{"status": "pushed", "note": note}}, nil
+		}
+		return map[string]any{"approval": "ap1", "kind": "git.push", "status": "pending", "settled": false, "result": map[string]any{"status": "pending", "note": note}}, nil
+	}
+	if r = runCLI(t, f, "", nil, "wait", "ap1"); r.code != ExitOK || reads != 6 || !strings.Contains(r.stdout, "pushed") {
+		t.Fatalf("second wait: code %d, reads %d, stdout %q, stderr %q", r.code, reads, r.stdout, r.stderr)
+	}
+}
+
 // A call with no status tool of its own, as pr comment, waits through approval_status.
 func TestCLICommentWaitsThroughApprovalStatus(t *testing.T) {
 	reads := 0

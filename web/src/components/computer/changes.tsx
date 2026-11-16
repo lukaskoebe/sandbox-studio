@@ -41,7 +41,8 @@ import {
   useElementWidth,
   useStoredSize,
 } from "@/components/resize-handle"
-import { GitReview, gitReviewDescription } from "@/components/git-review"
+import { GitReview, GitReviewHead } from "@/components/git-review"
+import { pullRequestName } from "@/lib/approval-kinds"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useClaimApprovals } from "@/lib/approval-claims"
@@ -120,6 +121,30 @@ function usePushed(env: string, sandboxId: string) {
       )
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
   }, [approved.data, sandboxId])
+}
+
+/** A waiting review's row: a push by its branch, a forge review or comment by its pull request. */
+function waitingRow(a: Approval) {
+  const c = a.forgeComment
+  if (c) {
+    const pr = `${c.owner}/${c.repo}#${c.number}`
+    return {
+      label: `Review the comment on ${pr}`,
+      what: "Comment on",
+      mono: pr,
+    }
+  }
+  const d = a.forgeReview?.draft
+  if (d) {
+    const pr = pullRequestName(d)
+    return { label: `Review the review of ${pr}`, what: "Review of", mono: pr }
+  }
+  const branch = a.git?.review?.branch ?? a.git?.pullRequest?.head ?? "push"
+  return {
+    label: `Review the push to ${branch}`,
+    what: "Push to",
+    mono: branch,
+  }
 }
 
 /** A pushed row's words: where it went, and what became of it. */
@@ -307,12 +332,14 @@ export function ChangesView({
   if (approval)
     main = (
       <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
-        <div className="grid gap-3 text-xs">
-          <p className="text-muted-foreground">
-            {gitReviewDescription(approval)}
-          </p>
+        <section
+          aria-labelledby={`review-${approval.id}`}
+          data-testid="git-review"
+          className="grid gap-3 text-xs"
+        >
+          <GitReviewHead approval={approval} id={`review-${approval.id}`} />
           <GitReview key={approval.id} approval={approval} />
-        </div>
+        </section>
       </ScrollArea>
     )
   else if (shown === "thread" && thread)
@@ -442,20 +469,17 @@ export function ChangesView({
               >
                 <ul className="min-w-0">
                   {reviews.map((a) => {
-                    const branch =
-                      a.git?.review?.branch ??
-                      a.git?.pullRequest?.head ??
-                      "push"
+                    const { label, what, mono } = waitingRow(a)
                     return (
                       <li key={a.id} className="min-w-0">
                         <RailRow
                           current={shown === `review:${a.id}`}
-                          aria-label={`Review the push to ${branch}`}
+                          aria-label={label}
                           onClick={() => pick({ review: a.id })}
                         >
                           <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
                           <span className="min-w-0 flex-1 truncate">
-                            Push to <span className="font-mono">{branch}</span>
+                            {what} <span className="font-mono">{mono}</span>
                           </span>
                           <span className="shrink-0 text-(--st-waiting)">
                             review

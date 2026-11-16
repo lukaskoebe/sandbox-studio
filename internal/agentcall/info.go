@@ -22,7 +22,8 @@ var ApprovalStatusTool = Tool{agentproto.MethodApprovalStatus,
 	"What became of something you asked the user to approve, by the approval ID an answer with \"awaiting approval\" " +
 		"gave: its status (pending, approved, denied, dismissed), whether it is settled, and once it is, the result " +
 		"(the pull request opened, the review or comment posted, the push pushed, or failed with the forge's answer). " +
-		"Don't ask it in a loop: `studio wait <id>` waits for you.",
+		"While a push waits, its result holds the reviewer's comments so far, if any. " +
+		"Don't ask it in a loop: `studio wait <id>` waits for you, and returns early when the reviewer comments on a push that waits.",
 	obj([]string{"approval"}, map[string]any{
 		"approval": str("The approval's ID", "maxLength", 100),
 	})}

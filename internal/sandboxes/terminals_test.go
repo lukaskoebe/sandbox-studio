@@ -45,6 +45,10 @@ func TestDescribeTerminals(t *testing.T) {
 		if got[i].Label != w.label || got[i].Program != w.program || got[i].State != w.state {
 			t.Errorf("%s: got %q, %q, %s; want %q, %q, %s", sessions[i].Name, got[i].Label, got[i].Program, got[i].State, w.label, w.program, w.state)
 		}
+		// An agent runs where a harness does, started by Studio or, as opencode, by hand.
+		if agent := w.program == "opencode" || w.program == "claude"; got[i].Agent != agent {
+			t.Errorf("%s: agent %v, want %v", sessions[i].Name, got[i].Agent, agent)
+		}
 	}
 }
 

@@ -102,6 +102,11 @@ func (m *Manager) startRebase(ctx context.Context, envID, id, operation string, 
 	if m.failedCreation(id) {
 		return View{}, lifecycleError("the sandbox could not be created; delete it")
 	}
+	// Refused here, a sandbox that runs as the older msb started it keeps running: the copy
+	// would stop it and then fail to start it.
+	if err := m.checkDisksMoved(ctx, sb); err != nil {
+		return View{}, err
+	}
 	rt, err := m.transfer()
 	if err != nil {
 		return View{}, err

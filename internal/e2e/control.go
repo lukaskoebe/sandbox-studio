@@ -86,8 +86,24 @@ var SetBase func(ctx context.Context, sandboxID, image, version string) error
 //	                                    added to the chat, straight into the store
 //	PUT  /api/e2e/sandboxes/{id}/base     {"image": "…:v0.7.0", "version": "v0.7.0"}: the base
 //	                                    image the sandbox's VM was made from, straight into the store
+//	PUT  /api/e2e/sandboxes/{id}/layout   {"old": true}: its disks in microsandbox's layout from
+//	                                    before 0.7.12, as macOS has them until Move disks
 func (r *Runtime) Control() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/layout", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			Old bool `json:"old"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil {
+			http.Error(w, "want {old}", http.StatusBadRequest)
+			return
+		}
+		if err := r.setOldLayout(req.PathValue("id"), body.Old); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("POST /api/e2e/chats/{id}/turns", func(w http.ResponseWriter, req *http.Request) {
 		var body struct {
 			Count int `json:"count"`

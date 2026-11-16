@@ -158,7 +158,7 @@ export interface paths {
         put?: never;
         /**
          * Send review feedback to the agent
-         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.
+         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it. With neither, the note is left on a push that still waits, for any agent in the sandbox to read: git_push_status and approval_status show it, and the sandbox's next chat prompt carries it; an empty note takes it back.
          */
         post: operations["sendReviewFeedback"];
         delete?: never;
@@ -3231,6 +3231,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/move-disks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What moveSandboxDisks would move
+         * @description Empty unless microsandbox refuses to start or copy a sandbox until its disks move to its new layout, as on macOS after the update to microsandbox 0.7.15. It answers from what microsandbox said in the last 30 seconds.
+         */
+        get: operations["listDisksToMove"];
+        put?: never;
+        /**
+         * Move the disks microsandbox keeps in its old layout, for every sandbox listDisksToMove lists
+         * @description microsandbox 0.7.12 and later won't start or copy a sandbox whose disks are in the layout from before, and on macOS move them only when told that nothing from before the upgrade still writes to them. Studio holds every such sandbox, in every environment, and the VMs it drives itself, such as teammates' browsers, stops the ones that run, has microsandbox move each one's disks, keeping the originals, and starts again the sandboxes that ran; its own VMs start when it next needs them. It answers when all are done; a sandbox that fails is listed with its error and the others go on.
+         */
+        post: operations["moveSandboxDisks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/previews": {
         parameters: {
             query?: never;
@@ -4225,6 +4249,16 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        DiskMove: {
+            environmentId: string;
+            id: string;
+            /** @description The sandbox's name, or what Studio uses the VM for, such as a teammate's browser */
+            name: string;
+            /** @description A VM Studio drives itself, such as a teammate's browser: it isn't started again after the move, but when Studio next needs it */
+            own?: boolean;
+            /** @description Whether its VM runs: running, suspended, stopped and so on */
+            status: string;
+        };
         DiskSizes: {
             /**
              * Format: int64
@@ -4241,6 +4275,10 @@ export interface components {
              * @description The size of /workspace in MiB, at least 1024
              */
             workspaceMiB?: number;
+        };
+        DisksToMoveOutBody: {
+            /** @description Every sandbox, in every environment, and every VM Studio drives itself, whose disks microsandbox keeps in its old layout */
+            sandboxes: components["schemas"]["DiskMove"][];
         };
         DoctorReport: {
             /** Format: date-time */
@@ -4571,12 +4609,14 @@ export interface components {
             newChat?: boolean;
             /** @description The reviewer's comments, line comments included */
             note?: string;
-            /** @description Or an agent's terminal in that sandbox: a tmux session Studio started for claude, codex or opencode */
+            /** @description Or an agent's terminal in that sandbox: a tmux session where claude, codex or opencode runs */
             terminal?: string;
         };
         FeedbackOut: {
             /** @description The chat started for it, when sent to a new chat */
             chat?: string;
+            /** @description The comments were left on the waiting push for its agent to read */
+            left?: boolean;
             /** @description The chat was busy: the feedback goes out when its running turn ends */
             queued: boolean;
         };
@@ -5451,6 +5491,21 @@ export interface components {
             /** @description One of the models the chat's teammate offers; empty for its default */
             model: string;
         };
+        MoveDisksInBody: {
+            /** @description The person's word that no Studio or msb from before the update still runs, here or with another microsandbox home, and that none starts until the move ends */
+            writersStopped: boolean;
+        };
+        MoveDisksOutBody: {
+            /** @description Each sandbox whose disks were to move, by name, with why it failed if it did */
+            moved: components["schemas"]["MovedDisks"][];
+        };
+        MovedDisks: {
+            environmentId: string;
+            /** @description Why its disks didn't move, or why it didn't start again after they did */
+            error?: string;
+            id: string;
+            name: string;
+        };
         NavigateBrowserInBody: {
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
@@ -6193,6 +6248,8 @@ export interface components {
             /** Format: int64 */
             memoryMiB: number;
             name: string;
+            /** @description microsandbox keeps the sandbox's disks in its layout from before 0.7.12 and won't start or copy the sandbox until moveSandboxDisks moves them; a running one runs as the older microsandbox started it */
+            oldDiskLayout?: boolean;
             /** @description The create or fork that runs or failed */
             progress?: components["schemas"]["Progress"];
             /** @description With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it */
@@ -7107,6 +7164,8 @@ export interface components {
              * @description Unix seconds of the session window's latest output
              */
             activity?: number;
+            /** @description An agent harness runs in the session, one Studio started or one started by hand: review feedback can go to it */
+            agent?: boolean;
             /** Format: int64 */
             attached: number;
             /** @description The chat this session continues, when a chat was opened in the terminal */
@@ -7442,6 +7501,8 @@ export interface components {
             /** Format: int64 */
             memoryMiB: number;
             name: string;
+            /** @description microsandbox keeps the sandbox's disks in its layout from before 0.7.12 and won't start or copy the sandbox until moveSandboxDisks moves them; a running one runs as the older microsandbox started it */
+            oldDiskLayout?: boolean;
             /** @description The create or fork that runs or failed */
             progress?: components["schemas"]["Progress"];
             /** @description With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it */
@@ -15552,6 +15613,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HostOpencodeKey"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listDisksToMove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisksToMoveOutBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    moveSandboxDisks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveDisksInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveDisksOutBody"];
                 };
             };
             /** @description Error */

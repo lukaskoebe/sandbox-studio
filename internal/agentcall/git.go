@@ -16,8 +16,9 @@ import (
 // GitPushStatusTool lists the sandbox's recent pushes and their review states.
 var GitPushStatusTool = Tool{agentproto.MethodGitPushStatus,
 	"Your recent pushes to the git remote, newest first, with their review state: pending (waiting for the user), " +
-		"pushed (approved and on the forge), rejected (declined; the reviewer's note is included), failed (approved, but the forge " +
-		"refused it) or superseded (a newer push to the same branch replaced it).",
+		"pushed (approved and on the forge), rejected (declined), failed (approved, but the forge " +
+		"refused it) or superseded (a newer push to the same branch replaced it). note is the reviewer's comments, line " +
+		"comments included, on a push of any state: one that still waits may have some the user wants acted on before deciding.",
 	obj(nil, map[string]any{
 		"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20, "description": "Default 10"},
 	})}

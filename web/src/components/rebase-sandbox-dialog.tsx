@@ -291,6 +291,12 @@ function RebaseForm({
         If the rebase fails, it stays as it is.
       </p>
 
+      {sandbox.oldDiskLayout && (
+        <p role="alert" className="text-destructive">
+          microsandbox must move this sandbox&apos;s disks to its new layout
+          before it can copy them. Move disks, on Home or Computers, does that.
+        </p>
+      )}
       {failure && !pending && (
         <p role="alert" className="text-destructive">
           Could not rebase the sandbox: {failure}
@@ -306,7 +312,10 @@ function RebaseForm({
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={!ready || pending}>
+        <Button
+          type="submit"
+          disabled={!ready || pending || !!sandbox.oldDiskLayout}
+        >
           {pending && <Spinner />}
           Rebase
         </Button>

@@ -11,6 +11,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	goruntime "runtime"
 	"strings"
@@ -46,6 +47,9 @@ type vm struct {
 	size      runtime.Size // what the VM starts with
 	room      runtime.Size // what it booted with room for: twice the size it booted with
 	image     string       // the image it was made from
+	// oldLayout is a VM whose disks msb keeps in its layout from before 0.7.12, as macOS has
+	// them after Studio's upgrade: it won't start until MoveDisks moves them.
+	oldLayout bool
 }
 
 // NewRuntime returns a runtime without VMs.
@@ -96,9 +100,57 @@ func (r *Runtime) Start(_ context.Context, name string) error {
 	if !ok {
 		return errors.New("no VM named " + name)
 	}
+	if v.oldLayout && v.status != runtime.StatusRunning {
+		return fmt.Errorf("%w (macOS legacy storage requires explicit maintenance recovery)", runtime.ErrMoveDisks)
+	}
 	if v.status != runtime.StatusRunning {
 		r.bootLocked(v)
 	}
+	return nil
+}
+
+// setOldLayout puts the disks of the VMs of sandboxID in msb's old layout, or takes them out.
+func (r *Runtime) setOldLayout(sandboxID string, old bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	found := false
+	for _, v := range r.vms {
+		if v.sandboxID == sandboxID {
+			v.oldLayout, found = old, true
+		}
+	}
+	if !found {
+		return errors.New("no VM of sandbox " + sandboxID)
+	}
+	return nil
+}
+
+// StorageStates lists the VMs whose disks are in msb's old layout, as msb on macOS does.
+func (r *Runtime) StorageStates(_ context.Context, prefix string) ([]runtime.StorageState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []runtime.StorageState
+	for name, v := range r.vms {
+		if v.oldLayout && strings.HasPrefix(name, prefix) {
+			out = append(out, runtime.StorageState{VM: name, Status: "maintenance_required", Running: v.status.IsRunning(),
+				Reasons: []string{"macOS legacy storage requires explicit maintenance recovery"}})
+		}
+	}
+	return out, nil
+}
+
+// MoveDisks moves a stopped VM's disks to the new layout; msb refuses while the VM runs.
+func (r *Runtime) MoveDisks(_ context.Context, name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vms[name]
+	if !ok {
+		return errors.New("no VM named " + name)
+	}
+	if v.status == runtime.StatusRunning || v.status == runtime.StatusSuspended {
+		return errors.New("legacy storage migration on macOS cannot exclude a writer in sandbox '" + name + "'")
+	}
+	v.oldLayout = false
 	return nil
 }
 

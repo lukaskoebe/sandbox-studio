@@ -47,10 +47,15 @@ func (s *Service) pushOutcome(ctx context.Context, a store.Approval) (map[string
 	if err != nil {
 		return nil, false, err
 	}
-	if p.State == store.PushPending {
-		return nil, false, nil
-	}
 	v := map[string]any{"status": p.State, "branch": strings.TrimPrefix(p.Ref, "refs/heads/"), "forge": p.ForgeName, "repository": repoPath(p)}
+	if p.State == store.PushPending {
+		// While it waits, only the reviewer's comments so far, if there are any.
+		if p.Note == "" {
+			return nil, false, nil
+		}
+		v["note"] = p.Note
+		return v, false, nil
+	}
 	if p.Result != "" {
 		v["result"] = p.Result
 	}
@@ -141,6 +146,10 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 		return err
 	}
 	defer s.publish(a.EnvironmentID, a.ID)
+	// Comments left while it waited stay, unless the decision brings its own.
+	if strings.TrimSpace(d.Note) == "" {
+		d.Note = p.Note
+	}
 	if st != store.StatusApproved {
 		result := ""
 		if st == store.StatusDismissed {

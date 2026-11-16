@@ -46,6 +46,7 @@ import {
   type Mention,
 } from "@/lib/mentions"
 import { cn, formatBytes } from "@/lib/utils"
+import { useComposerSpot } from "@/lib/composer-clearance"
 
 export type Prompt = components["schemas"]["PromptRequest"]
 
@@ -118,6 +119,8 @@ export function Composer({
   const input = useRef<HTMLInputElement>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
+  // The approval stack sits above this box rather than over its Send button.
+  useComposerSpot(boxRef)
   const backdrop = useRef<HTMLDivElement>(null)
   const size = files.reduce((n, f) => n + f.size, 0)
 

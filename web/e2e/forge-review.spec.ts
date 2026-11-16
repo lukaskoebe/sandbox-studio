@@ -138,28 +138,26 @@ test("a teammate's pull request review waits for approval and posts as edited", 
   )
   await card.getByRole("button", { name: "Review" }).click()
 
-  const sheet = page.getByRole("dialog")
-  await expect(sheet).toContainText("Apply coupon codes")
-  await expect(sheet).toContainText("feature/coupons → main")
-  await expect(sheet.getByRole("note")).toContainText(
+  const pane = page.getByTestId("git-review")
+  await expect(pane).toContainText("Apply coupon codes")
+  await expect(pane).toContainText("feature/coupons → main")
+  await expect(pane.getByRole("note")).toContainText(
     "Validate against finalTotal(cart)."
   )
-  await expect(sheet).toContainText("Posts as e2e-user")
+  await expect(pane).toContainText("Posts as e2e-user")
   // The diff is highlighted as TypeScript.
   await expect(
-    sheet
-      .locator(`span[style*="--code-keyword"]`, { hasText: "export" })
-      .first()
+    pane.locator(`span[style*="--code-keyword"]`, { hasText: "export" }).first()
   ).toBeVisible()
   // Edit the draft: a comment instead, a longer summary, the attribution line.
-  await sheet.getByRole("button", { name: "Comment", exact: true }).click()
-  const summary = sheet.getByRole("textbox", { name: "Summary" })
+  await pane.getByRole("button", { name: "Comment", exact: true }).click()
+  const summary = pane.getByRole("textbox", { name: "Summary" })
   await summary.fill(
     "The coupon is checked against the subtotal; see the line."
   )
-  await sheet.getByRole("checkbox", { name: /Review by an agent/ }).click()
-  await sheet.getByRole("button", { name: "Post review" }).click()
-  await expect(sheet).toBeHidden()
+  await pane.getByRole("checkbox", { name: /Review by an agent/ }).click()
+  await pane.getByRole("button", { name: "Post review" }).click()
+  await expect(pane).toBeHidden()
   await expect(card).toBeHidden()
 
   await expect
@@ -206,8 +204,8 @@ test("discarding a review posts nothing and keeps the note", async ({
     .getByTestId("approval-card")
     .filter({ hasText: "acme/web#1" })
   await card.getByRole("button", { name: "Review" }).click()
-  const sheet = page.getByRole("dialog")
-  await sheet.getByRole("button", { name: "Discard…" }).click()
+  const pane = page.getByTestId("git-review")
+  await pane.getByRole("button", { name: "Discard…" }).click()
   await page
     .getByRole("textbox", { name: /^Note for/ })
     .fill("Not blocking; leave it to the author.")
@@ -253,14 +251,14 @@ test("a teammate's comment on a pull request waits for approval and posts as edi
   await expect(card).toContainText("Comment on acme/web#1: Apply coupon codes")
   await expect(card).toContainText("The coupon tests fail on main too.")
   await card.getByRole("button", { name: "Review" }).click()
-  const sheet = page.getByRole("dialog")
-  await expect(sheet).toContainText("Posts as e2e-user")
-  await sheet
+  const pane = page.getByTestId("git-review")
+  await expect(pane).toContainText("Posts as e2e-user")
+  await pane
     .getByRole("textbox", { name: "Comment" })
     .fill("The coupon tests fail on main too; see #40.")
-  await sheet.getByRole("checkbox", { name: /Comment by an agent/ }).click()
-  await sheet.getByRole("button", { name: "Post comment" }).click()
-  await expect(sheet).toBeHidden()
+  await pane.getByRole("checkbox", { name: /Comment by an agent/ }).click()
+  await pane.getByRole("button", { name: "Post comment" }).click()
+  await expect(pane).toBeHidden()
   await expect(card).toBeHidden()
 
   const posted = ((await api.json<Posted[]>("GET", "/api/e2e/reviews")) ?? [])

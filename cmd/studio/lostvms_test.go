@@ -34,3 +34,29 @@ func TestFindLostVMs(t *testing.T) {
 		t.Errorf("gone: %+v", l)
 	}
 }
+
+func TestFindLeftoverVMs(t *testing.T) {
+	sbs := []store.Sandbox{
+		{ID: "mjbm", Name: "katara", Generation: 2},
+		{ID: "ok", Name: "fine", Generation: 1},
+		{ID: "reb", Name: "rebasing", Generation: 1},
+	}
+	statuses := map[string]runtime.Status{
+		"ss-mjbm-g1": runtime.StatusStopped, // katara's VM before its rebase
+		"ss-mjbm-g2": runtime.StatusRunning,
+		"ss-ok-g1":   runtime.StatusRunning,
+		"ss-reb-g2":  runtime.StatusStarting, // a rebase's target, still being made
+		"ss-xmeh-g1": runtime.StatusRunning,  // a failed fork's
+		"ss-bad-gx":  runtime.StatusStopped,  // no name of Studio's
+	}
+	left := findLeftoverVMs(sbs, statuses)
+	if len(left) != 2 {
+		t.Fatalf("left %+v, want ss-mjbm-g1 and ss-xmeh-g1", left)
+	}
+	if l := left[0]; l.VM != "ss-mjbm-g1" || l.Sandbox != "katara" || l.Status != "stopped" {
+		t.Errorf("katara's: %+v", l)
+	}
+	if l := left[1]; l.VM != "ss-xmeh-g1" || l.Sandbox != "" || l.Status != "running" {
+		t.Errorf("the fork's: %+v", l)
+	}
+}

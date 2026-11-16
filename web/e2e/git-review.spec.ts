@@ -68,13 +68,19 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
   await expect(card).toBeVisible()
   await card.getByRole("button", { name: "Review" }).click()
 
-  const sheet = page.getByRole("dialog")
-  await expect(sheet).toContainText("Add a greeting")
-  await expect(sheet).toContainText("hello from the sandbox")
-  await expect(sheet.getByRole("link", { name: "Open as page" })).toBeVisible()
-  await sheet.getByRole("button", { name: "Approve and push" }).click()
-  await expect(sheet).toBeHidden()
+  // Review opens the push in its computer's Changes tab, which then shows how it went.
+  await expect(page).toHaveURL(
+    new RegExp(`/e/${env}/sandboxes/${id}\\?.*tab=changes`)
+  )
+  const pane = page.getByTestId("git-review")
+  await expect(pane).toContainText("Add a greeting")
+  await expect(pane).toContainText("hello from the sandbox")
   await expect(card).toBeHidden()
+  await pane.getByRole("button", { name: "Approve and push" }).click()
+  await expect(pane.getByRole("status")).toContainText("This was approved.")
+  await expect(
+    pane.getByRole("button", { name: "Approve and push" })
+  ).toHaveCount(0)
 
   await expect
     .poll(async () =>
@@ -131,9 +137,9 @@ test("a push the forge refuses says why, and goes up when pushed again with a to
     .getByTestId("approval-card")
     .filter({ hasText: "team/app" })
   await card.getByRole("button", { name: "Review" }).click()
-  const sheet = page.getByRole("dialog")
-  await sheet.getByRole("button", { name: "Approve and push" }).click()
-  await expect(sheet).toBeHidden()
+  const pane = page.getByTestId("git-review")
+  await pane.getByRole("button", { name: "Approve and push" }).click()
+  await expect(pane.getByRole("status")).toContainText("This was approved")
 
   // The approval is gone, but a toast says the push failed and why, and stays.
   const toast = page
@@ -214,22 +220,22 @@ test("a rewritten branch is reviewed with what it drops and takes a force-push",
     .getByTestId("approval-card")
     .filter({ hasText: "Force-push 1 commit to topic" })
   await card.getByRole("button", { name: "Review" }).click()
-  const sheet = page.getByRole("dialog")
+  const pane = page.getByTestId("git-review")
   await expect(
-    sheet.getByText("rewrites history", { exact: true })
+    pane.getByText("rewrites history", { exact: true })
   ).toBeVisible()
-  const rewrite = sheet.getByRole("region", { name: "Rewrites history" })
+  const rewrite = pane.getByRole("region", { name: "Rewrites history" })
   await expect(rewrite).toContainText("drops 1 commit now on the forge")
   await expect(rewrite).toContainText(
     `${first.commit!.slice(0, 10)}Add the coupon field→ ${amended.commit!.slice(0, 10)}`
   )
   await expect(rewrite).toContainText("differ in coupon.txt")
-  await expect(sheet).toContainText("field v2")
+  await expect(pane).toContainText("field v2")
   await expect(
-    sheet.getByRole("button", { name: "Approve and push" })
+    pane.getByRole("button", { name: "Approve and push" })
   ).toHaveCount(0)
-  await sheet.getByRole("button", { name: "Force-push" }).click()
-  await expect(sheet).toBeHidden()
+  await pane.getByRole("button", { name: "Force-push" }).click()
+  await expect(pane.getByRole("status")).toContainText("This was approved")
   await expect
     .poll(async () =>
       (await api.upstream(forge.repo)).find((b) => b.name === "topic")
@@ -237,7 +243,7 @@ test("a rewritten branch is reviewed with what it drops and takes a force-push",
     .toMatchObject({ sha: amended.commit })
 })
 
-test("a pending push review opens as a page and is decided there", async ({
+test("a pending push review has a page of its own and is decided there", async ({
   page,
   api,
   env,
@@ -264,14 +270,14 @@ test("a pending push review opens as a page and is decided there", async ({
       .getByTitle("1 waiting for you")
   ).toBeVisible()
 
-  // The sheet's "Open as page" leads to the review's own address.
+  // Review opens it in the computer's Changes tab; its id is also the address of its page.
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: "team/app" })
   await card.getByRole("button", { name: "Review" }).click()
-  await page.getByRole("link", { name: "Open as page" }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/git/reviews/[^/]+$`))
-  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(page).toHaveURL(/[?&]review=/)
+  const review = new URL(page.url()).searchParams.get("review")
+  await page.goto(`/e/${env}/git/reviews/${review}`)
 
   const main = page.getByRole("main")
   await expect(main).toContainText("Start the notes")
@@ -282,6 +288,45 @@ test("a pending push review opens as a page and is decided there", async ({
   await expect(page.getByRole("status")).toContainText("This was rejected.")
   await expect(main).toContainText("Note: Not this one")
   expect(await api.upstream(forge.repo)).toEqual([forge.initial])
+})
+
+// Review keeps the thread in view when the push comes from its teammate's computer.
+test("Review opens a push in Changes beside its teammate's thread", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const teammate = await addTeammate(
+    api,
+    env,
+    `Beside ${Math.random().toString(36).slice(2, 6)}`
+  )
+  const id = await api.createSandbox(sandboxName("beside"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  const pushed = await api.push(id, {
+    url: forge.url,
+    file: "beside.txt",
+    content: "beside\n",
+    message: "Add beside",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+
+  await page.goto(`/e/${env}/teammates/${teammate}?thread=${chat.id}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+  await card.getByRole("button", { name: "Review" }).click()
+  await expect(page).toHaveURL(/[?&]tab=changes/)
+  expect(new URL(page.url()).searchParams.get("thread")).toBe(chat.id)
+  await expect(page.getByTestId("git-review")).toContainText("Add beside")
+
+  await api.dismissApprovals()
 })
 
 test("a review that doesn't exist says so", async ({ page, env }) => {
@@ -330,34 +375,34 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
       .filter({ hasText: "team/app" })
       .getByRole("button", { name: "Review" })
       .click()
-    return page.getByRole("dialog")
+    return page.getByTestId("git-review")
   }
 
   // A line comment, sent to the chat with the rejection.
-  let sheet = await review("greeting.txt", "Add a greeting")
-  await commentOn(sheet, sheet.locator("[data-line]").first())
-  await sheet
+  let pane = await review("greeting.txt", "Add a greeting")
+  await commentOn(pane, pane.locator("[data-line]").first())
+  await pane
     .getByRole("textbox", { name: "Comment on greeting.txt:1" })
     .fill("Say hello to the world, please")
-  await sheet.getByRole("button", { name: "Save comment" }).click()
+  await pane.getByRole("button", { name: "Save comment" }).click()
   await expect(
-    sheet.getByRole("note", { name: "Comment on greeting.txt:1" })
+    pane.getByRole("note", { name: "Comment on greeting.txt:1" })
   ).toContainText("Say hello to the world")
   // Comments lists it, and jumps back to its line.
-  await sheet.getByRole("tab", { name: /^Comments/ }).click()
-  const listed = sheet.getByRole("list", { name: "Line comments" })
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  const listed = pane.getByRole("list", { name: "Line comments" })
   await expect(listed).toContainText("greeting.txt:1")
   await listed.getByRole("button", { name: /Say hello to the world/ }).click()
-  await expect(sheet.getByRole("tab", { name: "Changes" })).toHaveAttribute(
+  await expect(pane.getByRole("tab", { name: "Changes" })).toHaveAttribute(
     "aria-selected",
     "true"
   )
   await expect(
-    sheet.getByRole("note", { name: "Comment on greeting.txt:1" })
+    pane.getByRole("note", { name: "Comment on greeting.txt:1" })
   ).toBeInViewport()
-  await sheet.getByRole("combobox", { name: "Send to" }).click()
+  await pane.getByRole("combobox", { name: "Send to" }).click()
   await page.getByRole("option", { name: /^Chat/ }).click()
-  await sheet.getByRole("button", { name: "Reject" }).click()
+  await pane.getByRole("button", { name: "Reject" }).click()
   await expect(page.getByText("Feedback sent to the agent")).toBeVisible()
 
   await page.goto(`/e/${env}/chats/${chat.id}`)
@@ -368,17 +413,17 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   await expect(main).toContainText("Say hello to the world, please")
 
   // A note, pasted into the agent's terminal without deciding.
-  sheet = await review("notes.txt", "Add notes")
-  await sheet.getByRole("tab", { name: /^Comments/ }).click()
-  await sheet
+  pane = await review("notes.txt", "Add notes")
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await pane
     .getByRole("textbox", { name: "Note for the agent" })
     .fill("Use markdown for the notes")
-  await sheet.getByRole("combobox", { name: "Send to" }).click()
+  await pane.getByRole("combobox", { name: "Send to" }).click()
   await page.getByRole("option", { name: /^Terminal/ }).click()
-  await sheet.getByRole("button", { name: "More decisions" }).click()
+  await pane.getByRole("button", { name: "More decisions" }).click()
   await page.getByRole("menuitem", { name: /^Send without deciding/ }).click()
   await expect(page.getByText("Feedback sent to the agent")).toBeVisible()
-  await expect(sheet.getByRole("button", { name: "Reject" })).toBeVisible()
+  await expect(pane.getByRole("button", { name: "Reject" })).toBeVisible()
 
   await page.goto(
     `/e/${env}/teammates/${teammate}?computer=${id}&tab=terminal&term=${session.name}`
@@ -388,15 +433,15 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   await expect(rows).toContainText("Use markdown for the notes")
 
   // A note in a new chat, the default for a teammate's sandbox.
-  sheet = await review("todo.txt", "Add a todo")
-  await expect(sheet.getByRole("combobox", { name: "Send to" })).toContainText(
+  pane = await review("todo.txt", "Add a todo")
+  await expect(pane.getByRole("combobox", { name: "Send to" })).toContainText(
     "A new chat"
   )
-  await sheet.getByRole("tab", { name: /^Comments/ }).click()
-  await sheet
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await pane
     .getByRole("textbox", { name: "Note for the agent" })
     .fill("Keep the todo list short")
-  await sheet.getByRole("button", { name: "Reject" }).click()
+  await pane.getByRole("button", { name: "Reject" }).click()
   await expect(page.getByText("Feedback sent to a new chat")).toBeVisible()
   const chats = await api.json<{ id: string }[]>(
     "GET",
@@ -405,6 +450,97 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   const fresh = chats!.find((c) => c.id !== chat.id)!
   await page.goto(`/e/${env}/chats/${fresh.id}`)
   await expect(page.getByRole("main")).toContainText("Keep the todo list short")
+})
+
+// With no chat or terminal to send to, comments stay on the waiting push for its agent to
+// read; an agent someone started by hand in a terminal can take them too.
+test("comments are left on a waiting push, or typed into an agent started by hand", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const id = await api.createSandbox(sandboxName("left"))
+  await api.guestReady(id)
+  const pushed = await api.push(id, {
+    url: forge.url,
+    file: "rename.txt",
+    content: "rename me\n",
+    message: "Add a file to rename",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+  const waiting = await api.json<
+    { id: string; sandboxId?: string; kind: string }[]
+  >("GET", `/api/environments/${env}/approvals`)
+  const approval = waiting!.find(
+    (a) => a.sandboxId === id && a.kind === "git.push"
+  )!
+  const note = async () =>
+    (
+      await api.json<{ git?: { push: { note?: string; state: string } } }>(
+        "GET",
+        `/api/environments/${env}/approvals/${approval.id}`
+      )
+    )?.git?.push
+
+  await page.goto(`/e/${env}`)
+  await approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+    .getByRole("button", { name: "Review" })
+    .click()
+  const pane = page.getByTestId("git-review")
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await expect(pane).toContainText(
+    "The agent reads the outcome and your comments when it checks on the push"
+  )
+  await pane
+    .getByRole("textbox", { name: "Note for the agent" })
+    .fill("Call it renamed.txt")
+  await pane.getByRole("button", { name: "More decisions" }).click()
+  await page.getByRole("menuitem", { name: /^Leave without deciding/ }).click()
+  await expect(page.getByText("Comments left on the push")).toBeVisible()
+  await expect(
+    pane.getByRole("region", { name: "Comments left for the agent" })
+  ).toContainText("Call it renamed.txt")
+  await expect(
+    pane.getByRole("textbox", { name: "Note for the agent" })
+  ).toHaveValue("")
+  await expect(pane.getByRole("button", { name: "Reject" })).toBeVisible()
+  expect(await note()).toMatchObject({
+    state: "pending",
+    note: "Call it renamed.txt",
+  })
+
+  // opencode, started by hand in a terminal of the sandbox, is offered and takes the note.
+  await api.setTerminal(id, "work", {
+    command: "opencode",
+    foreground: ["opencode"],
+  })
+  await page.reload()
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await pane.getByRole("combobox", { name: "Send to" }).click()
+  await page.getByRole("option", { name: "Terminal work · OpenCode" }).click()
+  await pane
+    .getByRole("textbox", { name: "Note for the agent" })
+    .fill("And keep its contents")
+  await pane.getByRole("button", { name: "More decisions" }).click()
+  await page.getByRole("menuitem", { name: /^Send without deciding/ }).click()
+  await expect(page.getByText("Feedback sent to the agent")).toBeVisible()
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=terminal&term=work`)
+  await expect(terminal(page).rows).toContainText("And keep its contents")
+
+  // Approving with no note of its own keeps the comments left on the push.
+  await api.json(
+    "POST",
+    `/api/environments/${env}/approvals/${approval.id}/decide`,
+    { action: "allow", scope: "sandbox" }
+  )
+  await expect.poll(note).toMatchObject({
+    state: "pushed",
+    note: "Call it renamed.txt",
+  })
 })
 
 test("a long diff is highlighted off the page's thread, and a very long line stays plain", async ({
@@ -451,9 +587,9 @@ test("a long diff is highlighted off the page's thread, and a very long line sta
     .getByTestId("approval-card")
     .filter({ hasText: "team/app" })
   await card.getByRole("button", { name: "Review" }).click()
-  const sheet = page.getByRole("dialog")
+  const pane = page.getByTestId("git-review")
 
-  const line = sheet.locator("[data-line]")
+  const line = pane.locator("[data-line]")
   const first = line.filter({ hasText: 'func f0() string { return "s0" }' })
   await expect(first).toBeVisible()
   await expect(
@@ -471,10 +607,10 @@ test("a long diff is highlighted off the page's thread, and a very long line sta
 })
 
 /** Opens the comment editor of a row. Highlighting redraws a row, which drops the hover's button. */
-async function commentOn(sheet: Locator, row: Locator) {
+async function commentOn(pane: Locator, row: Locator) {
   await expect(async () => {
     await row.hover()
-    await sheet
+    await pane
       .getByRole("button", { name: "Comment on this line" })
       .click({ timeout: 1000 })
   }).toPass()
@@ -498,12 +634,18 @@ async function reviewWithDiff(
   })
   await page.route(/\/api\/.*approvals/, async (route) => {
     if (route.request().method() !== "GET") return route.continue()
-    const r = await route.fetch()
-    const body = (await r.text()).replace(
-      /"diff":"(?:[^"\\]|\\.)*"/g,
-      () => `"diff":${JSON.stringify(typeof diff === "string" ? diff : diff())}`
-    )
-    await route.fulfill({ response: r, body })
+    try {
+      const r = await route.fetch()
+      const body = (await r.text()).replace(
+        /"diff":"(?:[^"\\]|\\.)*"/g,
+        () =>
+          `"diff":${JSON.stringify(typeof diff === "string" ? diff : diff())}`
+      )
+      await route.fulfill({ response: r, body })
+    } catch {
+      // The page moved on while the list polled, and the request went with it.
+      await route.abort().catch(() => {})
+    }
   })
   await page.goto(`/e/${env}`)
   await approvals(page)
@@ -511,7 +653,7 @@ async function reviewWithDiff(
     .filter({ hasText: "team/app" })
     .getByRole("button", { name: "Review" })
     .click()
-  return page.getByRole("dialog")
+  return page.getByTestId("git-review")
 }
 
 test("a diff that changes to one of the same length shows the new one", async ({
@@ -530,12 +672,12 @@ test("a diff that changes to one of the same length shows the new one", async ({
       "",
     ].join("\n")
   let diff = change(1)
-  const sheet = await reviewWithDiff(
+  const pane = await reviewWithDiff(
     { page, api, env },
     "same-length",
     () => diff
   )
-  const lines = sheet.locator("[data-line]")
+  const lines = pane.locator("[data-line]")
   await expect(lines.filter({ hasText: "v = 1" })).toBeVisible()
 
   diff = change(2)
@@ -551,7 +693,7 @@ test("a diff shows Studio's notes and renames, and what it holds stays text", as
   api,
   env,
 }) => {
-  const sheet = await reviewWithDiff(
+  const pane = await reviewWithDiff(
     { page, api, env },
     "diff-notes",
     [
@@ -573,14 +715,14 @@ test("a diff shows Studio's notes and renames, and what it holds stays text", as
       "",
     ].join("\n")
   )
-  await expect(sheet).toContainText("big.bin: 900000 bytes")
-  await expect(sheet).toContainText("new.txt")
-  await expect(sheet).toContainText("3 more files not shown")
+  await expect(pane).toContainText("big.bin: 900000 bytes")
+  await expect(pane).toContainText("new.txt")
+  await expect(pane).toContainText("3 more files not shown")
   await expect(
-    sheet.locator("[data-line]").filter({ hasText: "<img src=x" })
+    pane.locator("[data-line]").filter({ hasText: "<img src=x" })
   ).toBeVisible()
   await expect(
-    sheet.locator("diffs-container img, diffs-container script")
+    pane.locator("diffs-container img, diffs-container script")
   ).toHaveCount(0)
   expect(await page.evaluate(() => "pwned" in window)).toBe(false)
 })
@@ -591,7 +733,7 @@ test("a comment lands on its line after a removed --- line, and a draft outlives
   env,
 }) => {
   const body = Array.from({ length: 3000 }, (_, i) => `+line ${i}`)
-  const sheet = await reviewWithDiff(
+  const pane = await reviewWithDiff(
     { page, api, env },
     "diff-comment",
     [
@@ -605,32 +747,32 @@ test("a comment lands on its line after a removed --- line, and a draft outlives
       "",
     ].join("\n")
   )
-  const row = sheet.locator("[data-line]").filter({ hasText: /^line 2$/ })
-  await commentOn(sheet, row)
-  const editor = sheet.getByRole("textbox", { name: "Comment on q.sql:4" })
+  const row = pane.locator("[data-line]").filter({ hasText: /^line 2$/ })
+  await commentOn(pane, row)
+  const editor = pane.getByRole("textbox", { name: "Comment on q.sql:4" })
   await editor.fill("A draft on the fourth line")
 
   await page.mouse.wheel(0, 20000)
   await expect(editor).toHaveCount(0)
   await page.mouse.wheel(0, -20000)
   await expect(editor).toHaveValue("A draft on the fourth line")
-  await sheet.getByRole("button", { name: "Save comment" }).click()
+  await pane.getByRole("button", { name: "Save comment" }).click()
   await expect(
-    sheet.getByRole("note", { name: "Comment on q.sql:4" })
+    pane.getByRole("note", { name: "Comment on q.sql:4" })
   ).toBeVisible()
 
   // The list jumps back to a line that left the page.
   await page.mouse.wheel(0, 20000)
   await expect(
-    sheet.getByRole("note", { name: "Comment on q.sql:4" })
+    pane.getByRole("note", { name: "Comment on q.sql:4" })
   ).toHaveCount(0)
-  await sheet.getByRole("tab", { name: /^Comments/ }).click()
-  await sheet
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await pane
     .getByRole("list", { name: "Line comments" })
     .getByRole("button", { name: /A draft on the fourth line/ })
     .click()
   await expect(
-    sheet.getByRole("note", { name: "Comment on q.sql:4" })
+    pane.getByRole("note", { name: "Comment on q.sql:4" })
   ).toBeInViewport()
 })
 
@@ -643,7 +785,7 @@ test("a split diff comments on an unchanged line from either side", async ({
   await page.addInitScript(() =>
     localStorage.setItem("studio.diff.style", "split")
   )
-  const sheet = await reviewWithDiff(
+  const pane = await reviewWithDiff(
     { page, api, env },
     "diff-split",
     [
@@ -659,26 +801,26 @@ test("a split diff comments on an unchanged line from either side", async ({
       "",
     ].join("\n")
   )
-  await expect(sheet.locator("pre[data-diff-type]")).toHaveAttribute(
+  await expect(pane.locator("pre[data-diff-type]")).toHaveAttribute(
     "data-diff-type",
     "split"
   )
   // c is line 3 on the old side and line 4 on the new.
-  const old = sheet
+  const old = pane
     .locator("[data-deletions] [data-column-number]")
     .filter({ hasText: /^3$/ })
   await old.click()
   await expect(
-    sheet.getByRole("textbox", { name: "Comment on q.txt:4" })
+    pane.getByRole("textbox", { name: "Comment on q.txt:4" })
   ).toBeVisible()
-  await sheet.getByRole("button", { name: "Cancel" }).click()
+  await pane.getByRole("button", { name: "Cancel" }).click()
 
   // Dragging from the comment button of a to the old c covers a to c.
-  const a = sheet
+  const a = pane
     .locator("[data-deletions] [data-line]")
     .filter({ hasText: /^a$/ })
   await a.hover()
-  const button = sheet.getByRole("button", { name: "Comment on this line" })
+  const button = pane.getByRole("button", { name: "Comment on this line" })
   const from = (await button.boundingBox())!
   const to = (await old.boundingBox())!
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
@@ -688,7 +830,7 @@ test("a split diff comments on an unchanged line from either side", async ({
   })
   await page.mouse.up()
   await expect(
-    sheet.getByRole("textbox", { name: "Comment on q.txt:1–4" })
+    pane.getByRole("textbox", { name: "Comment on q.txt:1–4" })
   ).toBeVisible()
 })
 
@@ -739,16 +881,16 @@ test("a push to a checked-out branch of a local repository updates its files", a
       .getByTestId("approval-card")
       .filter({ hasText: "proj" })
     await card.getByRole("button", { name: "Review" }).click()
-    const sheet = page.getByRole("dialog")
-    const update = sheet.getByRole("checkbox", {
+    const pane = page.getByTestId("git-review")
+    const update = pane.getByRole("checkbox", {
       name: "Update the checked-out files too",
     })
     await expect(update).toBeChecked()
-    await expect(sheet).toContainText("main is checked out in the repository")
-    // The diff is the last part of the sheet to load; once it shows, the sheet has settled.
-    await expect(sheet).toContainText("from the sandbox")
-    await sheet.getByRole("button", { name: "Approve and push" }).click()
-    await expect(sheet).toBeHidden()
+    await expect(pane).toContainText("main is checked out in the repository")
+    // The diff is the last part of the pane to load; once it shows, the pane has settled.
+    await expect(pane).toContainText("from the sandbox")
+    await pane.getByRole("button", { name: "Approve and push" }).click()
+    await expect(pane.getByRole("status")).toContainText("This was approved")
 
     await expect
       .poll(() => git("-C", repo, "rev-parse", "HEAD").trim())
@@ -767,7 +909,7 @@ test("a push to a checked-out branch of a local repository updates its files", a
  * The middle of a diff row's number: a click there selects the line, a drag or shift-click
  * several. The mouse moves by itself, as hover() waits out the comment button over a number.
  */
-async function numberOf(sheet: Locator, row: Locator) {
+async function numberOf(pane: Locator, row: Locator) {
   // A jump scrolls smoothly: the row settles first.
   let was = -1
   await expect
@@ -779,12 +921,18 @@ async function numberOf(sheet: Locator, row: Locator) {
     })
     .toBe(true)
   const index = await row.getAttribute("data-line-index")
-  const cell = sheet
+  const cell = pane
     .locator(`[data-column-number][data-line-index="${index}"]`)
     .first()
-  await cell.scrollIntoViewIfNeeded()
-  const box = (await cell.boundingBox())!
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  // The diff renders its rows again as it scrolls, so the cell found may be gone by then.
+  let box: { x: number; y: number; width: number; height: number } | null = null
+  await expect(async () => {
+    await cell.scrollIntoViewIfNeeded({ timeout: 2000 })
+    box = await cell.boundingBox()
+    expect(box).not.toBeNull()
+  }).toPass()
+  const { x, y, width, height } = box!
+  return { x: x + width / 2, y: y + height / 2 }
 }
 
 test("a diff lists its files to jump to, and a comment covers the lines dragged over", async ({
@@ -792,7 +940,7 @@ test("a diff lists its files to jump to, and a comment covers the lines dragged 
   api,
   env,
 }) => {
-  const sheet = await reviewWithDiff(
+  const pane = await reviewWithDiff(
     { page, api, env },
     "diff-files",
     [
@@ -822,7 +970,7 @@ test("a diff lists its files to jump to, and a comment covers the lines dragged 
   )
 
   // The overview lists each file with its lines, and jumps to one.
-  const files = sheet.getByRole("navigation", { name: "Files in the diff" })
+  const files = pane.getByRole("navigation", { name: "Files in the diff" })
   await expect(files.getByRole("listitem")).toHaveCount(3)
   await expect(files).toContainText("3 · +302 −2")
   const a = files.getByRole("button", { name: /src\/a\.ts/ })
@@ -831,7 +979,7 @@ test("a diff lists its files to jump to, and a comment covers the lines dragged 
   await expect(files.getByRole("button", { name: /long\.txt/ })).toContainText(
     "+300"
   )
-  const gone = sheet.locator("[data-line]").filter({ hasText: /^gone$/ })
+  const gone = pane.locator("[data-line]").filter({ hasText: /^gone$/ })
   await expect(gone).not.toBeInViewport()
   await files.getByRole("button", { name: /z\.txt/ }).click()
   await expect(gone).toBeInViewport()
@@ -839,42 +987,42 @@ test("a diff lists its files to jump to, and a comment covers the lines dragged 
 
   // Dragging over the numbers of three lines comments on all of them.
   const row = (text: RegExp) =>
-    sheet.locator("[data-line]").filter({ hasText: text }).first()
-  const one = await numberOf(sheet, row(/^one$/))
-  const three = await numberOf(sheet, row(/^three$/))
+    pane.locator("[data-line]").filter({ hasText: text }).first()
+  const one = await numberOf(pane, row(/^one$/))
+  const three = await numberOf(pane, row(/^three$/))
   await page.mouse.move(one.x, one.y)
   await page.mouse.down()
   await page.mouse.move(three.x, three.y, { steps: 5 })
   await page.mouse.up()
-  await sheet
+  await pane
     .getByRole("textbox", { name: "Comment on src/a.ts:1–3" })
     .fill("Keep these together")
-  await sheet.getByRole("button", { name: "Save comment" }).click()
-  const note = sheet.getByRole("note", { name: "Comment on src/a.ts:1–3" })
+  await pane.getByRole("button", { name: "Save comment" }).click()
+  const note = pane.getByRole("note", { name: "Comment on src/a.ts:1–3" })
   await expect(note).toContainText("lines 1–3")
   await expect(note).toContainText("Keep these together")
 
   // A click and a shift-click select a range too.
-  const x2 = await numberOf(sheet, row(/^x 2$/))
+  const x2 = await numberOf(pane, row(/^x 2$/))
   await page.mouse.click(x2.x, x2.y)
-  const x5 = await numberOf(sheet, row(/^x 5$/))
+  const x5 = await numberOf(pane, row(/^x 5$/))
   await page.keyboard.down("Shift")
   await page.mouse.click(x5.x, x5.y)
   await page.keyboard.up("Shift")
   await expect(
-    sheet.getByRole("textbox", { name: "Comment on long.txt:3–6" })
+    pane.getByRole("textbox", { name: "Comment on long.txt:3–6" })
   ).toBeVisible()
-  await sheet.getByRole("button", { name: "Cancel" }).click()
+  await pane.getByRole("button", { name: "Cancel" }).click()
 
   // Comments names the range, and the agent's note quotes its lines.
-  await sheet.getByRole("tab", { name: /^Comments/ }).click()
-  await expect(
-    sheet.getByRole("list", { name: "Line comments" })
-  ).toContainText("src/a.ts:1–3")
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await expect(pane.getByRole("list", { name: "Line comments" })).toContainText(
+    "src/a.ts:1–3"
+  )
   const decided = page.waitForRequest(
     (r) => r.method() === "POST" && r.url().endsWith("/decide")
   )
-  await sheet.getByRole("button", { name: "Reject" }).click()
+  await pane.getByRole("button", { name: "Reject" }).click()
   const body = (await decided).postDataJSON() as { note?: string }
   expect(body.note).toContain("src/a.ts:1–3, on these lines:")
   expect(body.note).toContain("   one\n  -two\n  +TWO\n  +three")
@@ -903,9 +1051,9 @@ test("a push's commits open to their own changes", async ({
     .filter({ hasText: "team/app" })
     .getByRole("button", { name: "Review" })
     .click()
-  const sheet = page.getByRole("dialog")
-  await sheet.getByRole("tab", { name: /^Commits/ }).click()
-  const panel = sheet.getByRole("tabpanel")
+  const pane = page.getByTestId("git-review")
+  await pane.getByRole("tab", { name: /^Commits/ }).click()
+  const panel = pane.getByRole("tabpanel")
   await panel
     .getByRole("button", { name: /^Changes of .*: Add a greeting$/ })
     .click()

@@ -1,5 +1,95 @@
 # Changelog
 
+## Unreleased
+
+- Fixes from v0.23.0, which copied microsandbox's database every five minutes and after each
+  create or fork from inside Studio's own process. Closing those copies dropped the locks
+  microsandbox's library in Studio holds on the database. Another microsandbox process, such
+  as a VM's or the SSH connection behind each VS Code window, could then take itself for the
+  database's last user and delete its write-ahead log while Studio still wrote to it. What
+  Studio wrote afterwards was lost to every other process until Studio restarted. That showed
+  as "database disk image is malformed" while `studio doctor` found the database fine, and as
+  forks failing with "insert run: FOREIGN KEY constraint failed", since the new VM couldn't
+  see its own record. Now:
+  - The copies are made by a process of their own (`studio msb-backup`).
+  - Once microsandbox's library has its database open, Studio's process refuses to open the
+    database's files itself, so no later change can bring the problem back.
+- Failed creates and forks no longer leave VMs behind in microsandbox:
+  - Removing a VM whose start just failed waits for microsandbox to let go of it, for up to
+    about 15 seconds, and stops it by force first, as `msb remove --force` does. Before,
+    microsandbox could refuse because the failed VM's own cleanup was still running, and keep
+    a half-made record.
+  - `studio doctor` and Settings have a new **Leftover VMs** check. It lists the VMs
+    microsandbox keeps under Studio's names that no sandbox uses, with the `msb remove --force`
+    command that removes them. Studio doesn't remove them itself: after its data was reset or
+    restored from an older copy, one may hold work no record knows about.
+  - On a Mac, such a VM that microsandbox still counts as running stops it from moving any
+    other sandbox's disks ("cannot exclude a writer in sandbox …"). The **Sandbox storage**
+    check and **Move disks** now name that VM and say to remove it first.
+- On a Mac, Studio moves the disks microsandbox 0.7.15 won't start until they are moved.
+  Before, a rebase, start or fork failed with "legacy storage requires explicit maintenance
+  recovery", and only `msb self repair` in a terminal got the sandbox going again:
+  - Home and Computers show a notice while sandboxes, teammates' browsers or Studio's own VMs
+    are in the old layout.
+  - **Move disks** stops them, has microsandbox move their disks (it keeps the originals), and
+    starts again the sandboxes that ran. You confirm first that no older Studio or msb still
+    runs.
+  - Start, rebase and fork refuse such a sandbox before they stop anything, and say why.
+  - This is tested only against Studio's test runtime, since only a Mac's microsandbox does
+    this. Feedback from a Mac with such sandboxes is welcome.
+- Finding your way around is new:
+  - The sidebar lists each teammate's threads under it: every one that runs, waits or works in
+    a terminal (marked `>_`), then the two latest others, then "All N threads". On hover a
+    teammate shows `>_` (a terminal on the computer last used for it) and + (Start work).
+  - **Your computers** lists the computers without a teammate. **Environment** has Computers,
+    Network, Secrets, Memory and Activity.
+  - **Environment › Computers** lists every computer, with forks under their base, their state,
+    who uses each, what runs on it, its disk and when it was last used. All, Running, Yours and
+    Bases filter the list.
+  - Search (⌘K or Ctrl+K) finds teammates, threads, computers, pages, settings sections, actions
+    and what waits for you. Starting with `/`
+    searches the files of the computer in view and opens the one you pick in Files.
+  - A row of breadcrumbs above every page says where you are: a teammate › its thread, with a
+    chip for the computer it shows, or Environment, Settings or Computers › a page. Each part
+    with a caret opens its neighbours. The chip switches the computer, with forks under their
+    base. The screen's own computer switcher is gone.
+  - The splits between the conversation and the screen, and beside the lists, drag. A
+    double-click resets them.
+  - A computer's ⋯ menu is shorter, and its details moved to a **Details** tab.
+  - **Changes** comes in sections, with **Pushed** for the last day's pushes. Each push shows
+    its pull request's number, whether it is open, merged or closed, its checks and its
+    comment count, kept up to date.
+  - A teammate's settings are a page of their own.
+  - On a phone, the approvals are a button in the breadcrumb row, beside Search, instead of a
+    pill over the composer.
+- A teammate's page has three states:
+  - Its **home** takes the page. First comes the **Now** card: what waits for you, what the
+    teammate is working on and what keeps it from working, with Start work. Then the threads,
+    newest first, and its computers as cards with Terminal, Browser and Files. On a phone the
+    first two computers show, then "All N computers".
+  - Its **desk** opens a computer with the home narrowed to a panel beside it.
+  - A **thread** has the conversation on the left and the screen on the right.
+  - The rim between the home and the screen drags all the way: from the folded rail to the
+    desk and on to a full-page screen.
+  - The page has no header of its own: the teammate's name is in the breadcrumbs, whose menu
+    has Profile, Threads and Settings.
+- **Start work** asks how a teammate should work: in a chat, with its agent in a terminal you
+  can type along in, or just on the computer; and on which of its computers, or in a fresh
+  fork. **Bring X in**, on the desk, starts a chat on the computer shown, with the terminal's
+  last lines and the uncommitted changes as context unless you untick them.
+- **Review** on a push or pull request card opens it on its computer's Changes tab. The review
+  sheet that opened over the page is gone.
+- The approval cards no longer cover a composer's Send button: they sit just above the
+  composer and move up as a draft grows.
+- Comments you leave on a waiting push without deciding it now reach any agent in its sandbox,
+  also one you started by hand in a terminal. They show in `git_push_status`, in
+  `approval_status`, in `studio wait`, which returns when new comments arrive, and in the next
+  chat prompt. Before, they only lived in the open page.
+- **Send to** also lists terminals where you started an agent by hand, such as opencode. Studio
+  types the comments in only while that agent still runs there, and says so if it has left.
+- On a Mac, scrolling over a teammate's browser while you drive it no longer makes the whole
+  page rubber-band.
+
 ## v0.23.0 — 2026-11-14
 
 - Studio uses microsandbox 0.7.15, which fixes three security advisories (GHSA-3f94,

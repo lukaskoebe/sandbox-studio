@@ -2,12 +2,10 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { GitBranchIcon } from "@phosphor-icons/react"
 import {
   GitReview,
-  gitReviewDescription,
+  GitReviewHead,
   isGitApproval,
 } from "@/components/git-review"
-import { KindChip } from "@/components/kind-chip"
 import { PageHeader } from "@/components/page-header"
-import { StatusDot } from "@/components/status-dot"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -21,23 +19,15 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, errorStatus } from "@/lib/api/client"
 import { useClaimApprovals } from "@/lib/approval-claims"
-import { approvalKind, gitSummary } from "@/lib/approval-kinds"
-import { formatAge } from "@/lib/utils"
+import { approvalKind } from "@/lib/approval-kinds"
 
 export const Route = createFileRoute("/e/$env/git/reviews/$id")({
   component: GitReviewPage,
 })
 
-/** What a decided push or pull request came to, in one sentence. */
-const decided: Record<string, string> = {
-  approved: "This was approved.",
-  denied: "This was rejected.",
-  dismissed: "This was ignored.",
-}
-
 /**
  * One git push or pull request review as a page of its own, so it can be linked to: the same
- * review as the sheet the approval card opens.
+ * review as its computer's Changes tab shows, kept for decided pushes and computers that are gone.
  */
 function GitReviewPage() {
   const { env, id } = Route.useParams()
@@ -92,35 +82,7 @@ function GitReviewPage() {
             </Empty>
           ) : (
             <>
-              <div className="grid gap-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <KindChip area={kind.area} icon={kind.icon}>
-                    {kind.title}
-                  </KindChip>
-                  {a.status === "pending" && <StatusDot status="waiting" />}
-                  <span className="text-muted-foreground">
-                    {formatAge(a.createdAt)}
-                  </span>
-                </div>
-                <h2 className="text-sm font-medium break-words">
-                  {gitSummary(a)}
-                </h2>
-                {a.status === "pending" && (
-                  <p className="text-muted-foreground">
-                    {gitReviewDescription(a)}
-                  </p>
-                )}
-              </div>
-              {a.status !== "pending" && (
-                <p
-                  role="status"
-                  className="rounded-md border border-dashed px-3 py-2.5 font-medium"
-                >
-                  {a.git?.push.state === "failed" && !a.git.pullRequest
-                    ? "This was approved, but the push failed; why is below."
-                    : `${decided[a.status] ?? `This is ${a.status}.`} Nothing is left to decide; the outcome is below.`}
-                </p>
-              )}
+              <GitReviewHead approval={a} />
               <GitReview key={a.id} approval={a} />
             </>
           )}

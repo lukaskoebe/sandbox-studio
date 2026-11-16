@@ -31,6 +31,9 @@ type schemaLeaf struct {
 // a sound copy of the first page) and as one without otherwise. Call it on a copy: it changes
 // the file.
 func rebuildFirstPage(path string, wal bool) error {
+	if err := guard(path); err != nil {
+		return err
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err

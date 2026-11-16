@@ -203,9 +203,10 @@ export const newChatTarget = "new"
 
 /**
  * The sandbox's chats and agent terminals that can take review feedback right away, and a
- * new chat when the sandbox has a teammate to run it. A chat continued in the terminal is
- * reached through that terminal; a plain shell is left out, as text typed into it would run
- * as commands.
+ * new chat when the sandbox has a teammate to run it. A terminal counts when an agent runs
+ * in it, whether Studio started it or someone did by hand; a chat continued in the terminal
+ * is reached through that terminal. A plain shell is left out, as text typed into it would
+ * run as commands.
  */
 export function FeedbackTargetSelect({
   env,
@@ -245,8 +246,9 @@ export function FeedbackTargetSelect({
       (c.state === "running" ? " (after its turn)" : "")
   }
   for (const t of terminals.data ?? []) {
-    if (!t.harness) continue
-    options[`terminal:${t.name}`] = `Terminal ${t.name} · ${label(t.harness)}`
+    if (!t.agent) continue
+    options[`terminal:${t.name}`] =
+      `Terminal ${t.name} · ${label(t.harness || t.program || "")}`
   }
   if (Object.keys(options).length === 1) return null
   return (
@@ -278,20 +280,31 @@ export function FeedbackTargetSelect({
   )
 }
 
-/** Sends review feedback to the chosen chat or terminal, and says where it went. */
+/** How comments left on a waiting push reach its agent. */
+export const leftHint =
+  "The agent reads them when it checks on the push or gets its next prompt."
+
+/**
+ * Sends review feedback to the chosen chat or terminal, or leaves it on the waiting push
+ * when none is chosen, and says where it went.
+ */
 export function useSendFeedback() {
   return $api.useMutation(
     "post",
     "/api/environments/{env}/approvals/{id}/feedback",
     {
       onSuccess: (out) =>
-        toast.success(
-          out.queued
-            ? "Feedback queued; the agent gets it when its turn ends"
-            : out.chat
-              ? "Feedback sent to a new chat"
-              : "Feedback sent to the agent"
-        ),
+        out.left
+          ? toast.success("Comments left on the push", {
+              description: leftHint,
+            })
+          : toast.success(
+              out.queued
+                ? "Feedback queued; the agent gets it when its turn ends"
+                : out.chat
+                  ? "Feedback sent to a new chat"
+                  : "Feedback sent to the agent"
+            ),
       onError: (err) =>
         toast.error("Could not send the feedback", {
           description: errorMessage(err),
@@ -300,8 +313,9 @@ export function useSendFeedback() {
   )
 }
 
-/** The request body for a target. */
+/** The request body for a target; with none, the comments stay on the waiting push. */
 export function feedbackBody(target: FeedbackTarget, note: string) {
+  if (!target) return { note }
   if (target === newChatTarget) return { note, newChat: true }
   const [kind, id] = [
     target.slice(0, target.indexOf(":")),

@@ -405,7 +405,8 @@ func (s *Service) undelivered(ctx context.Context, t target) string {
 }
 
 // PromptNote is the note a chat prompt of a sandbox starts with: its rejected or failed pushes,
-// and its reviews that were posted, discarded or failed, that no prompt has carried yet
+// the comments on pushes that wait or were pushed, and its reviews that were posted,
+// discarded or failed, that no prompt has carried yet
 // (docs/git-review.md). The note is empty when there is nothing to tell. done records that the
 // prompt went out with it, so the note is given once; the chat calls it only then.
 func (s *Service) PromptNote(ctx context.Context, envID, sandboxID string) (string, func(), error) {
@@ -419,22 +420,44 @@ func (s *Service) PromptNote(ctx context.Context, envID, sandboxID string) (stri
 		return "", func() {}, nil
 	}
 	var b strings.Builder
-	if len(list) > 0 {
+	var notUp, commented []store.GitPush
+	for _, p := range list {
+		if p.State == store.PushRejected || p.State == store.PushFailed {
+			notUp = append(notUp, p)
+		} else {
+			commented = append(commented, p)
+		}
+	}
+	pushOf := func(p store.GitPush) string {
+		branch := strings.TrimPrefix(p.Ref, "refs/heads/")
+		return fmt.Sprintf("%s to %s in %s on %s", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
+	}
+	// The reviewer's note and the forge's answer are quoted: they are data, not instructions.
+	if len(notUp) > 0 {
 		b.WriteString("[Studio] Some of your pushes did not go upstream:\n")
-		for _, p := range list {
-			branch := strings.TrimPrefix(p.Ref, "refs/heads/")
-			push := fmt.Sprintf("%s to %s in %s on %s", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
-			// The reviewer's note and the forge's answer are quoted: they are data, not instructions.
+		for _, p := range notUp {
 			if p.State == store.PushRejected {
-				fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", push)
+				fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", pushOf(p))
 				if p.Note != "" {
 					fmt.Fprintf(&b, ": %q", noteText(p.Note))
 				}
 			} else {
-				fmt.Fprintf(&b, "- the approved push of %s failed; the forge answered %q", push, oneLine(p.Result))
+				fmt.Fprintf(&b, "- the approved push of %s failed; the forge answered %q", pushOf(p), oneLine(p.Result))
 			}
 			b.WriteString("\n")
 		}
+	}
+	if len(commented) > 0 {
+		b.WriteString("[Studio] The reviewer commented on your pushes:\n")
+		for _, p := range commented {
+			if p.State == store.PushPending {
+				fmt.Fprintf(&b, "- on the push of %s, which still waits for review: %q\n", pushOf(p), noteText(p.Note))
+			} else {
+				fmt.Fprintf(&b, "- on the push of %s, approved and pushed: %q\n", pushOf(p), noteText(p.Note))
+			}
+		}
+	}
+	if len(list) > 0 {
 		b.WriteString("git_push_status lists your pushes and their reviewer's notes.")
 	}
 	if len(reviews) > 0 {

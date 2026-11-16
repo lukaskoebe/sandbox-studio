@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   ArrowLineLeftIcon,
@@ -32,9 +33,14 @@ import { isGitApproval } from "@/components/git-review"
 import { ComposerDock } from "@/components/chat/chat-thread"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { ModelPicker } from "@/components/chat/model-picker"
-import { TeammateHeader } from "@/components/teammate/header"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
-import { TeammateAvatar } from "@/components/teammate-avatar"
+import {
+  activityDetail,
+  presenceLabels,
+  useActivity,
+} from "@/hooks/use-teammate-presence"
+import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
+import { Readiness } from "@/components/teammate-readiness"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -42,14 +48,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
-  MessageScrollerItem,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from "@/components/ui/message-scroller"
 import { Spinner } from "@/components/ui/spinner"
 import {
   $api,
@@ -197,9 +195,11 @@ function useAgentTerminals(env: string, computers: Sandbox[]) {
 }
 
 /**
- * The home with the page to itself: its threads as cards by day, what it learned, its tasks
- * and terminal work between them, what waits for you at the end, and a composer that starts a
- * new thread; beside them its computers, each one click from its terminal, browser and files.
+ * The home with the page to itself (docs/design/teammate-computer.md). It opens with what the
+ * teammate does now: what waits for you, what runs, and Start work. Below are its threads as
+ * cards by day, newest first, with what it learned and its tasks between them, and its
+ * computers, each one click from its terminal, browser and files: beside the threads on a wide
+ * page, above them on a narrow one. The composer at the bottom starts a new thread.
  */
 function FullHome({
   env,
@@ -291,7 +291,7 @@ function FullHome({
             },
           ]
     ),
-  ].sort((a, b) => a.at.localeCompare(b.at))
+  ].sort((a, b) => b.at.localeCompare(a.at))
 
   const rows: ReactNode[] = []
   let day = ""
@@ -318,116 +318,263 @@ function FullHome({
 
   return (
     <div className="@container flex min-h-0 flex-1 flex-col">
-      <TeammateHeader
-        env={env}
-        teammate={teammate}
-        onProfile={onProfile}
-        onStartWork={onStartWork}
-      />
-      <div className="shrink-0 px-4 pb-2 @4xl:hidden">{cards}</div>
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
-            <MessageScroller className="min-h-0 flex-1">
-              <MessageScrollerViewport
-                aria-label={`Threads with ${teammate.name}`}
-              >
-                <MessageScrollerContent className="mx-auto w-full max-w-2xl gap-2.5 px-4 pt-2 pb-4">
-                  {timeline.isPending && (
-                    <MessageScrollerItem className="m-auto">
-                      <Spinner />
-                    </MessageScrollerItem>
-                  )}
-                  {timeline.error && (
-                    <MessageScrollerItem>
-                      <p role="alert" className="text-xs text-destructive">
-                        {errorMessage(timeline.error)}
-                      </p>
-                    </MessageScrollerItem>
-                  )}
-                  {empty && (
-                    <MessageScrollerItem className="m-auto grid max-w-xs justify-items-center gap-2 text-center">
-                      <TeammateAvatar
-                        name={teammate.name}
-                        avatar={teammate.avatar}
-                        className="size-11 text-base"
-                      />
-                      <p className="text-sm font-medium">
-                        This is where you and {teammate.name} talk.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {computer
-                          ? `Ask ${teammate.name} something and it starts a thread here.`
-                          : `Give ${teammate.name} a computer, then ask it something: each request starts a thread here.`}
-                      </p>
-                    </MessageScrollerItem>
-                  )}
-                  {hidden > 0 && (
-                    <MessageScrollerItem className="flex justify-center">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="text-muted-foreground"
-                        onClick={() => setOlder(true)}
-                      >
-                        {hidden} earlier {hidden === 1 ? "thread" : "threads"}
-                      </Button>
-                    </MessageScrollerItem>
-                  )}
-                  {rows.map((row, i) => (
-                    <MessageScrollerItem key={i}>{row}</MessageScrollerItem>
-                  ))}
-                  {inTerminals.map((t) => (
-                    <MessageScrollerItem key={`${t.sandboxId}-${t.name}`}>
-                      <TerminalCard
-                        teammate={teammate}
-                        terminal={t}
-                        computer={computers.find((c) => c.id === t.sandboxId)}
-                        onOpen={(c) => onOpenComputer(c, "terminal", t.name)}
-                      />
-                    </MessageScrollerItem>
-                  ))}
-                  {browsing && (
-                    <MessageScrollerItem>
-                      <BrowsingCard
-                        env={env}
-                        teammate={id}
-                        name={teammate.name}
-                        waiting={browserWaiting}
-                        watching={watching}
-                        onWatch={onWatch}
-                      />
-                    </MessageScrollerItem>
-                  )}
-                  {shownWaiting.length > 0 && (
-                    <MessageScrollerItem>
-                      <Waiting
-                        env={env}
-                        approvals={shownWaiting}
-                        onReview={onReview}
-                      />
-                    </MessageScrollerItem>
-                  )}
-                </MessageScrollerContent>
-              </MessageScrollerViewport>
-              <MessageScrollerButton />
-            </MessageScroller>
-          </MessageScrollerProvider>
-          <NewThread
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 pt-4 pb-6">
+          <NowCard
             env={env}
             teammate={teammate}
-            computer={computer}
+            chats={chats}
             computers={computers}
+            waiting={shownWaiting}
+            terminals={inTerminals}
+            browsing={!!browsing}
+            browserWaiting={browserWaiting}
+            watching={watching}
             onThread={onThread}
+            onReview={onReview}
+            onWatch={onWatch}
+            onStartWork={onStartWork}
+            onOpenComputer={onOpenComputer}
           />
+          <div className="grid items-start gap-4 @4xl:grid-cols-[minmax(0,1fr)_17rem] @4xl:gap-6">
+            <aside
+              aria-label={`${teammate.name}'s computers`}
+              className="min-w-0 @4xl:col-start-2 @4xl:row-start-1"
+            >
+              {cards}
+            </aside>
+            <section
+              aria-label={`Threads with ${teammate.name}`}
+              className="grid min-w-0 gap-2.5 @4xl:col-start-1 @4xl:row-start-1"
+            >
+              {timeline.isPending && <Spinner className="mx-auto my-6" />}
+              {timeline.error && (
+                <p role="alert" className="text-xs text-destructive">
+                  {errorMessage(timeline.error)}
+                </p>
+              )}
+              {empty && (
+                <div className="mx-auto grid max-w-xs justify-items-center gap-2 py-6 text-center">
+                  <ChatCircleIcon className="size-6 text-muted-foreground" />
+                  <p className="text-sm font-medium">
+                    This is where you and {teammate.name} talk.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {computer
+                      ? `Ask ${teammate.name} something and it starts a thread here.`
+                      : `Give ${teammate.name} a computer, then ask it something: each request starts a thread here.`}
+                  </p>
+                </div>
+              )}
+              {rows}
+              {hidden > 0 && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="justify-self-center text-muted-foreground"
+                  onClick={() => setOlder(true)}
+                >
+                  {hidden} earlier {hidden === 1 ? "thread" : "threads"}
+                </Button>
+              )}
+            </section>
+          </div>
         </div>
-        <aside
-          aria-label={`${teammate.name}'s computers`}
-          className="hidden w-72 shrink-0 overflow-y-auto border-l px-3 py-1 @4xl:block"
-        >
-          {cards}
-        </aside>
       </div>
+      <NewThread
+        env={env}
+        teammate={teammate}
+        computer={computer}
+        computers={computers}
+        onThread={onThread}
+      />
+    </div>
+  )
+}
+
+/**
+ * The top of the teammate's home: what it does now. What waits for you comes first, each with
+ * the button that answers it, then what runs: its threads at work, its agents in terminals and
+ * its browser. With nothing alive it is one line, its status beside Start work.
+ */
+function NowCard({
+  env,
+  teammate,
+  chats,
+  computers,
+  waiting,
+  terminals,
+  browsing,
+  browserWaiting,
+  watching,
+  onThread,
+  onReview,
+  onWatch,
+  onStartWork,
+  onOpenComputer,
+}: {
+  env: string
+  teammate: Teammate
+  chats: Chat[]
+  computers: Sandbox[]
+  waiting: Approval[]
+  terminals: AgentTerminal[]
+  browsing: boolean
+  browserWaiting: boolean
+  watching: boolean
+  onThread: (chat: Chat) => void
+  onReview: (a: Approval) => void
+  onWatch: () => void
+  onStartWork: () => void
+  onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
+}) {
+  const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
+    params: { path: { env } },
+  })
+  const activity = useActivity(env)(teammate.id)
+  const running = chats.filter((c) => c.state === "running")
+  const where = (id?: string | null) =>
+    computers.length > 1 ? computers.find((c) => c.id === id)?.name : undefined
+  const rows = [
+    ...running.map((c) => (
+      <NowRow
+        key={c.id}
+        lead={<ThreadDot status="working" />}
+        title={chatTitle(c)}
+        meta={["working", where(c.sandboxId)].filter(Boolean).join(" on ")}
+        onOpen={() => onThread(c)}
+      />
+    )),
+    ...terminals.flatMap((t) => {
+      const c = computers.find((x) => x.id === t.sandboxId)
+      if (!c) return []
+      return [
+        <NowRow
+          key={`${t.sandboxId}-${t.name}`}
+          lead={<ThreadDot status="terminal" />}
+          title={t.title || `${teammate.name} in a terminal`}
+          meta={`${t.state === "working" ? "working" : "in the terminal"} on ${c.name}`}
+          onOpen={() => onOpenComputer(c, "terminal", t.name)}
+        />,
+      ]
+    }),
+  ]
+  const alive = rows.length > 0 || browsing
+  const presence = waiting.length > 0 ? "waiting" : activity.presence
+  // What it does is in the rows below while there are any; otherwise the status line says it.
+  const detail = alive ? undefined : activityDetail(activity)
+  const last = chats.reduce<string | undefined>(
+    (m, c) => (!m || c.updatedAt > m ? c.updatedAt : m),
+    undefined
+  )
+  const since =
+    presence === "idle" &&
+    last &&
+    new Date(last).toDateString() === new Date().toDateString()
+      ? ` since ${time(last)}`
+      : ""
+  const terminal = activity.terminal
+  const status =
+    waiting.length > 0
+      ? `Waiting for you · ${waiting.length}`
+      : `${presenceLabels[presence]}${since}`
+  return (
+    <section
+      aria-label={`${teammate.name} now`}
+      className={cn(
+        "grid gap-2 rounded-xl border bg-card px-3.5 py-3 shadow-xs",
+        presence === "waiting"
+          ? "border-l-3 border-l-(--st-waiting)"
+          : alive && "border-l-3 border-l-(--st-running)"
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        <PresenceDot
+          presence={presence}
+          busy={activity.terminal?.state === "busy"}
+        />
+        <h2 className="min-w-0 flex-1 text-sm font-medium break-words">
+          {status}
+          {waiting.length === 0 && detail && (
+            <span className="font-normal text-muted-foreground">
+              {" · "}
+              {terminal ? (
+                <Link
+                  to="/e/$env/teammates/$id"
+                  params={{ env, id: teammate.id }}
+                  search={(prev) => ({
+                    ...prev,
+                    tab: "terminal" as const,
+                    term: terminal.name,
+                    computer: terminal.sandboxId,
+                  })}
+                  className="text-foreground underline-offset-2 hover:underline"
+                >
+                  {detail}
+                </Link>
+              ) : (
+                detail
+              )}
+            </span>
+          )}
+        </h2>
+        <Readiness
+          teammate={teammate}
+          provider={providers.data?.find((p) => p.id === teammate.providerId)}
+          problemsOnly
+        />
+        <Button size="sm" onClick={onStartWork}>
+          <PlusIcon />
+          Start work
+        </Button>
+      </div>
+      {waiting.length > 0 && (
+        <Waiting env={env} approvals={waiting} onReview={onReview} inCard />
+      )}
+      {waiting.length > 0 && alive && <hr className="border-border" />}
+      {rows}
+      {browsing && (
+        <BrowsingCard
+          env={env}
+          teammate={teammate.id}
+          name={teammate.name}
+          waiting={browserWaiting}
+          watching={watching}
+          onWatch={onWatch}
+          className="ml-0"
+        />
+      )}
+    </section>
+  )
+}
+
+/** One thing that runs, on the Now card: its thread, or its agent in a terminal. */
+function NowRow({
+  lead,
+  title,
+  meta,
+  onOpen,
+}: {
+  lead: ReactNode
+  title: string
+  meta: string
+  onOpen: () => void
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="flex w-3.5 shrink-0 justify-center">{lead}</span>
+      <span className="min-w-0 flex-1 truncate text-sm">{title}</span>
+      <span className="max-w-[40%] shrink-0 truncate text-xs text-muted-foreground">
+        {meta}
+      </span>
+      <Button
+        size="xs"
+        variant="outline"
+        aria-label={`Open ${title}`}
+        onClick={onOpen}
+      >
+        Open
+      </Button>
     </div>
   )
 }
@@ -469,7 +616,8 @@ export function ThreadDot({
 
 /**
  * The teammate's computers, as cards with what happens on each and one click into its
- * terminal, browser or files; or, while it has none, the offer to give it one.
+ * terminal, browser or files; or, while it has none, the offer to give it one. On a narrow page
+ * the first two show, then "All N computers".
  */
 function ComputerCards({
   env,
@@ -487,6 +635,7 @@ function ComputerCards({
   onOpen: (c: Sandbox, tab?: ScreenTab) => void
 }) {
   const [giving, setGiving] = useState(false)
+  const [all, setAll] = useState(false)
   const pending = usePendingApprovals()
   const give = (
     <CreateSandboxDialog
@@ -501,7 +650,7 @@ function ComputerCards({
     return (
       <section
         aria-label={`${teammate.name}'s computer`}
-        className="my-2 grid justify-items-start gap-2 rounded-xl border border-dashed px-3.5 py-3"
+        className="grid justify-items-start gap-2 rounded-xl border border-dashed px-3.5 py-3"
       >
         <p className="text-sm font-medium">
           {teammate.name} has no computer yet
@@ -519,11 +668,11 @@ function ComputerCards({
   const asks = (pending.data ?? []).filter((a) => a.environmentId === env)
   const byName = new Map(computers.map((c) => [c.id, c.name]))
   return (
-    <div className="flex gap-2 overflow-x-auto py-2 @4xl:grid @4xl:overflow-visible">
-      <span className="hidden section-label text-muted-foreground @4xl:block">
+    <div className="grid gap-2">
+      <span className="section-label text-muted-foreground">
         {teammate.name}'s computers
       </span>
-      {computers.map((c) => {
+      {computers.map((c, i) => {
         const p = phase(c)
         const here = chats
           .filter((x) => x.sandboxId === c.id)
@@ -540,7 +689,10 @@ function ComputerCards({
           <div
             key={c.id}
             data-testid="computer-card"
-            className="grid w-60 shrink-0 gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-xs @4xl:w-auto"
+            className={cn(
+              "grid min-w-0 gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-xs",
+              i >= foldedCards && !all && "hidden @4xl:grid"
+            )}
           >
             <span className="flex min-w-0 items-center gap-2">
               <StatusDot {...phaseDot(p)} compact />
@@ -552,11 +704,11 @@ function ComputerCards({
                 {phaseDot(p).label}
               </span>
             </span>
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
               {shown && status ? (
                 <>
-                  <ThreadDot status={status} />
-                  <span className="truncate">
+                  <ThreadDot status={status} className="mt-1" />
+                  <span className="line-clamp-2 break-words">
                     {chatTitle(shown)}
                     {status === "working"
                       ? " is running here"
@@ -574,7 +726,7 @@ function ComputerCards({
                 <span>No thread here yet</span>
               )}
             </span>
-            <span className="flex gap-1">
+            <span className="flex flex-wrap gap-1">
               {(
                 [
                   ["terminal", TerminalWindowIcon, "Terminal"],
@@ -597,53 +749,31 @@ function ComputerCards({
           </div>
         )
       })}
-      <Button
-        size="xs"
-        variant="ghost"
-        className="shrink-0 self-center justify-self-start text-muted-foreground"
+      {computers.length > foldedCards && !all && (
+        <Button
+          size="xs"
+          variant="ghost"
+          className="justify-self-start text-muted-foreground @4xl:hidden"
+          onClick={() => setAll(true)}
+        >
+          All {computers.length} computers
+        </Button>
+      )}
+      <button
+        type="button"
         onClick={() => setGiving(true)}
+        className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-xs text-muted-foreground outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
       >
-        <PlusIcon />
+        <PlusIcon className="size-3.5" />
         Give {teammate.name} another computer
-      </Button>
+      </button>
       {give}
     </div>
   )
 }
 
-/** The teammate's agent in a terminal with no chat, which opens on its computer's terminal. */
-function TerminalCard({
-  teammate,
-  terminal: t,
-  computer,
-  onOpen,
-}: {
-  teammate: Teammate
-  terminal: AgentTerminal
-  computer?: Sandbox
-  onOpen: (c: Sandbox) => void
-}) {
-  if (!computer) return null
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(computer)}
-      className="@container/card flex w-full min-w-0 items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-left shadow-xs outline-none hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring/40"
-    >
-      <ThreadDot status="terminal" />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-        {t.title || `${teammate.name} in a terminal`}
-      </span>
-      <span className="max-w-[45%] shrink-0 truncate rounded-full border px-2 font-mono text-caption text-muted-foreground">
-        on {computer.name}
-      </span>
-      {/* On a phone the title comes first; the icon says it is a terminal. */}
-      <span className="shrink-0 text-xs text-muted-foreground @max-[26rem]/card:hidden">
-        {t.state === "working" ? "working" : "in the terminal"}
-      </span>
-    </button>
-  )
-}
+/** How many computer cards a narrow home shows before "All N computers". */
+const foldedCards = 2
 
 /** How many threads the desk lists before "All threads". */
 const deskThreads = 8
@@ -1186,16 +1316,19 @@ function Waiting({
   env,
   approvals,
   onReview,
+  inCard,
 }: {
   env: string
   approvals: Approval[]
   onReview: (a: Approval) => void
+  /** On the home's Now card, whose status line says that they wait: rows without a frame. */
+  inCard?: boolean
 }) {
   useClaimApprovals(approvals.map((a) => a.id))
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
   const envs = $api.useQuery("get", "/api/environments")
-  const { sheet, review } = useApprovalReview(approvals)
+  const { sheet, review } = useApprovalReview()
   const cards = approvalCards(approvals, split)
   const toggle = (key: string) =>
     setOpen((prev) => {
@@ -1204,11 +1337,16 @@ function Waiting({
       return next
     })
   return (
-    <section aria-label="Waiting for you" className="grid gap-2 pt-3">
-      <span className="flex items-center gap-2 section-label text-(--st-waiting)">
-        <span className="size-1.5 rounded-full bg-(--st-waiting)" />
-        Waiting for you
-      </span>
+    <section
+      aria-label="Waiting for you"
+      className={cn("grid gap-2", !inCard && "pt-3")}
+    >
+      {!inCard && (
+        <span className="flex items-center gap-2 section-label text-(--st-waiting)">
+          <span className="size-1.5 rounded-full bg-(--st-waiting)" />
+          Waiting for you
+        </span>
+      )}
       {cards.map((card) => {
         const a = cardApproval(card)
         if (!open.has(a.id))
@@ -1216,6 +1354,7 @@ function Waiting({
             <WaitingRow
               key={a.id}
               card={card}
+              inCard={inCard}
               onOpen={() =>
                 isGitApproval(a)
                   ? onReview(a)
@@ -1231,7 +1370,7 @@ function Waiting({
               cards={[card]}
               max={1}
               envName={() => envs.data?.find((e) => e.id === env)?.name}
-              onReview={review}
+              onReview={(r) => (isGitApproval(r) ? onReview(r) : review(r))}
               onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
             />
             <button
@@ -1252,9 +1391,11 @@ function Waiting({
 /** One thing waiting, folded to a line, with the button that answers or reviews it. */
 function WaitingRow({
   card,
+  inCard,
   onOpen,
 }: {
   card: ApprovalCard
+  inCard?: boolean
   onOpen: () => void
 }) {
   const a = cardApproval(card)
@@ -1275,7 +1416,10 @@ function WaitingRow({
   return (
     <div
       data-testid="waiting-row"
-      className="flex items-center gap-3 rounded-2xl border bg-card py-2.5 pr-2.5 pl-3"
+      className={cn(
+        "flex items-center gap-3",
+        !inCard && "rounded-2xl border bg-card py-2.5 pr-2.5 pl-3"
+      )}
     >
       <span
         className={cn(
@@ -1448,7 +1592,7 @@ function NewThread({
   )
 
   return (
-    <ComposerDock className="@container/composer max-w-2xl">
+    <ComposerDock className="@container/composer max-w-5xl">
       <Composer
         onSend={send}
         error={problem}

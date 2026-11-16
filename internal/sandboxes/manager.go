@@ -79,12 +79,17 @@ type Manager struct {
 	// DisksEvery is how often WatchDisks asks the guests how full their disks are; 0 is a
 	// minute.
 	DisksEvery time.Duration
+	// StorageEvery is how long views trust what msb last said of the layout of the VMs' disks;
+	// 0 is 30 seconds. A move, or a start refused for the layout, asks again at once.
+	StorageEvery time.Duration
 
 	opsMu sync.Mutex
 	ops   map[string]*operation // sandbox ID → its create or fork; see progress.go
 	// copySlot lets one rebase or disk resize copy at a time; see waitForCopy.
 	copySlotOnce sync.Once
 	copySlot     chan struct{}
+	// storage is the VMs whose disks msb has yet to move; see movedisks.go.
+	storage storageStates
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	autoFailed  sync.Map // sandbox ID → when its scheduled checkpoint last failed, see scheduledCheckpoint
@@ -147,6 +152,7 @@ type View struct {
 	BaseOutdated               bool              `json:"baseOutdated,omitempty" doc:"Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date"`
 	LowDisks                   []agentproto.Disk `json:"lowDisks,omitempty" doc:"The sandbox's disks that are nearly full, as its guest said within the last minute while a tab was open; absent when none is"`
 	Repairable                 bool              `json:"repairable,omitempty" doc:"With status absent: microsandbox lost the record of the sandbox's VM but its disks are still on hand, so repairSandboxVM can give it a new record and start it"`
+	OldDiskLayout              bool              `json:"oldDiskLayout,omitempty" doc:"microsandbox keeps the sandbox's disks in its layout from before 0.7.12 and won't start or copy the sandbox until moveSandboxDisks moves them; a running one runs as the older microsandbox started it"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -172,18 +178,25 @@ func VMName(sb store.Sandbox) string { return fmt.Sprintf("%s%s-g%d", VMPrefix, 
 
 // VMSandboxID is the sandbox a name of VMName's belongs to.
 func VMSandboxID(name string) (string, bool) {
+	id, _, ok := ParseVMName(name)
+	return id, ok
+}
+
+// ParseVMName splits a name of VMName's into its sandbox's id and its generation.
+func ParseVMName(name string) (id string, generation int, ok bool) {
 	rest, ok := strings.CutPrefix(name, VMPrefix)
 	if !ok {
-		return "", false
+		return "", 0, false
 	}
 	i := strings.LastIndex(rest, "-g")
 	if i <= 0 {
-		return "", false
+		return "", 0, false
 	}
-	if _, err := strconv.Atoi(rest[i+2:]); err != nil {
-		return "", false
+	generation, err := strconv.Atoi(rest[i+2:])
+	if err != nil {
+		return "", 0, false
 	}
-	return rest[:i], true
+	return rest[:i], generation, true
 }
 
 func vmNameAtGeneration(sb store.Sandbox, generation int) string {
@@ -481,6 +494,7 @@ func (m *Manager) removeFailedVM(ctx context.Context, rec store.Sandbox, cause e
 		err = m.Runtime.Remove(cleanupCtx, VMName(rec))
 	}
 	if err != nil {
+		m.Log.Error("could not remove the VM of a failed create or fork; deleting the sandbox tries again", "sandbox", rec.ID, "vm", VMName(rec), "err", err)
 		return errors.Join(cause, fmt.Errorf("removing the VM failed: %w", err))
 	}
 	return cause
@@ -619,6 +633,9 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 			}
 		}
 		return View{}, lifecycleError(LostVM)
+	}
+	if err := m.checkDisksMoved(ctx, rec); err != nil {
+		return View{}, err
 	}
 	rec, err = m.startVM(ctx, rec)
 	if err != nil {
@@ -862,6 +879,7 @@ func (m *Manager) withAgent(v View) View {
 	}
 	v = m.withProgress(v)
 	v.Repairable = m.repairable(v)
+	v.OldDiskLayout = m.oldDiskLayout(VMName(v.Sandbox))
 	return v
 }
 

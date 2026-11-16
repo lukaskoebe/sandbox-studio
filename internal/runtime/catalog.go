@@ -13,8 +13,9 @@ import (
 // fails until it is fixed.
 var ErrCatalog = errors.New("microsandbox's database can't be used")
 
-// RepairOnRestart is how to fix a damaged database.
-const RepairOnRestart = "Restart Studio: it moves the damaged database aside, keeping it, and rebuilds it from what it can still read"
+// RepairOnRestart is how to fix a damaged database. msb can also report one that Studio's
+// process merely sees out of date; the restart checks the file before it moves anything.
+const RepairOnRestart = "Restart Studio: it checks the database, and if it is damaged moves it aside, keeping it, and rebuilds it from what it can still read"
 
 // CatalogError is an msb call that failed on msb's database, with how to fix that.
 type CatalogError struct {

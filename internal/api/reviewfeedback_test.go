@@ -36,10 +36,17 @@ func TestReviewFeedbackToANewChat(t *testing.T) {
 	}
 	envBase := testOrigin + "/api/environments/" + env.ID
 	url := envBase + "/approvals/" + a.ID + "/feedback"
-	for _, body := range []string{`{"note":"x"}`, `{"newChat":true,"chat":"c1"}`, `{"newChat":true,"terminal":"claude"}`} {
+	for _, body := range []string{`{"newChat":true,"chat":"c1"}`, `{"newChat":true,"terminal":"claude"}`} {
 		if rec := do(h, "POST", url, body); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
 		}
+	}
+	// With no chat or terminal, the comments stay on the waiting push for its agent to read.
+	if rec := do(h, "POST", url, `{"note":" rename x "}`); rec.Code != http.StatusOK || !decode[FeedbackOut](t, rec).Left {
+		t.Fatalf("leave comments: %d %s", rec.Code, rec.Body)
+	}
+	if p, err := s.Store.GitPushByApproval(ctx, env.ID, a.ID); err != nil || p.Note != "rename x" || p.State != store.PushPending {
+		t.Fatalf("push after leaving comments = %+v, %v", p, err)
 	}
 	rec := do(h, "POST", url, `{"newChat":true,"note":"Split the migration out."}`)
 	if rec.Code != http.StatusOK {

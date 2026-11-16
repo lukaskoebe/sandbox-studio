@@ -156,10 +156,28 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
     ten: every five minutes when it changed, and soon after a create, fork, rebase, disk resize
     or repair (`cmd/studio/runtime_host.go`, `msbdb.Backup`). The copy is taken from a snapshot
     of the database and its `-wal` (retried while either changes), never from msb's open files,
-    and kept only when SQLite's quick check passes.
+    and kept only when SQLite's quick check passes. A process of its own makes it (`studio
+    msb-backup`), as `studio msb-sandbox-id` reads msb's records for Repair. Once Studio's msb
+    library has the database open, Studio's process must not open its files at all, not even
+    to read them: closing any descriptor of a file drops all of the process's POSIX locks on
+    it, the library's SQLite locks with them. Then another msb process that closes the database
+    takes itself for its last user, checkpoints it and deletes the `-wal` and `-shm` under the
+    library. The library's later writes go to the deleted WAL, lost to everyone else, and its
+    reads can fail with "database disk image is malformed" while the file itself checks fine,
+    and a VM's runner, which can't see a new sandbox's record, fails with "insert run: FOREIGN
+    KEY constraint failed". v0.23.0 made these copies in Studio's process. Since then
+    `msbdb.Seal` marks the process before the library opens the catalog (`repairMSBDB`,
+    `checkMSBDB`, and in any case after the startup doctor), and every open, copy or rebuild of
+    msb.db, its `-wal` or its `-shm` by path or through a link then fails with
+    `msbdb.ErrSealed`; the copies beside them can still be read.
   - The `msb-vms` doctor check compares Studio's catalog with msb's VMs and fails for a sandbox
     whose VM msb doesn't know, saying which generations msb does know and whether the VM's
     disks are still in `$MSB_HOME/sandboxes/<vm>`.
+  - The `msb-leftovers` doctor check warns, the other way round, about VMs msb keeps under
+    Studio's names that no sandbox uses: one whose sandbox Studio has no record of, or an
+    older generation than the sandbox's (a newer one is a rebase or restore in flight). It
+    names `msb remove --force <vm>…` and is left out while Studio has no sandboxes at all. The
+    `msb-storage` check leaves such VMs to it, and says to remove them first.
   - `studio restore-msb-db` without a file lists the copy in place and every saved one
     (`.broken-*`, `.replaced-*`, `.backup-*`) with how many of the VMs Studio expects each knows,
     read from Studio's catalog read-only, and restores the one that knows most (the newest on a
@@ -190,8 +208,13 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   Studio VM's disks to its protected layout. On Linux and Windows msb moves them as a VM
   starts, so a VM still running as the older msb started it (`eligible`, running) only needs a
   restart; until then checkpoints fail with `runtime.ErrRestartToUpgrade` (409). On macOS
-  (`maintenance_required`) and for `recovery_required` the fix is `msb self repair --sandbox
-  <vm>` in a terminal, with the sandboxes stopped.
+  (`maintenance_required`) and for `recovery_required`, msb refuses to start or copy the VM.
+  Studio refuses such a start, rebase or fork itself, with `runtime.ErrMoveDisks`, before it
+  stops anything. **Move disks** (`sandboxes.Manager.MoveDisks`, `POST /api/system/move-disks`)
+  stops every VM of Studio's in the old layout, in every environment, calls `RecoverStorage`
+  with the person's word that no older writer runs, and starts again the sandboxes that ran;
+  `GET` on the same path lists what it would touch (docs/sandboxes.md, Disk layout). `msb self repair
+  --sandbox <vm>` in a terminal remains the fallback.
 - Startup (`cmd/studio/main.go`): data dir and its lock `studio.lock` (held: ask the running
   Studio for a login link with the control credential, open it and exit), a check of msb's own database
   (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent

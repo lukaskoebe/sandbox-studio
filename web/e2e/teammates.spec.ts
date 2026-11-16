@@ -1,4 +1,10 @@
-import { addTeammate, expect, sandboxName, test } from "./fixtures"
+import {
+  addTeammate,
+  expect,
+  sandboxName,
+  teammateMenu,
+  test,
+} from "./fixtures"
 
 test("a teammate is copied to another environment from its profile, and opens there without a provider", async ({
   page,
@@ -36,7 +42,7 @@ test("a teammate is copied to another environment from its profile, and opens th
   )
 
   await page.goto(`/e/${env}/teammates/${teammate!.id}`)
-  await page.getByRole("button", { name: `${name}'s profile` }).click()
+  await teammateMenu(page, name, "Profile")
   await page
     .getByRole("dialog", { name: `${name}'s profile` })
     .getByRole("button", { name: "Copy to environment…" })
@@ -50,10 +56,9 @@ test("a teammate is copied to another environment from its profile, and opens th
 
   await page.getByRole("button", { name: "Open", exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${target!.id}/teammates/[^/]+$`))
-  await expect(
-    page.getByRole("button", { name: `${name}'s profile` })
-  ).toBeVisible()
-  await expect(page.getByText("No provider", { exact: true })).toBeVisible()
+  await expect(page.getByRole("region", { name: `${name} now` })).toContainText(
+    "No provider"
+  )
 })
 
 // Without a provider there is no model to choose, so adding a teammate says so and leads to the
@@ -116,8 +121,8 @@ test("a teammate without a computer is offered one, the screen's menu forks it a
   await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
 })
 
-// A harness printing in a terminal counts as work, in the header and the sidebar; another
-// program there leaves the teammate idle, with the program beside it.
+// A harness printing in a terminal counts as work, on the home's Now card and in the sidebar;
+// another program there leaves the teammate idle, with the program beside it.
 test("a teammate's status counts what runs in its terminals", async ({
   page,
   api,
@@ -132,7 +137,7 @@ test("a teammate's status counts what runs in its terminals", async ({
     foreground: ["node", "/usr/local/bin/opencode"],
   })
   await page.goto(`/e/${env}/teammates/${id}`)
-  const header = page.locator("header").filter({ hasText: name })
+  const header = page.getByRole("region", { name: `${name} now` })
   const row = page
     .locator('[data-sidebar="sidebar"]')
     .getByRole("link", { name: new RegExp(name) })
@@ -152,7 +157,7 @@ test("a teammate's status counts what runs in its terminals", async ({
   )
   await expect(sessions.getByLabel("working")).toBeVisible()
 
-  // A dev server that printed long ago isn't work; the home's header says so.
+  // A dev server that printed long ago isn't work; the home's Now card says so.
   await api.setTerminal(sb, "2", {
     command: "npm",
     foreground: ["npm run dev"],

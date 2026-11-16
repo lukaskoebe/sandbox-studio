@@ -291,7 +291,7 @@ func validImageSourceID(id string) bool {
 func (r *Runtime) Start(ctx context.Context, name string) error {
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
-		return catalogError(err)
+		return moveError(catalogError(err))
 	}
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
@@ -300,7 +300,7 @@ func (r *Runtime) Start(ctx context.Context, name string) error {
 func (r *Runtime) StartForTransfer(ctx context.Context, name string) error {
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
-		return catalogError(err)
+		return moveError(catalogError(err))
 	}
 	return sb.Detach(ctx)
 }
@@ -437,15 +437,65 @@ func (r *Runtime) Resume(ctx context.Context, name string) error {
 }
 
 // Remove stops and deletes a sandbox and its owned disks. Missing sandboxes are fine.
+//
+// A VM whose start just failed can still be letting go of its sandbox when Remove runs: msb
+// then keeps the half-made record ("Sandbox creation or restore has not finished") and
+// refuses to remove it while the VM's process holds it. So a removal msb refuses because the
+// sandbox still runs is tried again for a while, killing the VM first, as `msb remove --force`
+// does; a record left behind would hold the disks and block msb self repair.
 func (r *Runtime) Remove(ctx context.Context, name string) error {
-	if err := r.stop(ctx, name, false); err != nil {
-		return catalogError(err)
+	err := r.stop(ctx, name, false)
+	for try := 0; ; try++ {
+		if err == nil {
+			err = msb.RemoveSandbox(ctx, name)
+			if err != nil && msb.IsKind(err, msb.ErrSandboxNotFound) {
+				return nil
+			}
+		}
+		if err == nil || !stillHeld(err) || try == len(removeBackoff) {
+			return catalogError(err)
+		}
+		select {
+		case <-ctx.Done():
+			return catalogError(errors.Join(err, ctx.Err()))
+		case <-time.After(removeBackoff[try]):
+		}
+		err = r.kill(ctx, name)
 	}
-	err := msb.RemoveSandbox(ctx, name)
-	if err != nil && msb.IsKind(err, msb.ErrSandboxNotFound) {
+}
+
+// removeBackoff is how long Remove waits before each new try on a sandbox msb still holds.
+var removeBackoff = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
+
+// stillHeld reports whether msb refused to stop or remove a sandbox because something still
+// holds it: its VM process, a start or a create that hasn't let go yet, or a busy catalog.
+func stillHeld(err error) bool {
+	if msb.IsKind(err, msb.ErrSandboxStillRunning) || msb.IsKind(err, msb.ErrSandboxStopTimedOut) || catalogBusy(err) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, held := range []string{"still running", "still owns", "startup cleanup pending", "may still be live", "status is running", "status is starting", "status is draining"} {
+		if strings.Contains(msg, held) {
+			return true
+		}
+	}
+	return false
+}
+
+// kill force-stops name unless msb has it stopped already.
+func (r *Runtime) kill(ctx context.Context, name string) error {
+	h, err := msb.GetSandbox(ctx, name)
+	if err != nil {
+		if msb.IsKind(err, msb.ErrSandboxNotFound) {
+			return nil
+		}
+		return err
+	}
+	switch statusOf(h.Status()) {
+	case StatusStopped, StatusCrashed, StatusCreated:
 		return nil
 	}
-	return catalogError(err)
+	return h.Kill(ctx, msb.WithKillTimeout(10*time.Second))
 }
 
 // Status returns the runtime state of name.

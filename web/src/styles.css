@@ -354,6 +354,13 @@
     :is([data-slot="sidebar-gap"], [data-slot="sidebar-container"]) {
     transition: none;
   }
+  html,
+  body {
+    /* The app's view doesn't scroll as a page: its parts scroll in themselves. Without this
+       Safari, and the desktop app on a Mac, bounce the whole view at every scroll that runs
+       past an end. */
+    overscroll-behavior: none;
+  }
   html {
     @apply font-sans;
   }

@@ -41,8 +41,10 @@ export type SearchChange = Partial<Record<keyof TeammateSearch, unknown>>
  * A teammate's page (docs/design/teammate-computer.md) is one layout in three states: its home,
  * with the computer folded to a rail at the right; its desk, the same home narrowed to a panel
  * beside the open computer, with no thread and no chat; and a thread, whose chat takes the
- * home's place while the computer side stays as it was. Either side folds to a rail. The
- * profile opens over the left side. Esc closes what is on top, then the thread.
+ * home's place while the computer side stays as it was. Either side folds to a rail, and the
+ * line between them drags all the way: to the screen's rail, to any split, to the screen taking
+ * the page. On phones the home has no rail: its computer cards open the screen. The profile
+ * opens over the left side. Esc closes what is on top, then the thread.
  */
 export function TeammatePage({
   env,
@@ -206,12 +208,18 @@ export function TeammatePage({
       const t = e.target as HTMLElement | null
       if (
         t?.closest(
-          "input, textarea, select, [contenteditable], .xterm, [role=dialog], [role=menu], [role=listbox]"
+          "input, textarea, select, [contenteditable], .xterm, [role=dialog], [role=menu]:not([data-closed]), [role=listbox]"
         ) &&
         !t.closest('[aria-label$="\'s profile"], [aria-label$="\'s settings"]')
       )
         return
-      if (document.querySelector("[data-open][role=dialog], [role=menu]"))
+      // A menu fading out after a pick stays in the page, with the focus, for its animation;
+      // it is closed already.
+      if (
+        document.querySelector(
+          "[data-open][role=dialog], [role=menu]:not([data-closed])"
+        )
+      )
         return
       if (search.profile) profile(undefined)
       else if (!wide && overlay) setOverlay(false)
@@ -225,20 +233,21 @@ export function TeammatePage({
   })
 
   // The conversation's share of the page beside the screen, kept in this browser; dragged past
-  // its minimum, the screen takes the page.
+  // its minimum, the screen takes the page, and past its maximum, the screen folds to its rail.
   const [box, boxWidth] = useElementWidth<HTMLDivElement>()
   const [threadShare, setThreadShare] = useStoredSize(
     "studio.conversation-share",
     conversationSplit.share
   )
-  // The desk's home is a narrower panel, with a share of its own.
+  // The desk's home is a narrower panel, with a share of its own: the home's, dragged out from
+  // the rail, is the desk's.
   const [deskShare, setDeskShare] = useStoredSize(
     "studio.desk-share",
     deskSplit.share
   )
-  const sizes = desk ? deskSplit : conversationSplit
-  const share = desk ? deskShare : threadShare
-  const setShare = desk ? setDeskShare : setThreadShare
+  const sizes = search.thread ? conversationSplit : deskSplit
+  const share = search.thread ? threadShare : deskShare
+  const setShare = search.thread ? setThreadShare : setDeskShare
   const split = wide && !!computer && !folded && !full && boxWidth > 0
   const maxConversation = Math.max(sizes.min, boxWidth - sizes.screenMin)
   const conversationWidth = Math.round(
@@ -374,20 +383,25 @@ export function TeammatePage({
           />
         )}
       </div>
-      {split && (
+      {wide && computer && boxWidth > 0 && (
         <ResizeHandle
-          label={desk ? "the home" : "the conversation"}
+          label={search.thread ? "the conversation" : "the home"}
           side="left"
           size={conversationWidth}
           min={sizes.min}
           max={maxConversation}
           defaultSize={Math.round(sizes.share * boxWidth)}
           onResize={(px) => setShare(px / boxWidth)}
-          onFold={(fold) => fold && screen({ full: true })}
+          folded={full}
+          foldedSize={stripWidth}
+          onFold={(fold) => screen({ full: fold })}
+          expanded={folded}
+          expandedSize={boxWidth - railWidth}
+          onExpand={(fold) => screen({ fold })}
           className="-mx-1"
         />
       )}
-      {computer ? (
+      {computer && !wide && folded && !search.thread ? null : computer ? (
         <div
           className={cn(
             "flex min-h-0",
@@ -432,6 +446,10 @@ export function TeammatePage({
     </div>
   )
 }
+
+/** The folded conversation's strip and the folded screen's rail, which a drag starts from. */
+const stripWidth = 48
+const railWidth = 56
 
 /** The conversation beside the screen: its default share of the page and the ends it drags to. */
 const conversationSplit = { share: 0.444, min: 320, screenMin: 480 }

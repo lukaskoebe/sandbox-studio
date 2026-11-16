@@ -333,11 +333,60 @@ func TestStorageSaysWhichSandboxesToRestartOrRepair(t *testing.T) {
 	issues = append(issues, StorageIssue{Sandbox: "mac", VM: "ss-m-g1", Status: "maintenance_required", Reasons: []string{"legacy disks"}})
 	c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-storage")
 	if c.Status != Fail || !strings.Contains(c.Message, "mac (legacy disks)") ||
-		!strings.Contains(c.Fix, "`/h/.microsandbox/bin/msb self repair --sandbox ss-m-g1`") {
+		!strings.Contains(c.Fix, "Move disks") || !strings.Contains(c.Fix, "`/h/.microsandbox/bin/msb self repair --sandbox ss-m-g1`") {
 		t.Fatalf("a VM to repair: %+v", c)
 	}
 	issues = issues[1:2]
 	if c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-storage"); c.Status != OK {
 		t.Errorf("only a stopped VM that moves as it starts: %+v", c)
+	}
+}
+
+// The case from a teammate's Mac: failed forks left VMs msb counts as running, which no
+// sandbox uses and which stop msb moving other disks.
+func TestLeftoverVMsWarnWithTheRemoveCommand(t *testing.T) {
+	p := healthy()
+	p.MSBPath = func() (string, error) { return "/h/.microsandbox/bin/msb", nil }
+	p.Leftovers = func(context.Context) ([]LeftoverVM, error) {
+		return []LeftoverVM{{VM: "ss-fvio-g1", Status: "starting"}, {VM: "ss-mjbm-g1", Status: "stopped", Sandbox: "katara"}}, nil
+	}
+	c, ok := findCheck(Run(context.Background(), p, Options{}), "msb-leftovers")
+	if !ok || c.Status != Warn {
+		t.Fatalf("check %+v, want a warning", c)
+	}
+	for _, want := range []string{"2 VMs", "ss-fvio-g1 (starting)", "ss-mjbm-g1 (an older VM of katara, stopped)"} {
+		if !strings.Contains(c.Message, want) {
+			t.Errorf("message %q lacks %q", c.Message, want)
+		}
+	}
+	if !strings.Contains(c.Fix, "`/h/.microsandbox/bin/msb remove --force ss-fvio-g1 ss-mjbm-g1`") {
+		t.Errorf("fix %q lacks the remove command", c.Fix)
+	}
+
+	p.Leftovers = func(context.Context) ([]LeftoverVM, error) { return nil, nil }
+	if c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-leftovers"); c.Status != OK {
+		t.Fatalf("no leftovers: %+v", c)
+	}
+	p.Leftovers = func(context.Context) ([]LeftoverVM, error) { return nil, errors.New("catalog busy") }
+	if c, _ = findCheck(Run(context.Background(), p, Options{}), "msb-leftovers"); c.Status != Warn {
+		t.Fatalf("a failed search: %+v, want a warning", c)
+	}
+}
+
+// A leftover VM's disks are removed, not repaired, and removed first, since msb won't move a
+// sandbox's disks while a leftover seems to run.
+func TestStorageLeavesLeftoverVMsToTheirCheck(t *testing.T) {
+	p := healthy()
+	p.MSBPath = func() (string, error) { return "/h/.microsandbox/bin/msb", nil }
+	issues := []StorageIssue{{VM: "ss-xgof-g1", Status: "unavailable", Leftover: true}}
+	p.Storage = func(context.Context) ([]StorageIssue, error) { return issues, nil }
+	if c, _ := findCheck(Run(context.Background(), p, Options{}), "msb-storage"); c.Status != OK {
+		t.Fatalf("only a leftover: %+v, want it left to Leftover VMs", c)
+	}
+	issues = append(issues, StorageIssue{Sandbox: "mac", VM: "ss-m-g1", Status: "maintenance_required"})
+	c, _ := findCheck(Run(context.Background(), p, Options{}), "msb-storage")
+	if c.Status != Fail || strings.Contains(c.Message, "ss-xgof-g1") || strings.Contains(c.Fix, "--sandbox ss-xgof-g1") ||
+		!strings.HasPrefix(c.Fix, "First remove ss-xgof-g1") {
+		t.Fatalf("a leftover beside a VM to repair: %+v", c)
 	}
 }

@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type ReactNode,
 } from "react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -24,7 +25,7 @@ import {
 } from "@/components/browser-approval"
 import {
   GitApprovalSummary,
-  GitReviewSheet,
+  useOpenGitReview,
   isGitApproval,
 } from "@/components/git-review"
 import {
@@ -77,6 +78,7 @@ import {
   waitingConnections,
 } from "@/lib/connection-holds"
 import { appAllowAllEvent, appNotifies, notifyApp } from "@/lib/desktop"
+import { useComposerClearance } from "@/lib/composer-clearance"
 
 /** Cards the open stack lists; the rest are one link away. */
 const maxCards = 3
@@ -161,10 +163,13 @@ export function ApprovalStack() {
   // Requests the user chose to review one by one, which then no longer group.
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   useTitleCount(all.length)
+  // 1rem up from the corner, or above the composer it would rest on, clear of its Send button.
+  const [section, setSection] = useState<HTMLElement | null>(null)
+  const bottom = useComposerClearance(section, 16)
 
   // What the page shows in place (a chat's permission cards, Home's and a teammate's cards,
   // the browser's questions) stays out of the stack.
-  const { sheet, review } = useApprovalReview(all)
+  const { sheet, review } = useApprovalReview()
   const cards = approvalCards(items, split)
   if (cards.length === 0) return sheet
   const envName = (a: Approval) =>
@@ -176,9 +181,11 @@ export function ApprovalStack() {
   const single = cards.length === 1
   return (
     <section
+      ref={setSection}
       aria-label="Approvals"
+      style={{ "--stack-bottom": `${bottom}px` } as CSSProperties}
       className={cn(
-        "fixed right-4 bottom-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2",
+        "fixed right-4 bottom-(--stack-bottom) z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2",
         hosted && "max-sm:top-12 max-sm:bottom-auto"
       )}
     >
@@ -188,7 +195,8 @@ export function ApprovalStack() {
           "w-80 max-w-full",
           !expanded && (single ? "max-sm:hidden" : "hidden")
         )}
-        viewportClassName="flex max-h-[60vh] flex-col gap-2 *:shrink-0 *:data-[slot=card]:shadow-lg"
+        // Lifted over a tall draft, the list keeps to the room left above it.
+        viewportClassName="flex max-h-[min(60vh,calc(100dvh_-_var(--stack-bottom)_-_6rem))] flex-col gap-2 *:shrink-0 *:data-[slot=card]:shadow-lg"
       >
         {notifications.canAsk && (
           <Button
@@ -234,36 +242,33 @@ export function ApprovalStack() {
 }
 
 /**
- * The sheets that reviewing an approval opens: a git push's diff, a memory conflict. review opens
- * the one an approval needs; sheet is rendered wherever its caller lists the cards.
+ * Reviewing an approval: a git push opens in its computer's Changes tab, a memory conflict in a
+ * sheet, which is rendered wherever its caller lists the cards.
  */
-export function useApprovalReview(all: Approval[]): {
+export function useApprovalReview(): {
   sheet: ReactNode
   review: (a: Approval) => void
 } {
-  const [reviewing, setReviewing] = useState<string>()
   const [conflict, setConflict] = useState<Approval>()
+  const openReview = useOpenGitReview()
   const sheet = (
-    <>
-      <GitReviewSheet
-        approval={all.find((a) => a.id === reviewing)}
-        onOpenChange={(open) => {
-          if (!open) setReviewing(undefined)
-        }}
-      />
-      <ConflictSheet
-        env={conflict?.environmentId ?? ""}
-        conflictId={conflict?.memoryConflict?.conflictId}
-        onOpenChange={(open) => {
-          if (!open) setConflict(undefined)
-        }}
-      />
-    </>
+    <ConflictSheet
+      env={conflict?.environmentId ?? ""}
+      conflictId={conflict?.memoryConflict?.conflictId}
+      onOpenChange={(open) => {
+        if (!open) setConflict(undefined)
+      }}
+    />
   )
   return {
     sheet,
-    review: (a) =>
-      a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id),
+    review: (a) => {
+      if (a.kind === "memory.conflict") setConflict(a)
+      else {
+        setStackOpen(false)
+        void openReview(a)
+      }
+    },
   }
 }
 

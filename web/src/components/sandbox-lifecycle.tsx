@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
+import { MoveDisksButton } from "@/components/move-disks"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
 
 /** Refetches the sandbox and the list after a change to it. */
@@ -182,6 +183,22 @@ export function SandboxStateBanner({
       </div>
     )
   if (!action) return null
+  if (sandbox.oldDiskLayout && action === "start")
+    return (
+      <div
+        role="status"
+        className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5 text-xs"
+      >
+        <StatusDot {...phaseDot(p)} compact />
+        <span className="min-w-0 flex-1">
+          <span className="font-mono">{sandbox.name}</span> is stopped.{" "}
+          <span className="text-muted-foreground">
+            microsandbox must move its disks to the new layout before it starts.
+          </span>
+        </span>
+        <MoveDisksButton env={env} sandbox={sandbox} size="sm" />
+      </div>
+    )
   const what =
     p === "suspended"
       ? "is suspended"

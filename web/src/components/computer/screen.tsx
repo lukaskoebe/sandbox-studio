@@ -35,6 +35,7 @@ import {
   RepairButton,
   useSandboxLifecycle,
 } from "@/components/sandbox-lifecycle"
+import { MoveDisksButton } from "@/components/move-disks"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import {
   RebaseFailedAlert,
@@ -621,6 +622,8 @@ function Off({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
     .at(0)
   const lost = sb.status === "absent"
   const crashed = p === "failed"
+  // microsandbox won't start it until its disks move to the new layout.
+  const moveFirst = !lost && !!sb.oldDiskLayout && p !== "booting"
   const mutation = p === "suspended" ? resume : start
   return (
     <div className="m-auto grid max-w-80 justify-items-center gap-2.5 p-5 text-center">
@@ -648,11 +651,13 @@ function Off({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
       <p className="text-xs text-(--glass-dim)">
         {lost
           ? lostVM(sb)
-          : p === "booting"
-            ? "Its terminals open once it is up."
-            : p === "suspended"
-              ? "Resume it to continue where it left off."
-              : "Its workspace, home directory and Docker images are kept."}
+          : moveFirst
+            ? "microsandbox keeps its disks in the layout from before Studio's update, and starts it only once they are moved. Moving them keeps the originals."
+            : p === "booting"
+              ? "Its terminals open once it is up."
+              : p === "suspended"
+                ? "Resume it to continue where it left off."
+                : "Its workspace, home directory and Docker images are kept."}
         {latest && !lost && p !== "booting" && (
           <>
             {" "}
@@ -663,7 +668,8 @@ function Off({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           </>
         )}
       </p>
-      {!lost && p !== "booting" && (
+      {moveFirst && <MoveDisksButton env={env} sandbox={sb} className="mt-1" />}
+      {!lost && !moveFirst && p !== "booting" && (
         <Button
           className="mt-1"
           disabled={mutation.isPending}

@@ -604,3 +604,47 @@ func TestKeepBeforeCopiesOncePerVersion(t *testing.T) {
 		t.Errorf("KeepBefore without a catalog = %q, %v", none, err)
 	}
 }
+
+// TestSealedProcessLeavesTheLiveCatalogAlone checks that once Seal is called, the package
+// neither opens nor copies the catalog in place, through any path to it, while the copies
+// kept beside it stay readable.
+func TestSealedProcessLeavesTheLiveCatalogAlone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("MSB_HOME", home)
+	live := filepath.Join(home, "db", "msb.db")
+	if err := os.MkdirAll(filepath.Dir(live), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(catalog(t), live); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := Backup(context.Background(), live, now, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link.db")
+	if err := os.Symlink(live, link); err != nil {
+		t.Fatal(err)
+	}
+
+	Seal()
+	t.Cleanup(func() { sealed.Store(false) })
+	ctx := context.Background()
+	for _, path := range []string{live, link, filepath.Join(home, "db", ".", "msb.db")} {
+		if err := Check(ctx, path); !errors.Is(err, ErrSealed) {
+			t.Errorf("Check(%s) = %v, want ErrSealed", path, err)
+		}
+		if _, err := SandboxID(ctx, path, "ss-a"); !errors.Is(err, ErrSealed) {
+			t.Errorf("SandboxID(%s) = %v, want ErrSealed", path, err)
+		}
+	}
+	if _, err := Backup(ctx, live, now.Add(time.Hour), 3); !errors.Is(err, ErrSealed) {
+		t.Errorf("Backup = %v, want ErrSealed", err)
+	}
+	if err := copyFile(live+"-wal", filepath.Join(t.TempDir(), "wal")); !errors.Is(err, ErrSealed) {
+		t.Errorf("copying the WAL = %v, want ErrSealed", err)
+	}
+	if err := Check(ctx, kept); err != nil {
+		t.Errorf("Check of the kept copy: %v", err)
+	}
+}

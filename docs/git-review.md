@@ -337,7 +337,11 @@ it, so a client that doesn't know about rewrites can't approve one by accident.
   repository: that fetch fails once with the reason and note, and the next one works.
 - The agent hears about it in its chat too. The next prompt of any chat in that sandbox
   starts with a `[Studio] Some of your pushes did not go upstream` note that lists its
-  rejected and failed pushes no prompt has carried yet, and each is listed once. The note
+  rejected and failed pushes no prompt has carried yet, and each is listed once. A
+  `[Studio] The reviewer commented on your pushes` part lists, the same way, comments left
+  on a push that still waits and the note of a push approved with one (see
+  [Review feedback](#review-feedback)); a rejection after its comments were told is told
+  again, as the outcome is new. Migration 065 marks the notes from before as told. The note
   rides on the prompt (the same way as the note after an undo). A chat takes a new prompt
   only when it is idle, and an MCP notification never reaches the model, so a running turn
   hears about it at its next prompt. The chat sends the note only once the prompt went out, so a
@@ -372,18 +376,19 @@ endpoint (`note` is optional); the integration owning the approval kind handles 
 ## Review feedback
 
 The delivery above waits for the agent: its next fetch or prompt. The review can also tell
-an agent at once, in the sandbox's chat or terminal it works in.
+an agent at once, in the sandbox's chat or terminal it works in, or leave its comments on a
+push that still waits.
 
-- **The review** (`GitReview` in `web/src/components/git-review.tsx`, the same in the sheet,
-  the review page and the sandbox's Git tab) shows the branch and its change, then a push in
+- **The review** (`GitReview` in `web/src/components/git-review.tsx`, the same on the
+  computer's Changes tab, where the card's Review opens it, and on the review page) shows the branch and its change, then a push in
   tabs: **Changes**, the diff at full length, with its files listed beside it (above it when
   narrow) to jump to; **Commits**, with the repository and sandbox, each commit opening to its own
   diff from its first parent (`GET …/approvals/{id}/commits/{sha}`, read from the staging
   repository, for the commits the review lists; 404 once Studio no longer keeps it);
   and while it waits **Comments**, the note and the line comments, each of which jumps to its
   line. A footer that stays in view holds Send to, the pull request choice, Reject and
-  Approve, with Send without deciding and Ignore in its More menu. A `git.pr` approval has
-  no diff and no tabs.
+  Approve, with Send without deciding (Leave without deciding when Send to names no chat or
+  terminal) and Ignore in its More menu. A `git.pr` approval has no diff and no tabs.
 - **Stacked or split.** A full-length diff (the review's Changes tab, a commit's diff, the
   Changes tab of the screen and the thread's changes) shows its lines stacked, old above new,
   or split, old beside new. The switch above the diff is remembered per browser
@@ -402,15 +407,27 @@ an agent at once, in the sandbox's chat or terminal it works in.
   fetch message keeps one line of 500.
 - **Send to.** The review lists the sandbox's idle and running chats and its agent
   terminals: tmux sessions Studio started for a harness (`@studio_harness`, see
-  [harnesses](harnesses.md)). A chat continued in the terminal is reached through that
-  terminal. Plain shells are not offered, since text typed into one runs as commands.
+  [harnesses](harnesses.md)) and ones where someone started claude, codex, opencode,
+  cursor-agent, gemini or aider by hand (the terminal's `agent`, from the program in its
+  foreground). A chat continued in the terminal is reached through that terminal. Plain
+  shells are not offered, since text typed into one runs as commands.
+- **Leaving comments.** With no chat or terminal chosen ("Its next fetch or prompt"), Leave
+  without deciding keeps the note and line comments on the push (`git_pushes.note`,
+  `gitreview.Service.LeaveNote`), which keeps waiting. Any agent in the sandbox reads them,
+  whatever started it: `git_push_status` (`studio git pushes`) lists each push's note,
+  `approval_status` gives a waiting push's `result` with `status` and `note`, `studio wait`
+  returns 75 with them when they change while it waits, and the next chat prompt tells them
+  once. The review shows them as left; leaving new ones replaces them, and a decision without
+  a note of its own keeps them as its note. 409 once the push is decided, 422 for a pull
+  request (`git.pr`).
 - **A new chat** is offered for a sandbox with a teammate, and is the default there: the
   feedback is the first prompt of a chat started in the push's sandbox. The web sends it only
   with a note or a line comment, since the outcome alone reaches the agent anyway. Telling the
   chat that pushed instead would need Studio to know which chat a push came from, and git's
   remote doesn't say.
-- `POST /api/environments/{env}/approvals/{id}/feedback` with `{note, chat}`,
-  `{note, terminal}` or `{note, newChat: true}` sends `gitreview.Service.Feedback`'s message: "Review of your push of
+- `POST /api/environments/{env}/approvals/{id}/feedback` with `{note}` leaves the comments
+  (`{left: true}`); with `{note, chat}`, `{note, terminal}` or `{note, newChat: true}` it
+  sends `gitreview.Service.Feedback`'s message: "Review of your push of
   <sha> to <branch> in <repo> on <forge>:" with the outcome (approved and pushed, with the
   pull request it opened or updates, the push's failure, rejected, still waiting for review), then "My comments:" and the note. It is the
   user's own message to the agent, not quoted data like the prompt note above. The web sends
@@ -423,7 +440,12 @@ an agent at once, in the sandbox's chat or terminal it works in.
   stream (`KindRun`, as the agent user): `load-buffer` from stdin, `paste-buffer -p` (a
   bracketed paste, so the TUI takes the lines as one input) and `send-keys Enter`, one call
   each so the paste is read before the Enter. Claude Code, Codex and OpenCode all accept
-  bracketed paste; a live check against the pinned CLIs is pending.
+  bracketed paste; a live check against the pinned CLIs is pending. In a terminal where the
+  agent was started by hand, the paste and the Enter each run under
+  `if-shell -F '#{==:#{pane_current_command},<program>}'`, so tmux types nothing once the
+  agent quit to its shell (or ran a program of its own), and drops the buffer instead. Studio
+  then looks again and answers 409 if the program changed. Only session and program names
+  of letters, digits and `._+-` are taken, since tmux parses them in those commands.
 - Once sent, the push is marked delivered and notified, so its next fetch and prompt don't
   tell the agent again.
 
@@ -481,8 +503,8 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   (docs/agent-cli.md#waiting-for-the-user). A newer draft for the same pull request from the
   same sandbox supersedes one still waiting, except a call with an `idempotency_key` the
   sandbox already drafted with, which answers with that draft.
-- **The review** (`ForgeReview` in `web/src/components/forge-review.tsx`, in the same sheet,
-  review page and Git tab as a push) shows the pull request, a link to it on the forge, the
+- **The review** (`ForgeReview` in `web/src/components/forge-review.tsx`, on the same
+  Changes tab and review page as a push) shows the pull request, a link to it on the forge, the
   verdict as a toggle, the summary, the diff with the draft's comments on their lines, and a
   footer: "Posts as <account> on <host> · N comments", **Discard…** and **Post review**.
   Everything is editable while it waits; comments are edited or dropped in place and new ones
@@ -537,8 +559,8 @@ review: `git_pull_request_comment(repository, number, body, forge?, idempotency_
   no table of its own. The agent gets "awaiting approval" with the approval's ID at once. A
   call with an `idempotency_key` this sandbox already asked with answers with that comment.
   Comments don't replace each other, unlike review drafts.
-- **The card** (`ForgeComment` in `web/src/components/forge-comment.tsx`, in the stack, the
-  review sheet and page) shows the comment's start; the review shows the pull request with
+- **The card** (`ForgeComment` in `web/src/components/forge-comment.tsx`, in the stack, on
+  Changes and the review page) shows the comment's start; the review shows the pull request with
   its link, the comment in an editable box, the attribution checkbox ("Comment by Ada
   (agent)", remembered per teammate as for reviews) and "Posts as <account> on <host>",
   **Discard…** with a note, Ignore, and **Post comment**.

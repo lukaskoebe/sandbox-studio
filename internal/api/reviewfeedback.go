@@ -16,6 +16,7 @@ import (
 type FeedbackOut struct {
 	Queued bool   `json:"queued" doc:"The chat was busy: the feedback goes out when its running turn ends"`
 	Chat   string `json:"chat,omitempty" doc:"The chat started for it, when sent to a new chat"`
+	Left   bool   `json:"left,omitempty" doc:"The comments were left on the waiting push for its agent to read"`
 }
 
 func (s *Server) registerReviewFeedback(api huma.API) {
@@ -25,7 +26,7 @@ func (s *Server) registerReviewFeedback(api huma.API) {
 		Body struct {
 			Note     string `json:"note,omitempty" maxLength:"8000" doc:"The reviewer's comments, line comments included"`
 			Chat     string `json:"chat,omitempty" doc:"A chat of the approval's sandbox to send the feedback to"`
-			Terminal string `json:"terminal,omitempty" pattern:"^[A-Za-z0-9_-]{1,64}$" doc:"Or an agent's terminal in that sandbox: a tmux session Studio started for claude, codex or opencode"`
+			Terminal string `json:"terminal,omitempty" pattern:"^[A-Za-z0-9_-]{1,64}$" doc:"Or an agent's terminal in that sandbox: a tmux session where claude, codex or opencode runs"`
 			NewChat  bool   `json:"newChat,omitempty" doc:"Or a new chat in that sandbox, with the feedback as its first prompt"`
 		}
 	}
@@ -35,13 +36,22 @@ func (s *Server) registerReviewFeedback(api huma.API) {
 		Description: "Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of " +
 			"its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and " +
 			"submitted. A plain shell takes no " +
-			"feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.",
+			"feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it. " +
+			"With neither, the note is left on a push that still waits, for any agent in the sandbox to read: git_push_status and " +
+			"approval_status show it, and the sandbox's next chat prompt carries it; an empty note takes it back.",
 	}, func(ctx context.Context, in *feedbackIn) (*struct{ Body FeedbackOut }, error) {
-		if n := btoi(in.Body.Chat != "") + btoi(in.Body.Terminal != "") + btoi(in.Body.NewChat); n != 1 {
+		n := btoi(in.Body.Chat != "") + btoi(in.Body.Terminal != "") + btoi(in.Body.NewChat)
+		if n > 1 {
 			return nil, huma.Error422UnprocessableEntity("name a chat or a terminal, or ask for a new chat")
 		}
 		if s.Git == nil {
 			return nil, huma.Error503ServiceUnavailable("git review is not available")
+		}
+		if n == 0 {
+			if err := s.Git.LeaveNote(ctx, in.Env, in.ID, in.Body.Note); err != nil {
+				return nil, apiError(err)
+			}
+			return &struct{ Body FeedbackOut }{FeedbackOut{Left: true}}, nil
 		}
 		approval, err := s.Store.Approval(ctx, in.Env, in.ID)
 		if err != nil {

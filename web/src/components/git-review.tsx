@@ -5,10 +5,9 @@ import {
 } from "@/components/forge-comment"
 import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { useMatch, useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
-  ArrowSquareOutIcon,
   CaretRightIcon,
   ChatCircleTextIcon,
   DotsThreeIcon,
@@ -33,13 +32,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CountPill } from "@/components/count-pill"
@@ -390,8 +382,19 @@ function PushReview({ approval }: { approval: Approval }) {
   }
   const lines = parseDiff(git.review?.diff ?? "")
   const fullNote = () => composeNote(note, lines, comments)
+  // With no chat or terminal chosen, the comments stay on the push for its agent to read,
+  // and the draft clears: the push shows them as left.
   const send = () =>
-    feedback.mutate({ ...params, body: feedbackBody(target, fullNote()) })
+    feedback.mutate(
+      { ...params, body: feedbackBody(target, fullNote()) },
+      {
+        onSuccess: (out) => {
+          if (!out.left) return
+          setNote("")
+          setComments([])
+        },
+      }
+    )
   const busy = (action: Action) =>
     decide.isPending && decide.variables.body.action === action
   // A new chat starts only when there is something to tell it beyond the outcome.
@@ -446,8 +449,22 @@ function PushReview({ approval }: { approval: Approval }) {
     </>
   )
 
+  // Comments left on the push earlier, which the agent reads until a decision replaces them.
+  const left = pending && !pr ? git.push.note : undefined
   const noteField = (
     <div className="grid gap-2">
+      {left && (
+        <section
+          aria-label="Comments left for the agent"
+          className="grid gap-1 rounded-md bg-muted/50 px-2 py-1.5 text-xs"
+        >
+          <p className="text-muted-foreground">
+            Left for the agent · new comments replace these, and deciding
+            without any sends them along
+          </p>
+          <p className="break-words whitespace-pre-wrap">{left}</p>
+        </section>
+      )}
       <textarea
         aria-label="Note for the agent"
         placeholder={
@@ -466,7 +483,9 @@ function PushReview({ approval }: { approval: Approval }) {
           ? "With a note or line comments, deciding starts a chat in the sandbox that tells the agent the outcome and your comments."
           : target
             ? "Deciding sends the outcome, the note and your line comments there."
-            : "The agent sees a rejection and its note when it next fetches or gets a prompt."}
+            : pr
+              ? "The agent sees a rejection and its note when it next fetches or gets a prompt."
+              : "The agent reads the outcome and your comments when it checks on the push or gets its next prompt."}
       </p>
     </div>
   )
@@ -620,7 +639,11 @@ function PushReview({ approval }: { approval: Approval }) {
               {pending && (
                 <TabsTrigger value="comments">
                   Comments
-                  <CountPill count={comments.length + (note.trim() ? 1 : 0)} />
+                  <CountPill
+                    count={
+                      comments.length + (note.trim() ? 1 : 0) + (left ? 1 : 0)
+                    }
+                  />
                 </TabsTrigger>
               )}
             </TabsList>
@@ -781,7 +804,7 @@ function PushReview({ approval }: { approval: Approval }) {
                   <DotsThreeIcon weight="bold" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                  {target && (
+                  {target ? (
                     <DropdownMenuItem
                       disabled={feedback.isPending || !fullNote()}
                       onClick={send}
@@ -794,6 +817,21 @@ function PushReview({ approval }: { approval: Approval }) {
                         </span>
                       </span>
                     </DropdownMenuItem>
+                  ) : (
+                    !pr && (
+                      <DropdownMenuItem
+                        disabled={feedback.isPending || !fullNote()}
+                        onClick={send}
+                      >
+                        <ChatCircleTextIcon />
+                        <span className="grid">
+                          Leave without deciding
+                          <span className="text-caption text-muted-foreground">
+                            For the agent to read; the push keeps waiting
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    )
                   )}
                   <DropdownMenuItem
                     disabled={decide.isPending}
@@ -940,57 +978,112 @@ export function gitReviewDescription(approval: Approval) {
   )
 }
 
-/** A wide sheet with the review of one git approval. */
-export function GitReviewSheet({
-  approval,
-  onOpenChange,
+/** What a decided push or pull request came to, in one sentence. */
+const decided: Record<string, string> = {
+  approved: "This was approved.",
+  denied: "This was rejected.",
+  dismissed: "This was ignored.",
+}
+
+/**
+ * A git review's heading: what it asks and when, and while it waits what deciding it does; once
+ * decided, what it came to.
+ */
+export function GitReviewHead({
+  approval: a,
+  id,
 }: {
-  approval?: Approval
-  onOpenChange: (open: boolean) => void
+  approval: Approval
+  /** The heading's id, for a region it names. */
+  id?: string
 }) {
-  const kind = approval && approvalKind(approval)
+  const kind = approvalKind(a)
   return (
-    <Sheet open={approval !== undefined} onOpenChange={onOpenChange}>
-      <SheetContent className="data-[side=right]:sm:max-w-3xl">
-        {approval && kind && (
-          <>
-            <SheetHeader>
-              <div className="flex items-center gap-2 pr-8">
-                <KindChip area={kind.area} icon={kind.icon}>
-                  {kind.title}
-                </KindChip>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="ml-auto"
-                  render={
-                    <Link
-                      to="/e/$env/git/reviews/$id"
-                      params={{ env: approval.environmentId, id: approval.id }}
-                      onClick={() => onOpenChange(false)}
-                    />
-                  }
-                >
-                  <ArrowSquareOutIcon />
-                  Open as page
-                </Button>
-              </div>
-              <SheetTitle>{gitSummary(approval)}</SheetTitle>
-              <SheetDescription>
-                {gitReviewDescription(approval)}
-              </SheetDescription>
-            </SheetHeader>
-            <ScrollArea
-              className="min-h-0 flex-1"
-              viewportClassName="px-6 pb-6"
-            >
-              <GitReview key={approval.id} approval={approval} />
-            </ScrollArea>
-          </>
+    <>
+      <div className="grid gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <KindChip area={kind.area} icon={kind.icon}>
+            {kind.title}
+          </KindChip>
+          {a.status === "pending" && <StatusDot status="waiting" />}
+          <span className="text-muted-foreground">
+            {formatAge(a.createdAt)}
+          </span>
+        </div>
+        <h2 id={id} className="text-sm font-medium break-words">
+          {gitSummary(a)}
+        </h2>
+        {a.status === "pending" && (
+          <p className="text-muted-foreground">{gitReviewDescription(a)}</p>
         )}
-      </SheetContent>
-    </Sheet>
+      </div>
+      {a.status !== "pending" && (
+        <p
+          role="status"
+          className="rounded-md border border-dashed px-3 py-2.5 font-medium"
+        >
+          {a.git?.push.state === "failed" && !a.git.pullRequest
+            ? "This was approved, but the push failed; why is below."
+            : `${decided[a.status] ?? `This is ${a.status}.`} Nothing is left to decide; the outcome is below.`}
+        </p>
+      )}
+    </>
   )
+}
+
+/**
+ * Opens a git approval's review where it is decided: its computer's Changes tab, beside the
+ * thread in view when the computer is the open teammate's. A review whose computer is gone
+ * opens its own page.
+ */
+export function useOpenGitReview() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const teammatePage = useMatch({
+    from: "/e/$env/teammates/$id",
+    shouldThrow: false,
+  })
+  return async (a: Approval) => {
+    const env = a.environmentId
+    const list = a.sandboxId
+      ? await queryClient
+          .ensureQueryData(
+            $api.queryOptions("get", "/api/environments/{env}/sandboxes", {
+              params: { path: { env } },
+            })
+          )
+          .catch(() => undefined)
+      : undefined
+    const sb = list?.find((s) => s.id === a.sandboxId)
+    if (!sb)
+      return navigate({
+        to: "/e/$env/git/reviews/$id",
+        params: { env, id: a.id },
+      })
+    if (
+      sb.teammateId &&
+      teammatePage?.params.env === env &&
+      teammatePage.params.id === sb.teammateId
+    )
+      return navigate({
+        to: "/e/$env/teammates/$id",
+        params: { env, id: sb.teammateId },
+        search: (prev) => ({
+          ...prev,
+          tab: "changes" as const,
+          review: a.id,
+          change: undefined,
+          computer: sb.id,
+          fold: undefined,
+        }),
+      })
+    // A teammate's computer redirects to the teammate's desk.
+    return navigate({
+      to: "/e/$env/sandboxes/$id",
+      params: { env, id: sb.id },
+      search: { tab: "changes", review: a.id },
+    })
+  }
 }
 
 /** A compact card body for the approval stack: what is asked, and a button to review it. */

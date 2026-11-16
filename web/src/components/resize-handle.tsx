@@ -99,9 +99,12 @@ const step = 16
 
 /**
  * The line between two panes, which drags: the pane on `side` of it takes the size it is dragged
- * to, between min and max. Dragged well past the minimum it folds, if it can, and dragged out
- * again it unfolds. Double-click puts back the default; with focus, ← → move it, Home and End go
- * to the ends and Enter folds or unfolds.
+ * to, between min and max. Dragged well past the minimum it folds, if it can, and dragged out a
+ * little it opens at its minimum. Where the other pane folds too, dragged well past the maximum
+ * it expands, leaving the other pane folded, and dragged back a little it gives that pane its
+ * minimum.
+ * Double-click puts back the default; with focus, ← → move it, Home and End go to the ends and
+ * Enter folds or unfolds.
  */
 export function ResizeHandle({
   label,
@@ -114,6 +117,9 @@ export function ResizeHandle({
   folded = false,
   foldedSize = 0,
   onFold,
+  expanded = false,
+  expandedSize = 0,
+  onExpand,
   className,
 }: {
   /** Names what it resizes, such as "the sidebar". */
@@ -130,6 +136,12 @@ export function ResizeHandle({
   foldedSize?: number
   /** Without it the pane doesn't fold. */
   onFold?: (folded: boolean) => void
+  /** The pane has all but the other pane's folded part. */
+  expanded?: boolean
+  /** The pane's size while it is expanded. */
+  expandedSize?: number
+  /** Without it the pane doesn't expand: it stops at max. */
+  onExpand?: (expanded: boolean) => void
   className?: string
 }) {
   const start = useRef<{ x: number; size: number } | null>(null)
@@ -148,16 +160,35 @@ export function ResizeHandle({
   }, [dragging])
 
   const moveTo = (clientX: number) => {
-    if (!start.current) return
-    const dx = clientX - start.current.x
-    const wanted = start.current.size + (side === "left" ? dx : -dx)
-    if (onFold && wanted < min - foldSlack) {
-      if (!folded) onFold(true)
+    const from = start.current
+    if (!from) return
+    const dx = clientX - from.x
+    const wanted = from.size + (side === "left" ? dx : -dx)
+    // A folded or expanded pane opens to the near end of its range as soon as it is dragged a
+    // little, and follows the pointer from there; dragged back as far, it folds or expands again.
+    if (folded && onFold) {
+      if (wanted < foldedSize + foldSlack) return
+      onFold(false)
+      start.current = { x: clientX, size: min }
+      onResize(clamp(min))
       return
     }
-    if (folded && onFold) {
-      if (wanted < min) return
-      onFold(false)
+    if (expanded && onExpand) {
+      if (wanted > expandedSize - foldSlack) return
+      onExpand(false)
+      start.current = { x: clientX, size: max }
+      onResize(clamp(max))
+      return
+    }
+    if (onFold && wanted < min - foldSlack) {
+      onFold(true)
+      start.current = { x: clientX, size: foldedSize }
+      return
+    }
+    if (onExpand && wanted > max + foldSlack) {
+      onExpand(true)
+      start.current = { x: clientX, size: expandedSize }
+      return
     }
     onResize(clamp(wanted))
   }
@@ -166,7 +197,10 @@ export function ResizeHandle({
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
     // A folded pane is dragged out from what is left of it.
-    start.current = { x: event.clientX, size: folded ? foldedSize : size }
+    start.current = {
+      x: event.clientX,
+      size: folded ? foldedSize : expanded ? expandedSize : size,
+    }
     setDragging(true)
   }
   const onPointerUp = () => {
@@ -179,8 +213,13 @@ export function ResizeHandle({
     if (event.key === "Enter" && onFold) onFold(!folded)
     else if (folded && (event.key === grow || event.key === "End")) {
       onFold?.(false)
-    } else if (event.key === grow) onResize(clamp(size + step))
-    else if (event.key === shrink) {
+    } else if (expanded && (event.key === shrink || event.key === "Home")) {
+      onExpand?.(false)
+      onResize(clamp(max))
+    } else if (event.key === grow) {
+      if (onExpand && size >= max) onExpand(true)
+      else onResize(clamp(size + step))
+    } else if (event.key === shrink) {
       if (onFold && size <= min) onFold(true)
       else onResize(clamp(size - step))
     } else if (event.key === "Home") onResize(min)
@@ -196,7 +235,7 @@ export function ResizeHandle({
       aria-orientation="vertical"
       aria-valuemin={min}
       aria-valuemax={Math.round(max)}
-      aria-valuenow={folded ? 0 : size}
+      aria-valuenow={folded ? 0 : expanded ? Math.round(max) : size}
       tabIndex={0}
       title="Drag to resize, double-click to reset"
       data-dragging={dragging || undefined}
@@ -212,7 +251,8 @@ export function ResizeHandle({
       onPointerCancel={onPointerUp}
       onLostPointerCapture={onPointerUp}
       onDoubleClick={() => {
-        onFold?.(false)
+        if (folded) onFold?.(false)
+        else if (expanded) onExpand?.(false)
         onResize(clamp(defaultSize))
       }}
       onKeyDown={onKeyDown}

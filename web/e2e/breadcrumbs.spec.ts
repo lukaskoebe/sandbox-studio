@@ -177,3 +177,42 @@ test("on a phone the approvals are a button in the breadcrumb row", async ({
   await expect(card).toBeHidden()
   await api.dismissApprovals()
 })
+
+// On a wide page the stack floats in the corner, and above the composer when there is one, so
+// its cards never cover the Send button.
+test("the approval stack sits above a composer, not over its Send button", async ({
+  page,
+  api,
+  env,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const name = `Stack ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const host = `stack-${Math.random().toString(36).slice(2, 8)}.example.org`
+  await api.connect(await api.createSandbox(sandboxName("stackask")), host)
+
+  const stack = approvals(page)
+  await page.goto(`/e/${env}/secrets`)
+  await expect(stack).toBeVisible()
+  await expect
+    .poll(async () =>
+      Math.round(
+        800 -
+          (await stack.boundingBox())!.y -
+          (await stack.boundingBox())!.height
+      )
+    )
+    .toBe(16)
+
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const send = page.getByRole("button", { name: "Send" })
+  await expect(send).toBeVisible()
+  await expect(stack).toBeVisible()
+  const top = (await send.boundingBox())!.y
+  await expect
+    .poll(async () => {
+      const box = (await stack.boundingBox())!
+      return box.y + box.height
+    })
+    .toBeLessThanOrEqual(top)
+})

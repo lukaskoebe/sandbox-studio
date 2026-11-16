@@ -42,6 +42,7 @@ export function BrowsingCard({
   waiting,
   watching,
   onWatch,
+  className,
 }: {
   env: string
   teammate: string
@@ -49,6 +50,7 @@ export function BrowsingCard({
   waiting: boolean
   watching: boolean
   onWatch: () => void
+  className?: string
 }) {
   const b = useBrowsing(env, teammate)
   if (!b.now || !b.run) return null
@@ -59,7 +61,10 @@ export function BrowsingCard({
     <div
       role="group"
       aria-label={`${name}'s browser`}
-      className="@container ml-8 grid gap-3 rounded-lg border p-3 text-xs"
+      className={cn(
+        "@container ml-8 grid gap-3 rounded-lg border p-3 text-xs",
+        className
+      )}
     >
       <div className="flex items-center gap-2">
         <span

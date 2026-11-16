@@ -46,3 +46,21 @@ func TestCatalogBusy(t *testing.T) {
 		}
 	}
 }
+
+// TestStillHeld checks which refusals Remove tries again: the ones of a sandbox that a VM, a
+// start or a create still holds, but not a missing or broken one.
+func TestStillHeld(t *testing.T) {
+	for msg, want := range map[string]bool{
+		`failed to start "ss-a-g1": insert run: FOREIGN KEY constraint failed; startup cleanup pending: runtime still owns sandbox "ss-a-g1"`: true,
+		`cannot remove sandbox "ss-a-g1": status is Running`:                        true,
+		`cannot remove sandbox "ss-a-g1": status changed to Starting`:               false,
+		`cannot replace sandbox "ss-a-g1": a runtime endpoint may still be live`:    true,
+		"error returned from database: (code: 5) database is locked":                true,
+		`sandbox not found: ss-a-g1`:                                                false,
+		"error returned from database: (code: 11) database disk image is malformed": false,
+	} {
+		if got := stillHeld(errors.New(msg)); got != want {
+			t.Errorf("stillHeld(%q) = %v, want %v", msg, got, want)
+		}
+	}
+}

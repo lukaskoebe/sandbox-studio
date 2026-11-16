@@ -6,6 +6,7 @@ import { ComputerMenu } from "@/components/computer/computer-menu"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { Notice } from "@/components/notice"
+import { DisksNotice } from "@/components/move-disks"
 import { PageHeader } from "@/components/page-header"
 import { RebaseAllDialog } from "@/components/rebase-sandbox-dialog"
 import { formatMiB } from "@/components/sandbox-details"
@@ -166,6 +167,7 @@ export function ComputersPage({ env }: { env: string }) {
             ))}
           </div>
         )}
+        <DisksNotice env={env} />
         {outdated.length > 0 && (
           <Notice
             aria-label="Base image"

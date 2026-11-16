@@ -584,16 +584,20 @@ func invoke(ctx context.Context, c Caller, tool string, inv invocation, env CLIE
 
 // waitResult is `studio wait`: it asks again until the approval is settled, then prints it. It
 // exits 0 when the user approved and what that did went through, 1 when they denied or dismissed
-// it or the forge refused it.
+// it or the forge refused it, and 75 when the reviewer left new comments on a push that waits.
 func waitResult(ctx context.Context, c Caller, tool string, inv invocation, env CLIEnv, result json.RawMessage) int {
 	var st struct {
 		Status  string `json:"status"`
 		Settled bool   `json:"settled"`
 		Result  struct {
 			Status string `json:"status"`
+			Note   string `json:"note"`
 		} `json:"result"`
 	}
 	_ = json.Unmarshal(result, &st)
+	// Comments the reviewer leaves on a push while it waits end the wait, as the agent can act
+	// on them before the decision; the ones there already when it began don't.
+	seen := st.Result.Note
 	for !st.Settled {
 		if !sleep(ctx, env.Poll) {
 			return ExitFailed
@@ -603,8 +607,15 @@ func waitResult(ctx context.Context, c Caller, tool string, inv invocation, env 
 			fmt.Fprintf(env.Stderr, "studio: %v\n", err)
 			return ExitFailed
 		}
-		st.Result.Status = ""
+		st.Result.Status, st.Result.Note = "", ""
 		_ = json.Unmarshal(result, &st)
+		if !st.Settled && st.Result.Note != "" && st.Result.Note != seen {
+			if code := print(result, inv, tool, env); code != ExitOK {
+				return code
+			}
+			fmt.Fprintf(env.Stderr, "studio: the reviewer commented while it waits; `studio wait %v` waits for the decision\n", inv.params["approval"])
+			return ExitWaiting
+		}
 	}
 	if code := print(result, inv, tool, env); code != ExitOK {
 		return code

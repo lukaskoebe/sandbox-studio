@@ -36,8 +36,10 @@ type Terminal struct {
 	agentproto.Session
 	Label string `json:"label" doc:"The session's name in the UI: the name the user gave it, the harness that runs, the program in the foreground or the base name of its directory, made unique with \" 2\""`
 	// Program is what runs, for a status line such as "npm run dev running".
-	Program string        `json:"program,omitempty" doc:"The harness or the foreground program, cut to 24 characters; empty at a shell prompt"`
-	State   TerminalState `json:"state" enum:"working,busy,idle" doc:"working: an agent harness runs and printed in the last 20 s; busy: another program than the shell runs; idle otherwise"`
+	Program string `json:"program,omitempty" doc:"The harness or the foreground program, cut to 24 characters; empty at a shell prompt"`
+	// Agent is whether an agent harness runs, so review feedback can be typed into it.
+	Agent bool          `json:"agent,omitempty" doc:"An agent harness runs in the session, one Studio started or one started by hand: review feedback can go to it"`
+	State TerminalState `json:"state" enum:"working,busy,idle" doc:"working: an agent harness runs and printed in the last 20 s; busy: another program than the shell runs; idle otherwise"`
 }
 
 // SandboxTerminals are the terminals of one sandbox.
@@ -98,7 +100,7 @@ func describeTerminal(s agentproto.Session, now time.Time) Terminal {
 	}
 	switch {
 	case harness != "":
-		t.Program = harness
+		t.Program, t.Agent = harness, true
 		if s.Activity > 0 && now.Sub(time.Unix(s.Activity, 0)) < workingWindow {
 			t.State = TerminalWorking
 		}

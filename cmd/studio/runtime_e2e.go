@@ -43,6 +43,9 @@ func (noVMs) removeCheckpoints(context.Context, []string) error { return nil }
 // disksEvery has the fake guests' disks, which the tests set, show within a second.
 const disksEvery = time.Second
 
+// storageEvery has a sandbox whose disks the tests put in msb's old layout show so at once.
+const storageEvery = time.Millisecond
+
 func ensureRuntime(context.Context) (*runtime.Upgrade, error) { return nil, nil }
 
 func repairMSBDB(context.Context, *slog.Logger) {}
@@ -51,6 +54,8 @@ func repairMSBDB(context.Context, *slog.Logger) {}
 func prepareMSBHome(*slog.Logger) error { return nil }
 
 func runMSBSandboxID([]string) int { return 1 }
+
+func runMSBBackup([]string) int { return 1 }
 
 func keepMSBDBBeforeUpgrade(context.Context, *slog.Logger) {}
 
@@ -73,6 +78,11 @@ func hostProbes() doctor.Probes {
 
 // storageProbe leaves the question out: the e2e build has no msb.
 func storageProbe(func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.StorageIssue, error) {
+	return nil
+}
+
+// leftoversProbe leaves the search out: the e2e build has no msb.
+func leftoversProbe(func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.LeftoverVM, error) {
 	return nil
 }
 

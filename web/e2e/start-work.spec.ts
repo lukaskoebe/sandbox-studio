@@ -16,8 +16,7 @@ test("Start work begins a thread with the message, on the teammate's computer", 
 
   await page.goto(`/e/${env}/teammates/${id}`)
   await page
-    .locator("header")
-    .filter({ hasText: name })
+    .getByRole("region", { name: `${name} now` })
     .getByRole("button", { name: "Start work" })
     .click()
   const dialog = page.getByRole("dialog", { name: `Start work with ${name}` })
@@ -153,8 +152,7 @@ test("Start work offers a computer to a teammate without one", async ({
   const id = await addTeammate(api, env, name)
   await page.goto(`/e/${env}/teammates/${id}`)
   await page
-    .locator("header")
-    .filter({ hasText: name })
+    .getByRole("region", { name: `${name} now` })
     .getByRole("button", { name: "Start work" })
     .click()
   const dialog = page.getByRole("dialog", { name: `Start work with ${name}` })

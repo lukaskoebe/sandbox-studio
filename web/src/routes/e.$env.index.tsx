@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/notice"
+import { DisksNotice } from "@/components/move-disks"
 import { LowDiskAdvice, lowDiskText } from "@/components/low-disk"
 import {
   ApprovalCardList,
@@ -79,6 +80,7 @@ function Home() {
       <OnboardingCard env={env} />
       <NotificationsBanner />
       <PreviewsNotice env={env} />
+      <DisksNotice env={env} />
       <BaseNotice env={env} sandboxes={sandboxes.data ?? []} />
       <DiskNotice env={env} sandboxes={sandboxes.data ?? []} />
       {empty ? (
@@ -390,7 +392,7 @@ function NeedsYou({ env, approvals }: { env: string; approvals: Approval[] }) {
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const envs = $api.useQuery("get", "/api/environments")
   useClaimApprovals(approvals.map((a) => a.id))
-  const { sheet, review } = useApprovalReview(approvals)
+  const { sheet, review } = useApprovalReview()
   const cards = approvalCards(approvals, split)
   const envName = () => envs.data?.find((e) => e.id === env)?.name
   return (

@@ -378,7 +378,7 @@ test("a chat says when its sandbox is suspended or stopped, and starts it", asyn
 
   // The teammate's home says it is offline, and its computer's screen on its desk starts it.
   await page.goto(`/e/${env}/teammates/${teammate}`)
-  const header = main.locator("header").first()
+  const header = main.getByRole("region", { name: `${name} now` })
   await expect(header).toContainText("Offline")
   await page.goto(`/e/${env}/teammates/${teammate}?tab=terminal`)
   const screen = main.getByRole("region", { name: `${sbName}'s screen` })

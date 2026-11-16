@@ -53,6 +53,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
+	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/netreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -159,6 +160,8 @@ func main() {
 		os.Exit(runRestoreMSBDB(os.Stdout, *addr, flag.Args()[1:]))
 	case "msb-sandbox-id": // for Repair, which can't read msb's database in Studio's process
 		os.Exit(runMSBSandboxID(flag.Args()[1:]))
+	case "msb-backup": // for the backups of msb's database, which Studio's process can't read either
+		os.Exit(runMSBBackup(flag.Args()[1:]))
 	}
 	if flag.Arg(0) == "login-url" {
 		link, err := requestLoginURL(context.Background(), *addr)
@@ -337,6 +340,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	repairMSBDB(ctx, log)
 	msbBackups := backupMSBDB(ctx, log)
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil, nil))
+	// From here on this process's msb library has msb's catalog open, so Studio's own SQLite
+	// leaves the catalog's files alone in it: see msbdb.ErrSealed.
+	msbdb.Seal()
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
 		return err
 	}
@@ -515,6 +521,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go mgr.RunCheckpointSchedules(ctx)
 	go mgr.WatchTerminals(ctx)
 	mgr.DisksEvery = disksEvery
+	mgr.StorageEvery = storageEvery
 	go mgr.WatchDisks(ctx)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err

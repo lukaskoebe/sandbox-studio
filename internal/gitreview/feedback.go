@@ -79,6 +79,39 @@ func (s *Service) Feedback(ctx context.Context, envID, approvalID, note string) 
 	return p, b.String(), nil
 }
 
+// ErrDecided means comments were left on a push that is no longer waiting: once decided, the
+// decision's note is the push's, and feedback goes to a chat or terminal.
+var ErrDecided = errors.New("the push was decided already; send the comments to a chat or terminal")
+
+// LeaveNote records note, the reviewer's comments, on a push that still waits, for any agent
+// in its sandbox to read: git_push_status and approval_status show it, and the sandbox's next
+// chat prompt tells it once (docs/git-review.md#review-feedback). An empty note takes them
+// back.
+func (s *Service) LeaveNote(ctx context.Context, envID, approvalID, note string) error {
+	a, err := s.Store.Approval(ctx, envID, approvalID)
+	if err != nil {
+		return err
+	}
+	if a.Kind != KindPush {
+		return ErrNotReview
+	}
+	p, err := s.Store.GitPushByApproval(ctx, envID, approvalID)
+	if err != nil {
+		return err
+	}
+	note = strings.TrimSpace(note)
+	if len(note) > maxFeedbackNote {
+		note = note[:maxFeedbackNote] + "…"
+	}
+	if err := s.Store.LeaveGitPushNote(ctx, envID, p.ID, note); errors.Is(err, store.ErrNotFound) {
+		return ErrDecided
+	} else if err != nil {
+		return err
+	}
+	s.publish(envID, approvalID)
+	return nil
+}
+
 func statusWords(status, it string) string {
 	switch status {
 	case store.StatusPending:

@@ -2425,6 +2425,36 @@
         ],
         "type": "object"
       },
+      "DiskMove": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "description": "The sandbox's name, or what Studio uses the VM for, such as a teammate's browser",
+            "type": "string"
+          },
+          "own": {
+            "description": "A VM Studio drives itself, such as a teammate's browser: it isn't started again after the move, but when Studio next needs it",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "Whether its VM runs: running, suspended, stopped and so on",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name",
+          "status"
+        ],
+        "type": "object"
+      },
       "DiskSizes": {
         "additionalProperties": false,
         "properties": {
@@ -2444,6 +2474,22 @@
             "type": "integer"
           }
         },
+        "type": "object"
+      },
+      "DisksToMoveOutBody": {
+        "additionalProperties": false,
+        "properties": {
+          "sandboxes": {
+            "description": "Every sandbox, in every environment, and every VM Studio drives itself, whose disks microsandbox keeps in its old layout",
+            "items": {
+              "$ref": "#/components/schemas/DiskMove"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sandboxes"
+        ],
         "type": "object"
       },
       "DoctorReport": {
@@ -3293,7 +3339,7 @@
             "type": "string"
           },
           "terminal": {
-            "description": "Or an agent's terminal in that sandbox: a tmux session Studio started for claude, codex or opencode",
+            "description": "Or an agent's terminal in that sandbox: a tmux session where claude, codex or opencode runs",
             "pattern": "^[A-Za-z0-9_-]{1,64}$",
             "type": "string"
           }
@@ -3306,6 +3352,10 @@
           "chat": {
             "description": "The chat started for it, when sent to a new chat",
             "type": "string"
+          },
+          "left": {
+            "description": "The comments were left on the waiting push for its agent to read",
+            "type": "boolean"
           },
           "queued": {
             "description": "The chat was busy: the feedback goes out when its running turn ends",
@@ -5981,6 +6031,59 @@
         ],
         "type": "object"
       },
+      "MoveDisksInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "writersStopped": {
+            "description": "The person's word that no Studio or msb from before the update still runs, here or with another microsandbox home, and that none starts until the move ends",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "writersStopped"
+        ],
+        "type": "object"
+      },
+      "MoveDisksOutBody": {
+        "additionalProperties": false,
+        "properties": {
+          "moved": {
+            "description": "Each sandbox whose disks were to move, by name, with why it failed if it did",
+            "items": {
+              "$ref": "#/components/schemas/MovedDisks"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "moved"
+        ],
+        "type": "object"
+      },
+      "MovedDisks": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "type": "string"
+          },
+          "error": {
+            "description": "Why its disks didn't move, or why it didn't start again after they did",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name"
+        ],
+        "type": "object"
+      },
       "NavigateBrowserInBody": {
         "additionalProperties": false,
         "properties": {
@@ -8192,6 +8295,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "oldDiskLayout": {
+            "description": "microsandbox keeps the sandbox's disks in its layout from before 0.7.12 and won't start or copy the sandbox until moveSandboxDisks moves them; a running one runs as the older microsandbox started it",
+            "type": "boolean"
           },
           "progress": {
             "$ref": "#/components/schemas/Progress",
@@ -10773,6 +10880,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "agent": {
+            "description": "An agent harness runs in the session, one Studio started or one started by hand: review feedback can go to it",
+            "type": "boolean"
+          },
           "attached": {
             "format": "int64",
             "type": "integer"
@@ -11688,6 +11799,10 @@
           "name": {
             "type": "string"
           },
+          "oldDiskLayout": {
+            "description": "microsandbox keeps the sandbox's disks in its layout from before 0.7.12 and won't start or copy the sandbox until moveSandboxDisks moves them; a running one runs as the older microsandbox started it",
+            "type": "boolean"
+          },
           "progress": {
             "$ref": "#/components/schemas/Progress",
             "description": "The create or fork that runs or failed"
@@ -12388,7 +12503,7 @@
     },
     "/api/environments/{env}/approvals/{id}/feedback": {
       "post": {
-        "description": "Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.",
+        "description": "Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it. With neither, the note is left on a push that still waits, for any agent in the sandbox to read: git_push_status and approval_status show it, and the sandbox's next chat prompt carries it; an empty note takes it back.",
         "operationId": "sendReviewFeedback",
         "parameters": [
           {
@@ -24732,6 +24847,78 @@
         },
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/system/move-disks": {
+      "get": {
+        "description": "Empty unless microsandbox refuses to start or copy a sandbox until its disks move to its new layout, as on macOS after the update to microsandbox 0.7.15. It answers from what microsandbox said in the last 30 seconds.",
+        "operationId": "listDisksToMove",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisksToMoveOutBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What moveSandboxDisks would move",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "microsandbox 0.7.12 and later won't start or copy a sandbox whose disks are in the layout from before, and on macOS move them only when told that nothing from before the upgrade still writes to them. Studio holds every such sandbox, in every environment, and the VMs it drives itself, such as teammates' browsers, stops the ones that run, has microsandbox move each one's disks, keeping the originals, and starts again the sandboxes that ran; its own VMs start when it next needs them. It answers when all are done; a sandbox that fails is listed with its error and the others go on.",
+        "operationId": "moveSandboxDisks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveDisksInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveDisksOutBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Move the disks microsandbox keeps in its old layout, for every sandbox listDisksToMove lists",
+        "tags": [
+          "sandboxes"
         ]
       }
     },

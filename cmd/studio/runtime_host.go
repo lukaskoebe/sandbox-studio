@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
@@ -110,13 +109,17 @@ func lockMSB() (release func() error, dir string, err error) {
 	return release, dir, err
 }
 
-// repairMSBDB checks msb's database before any msb call opens it. A damaged one is moved
-// aside and rebuilt from the rows that can still be read; then msb indexes the snapshots on
-// disk again, so the checkpoints are found.
 // disksEvery is how often Studio asks the guests how full their disks are: 0 is the
 // sandbox manager's minute.
 const disksEvery = 0
 
+// storageEvery is how long views trust what msb last said of the layout of the VMs' disks: 0 is
+// the manager's default.
+const storageEvery = 0
+
+// repairMSBDB checks msb's database before any msb call opens it. A damaged one is moved
+// aside and rebuilt from the rows that can still be read; then msb indexes the snapshots on
+// disk again, so the checkpoints are found.
 func repairMSBDB(ctx context.Context, log *slog.Logger) {
 	path, err := msbdb.Path()
 	if err != nil {
@@ -144,7 +147,7 @@ func repairMSBDB(ctx context.Context, log *slog.Logger) {
 		return
 	}
 	msbRepaired = r.Summary()
-	msbOpened.Store(true)
+	msbdb.Seal()
 	if n, err := runtime.ReindexSnapshots(ctx); err != nil {
 		log.Error("msb could not index its snapshots again", "err", err)
 		msbRepaired += "; indexing the checkpoints again failed: " + err.Error()
@@ -175,23 +178,63 @@ func init() { runtime.CatalogID = catalogID }
 // catalogID asks a new process of this binary for the id of msb's record of the VM name:
 // this one's msb library has the catalog open, and only msb may open it here.
 func catalogID(ctx context.Context, name string) (int64, error) {
-	self, err := os.Executable()
+	out, err := runSelf(ctx, 30*time.Second, "msb-sandbox-id", name)
 	if err != nil {
 		return 0, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	return strconv.ParseInt(out, 10, 64)
+}
+
+// runSelf runs a new process of this binary with args and returns what it printed, or what it
+// printed to stderr as the error. It is how this process touches msb's catalog files once its
+// msb library has the catalog open (see msbdb.ErrSealed).
+func runSelf(ctx context.Context, timeout time.Duration, args ...string) (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, self, "msb-sandbox-id", name)
+	cmd := exec.CommandContext(ctx, self, args...)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return 0, errors.New(msg)
+			return "", errors.New(msg)
 		}
-		return 0, err
+		return "", err
 	}
-	return strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	return strings.TrimSpace(string(out)), nil
+}
+
+// msbBackup has a new process of this binary copy msb's catalog, and returns the copy. This
+// process must not: it reads the catalog's files, and a file a process closes drops every
+// POSIX lock the process holds on it, the msb library's SQLite locks too. Without them,
+// another msb process (a VM's, a command's) that closes the catalog takes itself for its last
+// user, checkpoints it and deletes its WAL under the library. From then on, what the library
+// writes is lost to every other process, and what it reads can fail as "database disk image
+// is malformed".
+func msbBackup(ctx context.Context) (string, error) {
+	return runSelf(ctx, 2*time.Minute, "msb-backup")
+}
+
+// runMSBBackup copies msb's catalog next to it and prints the copy, for msbBackup.
+func runMSBBackup(args []string) int {
+	if len(args) != 0 {
+		fmt.Fprintln(os.Stderr, "usage: studio msb-backup")
+		return 2
+	}
+	path, err := msbdb.Path()
+	if err == nil {
+		var out string
+		if out, err = msbdb.Backup(context.Background(), path, time.Now(), msbBackupsKept); err == nil {
+			fmt.Println(out)
+			return 0
+		}
+	}
+	fmt.Fprintln(os.Stderr, err)
+	return 1
 }
 
 // runMSBSandboxID prints the id of msb's record of the VM name, for catalogID.
@@ -212,12 +255,6 @@ func runMSBSandboxID(args []string) int {
 	return 1
 }
 
-// msbOpened is set once this process's msb library has opened msb's database. From then on
-// only msb reads it here: SQLite's locks belong to the process, and Studio's own SQLite
-// closing the file would drop the library's locks with it, so that another msb process
-// could write the database at the same time and damage it.
-var msbOpened atomic.Bool
-
 // checkMSBDB is the doctor's probe of msb's database: its integrity, while this process's
 // msb library hasn't opened it yet, then whether msb can read it.
 func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
@@ -226,7 +263,7 @@ func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
 			return strings.TrimSuffix(u.Error(), " "+u.Fix), "", u.Fix
 		}
 	}
-	if path, err := msbdb.Path(); err == nil && !msbOpened.Load() {
+	if path, err := msbdb.Path(); err == nil && !msbdb.Sealed() {
 		var d *msbdb.Damaged
 		if err := msbdb.Check(ctx, path); errors.As(err, &d) {
 			if msbHeldFix != "" {
@@ -235,7 +272,8 @@ func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
 			return d.Error(), "", runtime.RepairOnRestart
 		}
 	}
-	msbOpened.Store(true)
+	// msb opens the catalog next: from then on only msb reads it in this process.
+	msbdb.Seal()
 	var ce *runtime.CatalogError
 	if err := runtime.CheckCatalog(ctx); errors.As(err, &ce) {
 		return ce.Err.Error(), "", ce.Fix
@@ -252,14 +290,17 @@ func storageProbe(list func(context.Context) ([]store.Sandbox, error)) func(cont
 			return nil, err
 		}
 		names := map[string]string{}
+		var byID map[string]store.Sandbox
 		if sbs, err := list(ctx); err == nil {
+			byID = sandboxesByID(sbs)
 			for _, sb := range sbs {
 				names[sandboxes.VMName(sb)] = sb.Name
 			}
 		}
 		issues := make([]doctor.StorageIssue, len(states))
 		for n, st := range states {
-			issues[n] = doctor.StorageIssue{Sandbox: names[st.VM], VM: st.VM, Status: st.Status, Running: st.Running, Reasons: st.Reasons}
+			_, leftover := leftoverVM(byID, st.VM)
+			issues[n] = doctor.StorageIssue{Sandbox: names[st.VM], VM: st.VM, Status: st.Status, Running: st.Running, Reasons: st.Reasons, Leftover: leftover}
 		}
 		return issues, nil
 	}
@@ -281,6 +322,22 @@ func lostVMsProbe(list func(context.Context) ([]store.Sandbox, error)) func(cont
 			return nil, err
 		}
 		return findLostVMs(sbs, statuses, runtime.LostDisks), nil
+	}
+}
+
+// leftoversProbe is the doctor's search for VMs msb keeps under Studio's names that no
+// sandbox of Studio's, from list, uses.
+func leftoversProbe(list func(context.Context) ([]store.Sandbox, error)) func(context.Context) ([]doctor.LeftoverVM, error) {
+	return func(ctx context.Context) ([]doctor.LeftoverVM, error) {
+		sbs, err := list(ctx)
+		if err != nil || len(sbs) == 0 {
+			return nil, err
+		}
+		statuses, err := runtime.New(runtime.Options{}).Statuses(ctx, sandboxes.VMPrefix)
+		if err != nil {
+			return nil, err
+		}
+		return findLeftoverVMs(sbs, statuses), nil
 	}
 }
 
@@ -335,7 +392,8 @@ func (b *msbBackuper) Soon() {
 	}
 }
 
-// backupMSBDB copies msb's catalog whenever it changed, every msbBackupEvery or when asked.
+// backupMSBDB copies msb's catalog whenever it changed, every msbBackupEvery or when asked,
+// each time in a process of its own (msbBackup).
 func backupMSBDB(ctx context.Context, log *slog.Logger) *msbBackuper {
 	b := &msbBackuper{soon: make(chan struct{}, 1)}
 	path, err := msbdb.Path()
@@ -357,7 +415,7 @@ func backupMSBDB(ctx context.Context, log *slog.Logger) *msbBackuper {
 			if changed.IsZero() || !changed.After(copied) {
 				continue
 			}
-			if out, err := msbdb.Backup(ctx, path, time.Now(), msbBackupsKept); err != nil {
+			if out, err := msbBackup(ctx); err != nil {
 				log.Warn("could not back up microsandbox's database", "path", path, "err", err)
 			} else {
 				copied = changed

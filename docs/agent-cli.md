@@ -98,6 +98,10 @@ prints it:
   is settled once decided.
 - It exits 0 when the user approved and that went through, and 1 when they denied or dismissed
   it or the forge refused it.
+- A push that still waits has a `result` once the reviewer left comments on it (`status`
+  pending and `note`, see [git review](git-review.md#review-feedback)). Comments that change
+  while it waits end it early with 75, printing them, so the agent can act on them; `studio
+  wait <id>` again then waits for the decision.
 
 `approval_status` answers only for the calling sandbox's approvals; another sandbox's ID reads
 as unknown. It's also an MCP tool, for agents without the command.

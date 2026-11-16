@@ -1,4 +1,10 @@
-import { addTeammate, expect, sandboxName, test } from "./fixtures"
+import {
+  addTeammate,
+  expect,
+  sandboxName,
+  teammateMenu,
+  test,
+} from "./fixtures"
 
 test("the sidebar opens a teammate, whose profile opens its tasks, memory and settings", async ({
   page,
@@ -15,8 +21,9 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
     page.getByText(`This is where you and ${name} talk.`)
   ).toBeVisible()
 
-  // The name opens the profile's card; its sections open as sheets, each kept in the URL.
-  const profile = page.getByRole("button", { name: `${name}'s profile` })
+  // The crumb row's menu of the teammate opens the profile's card; its sections open as sheets,
+  // each kept in the URL.
+  const profile = { click: () => teammateMenu(page, name, "Profile") }
   const card = page.getByRole("dialog", { name: `${name}'s profile` })
   await profile.click()
   await expect(page).toHaveURL(/[?&]profile=card/)
@@ -58,8 +65,8 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
   await expect(settings).toBeHidden()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
 
-  // The header's Settings opens them at once, and a row of the card opens the same row there.
-  await page.getByRole("button", { name: `${name}'s settings` }).click()
+  // The menu's Settings opens them at once, and a row of the card opens the same row there.
+  await teammateMenu(page, name, "Settings")
   await expect(page).toHaveURL(/[?&]profile=settings/)
   await expect(settings).toBeVisible()
   await page.keyboard.press("Escape")
@@ -162,7 +169,7 @@ test("teaching a teammate puts the fact on its home, where it can be forgotten",
   )
   await expect(learned).toBeVisible()
   // The profile counts what it knows.
-  await page.getByRole("button", { name: `${name}'s profile` }).click()
+  await teammateMenu(page, name, "Profile")
   await expect(
     page.getByRole("dialog", { name: `${name}'s profile` }).getByText(fact)
   ).toBeVisible()
@@ -310,4 +317,39 @@ test("the conversation and the screen split where they are dragged to, and past 
   await expect(conversation).toBeHidden()
   await page.getByRole("button", { name: "Show the conversation" }).click()
   await expect(edge).toBeVisible()
+})
+
+test("the home's rim drags the screen out of its rail, over the page and back to the rail", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Rim ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const sb = await api.createSandbox(sandboxName("rim"), id)
+  await api.guestReady(sb)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const now = page.getByRole("region", { name: `${name} now` })
+  await expect(now).toBeVisible()
+  const edge = page.getByRole("separator", { name: "Resize the home" })
+  const drag = async (dx: number) => {
+    const box = (await edge.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + 300)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + 300, {
+      steps: 12,
+    })
+    await page.mouse.up()
+  }
+  // A little out of the rail opens the desk: the home a panel, the screen beside it.
+  await drag(-300)
+  await expect(page).toHaveURL(/[?&]tab=terminal/)
+  await expect(now).toBeHidden()
+  // All the way left the screen takes the page; all the way right it folds to the rail again.
+  await drag(-2000)
+  await expect(page).toHaveURL(/[?&]full=/)
+  await drag(2000)
+  await expect(page).toHaveURL(/[?&]fold=/)
+  await expect(now).toBeVisible()
 })

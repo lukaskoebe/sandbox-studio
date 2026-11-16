@@ -82,8 +82,9 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
 - **Panels, not sheets, for watching.** Connections, Browser (only with a teammate) and Files
   (files and changes) sit beside the terminal or chat as side panels, toggled from the
   workspace toolbar and remembered per page. On phones a panel takes the full screen. Sheets remain only for short detail opened
-  out of context, such as a git push review, and each of those has "Open as page" for an
-  address of its own that can be linked.
+  out of context, such as a memory conflict, and each of those has "Open as page" for an
+  address of its own that can be linked. A git review is not one of them: Review opens it on
+  its computer's Changes tab.
 - **Approvals.** Every kind has the same card: the rule on the left edge in the area's hue, a
   `KindChip` with the kind's name, a details line (source, environment, age), a title sentence
   (hosts in `Ident`), and Deny / Allow. Grouped requests list their hosts and allow the
@@ -100,6 +101,11 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   Below 640 px, on a page with the breadcrumb row, the pill moves into that row beside Search
   and the cards open below it: at the bottom it covered the composer's send button and the
   terminal's keys. Pages without the row keep the floating pill.
+  Where a composer lies under its corner (a teammate's home, a wide conversation), the stack sits
+  8 px above the composer instead of 1rem from the foot, and moves up as a draft grows, so a card
+  never hides Send (2026-11-16: a waiting card covered it). Each composer reports its box
+  (`useComposerSpot`, `lib/composer-clearance.ts`) and the stack measures where it would rest
+  (`useComposerClearance`); the open list keeps to the room left above it.
   Click alone opens it: a hover would open it over content as the pointer passes. The pill is a
   disclosure button (`aria-expanded`, `aria-controls`), so keyboard and screen-reader users get
   the same states. Enable notifications sits at the top of the open list.
@@ -220,7 +226,7 @@ primitives above and keeps the e2e selectors it had.
   screen, threads in the conversation, and tasks, memory and settings in the profile sheet.
   What waits for the teammate is a compact row each, which opens its card or its review.
 - **Done: chat.** The chat page header and the new chat notice.
-- **Done: git.** Settings (forges, pushes and forge dialogs) and the git review sheet.
+- **Done: git.** Settings (forges, pushes and forge dialogs) and the git review.
 - **Done: settings.** General, providers, git, network, templates and runtime; the build log
   and template spec sheets; template resources. Each section is a `SettingsPage` in the same
   56 rem column, and the nav's title row is as tall as the section's. Toggles and one-off actions are `SettingRow`s
