@@ -175,6 +175,9 @@ func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size
 	if err := m.Store.AdvanceSandboxImport(ctx, envID, imp.ID, store.ImportUploading, store.ImportBuilding, ""); err != nil {
 		return fail(errImportCancelled)
 	}
+	// Read before the work starts, so the caller gets the import as it is now (building), not
+	// wherever a quick start of the work has taken it already.
+	out, err := m.Store.SandboxImport(ctx, envID, imp.ID)
 	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), importTimeout)
 	m.imports.track(imp.ID, cancel)
 	go func() {
@@ -185,7 +188,7 @@ func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size
 			m.finishFailed(runCtx, imp, err)
 		}
 	}()
-	return m.Store.SandboxImport(ctx, envID, imp.ID)
+	return out, err
 }
 
 // storeArchive copies the rest of body to a new file, failing once it exceeds limit
