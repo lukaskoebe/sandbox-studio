@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
@@ -344,7 +345,11 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	// From here on this process's msb library has msb's catalog open, so Studio's own SQLite
 	// leaves the catalog's files alone in it: see msbdb.ErrSealed.
 	msbdb.Seal()
-	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
+	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); errors.Is(err, agentbin.ErrInUse) {
+		// Stopping here would leave no Studio to stop the sandboxes with, on Windows after every
+		// update made while they run. They keep the agent they have, which Studio still talks to.
+		log.Warn("the guest agent wasn't updated: a running sandbox holds it open. Stop every sandbox and restart Studio to update it", "err", err)
+	} else if err != nil {
 		return err
 	}
 	st, err := store.Open(ctx, p.DB())

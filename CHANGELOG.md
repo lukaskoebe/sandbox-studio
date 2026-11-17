@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- On Windows, Studio starts after an update made while sandboxes ran. It stopped at its start
+  with "Access is denied", because a running sandbox holds the guest agent open and Windows
+  won't replace an open file: the new agent now takes its place while the sandbox keeps the old
+  one. Where Windows refuses even that, Studio starts with the old agent and says to restart it
+  with the sandboxes stopped. The new upgrade test found it.
 - The smoke tests upgrade from the latest release to the new build on Linux, macOS and Windows,
   with `install.sh` where there is one. A sandbox the release made keeps running through the
   upgrade with its files, and it still stops, starts and forks under the new build.
