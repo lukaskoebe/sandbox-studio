@@ -6,7 +6,7 @@ import {
   test,
 } from "./fixtures"
 
-test("a teammate is copied to another environment from its profile, and opens there without a provider", async ({
+test("a teammate is copied to another environment from its settings, and opens there without a provider", async ({
   page,
   api,
   env,
@@ -42,10 +42,13 @@ test("a teammate is copied to another environment from its profile, and opens th
   )
 
   await page.goto(`/e/${env}/teammates/${teammate!.id}`)
-  await teammateMenu(page, name, "Profile")
-  await page
-    .getByRole("dialog", { name: `${name}'s profile` })
-    .getByRole("button", { name: "Copy to environment…" })
+  await teammateMenu(page, name, "Settings")
+  const settings = page.getByRole("region", { name: `${name}'s settings` })
+  await settings
+    .getByRole("button", { name: /^Copy to another environment/ })
+    .click()
+  await settings
+    .getByRole("button", { name: "Copy to another environment…" })
     .click()
   const dialog = page.getByRole("dialog", {
     name: `Copy ${name} to another environment`,
@@ -138,9 +141,10 @@ test("a teammate's status counts what runs in its terminals", async ({
   })
   await page.goto(`/e/${env}/teammates/${id}`)
   const header = page.getByRole("region", { name: `${name} now` })
+  // The row's own link: its + is "New thread with" the teammate.
   const row = page
     .locator('[data-sidebar="sidebar"]')
-    .getByRole("link", { name: new RegExp(name) })
+    .getByRole("link", { name: new RegExp(`^${name}`) })
   await expect(header).toContainText("Working · opencode in a terminal", {
     timeout: 15_000,
   })
@@ -410,5 +414,62 @@ test("a teammate's settings show what it knows and works on, its own rules, and 
   await page.getByRole("button", { name: /^Network rules/ }).click()
   const rules = page.locator("#teammate-rules-panel")
   await rules.getByRole("link", { name: new RegExp(host) }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/network\\?rule=`))
+  // The rule opens on the Network page, which then drops ?rule= from the URL.
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/network`))
+  const edit = page.getByRole("dialog", { name: "Edit rule" })
+  await expect(edit).toBeVisible()
+  await expect(edit.getByLabel("Host")).toHaveValue(host)
+})
+
+// The sidebar's >_ opens a terminal on the teammate's computer; its + and ⌘K's "New thread
+// with" open its home with the composer, which starts threads, ready to type in.
+test("the sidebar's + and ⌘K start a new thread with a teammate in its home composer", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Threader ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const computer = sandboxName("thread")
+  const sb = await api.createSandbox(computer, id)
+  await api.guestReady(sb)
+  const row = page
+    .locator('[data-sidebar="sidebar"]')
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: new RegExp(name) }) })
+    .first()
+  const composer = page.getByPlaceholder(`Message ${name}…`)
+
+  await page.goto(`/e/${env}`)
+  await row.hover()
+  await row.getByRole("link", { name: `A terminal on ${computer}` }).click()
+  await expect(page).toHaveURL(
+    new RegExp(`/teammates/${id}\\?.*computer=${sb}.*tab=terminal`)
+  )
+
+  await page.goto(`/e/${env}`)
+  await row.hover()
+  await row.getByRole("link", { name: `New thread with ${name}` }).click()
+  await expect(page).toHaveURL(new RegExp(`/teammates/${id}$`))
+  await expect(composer).toBeFocused()
+  await expect(page.getByRole("button", { name: "Start work" })).toHaveCount(0)
+
+  await page.goto(`/e/${env}`)
+  // The palette's shortcut is there once the sidebar is.
+  await expect(
+    page
+      .locator('[data-sidebar="sidebar"]')
+      .getByRole("button", { name: /^Search/ })
+  ).toBeVisible()
+  const palette = page.getByRole("dialog", { name: "Search Studio" })
+  await page.keyboard.press("Control+k")
+  await expect(palette).toBeVisible()
+  await palette
+    .getByRole("combobox", { name: "Search Studio" })
+    .fill(`new thread with ${name}`)
+  await palette
+    .getByRole("option", { name: new RegExp(`^New thread with ${name}`) })
+    .click()
+  await expect(page).toHaveURL(new RegExp(`/teammates/${id}$`))
+  await expect(composer).toBeFocused()
 })

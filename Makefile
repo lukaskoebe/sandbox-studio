@@ -57,7 +57,7 @@ check: lint test
 	t=$$(mktemp -d) && cd web && pnpm exec openapi-typescript openapi.json -o "$$t/schema.gen.ts" >/dev/null && diff -u src/lib/api/schema.gen.ts "$$t/schema.gen.ts"; s=$$?; rm -rf "$$t"; exit $$s
 	cd web && node --test ../internal/harness/opencode-plugin.test.mjs
 	sh scripts/test-install.sh
-	if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/test-install.sh scripts/macos-app.sh; else echo "shellcheck isn't installed: ci runs it"; fi
+	if command -v shellcheck >/dev/null; then shellcheck install.sh scripts/test-install.sh scripts/macos-app.sh scripts/upgrade-test.sh; else echo "shellcheck isn't installed: ci runs it"; fi
 
 # End-to-end tests: the web UI against Studio built with in-process fakes instead of VMs
 # (internal/e2e). Needs Chromium; see CONTRIBUTING.md.

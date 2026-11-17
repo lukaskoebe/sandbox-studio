@@ -2686,6 +2686,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/devtools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Opens Chrome's DevTools on a session's page, for the user: an address on its own host that serves the frontend of the session's Chromium and that page's debugging socket, and nothing else of the browser. The browser must be running (409), and a page that shows a credential refuses (409). Opening again on the same page of the same run gives the same address (docs/browser.md). */
+        post: operations["openBrowserDevTools"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/downloads": {
         parameters: {
             query?: never;
@@ -3622,6 +3639,16 @@ export interface components {
         BrowserCursor: {
             /** @description A CSS cursor keyword, such as default, pointer or text */
             cursor: string;
+        };
+        BrowserDevTools: {
+            /** @description The page's URL when DevTools opened */
+            pageUrl: string;
+            /** @description The page's DevTools target ID */
+            target: string;
+            /** @description The page's title when DevTools opened */
+            title: string;
+            /** @description The DevTools' own address, devtools-<token>.localhost on Studio's port; it works until the browser stops or the session closes */
+            url: string;
         };
         BrowserDownloadInput: {
             /** @description The file's name, as the list shows it */
@@ -5066,6 +5093,8 @@ export interface components {
             truncated?: boolean;
         };
         GoBrowserInBody: {
+            /** @description As for navigate: the teammate's sandbox localhost reaches */
+            computer?: string;
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
             /**
@@ -5507,6 +5536,8 @@ export interface components {
             name: string;
         };
         NavigateBrowserInBody: {
+            /** @description The teammate's sandbox on the user's screen, which localhost in the browser then reaches with the ports it listens on now. Empty, or not one of the teammate's sandboxes, keeps the sandbox that drove last. */
+            computer?: string;
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
             /** @description Absolute http or https URL to open while the user has taken over */
@@ -14394,6 +14425,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserCursor"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    openBrowserDevTools: {
+        parameters: {
+            query?: {
+                /** @description An ephemeral session's ID; empty for the persistent profile */
+                session?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserDevTools"];
                 };
             };
             /** @description Error */

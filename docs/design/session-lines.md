@@ -90,6 +90,12 @@ unique index keeps (migration 059, which also removed the copies that concurrent
 recorded before).
 Once every environment's sandboxes were listed, spans of sandboxes the pass no longer saw close
 too (`CloseSessionSpansExcept`), so a deleted or stopped sandbox doesn't keep sessions open.
+A pass that misses a sandbox for a beat (its guest reconnecting) closes all it had open, so a
+session that comes back reopens its last row (`rejoin`) rather than opening a new one: keys
+that carry when their session began (terminals, programs, browser sessions, takeovers) rejoin
+however late, a port only within 3 minutes, as it may be another server. Before that, each
+return was a new row dated from the session's start, a lane per return on Home; Home joins
+those rows again (`rejoinSpans`) for the 14 days they are kept.
 Closed spans are kept for 14 days. Sandbox IDs carry no foreign key, so the history outlives a
 deleted sandbox until then.
 

@@ -105,8 +105,16 @@ Each run of the workflow:
    macOS and Windows runners, Studio built from the tag or branch creates a sandbox from that
    image and waits for its guest agent, Linux and Windows run the live browser tests
    (`web/e2e-live`), and every host embeds with the real local model. The macOS runners have
-   no Hypervisor.framework, so they skip the boot with a warning. Nothing
-   is published unless this passes; if it fails on a flake, re-run the failed jobs.
+   no Hypervisor.framework, so they skip the boot with a warning. Its `upgrade` job upgrades
+   from the latest release to this build on each host OS. On Linux and macOS it installs the
+   release with `install.sh`, then installs this build with it too, from a local release that
+   `install.sh` restarts Studio from. On Windows it quits Studio and moves the new
+   `studio.exe` in. [`scripts/upgrade-test.sh`](../scripts/upgrade-test.sh) runs before and
+   after the upgrade. It checks that the new build is the one running, and that the
+   release's teammate is still there. On the hosts that boot, it also checks that a sandbox
+   the release made keeps running with the file the release wrote, and that it still stops,
+   starts and forks. Nothing is published unless this passes; if it fails on a flake, re-run
+   the failed jobs.
 6. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
    `sandbox-studio_<tag>_<os>_<arch>`, each holding a directory of the same name with
    `studio`, `studio-app` (the [Studio app](app.md); on macOS `Sandbox Studio.app`, signed,

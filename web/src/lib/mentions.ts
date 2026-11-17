@@ -47,6 +47,8 @@ export type Candidate = {
   changed: boolean
   /** The span of name that matches the query, to show in bold. */
   match?: [number, number]
+  /** For a fuzzy match, the letters of path that match the query instead. */
+  hits?: number[]
 }
 
 /** The index as files and folders, built once per index. */
@@ -83,19 +85,85 @@ export function candidates(paths: string[], changed: string[]) {
   return out
 }
 
+/** Whether q's letters are all in s, in order. */
+function hasInOrder(q: string, s: string) {
+  for (let i = 0, k = 0; k < q.length; i++, k++) {
+    i = s.indexOf(q[k], i)
+    if (i < 0) return false
+  }
+  return true
+}
+
+/** What a fuzzy run costs: the letters it skips, less two for each it has at a word's start. */
+function cost(hits: number[], s: string, n: number) {
+  let c = hits[hits.length - 1] - hits[0] + 1 - n
+  for (const i of hits) if (i === 0 || "/-_. ".includes(s[i - 1])) c -= 2
+  return c
+}
+
+/**
+ * Where the letters of q are in a name, in order: the tightest run from any start, which may
+ * skip at most a few more letters than q has, so "cmdpal" finds command-palette but not every
+ * name with a c, an m and a d somewhere.
+ */
+function inName(q: string, s: string) {
+  let best: { cost: number; hits: number[] } | undefined
+  for (let st = s.indexOf(q[0]); st >= 0; st = s.indexOf(q[0], st + 1)) {
+    const hits = [st]
+    for (let i = st; hits.length < q.length;) {
+      i = s.indexOf(q[hits.length], i + 1)
+      if (i < 0) break
+      hits.push(i)
+    }
+    if (hits.length < q.length) break
+    if (hits[hits.length - 1] - hits[0] + 1 - q.length > q.length + 3) continue
+    const c = cost(hits, s, q.length)
+    if (!best || c < best.cost) best = { cost: c, hits }
+  }
+  return best
+}
+
+/**
+ * Where the letters of q are along a path that has them all: the run nearest its end, found
+ * backward in one pass, so the name's letters count first.
+ */
+function alongPath(q: string, s: string) {
+  const hits: number[] = new Array(q.length)
+  for (let i = s.length, b = q.length - 1; b >= 0; b--)
+    hits[b] = i = s.lastIndexOf(q[b], i - 1)
+  return { cost: cost(hits, s, q.length), hits }
+}
+
+type Scored = {
+  c: Candidate
+  tier: number
+  cost?: number
+  match?: [number, number]
+  hits?: number[]
+}
+
+const ahead = (a: Scored, b: Scored) =>
+  a.tier - b.tier ||
+  (a.cost ?? 0) - (b.cost ?? 0) ||
+  Number(b.c.changed) - Number(a.c.changed) ||
+  Number(a.c.folder) - Number(b.c.folder) ||
+  a.c.path.length - b.c.path.length ||
+  a.c.path.localeCompare(b.c.path)
+
 /**
  * The candidates for a query, best first: names that start with it, then names that contain
- * it, then paths that do; changed files first within each, then files before folders, then
- * shorter paths. A query with
- * a slash looks in that folder, and an empty one after it lists the folder. Without a query,
- * the changed files and the top of the workspace.
+ * it, then paths that do, then names and then paths that have its letters in order (fuzzy, the
+ * tighter first, and only while the others leave room); changed files first within each,
+ * then files before folders, then shorter paths. A query with a slash looks in that folder, and an empty one after it lists the
+ * folder. Without a query, the changed files and the top of the workspace.
  */
 export function rank(all: Candidate[], query: string, limit = 8) {
   const q = query.toLowerCase()
   const slash = q.lastIndexOf("/")
   const within = slash < 0 ? "" : q.slice(0, slash + 1)
   const term = q.slice(slash + 1)
-  const scored: { c: Candidate; tier: number; match?: [number, number] }[] = []
+  const scored: Scored[] = []
+  const rest: { c: Candidate; name: string; rel: string }[] = []
   for (const c of all) {
     const path = c.path.toLowerCase()
     if (within && !path.startsWith(within)) continue
@@ -114,18 +182,51 @@ export function rank(all: Candidate[], query: string, limit = 8) {
     if (at === 0) scored.push({ c, tier: 0, match: [0, term.length] })
     else if (at > 0) scored.push({ c, tier: 1, match: [at, at + term.length] })
     else if (rel.includes(term)) scored.push({ c, tier: 2 })
+    else rest.push({ c, name, rel })
   }
-  scored.sort(
-    (a, b) =>
-      a.tier - b.tier ||
-      Number(b.c.changed) - Number(a.c.changed) ||
-      Number(a.c.folder) - Number(b.c.folder) ||
-      a.c.path.length - b.c.path.length ||
-      a.c.path.localeCompare(b.c.path)
-  )
+  scored.sort(ahead)
+  // The fuzzy tiers come after the others, so they only fill the room those leave, best first,
+  // kept as they come: a vague query can match every path of a big index.
+  const room = limit - scored.length
+  const fuzzy: Scored[] = []
+  let more = 0
+  if (term.length >= 2 && room > 0)
+    for (const { c, name, rel } of rest) {
+      // The name is the end of the path: without the letters along the path, it hasn't them.
+      if (!hasInOrder(term, rel)) continue
+      const n = inName(term, name)
+      let f: Scored | undefined
+      if (n)
+        f = {
+          c,
+          tier: 3,
+          cost: n.cost,
+          hits: n.hits.map((i) => c.dir.length + i),
+        }
+      else if (term.length >= 3) {
+        const p = alongPath(term, rel)
+        f = {
+          c,
+          tier: 4,
+          cost: p.cost,
+          hits: p.hits.map((i) => within.length + i),
+        }
+      }
+      if (!f) continue
+      more++
+      if (fuzzy.length === room && ahead(f, fuzzy[room - 1]) >= 0) continue
+      let k = fuzzy.length
+      while (k > 0 && ahead(f, fuzzy[k - 1]) < 0) k--
+      fuzzy.splice(k, 0, f)
+      if (fuzzy.length > room) fuzzy.pop()
+    }
   return {
-    total: scored.length,
-    shown: scored.slice(0, limit).map((s) => ({ ...s.c, match: s.match })),
+    total: scored.length + more,
+    shown: [...scored.slice(0, limit), ...fuzzy].map((s) => ({
+      ...s.c,
+      match: s.match,
+      hits: s.hits,
+    })),
   }
 }
 

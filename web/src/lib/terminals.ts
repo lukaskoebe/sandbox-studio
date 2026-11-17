@@ -47,6 +47,6 @@ export function terminalCommand(t: Terminal): string {
   return t.started ? `${command} · started ${startedAgo(t.started)}` : command
 }
 
-/** The websocket a terminal session attaches over, which also names it in terminalText. */
+/** The websocket a terminal session attaches over. */
 export const terminalURL = (env: string, sandbox: string, name: string) =>
   `/api/environments/${env}/sandboxes/${sandbox}/terminals/${name}/attach`

@@ -1,7 +1,8 @@
 # Browser broker
 
 Agents browse the web through a real Chromium. It runs in a separate microVM per teammate,
-and Studio is the only client: agents get the `studio browser` commands, never CDP. This doc covers the
+and Studio is the only client: agents get the `studio browser` commands, never CDP. The user can
+open Chrome's DevTools on a page (see [DevTools](#devtools)). This doc covers the
 implementation.
 
 Code:
@@ -67,7 +68,10 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
   - Commands use the `browser` request kind: a bounded argv for agent-browser plus an
     optional stdin for `batch`.
   - The live view uses `KindTCP` to the guest's loopback port 9223.
-  - Nothing listens on the VM beyond loopback. No CDP port is ever exposed.
+  - Nothing listens on the VM beyond loopback. Chromium's debugging port is on that loopback
+    (agent-browser starts it with `--remote-debugging-port=0`). The guest's `KindTCP`
+    reaches any loopback port, so only the channel guards it: agents never hold the channel,
+    and Studio passes on only one page's socket, for the user's [DevTools](#devtools).
   - The VM's loopback also holds the forwarded ports of the driving sandbox (see
     [localhost](#localhost)); those connections go out over the channel, not a network.
 - **The guest checks every command against its own allow-list.** Only these commands
@@ -83,6 +87,9 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     fixed, read-only script for each, for a note the user pins and for the cursor while the
     user drives (see [Live view and takeover](#live-view-and-takeover)). The host passes only
     the point; it can't pass a script, and a batch can't carry either.
+  - `devtools-port` runs nothing: the guest reads the port Chromium wrote on the first line
+    of the profile's `DevToolsActivePort` (`internal/guest/browser_devtools.go`). It takes
+    no arguments, and a batch can't carry it.
 - **Egress goes through the same gateway, MITM CA and rules.** The VM's HTTPS is always
   terminated with the environment's CA (agent sandboxes' connections are spliced unless a rule
   or a secret needs them checked), so its requests can be checked one by one.
@@ -124,8 +131,17 @@ browser treats it as a secure context.
 What this does and doesn't allow:
 
 - Only the driving sandbox, and only the ports it listened on when it last called. When
-  another of the teammate's sandboxes calls, localhost becomes that one. During a takeover
-  it stays the last driver's.
+  another of the teammate's sandboxes calls, localhost becomes that one.
+- **While the user drives**, each page they open, reload, or go back or forward to first
+  refreshes the forwards, from the computer whose screen shows the browser (the request's
+  `computer`). Studio checks it is one of the teammate's sandboxes in the environment, as
+  `DialForward` does again per connection. Without one, or with one that isn't, the
+  sandbox that drove last is refreshed instead. So a dev server opens from the address bar
+  even when no agent has used the browser yet. A link clicked on the page doesn't refresh
+  them.
+- **The address bar opens a local address over http**: `localhost`, a name under
+  `.localhost`, `127.x.x.x` and `[::1]` typed without a scheme, as Chrome's address bar
+  does. Anything else typed without one opens as https.
 - The connection reaches the sandbox's loopback directly, so the gateway doesn't see it.
   The browser's [policy](#policy-checked-before-anything-runs) still applies: opening a
   `http://localhost:…` page, clicking and filling on it, are checked against its origin's
@@ -559,6 +575,70 @@ clears the local input buffer.
       takes at most 3 s, isn't logged, and is refused while a credential shows on the page.
       A note whose lookup fails keeps its point alone.
 
+## DevTools
+
+The browser window's ⋯ menu has **DevTools** and **DevTools in a window** while the live view
+shows a page. DevTools dock under the page, and the split between them is draggable. Its
+height is kept in `studio.devtools-height`. The panel's header breaks them out into a window,
+and the panel then closes. The window is named after the teammate and the session, so picking
+it again reuses that window. Code: `internal/browser/devtools.go`,
+`web/src/components/browser-devtools.tsx`.
+
+- **Opening.** `POST /api/environments/{env}/teammates/{teammate}/browser/devtools`, with
+  `?session=` for an ephemeral session, calls `Service.OpenDevTools`, which:
+  1. asks the guest for `devtools-port`;
+  2. reads `/json/list` through `KindTCP` with Host `127.0.0.1:<port>`;
+  3. picks the `page` target whose URL is the session's page, or else the first page.
+     `browser_ui`, service worker and other targets are never picked;
+  4. issues a grant. Its token is 128 random bits in hex, tied to the session's state and
+     page, the VM, the run, the port and the target.
+- **The address** is `http://devtools-<token>.localhost:<Studio's port>/`:
+  - Browsers resolve `*.localhost` to loopback, so it reaches Studio.
+  - It is its own origin, so the frontend gets no Studio cookie and can't call Studio's API.
+  - `webauth.Middleware` passes those hosts to `browser.DevToolsRoute` without the login
+    cookie, because the token is the credential. `DevToolsToken` accepts only
+    `devtools-` and 32 lowercase hex digits.
+- **The route** answers only GET and HEAD:
+  - `/` redirects to `/devtools/devtools_app.html?ws=<host>/devtools/page/<target>`, with
+    `wss` behind TLS.
+  - The socket is upgraded only at `/devtools/page/<the grant's target>`.
+  - The frontend's files under `/devtools/` come from the VM's own Chromium, so they match
+    its version.
+  - Everything else is 404: `/json*`, `/devtools/browser*`, other targets, upgrades
+    elsewhere and paths that aren't clean.
+- **Headers.**
+  - Upstream, the route removes Origin (Chromium refuses a socket from an origin it wasn't
+    told to allow), Cookie, Authorization and Referer. It sets Host to `127.0.0.1:<port>`,
+    because Chromium refuses a Host that isn't an address or `localhost`.
+  - Downstream, it drops `Set-Cookie` and adds `frame-ancestors` for `localhost` and
+    `127.0.0.1` only, `Referrer-Policy: no-referrer` and `nosniff`.
+- **Lifetime.**
+  - A grant lives while its run is the session's current one, for at most 12 h. Sleep, a
+    restart, a new run or the session's end ends it.
+  - Opening again within 6 h gives the same address, so a reload keeps the window.
+  - At most 32 grants are kept, and the oldest goes first.
+  - A request on an ended grant gets 410 "These DevTools ended" and the grant is forgotten.
+    Later requests get 404.
+- **Credentials.** While a credential shows on the page, opening DevTools and new sockets
+  are refused (409), as the cursor lookup is.
+- **Trade-offs.**
+  - A page's socket is full CDP for that page, and through `Target` for that session's whole
+    Chromium. The user can read cookies and storage, run scripts and read a filled
+    password.
+  - That is the user's own tool, and the user can already read the vault's values. Agents
+    never get a token, because no tool returns one.
+  - Pages that DevTools navigate to still go through the gateway and its rules.
+  - Emulation or throttling set in DevTools also applies to what agents see on that page.
+- **Chromium only.** The frontend is blank in Firefox, which throws on a language tag, and
+  WebKit wasn't tried. The panel checks `navigator.userAgentData.brands` for Chromium.
+  Elsewhere it shows the address to open in Chrome or Edge, with Copy and Open buttons.
+  - The desktop app on macOS and Linux is WebKit, so it shows the address too.
+  - Its `window.open` goes to the system browser, so the window option opens DevTools
+    there.
+- **Older guests.** A browser VM started before this version runs the older guest agent,
+  which answers "is not allowed". The error tells the user to put the browser to sleep and
+  wake it.
+
 ## Ephemeral sessions
 
 An agent can open a throwaway session next to the persistent profile:
@@ -721,7 +801,15 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
 - localhost: the guest's listeners and their relay, the reserved and taken ports
   (`internal/guest`), and a page on a forwarded port through the Hub, the broker and the fake
   guests, with a port that stopped and refused forwards (`internal/e2e`,
-  `TestBrowserLocalhostIsTheDrivingSandbox`).
+  `TestBrowserLocalhostIsTheDrivingSandbox`);
+- DevTools:
+  - the guest's port file and its refusals (`internal/guest`, `browser_devtools_test.go`);
+  - the hosts and the middleware (`internal/webauth`);
+  - the grant, the target pick, reuse and the bound, the route's refusals with no request
+    reaching the browser, the headers, the socket, the 409 while a credential shows, and
+    410 then 404 after sleep (`internal/browser`, `devtools_test.go`);
+  - the panel, the window and the end in `e2e/browser.spec.ts`, through the fake's debugging
+    server.
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -760,7 +848,15 @@ to 1.5x from its top left, and the whole frame in view without scrolling. CDP's 
 `pageScaleFactor` follows the pinch, as `pointerToPage` assumes. agent-browser itself is not
 in that loop; a browser VM is.
 
+**Verified against a real Chromium (2026-11-16):** DevTools. Playwright's Chromium 1243,
+headless with `--remote-debugging-port`, sat behind the e2e fake's port
+(`STUDIO_E2E_DEVTOOLS`). Its own frontend loaded through the route, docked and in a window,
+and showed the page's elements, styles and console. Firefox 146 rendered the frontend blank.
+
 **Pending a live run:**
+
+- DevTools in a browser VM: Debian's `chromium` is assumed to ship the frontend in its
+  resources, as Playwright's build does.
 
 - Browser commands with screenshots over the channel, since the 2026-10-13 fix. The channel
   limits were measured on a scratch Studio with file reads of the same reply shape (see

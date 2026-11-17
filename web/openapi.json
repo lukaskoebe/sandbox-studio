@@ -581,6 +581,34 @@
         ],
         "type": "object"
       },
+      "BrowserDevTools": {
+        "additionalProperties": false,
+        "properties": {
+          "pageUrl": {
+            "description": "The page's URL when DevTools opened",
+            "type": "string"
+          },
+          "target": {
+            "description": "The page's DevTools target ID",
+            "type": "string"
+          },
+          "title": {
+            "description": "The page's title when DevTools opened",
+            "type": "string"
+          },
+          "url": {
+            "description": "The DevTools' own address, devtools-\u003ctoken\u003e.localhost on Studio's port; it works until the browser stops or the session closes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "target",
+          "title",
+          "pageUrl"
+        ],
+        "type": "object"
+      },
       "BrowserDownloadInput": {
         "additionalProperties": false,
         "properties": {
@@ -4710,6 +4738,11 @@
       "GoBrowserInBody": {
         "additionalProperties": false,
         "properties": {
+          "computer": {
+            "description": "As for navigate: the teammate's sandbox localhost reaches",
+            "maxLength": 64,
+            "type": "string"
+          },
           "session": {
             "description": "An ephemeral session's ID; empty for the persistent profile",
             "maxLength": 32,
@@ -6087,6 +6120,11 @@
       "NavigateBrowserInBody": {
         "additionalProperties": false,
         "properties": {
+          "computer": {
+            "description": "The teammate's sandbox on the user's screen, which localhost in the browser then reaches with the ports it listens on now. Empty, or not one of the teammate's sandboxes, keeps the sandbox that drove last.",
+            "maxLength": 64,
+            "type": "string"
+          },
           "session": {
             "description": "An ephemeral session's ID; empty for the persistent profile",
             "maxLength": 32,
@@ -22995,6 +23033,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BrowserCursor"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/devtools": {
+      "post": {
+        "description": "Opens Chrome's DevTools on a session's page, for the user: an address on its own host that serves the frontend of the session's Chromium and that page's debugging socket, and nothing else of the browser. The browser must be running (409), and a page that shows a credential refuses (409). Opening again on the same page of the same run gives the same address (docs/browser.md).",
+        "operationId": "openBrowserDevTools",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "explode": false,
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "description": "An ephemeral session's ID; empty for the persistent profile",
+              "maxLength": 32,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserDevTools"
                 }
               }
             },

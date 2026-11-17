@@ -77,7 +77,6 @@ import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { teammateApprovals, ThreadDot } from "@/components/teammate/home"
-import { StartWorkDialog } from "@/components/teammate/start-work"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
@@ -92,7 +91,7 @@ import {
 } from "@/lib/api/client"
 import { chatTitle, type Chat } from "@/lib/chats"
 import { lastComputer, screenComputer } from "@/lib/computer"
-import { openStartWork } from "@/lib/start-work"
+import { newThreadWith } from "@/lib/new-thread"
 import { programName } from "@/lib/terminals"
 import {
   agentTerminals,
@@ -444,7 +443,6 @@ export function AppSidebar({
         open={addingTeammate}
         onOpenChange={setAddingTeammate}
       />
-      <StartWorkDialog env={env} />
       <CommandPalette
         env={env}
         teammates={teammates.data ?? []}
@@ -604,15 +602,16 @@ function TeammateRow({
               <TerminalIcon />
             </Link>
           )}
-          <button
-            type="button"
-            aria-label={`Start work with ${teammate.name}`}
-            title={`Start work with ${teammate.name}`}
+          <Link
+            to="/e/$env/teammates/$id"
+            params={{ env, id: teammate.id }}
+            aria-label={`New thread with ${teammate.name}`}
+            title={`New thread with ${teammate.name}`}
             className={action}
-            onClick={() => openStartWork({ teammate: teammate.id })}
+            onClick={() => newThreadWith(teammate.id)}
           >
             <PlusIcon />
-          </button>
+          </Link>
         </span>
       </SidebarMenuItem>
       {(listed.length > 0 || terminals.length > 0) && (

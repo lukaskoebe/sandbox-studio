@@ -347,6 +347,9 @@
     cursor: col-resize;
     user-select: none;
   }
+  body[data-resizing="row"] {
+    cursor: row-resize;
+  }
   body[data-resizing] iframe {
     pointer-events: none;
   }

@@ -211,7 +211,11 @@ export function CandidateRow({
         <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
       <span className="shrink-0">
-        <Highlight text={c.folder ? `${c.name}/` : c.name} match={c.match} />
+        <Highlight
+          text={c.folder ? `${c.name}/` : c.name}
+          match={c.match}
+          hits={c.hits?.map((i) => i - c.dir.length).filter((i) => i >= 0)}
+        />
       </span>
       <span className="min-w-0 truncate text-muted-foreground">{c.dir}</span>
       {c.changed && (
@@ -237,10 +241,25 @@ function Kbd({ children }: { children: ReactNode }) {
 function Highlight({
   text,
   match,
+  hits,
 }: {
   text: string
   match?: [number, number]
+  /** A fuzzy match's letters of the text. */
+  hits?: number[]
 }) {
+  if (!match && hits?.length) {
+    const on = new Set(hits)
+    return [...text].map((ch, i) =>
+      on.has(i) ? (
+        <b key={i} className="font-semibold text-primary">
+          {ch}
+        </b>
+      ) : (
+        ch
+      )
+    )
+  }
   if (!match) return text
   return (
     <>

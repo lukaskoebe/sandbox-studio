@@ -37,7 +37,7 @@ jobs:
         run: sh scripts/test-install.sh
       - name: shellcheck
         if: runner.os == 'Linux'
-        run: shellcheck install.sh scripts/test-install.sh scripts/macos-app.sh
+        run: shellcheck install.sh scripts/test-install.sh scripts/macos-app.sh scripts/upgrade-test.sh
 
   # The app (cmd/studio-app) is a module of its own, so the go job's ./... leaves it out.
   app:

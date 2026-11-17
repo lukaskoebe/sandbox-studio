@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- The smoke tests upgrade from the latest release to the new build on Linux, macOS and Windows,
+  with `install.sh` where there is one. A sandbox the release made keeps running through the
+  upgrade with its files, and it still stops, starts and forks under the new build.
+- ⌘K forgives a typo ("netwrok" finds Network), and `/` in ⌘K, @ in the composer and Files' Go
+  to find a file by its letters in order ("chkcoup" finds checkout/coupon.ts), with them marked.
+- ⌘K finds more places: a teammate's browser, tasks and memory, each row of its settings by
+  what it holds ("stealth", "soul", "check-ins"), a computer's tabs ("docs changes"), and Home.
+- Alt+← and Alt+→ go back and forward through Studio's pages, also in the desktop app, and ⌘[
+  and ⌘] do on a Mac. Text fields, the terminal and the browser you drive keep the keys.
+- The teammate's Profile card is gone from the crumb's teammate menu. Its settings took what
+  only the card had: their header names the teammate's role, agent, model and what it is doing,
+  and the Tasks row has New task. Old `?profile=card` links open the settings.
+- Typing `localhost:3000` into the teammate's browser opens the dev server on the computer
+  you're looking at: local addresses open over http, and its ports are refreshed with each
+  page you open, so it works before any agent has used the browser.
+- Chrome's DevTools for the teammate's browser: the browser's ⋯ menu opens them under the page,
+  with a split you can drag, or in a window of their own, which the panel's header breaks them
+  out into. They reach that page and nothing else of the browser, and end when the browser
+  goes to sleep or restarts. They need Chrome, Edge or another Chromium browser: elsewhere,
+  the desktop app on macOS and Linux included, the panel gives their address to open in one.
+  A browser that was already awake needs to be put to sleep and woken once after the update.
+- Start work and Bring X in are gone. A new thread starts from the teammate's home: its
+  composer, which the sidebar's + and ⌘K's "New thread with X" now open with the cursor in it.
+- Home's sandbox lines no longer pile up copies of one terminal or port. When Studio missed a
+  sandbox for a moment, every session closed. On the next look each came back as a new row,
+  and a terminal's new row was dated from when the terminal started, so one terminal filled
+  dozens of lanes. A session that comes back now picks up its own row, and the copies already
+  recorded are drawn as one.
+
 ## v0.24.0 — 2026-11-16
 
 - Fixes from v0.23.0, which copied microsandbox's database every five minutes and after each

@@ -15,6 +15,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
+	"net/http/httputil"
 	"strings"
 	"sync"
 	"time"
@@ -119,6 +121,11 @@ type Service struct {
 	states   map[string]*state // by teammate ID
 	outcomes map[string]*credOutcome
 	signIns  signIns
+	devtools map[string]*devGrant // by token; see devtools.go
+
+	devOnce      sync.Once
+	devTransport *http.Transport
+	devProxy     *httputil.ReverseProxy
 }
 
 // state is what the broker keeps about one teammate's browser. Fields below run are

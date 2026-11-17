@@ -284,7 +284,7 @@ export async function addTeammate(
   return teammate!.id
 }
 
-/** A teammate's menu in the crumb row, which switches teammate and opens its profile and settings. */
+/** A teammate's menu in the crumb row, which switches teammate and opens its threads and settings. */
 export async function teammateMenu(page: Page, name: string, item: string) {
   await page
     .getByRole("navigation", { name: "Where you are" })

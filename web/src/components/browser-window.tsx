@@ -14,6 +14,7 @@ import {
   ArrowClockwiseIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowSquareOutIcon,
   ArrowsOutIcon,
   CaretLeftIcon,
   CaretRightIcon,
@@ -32,6 +33,7 @@ import {
   ShieldWarningIcon,
   SignOutIcon,
   WarningIcon,
+  WrenchIcon,
   XIcon,
 } from "@phosphor-icons/react"
 import {
@@ -39,6 +41,11 @@ import {
   BrowserControlDecision,
   BrowserCredentialDecision,
 } from "@/components/browser-approval"
+import {
+  DevToolsPanel,
+  popOutDevTools,
+  type OpenedDevTools,
+} from "@/components/browser-devtools"
 import { BrowserDownloads } from "@/components/browser-downloads"
 import { BrowserLive } from "@/components/browser-live"
 import {
@@ -52,6 +59,11 @@ import {
   useBrowserNotes,
 } from "@/components/browser-notes"
 import { KindChip } from "@/components/kind-chip"
+import {
+  ResizeHandle,
+  useElementHeight,
+  useStoredSize,
+} from "@/components/resize-handle"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
   AlertDialog,
@@ -147,6 +159,9 @@ export function replayShot(replay: BrowserReplay) {
 type Props = {
   env: string
   teammate: string
+  /** The teammate's computer whose screen shows the window: localhost reaches it while the
+   * user drives. */
+  computer?: string
   /** Shows or hides the activity and sites beside the window. */
   onActivity?: () => void
   /** Whether they show. */
@@ -176,6 +191,7 @@ function approvalSession(a: Approval) {
 export function BrowserWindow({
   env,
   teammate,
+  computer,
   onActivity,
   activity,
   onSites,
@@ -389,13 +405,16 @@ export function BrowserWindow({
     if (!(await takeWheel())) return false
     navigate.mutate({
       params: { path },
-      body: { url: normalized.value, session: sessionID },
+      body: { url: normalized.value, session: sessionID, computer },
     })
     return true
   }
   const go = async (to: "back" | "forward" | "reload") => {
     if (!(await takeWheel())) return
-    move.mutate({ params: { path }, body: { to, session: sessionID } })
+    move.mutate({
+      params: { path },
+      body: { to, session: sessionID, computer },
+    })
   }
   // Why the last wake failed, on the sleeping browser's card until the next try: a toast
   // that fades left the card as it was, as if waking had done nothing.
@@ -427,7 +446,10 @@ export function BrowserWindow({
       if (!(await setWheel(true))) return
       const normalized = normalizeBrowserAddress(raw)
       if (normalized.value)
-        navigate.mutate({ params: { path }, body: { url: normalized.value } })
+        navigate.mutate({
+          params: { path },
+          body: { url: normalized.value, computer },
+        })
       else setAddressError(normalized.error ?? "Enter a valid website address.")
     }
   }
@@ -462,10 +484,43 @@ export function BrowserWindow({
     onReplay,
   }
 
+  // Chrome's DevTools for the page, docked under it, until the session or the run changes.
+  const [devtools, setDevtools] = useState<OpenedDevTools>()
+  useEffect(() => setDevtools(undefined), [sessionID, running])
+  const [devtoolsHeight, setDevtoolsHeight] = useStoredSize(
+    devtoolsSplit.key,
+    devtoolsSplit.default
+  )
+  const [setWindowBox, windowHeight] = useElementHeight<HTMLDivElement>()
+  const devtoolsMax = Math.max(
+    devtoolsSplit.min,
+    windowHeight - devtoolsSplit.viewMin
+  )
+  const openDevTools = $api.useMutation(
+    "post",
+    "/api/environments/{env}/teammates/{teammate}/browser/devtools"
+  )
+  const devtoolsWindow = `studio-devtools-${teammate}-${sessionID}`
+  const showDevTools = (popOut: boolean) =>
+    openDevTools.mutate(
+      { params: { path, query: { session: sessionID || undefined } } },
+      {
+        onSuccess: (opened) => {
+          if (!popOut) return setDevtools(opened)
+          popOutDevTools(opened.url, devtoolsWindow)
+          setDevtools(undefined)
+        },
+        onError: onError("open DevTools"),
+      }
+    )
+
   const live = `${window.location.origin}/api/environments/${encodeURIComponent(env)}/teammates/${encodeURIComponent(teammate)}/browser/live${sessionID ? `?session=${encodeURIComponent(sessionID)}` : ""}`
 
   return (
-    <div className="@container/bw relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+    <div
+      ref={setWindowBox}
+      className="@container/bw relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+    >
       {running && sessions.length > 0 && <TabStrip w={w} />}
       <div className="flex h-10 shrink-0 items-center gap-0.5 border-b px-1.5">
         {replay ? (
@@ -617,6 +672,29 @@ export function BrowserWindow({
                 <ArrowsOutIcon />
                 Fit the page to this view
               </DropdownMenuCheckboxItem>
+              {liveView && (
+                <DropdownMenuCheckboxItem
+                  checked={!!devtools}
+                  disabled={openDevTools.isPending}
+                  closeOnClick
+                  onCheckedChange={(on) =>
+                    on ? showDevTools(false) : setDevtools(undefined)
+                  }
+                  title="Chrome's DevTools for the page: elements, console, network. Agents never get them."
+                >
+                  <WrenchIcon />
+                  DevTools
+                </DropdownMenuCheckboxItem>
+              )}
+              {liveView && (
+                <DropdownMenuItem
+                  disabled={openDevTools.isPending}
+                  onClick={() => showDevTools(true)}
+                >
+                  <ArrowSquareOutIcon />
+                  DevTools in a window
+                </DropdownMenuItem>
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
@@ -795,6 +873,30 @@ export function BrowserWindow({
           </div>
         )}
       </div>
+      {liveView && devtools && (
+        <>
+          <ResizeHandle
+            label="DevTools"
+            side="bottom"
+            size={Math.min(devtoolsHeight, devtoolsMax)}
+            min={devtoolsSplit.min}
+            max={devtoolsMax}
+            defaultSize={devtoolsSplit.default}
+            onResize={setDevtoolsHeight}
+            className="-my-1"
+          />
+          <DevToolsPanel
+            devtools={devtools}
+            name={name}
+            height={Math.min(devtoolsHeight, devtoolsMax)}
+            onPopOut={() => {
+              popOutDevTools(devtools.url, devtoolsWindow)
+              setDevtools(undefined)
+            }}
+            onClose={() => setDevtools(undefined)}
+          />
+        </>
+      )}
       <AlertDialog open={resetting} onOpenChange={setResetting}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -820,6 +922,14 @@ export function BrowserWindow({
       </AlertDialog>
     </div>
   )
+}
+
+/** DevTools docked under the page: their height, kept in this browser, and what they leave it. */
+const devtoolsSplit = {
+  key: "studio.devtools-height",
+  default: 320,
+  min: 140,
+  viewMin: 200,
 }
 
 /** What the window's parts share. */

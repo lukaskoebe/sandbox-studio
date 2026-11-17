@@ -93,6 +93,7 @@ type FakeBrowser = {
     sessions: {
       slot: number
       url: string
+      title: string
       viewport: [number, number]
       scale: number
     }[]
@@ -167,6 +168,32 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   await page.getByRole("button", { name: `Hand back to ${name}` }).click()
   await expect(page.getByTitle(`${name} isn't using the browser`)).toBeVisible()
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
+})
+
+// localhost typed into the address bar opens over http, on the computer whose screen shows
+// the browser, with the ports it listens on now: no agent has to have used the browser.
+test("localhost in the address bar opens the computer's dev server", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { tm, sb, base } = await browsing(page, api, env)
+  await api.json("PUT", `/api/e2e/sandboxes/${sb}/ports`, { ports: [3000] })
+  const address = page.getByLabel("Browser address")
+  await address.fill("localhost:3000/app")
+  await address.press("Enter")
+  await expect
+    .poll(async () => (await api.json<Status>("GET", base))!.url)
+    .toBe("http://localhost:3000/app")
+  const title = async () =>
+    (await api.json<FakeBrowser>(
+      "GET",
+      `/api/e2e/teammates/${tm}/browser`
+    ))!.browser!.sessions.find((s) => s.slot === 0)!.title
+  await expect
+    .poll(title)
+    .toBe(`Preview of sandbox ${sb} on port 3000, path /app`)
+  await expect(address).toHaveValue("http://localhost:3000/app")
 })
 
 // A sleeping browser picks up where it left off: its last pages, newest first, each wake it
@@ -433,6 +460,60 @@ test("the live view shows the page's cursor under the mouse while you drive", as
       () => getComputedStyle(document.documentElement).overscrollBehaviorY
     )
   ).toBe("none")
+})
+
+// DevTools open under the page, on a host of their own that reaches the page's socket and
+// nothing else of the browser; the header breaks them out into a window, and they end when the
+// browser goes to sleep.
+test("DevTools open under the page and break out into a window", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { base } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("https://example.com/login")
+  await address.press("Enter")
+  await expect(page.getByLabel("Live view of the browser")).toBeVisible()
+
+  const options = page.getByRole("button", { name: "Browser options" })
+  await options.click()
+  await page.getByRole("menuitemcheckbox", { name: "DevTools" }).click()
+  const panel = page.getByRole("region", { name: "DevTools" })
+  await expect(panel).toBeVisible()
+  const iframe = panel.locator("iframe")
+  const src = (await iframe.getAttribute("src"))!
+  expect(src).toMatch(/^http:\/\/devtools-[0-9a-f]{32}\.localhost:\d+\/$/)
+  // The fake frontend asks the page's socket which page it is, as DevTools do.
+  const devtools = iframe.contentFrame()
+  await expect(devtools.locator("#state")).toHaveText(
+    /^Inspecting .+ at https:\/\/example\.com\/login/
+  )
+  const frame = (await (await iframe.elementHandle()).contentFrame())!
+  const status = (path: string) =>
+    frame.evaluate((p) => fetch(p).then((r) => r.status), path)
+  expect(await status("/json/list")).toBe(404)
+  expect(await status("/devtools/browser/x")).toBe(404)
+
+  // Opening again, as after a reload, is the same DevTools.
+  const again = await api.json<{ url: string }>("POST", `${base}/devtools`)
+  expect(again!.url).toBe(src)
+
+  // Out into a window, which the panel leaves to.
+  const popup = page.waitForEvent("popup")
+  await panel.getByRole("button", { name: "Open DevTools in a window" }).click()
+  const win = await popup
+  await expect(win.locator("#state")).toHaveText(/^Inspecting /)
+  expect(new URL(win.url()).host).toBe(new URL(src).host)
+  await expect(panel).toBeHidden()
+
+  // The browser's sleep ends them.
+  await api.json("POST", `${base}/stop`)
+  await expect
+    .poll(async () => (await api.json<Status>("GET", base))!.vm)
+    .not.toBe("running")
+  await win.reload()
+  await expect(win.getByRole("heading")).toHaveText("These DevTools ended")
 })
 
 // Fit the page to this view gives the page the size of the view's body, one pixel to one, and

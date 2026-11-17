@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
@@ -17,7 +17,6 @@ import {
   PlusIcon,
   SparkleIcon,
   TerminalWindowIcon,
-  UserPlusIcon,
   type Icon,
 } from "@phosphor-icons/react"
 import { BaseMark } from "@/components/base-dialog"
@@ -83,6 +82,7 @@ import {
   type ThreadStatus,
 } from "@/lib/threads"
 import { cn, formatAge } from "@/lib/utils"
+import { useNewThreadFocus } from "@/lib/new-thread"
 
 type Event = components["schemas"]["TeammateEvent"]
 type Turn = components["schemas"]["TeammateTurn"]
@@ -163,13 +163,10 @@ type HomeProps = {
   /** Whether the computers have loaded, so "no computer yet" is true. */
   loaded: boolean
   onThread: (chat: Chat) => void
-  onProfile: (view: "card" | "tasks" | "memory" | "settings") => void
+  onProfile: (view: "tasks" | "memory" | "settings") => void
   onWatch: () => void
   /** Opens a push waiting for review on the screen's Changes. */
   onReview: (a: Approval) => void
-  onStartWork: () => void
-  /** Brings the teammate into what the user does in the terminal on the desk. */
-  onBringIn?: () => void
   /** Opens one of its computers on the screen, on a tab and terminal session. */
   onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
   /** The desk's home takes the page again, the computer folded to its rail. */
@@ -196,7 +193,7 @@ function useAgentTerminals(env: string, computers: Sandbox[]) {
 
 /**
  * The home with the page to itself (docs/design/teammate-computer.md). It opens with what the
- * teammate does now: what waits for you, what runs, and Start work. Below are its threads as
+ * teammate does now: what waits for you and what runs. Below are its threads as
  * cards by day, newest first, with what it learned and its tasks between them, and its
  * computers, each one click from its terminal, browser and files: beside the threads on a wide
  * page, above them on a narrow one. The composer at the bottom starts a new thread.
@@ -214,7 +211,6 @@ function FullHome({
   onProfile,
   onWatch,
   onReview,
-  onStartWork,
   onOpenComputer,
 }: HomeProps) {
   const id = teammate.id
@@ -333,7 +329,6 @@ function FullHome({
             onThread={onThread}
             onReview={onReview}
             onWatch={onWatch}
-            onStartWork={onStartWork}
             onOpenComputer={onOpenComputer}
           />
           <div className="grid items-start gap-4 @4xl:grid-cols-[minmax(0,1fr)_17rem] @4xl:gap-6">
@@ -395,7 +390,7 @@ function FullHome({
 /**
  * The top of the teammate's home: what it does now. What waits for you comes first, each with
  * the button that answers it, then what runs: its threads at work, its agents in terminals and
- * its browser. With nothing alive it is one line, its status beside Start work.
+ * its browser. With nothing alive it is one line, its status.
  */
 function NowCard({
   env,
@@ -410,7 +405,6 @@ function NowCard({
   onThread,
   onReview,
   onWatch,
-  onStartWork,
   onOpenComputer,
 }: {
   env: string
@@ -425,7 +419,6 @@ function NowCard({
   onThread: (chat: Chat) => void
   onReview: (a: Approval) => void
   onWatch: () => void
-  onStartWork: () => void
   onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
 }) {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
@@ -523,10 +516,6 @@ function NowCard({
           provider={providers.data?.find((p) => p.id === teammate.providerId)}
           problemsOnly
         />
-        <Button size="sm" onClick={onStartWork}>
-          <PlusIcon />
-          Start work
-        </Button>
       </div>
       {waiting.length > 0 && (
         <Waiting env={env} approvals={waiting} onReview={onReview} inCard />
@@ -793,8 +782,6 @@ function DeskHome({
   watching,
   onThread,
   onReview,
-  onStartWork,
-  onBringIn,
   onOpenComputer,
   onExpand,
   onFold,
@@ -825,22 +812,6 @@ function DeskHome({
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1 pr-1.5 pl-3">
         <h2 className="mr-1 font-heading text-sm font-semibold">Home</h2>
-        <Button size="xs" variant="outline" onClick={onStartWork}>
-          <PlusIcon />
-          Start work
-        </Button>
-        {onBringIn && (
-          <Button
-            size="xs"
-            variant="ghost"
-            className="min-w-0 text-muted-foreground"
-            title={`Start a thread with ${teammate.name} on what you are doing here`}
-            onClick={onBringIn}
-          >
-            <UserPlusIcon />
-            <span className="truncate">Bring {teammate.name} in</span>
-          </Button>
-        )}
         <span className="ml-auto flex shrink-0 items-center">
           <Button
             variant="ghost"
@@ -1468,6 +1439,8 @@ function NewThread({
   computers: Sandbox[]
   onThread: (chat: Chat) => void
 }) {
+  const box = useRef<HTMLDivElement>(null)
+  useNewThreadFocus(teammate.id, box)
   const queryClient = useQueryClient()
   const [picked, setPicked] = useState<string>()
   const computer = computers.find((c) => c.id === picked) ?? shown
@@ -1592,7 +1565,7 @@ function NewThread({
   )
 
   return (
-    <ComposerDock className="@container/composer max-w-5xl">
+    <ComposerDock ref={box} className="@container/composer max-w-5xl">
       <Composer
         onSend={send}
         error={problem}

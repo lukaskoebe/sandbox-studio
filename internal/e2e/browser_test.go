@@ -250,6 +250,41 @@ func TestBrowserLocalhostIsTheDrivingSandbox(t *testing.T) {
 	}
 }
 
+// While the user drives, localhost is the computer on their screen, with the ports it
+// listens on as each page opens, even before any agent used the browser; without one named,
+// it stays the sandbox that drove last.
+func TestBrowserLocalhostWhileTheUserDrives(t *testing.T) {
+	f := newBrowserFixture(t)
+	if err := f.svc.Start(f.ctx, f.env, f.teammate); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.teammate, "", true); err != nil {
+		t.Fatal(err)
+	}
+	open := func(computer, u string) string {
+		t.Helper()
+		if _, err := f.svc.Navigate(f.ctx, f.env, f.teammate, "", computer, u); err != nil {
+			t.Fatalf("open %s: %v", u, err)
+		}
+		return f.tab(0).Title
+	}
+	if got := open(f.agent.id, "http://localhost:3000/app"); got != "Preview of sandbox "+f.agent.id+" on port 3000, path /app" {
+		t.Fatalf("localhost:3000 on the computer's screen: %s", got)
+	}
+	// A dev server started since opens with the next page, reload included.
+	f.agent.SetPorts([]int{3000, 5173})
+	if got := open(f.agent.id, "http://localhost:5173/"); !strings.HasSuffix(got, "on port 5173, path /") {
+		t.Fatalf("localhost:5173 started since: %s", got)
+	}
+	// A computer that isn't one of the teammate's sandboxes keeps the last one.
+	if got := open("no-such-sandbox", "http://localhost:5173/x"); !strings.HasSuffix(got, "on port 5173, path /x") {
+		t.Fatalf("an unknown computer keeps the last one: %s", got)
+	}
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.teammate, "", false); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBrowserHistoryAndLiveView(t *testing.T) {
 	f := newBrowserFixture(t)
 	if err := f.svc.Start(f.ctx, f.env, f.teammate); err != nil {
@@ -259,13 +294,13 @@ func TestBrowserHistoryAndLiveView(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, u := range []string{"https://example.com/a", "https://example.com/b"} {
-		if st, err := f.svc.Navigate(f.ctx, f.env, f.teammate, "", u); err != nil || st.URL != u {
+		if st, err := f.svc.Navigate(f.ctx, f.env, f.teammate, "", "", u); err != nil || st.URL != u {
 			t.Fatalf("navigate %s: %+v %v", u, st, err)
 		}
 	}
 	for _, step := range []struct{ to, want string }{{"back", "https://example.com/a"}, {"back", "about:blank"},
 		{"forward", "https://example.com/a"}, {"reload", "https://example.com/a"}, {"forward", "https://example.com/b"}} {
-		if st, err := f.svc.Go(f.ctx, f.env, f.teammate, "", step.to); err != nil || st.URL != step.want {
+		if st, err := f.svc.Go(f.ctx, f.env, f.teammate, "", "", step.to); err != nil || st.URL != step.want {
 			t.Fatalf("%s: %+v %v, want %s", step.to, st, err, step.want)
 		}
 	}
@@ -362,7 +397,7 @@ func TestBrowserElementAtThroughTheChannel(t *testing.T) {
 	if err := f.svc.SetTakeover(f.ctx, f.env, f.teammate, "", true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Navigate(f.ctx, f.env, f.teammate, "", "https://example.com/login"); err != nil {
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.teammate, "", "", "https://example.com/login"); err != nil {
 		t.Fatal(err)
 	}
 	b := f.vm.browserVM()

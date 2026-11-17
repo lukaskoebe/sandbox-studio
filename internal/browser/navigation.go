@@ -48,15 +48,16 @@ func (s *Service) currentBrowserURL(ctx context.Context, st *state, pg *page) (s
 
 // Navigate runs a user-requested page open in a session ("" for the persistent profile) of
 // an already-running browser while the user has taken that session over. It shares the
-// command slot with agent calls, Stop, and handback.
-func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, rawURL string) (BrowserStatus, error) {
+// command slot with agent calls, Stop, and handback. computer is the teammate's sandbox
+// on the user's screen, which localhost then reaches; "" keeps the last driver's.
+func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, computer, rawURL string) (BrowserStatus, error) {
 	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return BrowserStatus{}, err
 	}
 	if !validNavigationURL(rawURL) {
 		return BrowserStatus{}, ErrBadURL
 	}
-	return s.drive(ctx, envID, teammateID, session, []string{"open", rawURL}, "open", rawURL)
+	return s.drive(ctx, envID, teammateID, session, computer, []string{"open", rawURL}, "open", rawURL)
 }
 
 // Moves the user can make in a session's history, as the browser's toolbar does.
@@ -64,20 +65,20 @@ var historyMoves = map[string]bool{"back": true, "forward": true, "reload": true
 
 // Go goes back, forward or reloads the page in a session the user has taken over, like
 // Navigate.
-func (s *Service) Go(ctx context.Context, envID, teammateID, session, to string) (BrowserStatus, error) {
+func (s *Service) Go(ctx context.Context, envID, teammateID, session, computer, to string) (BrowserStatus, error) {
 	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return BrowserStatus{}, err
 	}
 	if !historyMoves[to] {
 		return BrowserStatus{}, ErrBadMove
 	}
-	return s.drive(ctx, envID, teammateID, session, []string{to}, to, "")
+	return s.drive(ctx, envID, teammateID, session, computer, []string{to}, to, "")
 }
 
 // drive runs one of the user's commands in a session they have taken over, records it as
 // action, and returns the status with the page it lands on. fallbackURL is logged when the
 // browser cannot say where it is.
-func (s *Service) drive(ctx context.Context, envID, teammateID, session string, args []string, action, fallbackURL string) (BrowserStatus, error) {
+func (s *Service) drive(ctx context.Context, envID, teammateID, session, computer string, args []string, action, fallbackURL string) (BrowserStatus, error) {
 	st := s.state(envID, teammateID)
 	s.mu.Lock()
 	pg := st.pageFor(session)
@@ -126,8 +127,12 @@ func (s *Service) drive(ctx context.Context, envID, teammateID, session string, 
 	// A command may change the page before it reports a failure, so refs are invalid as soon
 	// as it starts. Keep the old URL out of Status until it can be confirmed.
 	pg.url, pg.refs, pg.credRefs = "", nil, nil
+	last := st.driver
 	s.mu.Unlock()
 
+	if lh, ok := s.localhostFor(ctx, envID, teammateID, computer, last); ok {
+		s.forward(ctx, st, lh)
+	}
 	data, _, runErr := s.exec(ctx, st, pg, agentproto.BrowserCommand{Args: args})
 	if runErr != nil {
 		actualURL, _ := s.currentBrowserURL(ctx, st, pg)

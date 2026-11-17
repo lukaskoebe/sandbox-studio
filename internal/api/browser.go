@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
 // The browser broker's endpoints (docs/browser.md): a teammate's browser VM, the user's takeover,
@@ -45,7 +47,7 @@ func (s *Server) browserError(err error) error {
 		errors.Is(err, browser.ErrBadPoint), errors.Is(err, browser.ErrBadViewport):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover), errors.Is(err, browser.ErrHidden),
-		errors.Is(err, browser.ErrBusy):
+		errors.Is(err, browser.ErrBusy), errors.Is(err, browser.ErrNoDevTools):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, browser.ErrNoSession), errors.Is(err, browser.ErrNoElement):
 		return huma.Error404NotFound(err.Error())
@@ -56,6 +58,14 @@ func (s *Server) browserError(err error) error {
 // browserCursor is the cursor a page shows at a point.
 type browserCursor struct {
 	Cursor string `json:"cursor" doc:"A CSS cursor keyword, such as default, pointer or text"`
+}
+
+// browserDevTools is an opened DevTools: where its frontend is, and which page it inspects.
+type browserDevTools struct {
+	URL     string `json:"url" doc:"The DevTools' own address, devtools-<token>.localhost on Studio's port; it works until the browser stops or the session closes"`
+	Target  string `json:"target" doc:"The page's DevTools target ID"`
+	Title   string `json:"title" doc:"The page's title when DevTools opened"`
+	PageURL string `json:"pageUrl" doc:"The page's URL when DevTools opened"`
 }
 
 // resizedBrowser is what a fit gave the page.
@@ -121,8 +131,9 @@ func (s *Server) registerBrowser(api huma.API) {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`
 		Body     struct {
-			URL     string `json:"url" minLength:"1" maxLength:"4000" doc:"Absolute http or https URL to open while the user has taken over"`
-			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+			URL      string `json:"url" minLength:"1" maxLength:"4000" doc:"Absolute http or https URL to open while the user has taken over"`
+			Session  string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+			Computer string `json:"computer,omitempty" maxLength:"64" doc:"The teammate's sandbox on the user's screen, which localhost in the browser then reaches with the ports it listens on now. Empty, or not one of the teammate's sandboxes, keeps the sandbox that drove last."`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -131,7 +142,7 @@ func (s *Server) registerBrowser(api huma.API) {
 		if err := need(); err != nil {
 			return nil, err
 		}
-		st, err := s.Browser.Navigate(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.URL)
+		st, err := s.Browser.Navigate(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Computer, in.Body.URL)
 		if err != nil {
 			return nil, s.browserError(err)
 		}
@@ -142,8 +153,9 @@ func (s *Server) registerBrowser(api huma.API) {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`
 		Body     struct {
-			To      string `json:"to" enum:"back,forward,reload" doc:"Where to go in the session's history"`
-			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+			To       string `json:"to" enum:"back,forward,reload" doc:"Where to go in the session's history"`
+			Session  string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+			Computer string `json:"computer,omitempty" maxLength:"64" doc:"As for navigate: the teammate's sandbox localhost reaches"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -153,7 +165,7 @@ func (s *Server) registerBrowser(api huma.API) {
 		if err := need(); err != nil {
 			return nil, err
 		}
-		st, err := s.Browser.Go(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.To)
+		st, err := s.Browser.Go(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Computer, in.Body.To)
 		if err != nil {
 			return nil, s.browserError(err)
 		}
@@ -294,6 +306,30 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, s.browserError(err)
 		}
 		return &struct{ Body browserCursor }{browserCursor{c}}, nil
+	})
+
+	type devToolsIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Session  string `query:"session" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "openBrowserDevTools", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{teammate}/browser/devtools", Tags: []string{"browser"},
+		Description: "Opens Chrome's DevTools on a session's page, for the user: an address on its own host that serves the frontend of the " +
+			"session's Chromium and that page's debugging socket, and nothing else of the browser. The browser must be running (409), and a " +
+			"page that shows a credential refuses (409). Opening again on the same page of the same run gives the same address (docs/browser.md).",
+	}, func(ctx context.Context, in *devToolsIn) (*struct{ Body browserDevTools }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		dt, err := s.Browser.OpenDevTools(ctx, in.Env, in.Teammate, in.Session)
+		if err != nil {
+			return nil, s.browserError(err)
+		}
+		_, port, _ := net.SplitHostPort(s.Addr)
+		return &struct{ Body browserDevTools }{browserDevTools{
+			URL: "http://" + webauth.DevToolsHost(dt.Token, port) + "/", Target: dt.Target, Title: dt.Title, PageURL: dt.URL,
+		}}, nil
 	})
 
 	type actionsIn struct {

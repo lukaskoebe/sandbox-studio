@@ -67,17 +67,26 @@ export function useStoredFlag(key: string, fallback: boolean) {
 
 /** The width an element has now, kept up to date as it changes. */
 export function useElementWidth<TElement extends HTMLElement>() {
+  return useElementSize<TElement>("width")
+}
+
+/** The height an element has now, as useElementWidth keeps its width. */
+export function useElementHeight<TElement extends HTMLElement>() {
+  return useElementSize<TElement>("height")
+}
+
+function useElementSize<TElement extends HTMLElement>(of: "width" | "height") {
   const [el, setEl] = useState<TElement | null>(null)
-  const [width, setWidth] = useState(0)
+  const [size, setSize] = useState(0)
   useEffect(() => {
     if (!el) return
     const observer = new ResizeObserver(([entry]) =>
-      setWidth(Math.round(entry.contentRect.width))
+      setSize(Math.round(entry.contentRect[of]))
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [el])
-  return [setEl, width] as const
+  }, [el, of])
+  return [setEl, size] as const
 }
 
 /**
@@ -103,8 +112,8 @@ const step = 16
  * little it opens at its minimum. Where the other pane folds too, dragged well past the maximum
  * it expands, leaving the other pane folded, and dragged back a little it gives that pane its
  * minimum.
- * Double-click puts back the default; with focus, ← → move it, Home and End go to the ends and
- * Enter folds or unfolds.
+ * Double-click puts back the default; with focus, ← → (↑ ↓ for a pane above or below) move it,
+ * Home and End go to the ends and Enter folds or unfolds.
  */
 export function ResizeHandle({
   label,
@@ -124,8 +133,8 @@ export function ResizeHandle({
 }: {
   /** Names what it resizes, such as "the sidebar". */
   label: string
-  /** Which side of the line the pane being sized is on. */
-  side: "left" | "right"
+  /** Which side of the line the pane being sized is on: above or below for a line across. */
+  side: "left" | "right" | "top" | "bottom"
   size: number
   min: number
   max: number
@@ -145,6 +154,9 @@ export function ResizeHandle({
   className?: string
 }) {
   const start = useRef<{ x: number; size: number } | null>(null)
+  // A line across, between a pane above and one below, drags up and down.
+  const across = side === "top" || side === "bottom"
+  const grows = side === "left" || side === "top"
   const [dragging, setDragging] = useState(false)
   const clamp = useCallback(
     (px: number) => Math.round(Math.min(Math.max(px, min), Math.max(min, max))),
@@ -153,17 +165,17 @@ export function ResizeHandle({
   // While dragging, nothing under the pointer is selected and nothing animates its width.
   useEffect(() => {
     if (!dragging) return
-    document.body.dataset.resizing = ""
+    document.body.dataset.resizing = across ? "row" : ""
     return () => {
       delete document.body.dataset.resizing
     }
-  }, [dragging])
+  }, [dragging, across])
 
   const moveTo = (clientX: number) => {
     const from = start.current
     if (!from) return
     const dx = clientX - from.x
-    const wanted = from.size + (side === "left" ? dx : -dx)
+    const wanted = from.size + (grows ? dx : -dx)
     // A folded or expanded pane opens to the near end of its range as soon as it is dragged a
     // little, and follows the pointer from there; dragged back as far, it folds or expands again.
     if (folded && onFold) {
@@ -198,7 +210,7 @@ export function ResizeHandle({
     event.currentTarget.setPointerCapture(event.pointerId)
     // A folded pane is dragged out from what is left of it.
     start.current = {
-      x: event.clientX,
+      x: across ? event.clientY : event.clientX,
       size: folded ? foldedSize : expanded ? expandedSize : size,
     }
     setDragging(true)
@@ -208,8 +220,11 @@ export function ResizeHandle({
     setDragging(false)
   }
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const grow = side === "left" ? "ArrowRight" : "ArrowLeft"
-    const shrink = side === "left" ? "ArrowLeft" : "ArrowRight"
+    const [forward, back] = across
+      ? ["ArrowDown", "ArrowUp"]
+      : ["ArrowRight", "ArrowLeft"]
+    const grow = grows ? forward : back
+    const shrink = grows ? back : forward
     if (event.key === "Enter" && onFold) onFold(!folded)
     else if (folded && (event.key === grow || event.key === "End")) {
       onFold?.(false)
@@ -232,7 +247,7 @@ export function ResizeHandle({
     <div
       role="separator"
       aria-label={`Resize ${label}`}
-      aria-orientation="vertical"
+      aria-orientation={across ? "horizontal" : "vertical"}
       aria-valuemin={min}
       aria-valuemax={Math.round(max)}
       aria-valuenow={folded ? 0 : expanded ? Math.round(max) : size}
@@ -240,12 +255,13 @@ export function ResizeHandle({
       title="Drag to resize, double-click to reset"
       data-dragging={dragging || undefined}
       className={cn(
-        "group/handle z-20 w-2 shrink-0 cursor-col-resize touch-none outline-none",
+        "group/handle z-20 shrink-0 touch-none outline-none",
+        across ? "h-2 cursor-row-resize" : "w-2 cursor-col-resize",
         className
       )}
       onPointerDown={onPointerDown}
       onPointerMove={(event) => {
-        if (start.current) moveTo(event.clientX)
+        if (start.current) moveTo(across ? event.clientY : event.clientX)
       }}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
@@ -257,7 +273,12 @@ export function ResizeHandle({
       }}
       onKeyDown={onKeyDown}
     >
-      <span className="pointer-events-none mx-auto block h-full w-0.5 transition-colors group-hover/handle:bg-primary/60 group-focus-visible/handle:bg-primary group-data-dragging/handle:bg-primary" />
+      <span
+        className={cn(
+          "pointer-events-none block transition-colors group-hover/handle:bg-primary/60 group-focus-visible/handle:bg-primary group-data-dragging/handle:bg-primary",
+          across ? "my-auto h-0.5 w-full" : "mx-auto h-full w-0.5"
+        )}
+      />
     </div>
   )
 }

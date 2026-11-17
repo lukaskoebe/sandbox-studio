@@ -5,9 +5,10 @@ name: smoke
 # boots the base image built from this commit; macOS and Windows, which can't build it, boot
 # the latest released one. A runner without a hypervisor (the macOS ones) skips the boot with
 # a warning. Each host that boots then runs the browser tests of web/e2e-live against the
-# same Studio, and every host embeds with the real local model. release.yml
-# calls it with the base image it just pushed, which every host then boots, before it
-# publishes.
+# same Studio, and every host embeds with the real local model. The upgrade job installs the
+# latest release, then upgrades it to this commit with a sandbox the release made running
+# through it. release.yml calls it with the base image it just pushed, which every host then
+# boots, before it publishes.
 
 on:
   schedule:
@@ -217,6 +218,162 @@ jobs:
           cat "$RUNNER_TEMP/studio.log" || true
           # Windows logs everything but warnings and errors to the data directory only.
           [ -n "${SANDBOX_STUDIO_HOME:-}" ] && cat "$SANDBOX_STUDIO_HOME/logs/studio.log" 2>/dev/null || true
+          for f in "$HOME"/.microsandbox/sandboxes/*/logs/*.log; do
+            [ -f "$f" ] && { echo "== $f"; tail -n 80 "$f"; }
+          done
+          true
+
+  # Upgrades from the latest release to this commit as a user would, with a sandbox the release
+  # made running through it; scripts/upgrade-test.sh says what it checks before and after. Linux
+  # and macOS install both with install.sh, which restarts Studio, the second time from a local
+  # release of this build. Windows, where the .zip is unpacked by hand, quits Studio, moves the
+  # new studio.exe in as the updater does and starts it again.
+  upgrade:
+    needs: assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, platform: linux_amd64, exe: studio }
+          - { runner: macos-15, platform: darwin_arm64, exe: studio }
+          - { runner: windows-2025, platform: windows_amd64, exe: studio.exe }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXE: ${{ matrix.exe }}
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: smoke-assets
+          path: internal
+      - name: Give the runner user access to /dev/kvm
+        if: runner.os == 'Linux'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm -a -w /dev/kvm
+      - name: The previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIVEN: ${{ inputs.image }}
+        run: |
+          prev=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          bin=$RUNNER_TEMP/bin home=$RUNNER_TEMP/studio-home
+          # Windows paths for studio.exe and PowerShell, as the vm job's; bin's with slashes for bash too.
+          if [ "$RUNNER_OS" = Windows ]; then bin=$(cygpath -m "$bin") home=$(cygpath -w "$home"); fi
+          mkdir -p "$bin" "$home"
+          {
+            echo "PREV=$prev"
+            # Not a release version (-g), so this build never offers to "update" to $PREV.
+            echo "NEXT=$prev-upgrade-g${GITHUB_SHA::7}"
+            # The base image of new sandboxes after the upgrade; the fork copies the release's.
+            echo "IMAGE=${GIVEN:-ghcr.io/lukaskoebe/sandbox-studio-base:$prev}"
+            echo "BIN=$bin"
+            # A data directory of its own; the commands find Studio through it.
+            echo "SANDBOX_STUDIO_HOME=$home"
+          } >> "$GITHUB_ENV"
+      - name: Install the previous release
+        if: runner.os != 'Windows'
+        run: SANDBOX_STUDIO_VERSION="$PREV" SANDBOX_STUDIO_INSTALL_DIR="$BIN" sh install.sh
+      - name: Install the previous release (Windows)
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="sandbox-studio_${PREV}_$PLATFORM"
+          gh release download "$PREV" --repo "$GITHUB_REPOSITORY" -p "$name.zip" -p checksums.txt -D "$RUNNER_TEMP/prev"
+          cd "$RUNNER_TEMP/prev"
+          sha256sum -c --ignore-missing checksums.txt
+          7z x "$name.zip" > /dev/null
+          cp "$name"/* "$BIN/"
+          "$BIN/studio.exe" version
+      - name: Start the previous release
+        if: runner.os != 'Windows'
+        run: |
+          "$BIN/studio" > "$RUNNER_TEMP/studio.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/studio.pid"
+          for _ in $(seq 1 600); do
+            grep -q 'sandbox studio listening' "$RUNNER_TEMP/studio.log" && exit 0
+            kill -0 "$(cat "$RUNNER_TEMP/studio.pid")" 2>/dev/null || break
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/studio.log"
+          exit 1
+      - name: Start the previous release (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/start-studio-windows.ps1
+      - name: Host checks
+        id: doctor
+        run: |
+          "$BIN/$EXE" doctor || true
+          if [ "$RUNNER_OS" = macOS ] && [ "$(sysctl -n kern.hv_support 2>/dev/null)" != 1 ]; then
+            echo "::warning::This runner has no Hypervisor.framework (no nested virtualization); only Studio's own data goes through the upgrade."
+            echo "boot=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Before the upgrade, under the previous release
+        timeout-minutes: 25
+        env:
+          BOOT: ${{ steps.doctor.outputs.boot != 'false' }}
+        run: STUDIO="$BIN/$EXE" scripts/upgrade-test.sh before
+      - name: Build this commit as a release would
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          pkg=github.com/lukaskoebe/sandbox-studio/internal/version
+          name="sandbox-studio_${NEXT}_$PLATFORM"
+          go build -trimpath -tags "$GO_TAGS" -ldflags "-s -w -X $pkg.Version=$NEXT -X $pkg.BaseImage=$IMAGE" \
+            -o "$RUNNER_TEMP/next/$name/$EXE" ./cmd/studio
+          # The release install.sh downloads, served from a directory.
+          if [ "$RUNNER_OS" != Windows ]; then
+            mkdir -p "$RUNNER_TEMP/release/$NEXT"
+            tar -czf "$RUNNER_TEMP/release/$NEXT/$name.tar.gz" -C "$RUNNER_TEMP/next" "$name"
+            cd "$RUNNER_TEMP/release/$NEXT"
+            shasum -a 256 "$name.tar.gz" > checksums.txt
+          fi
+      - name: Upgrade with install.sh
+        if: runner.os != 'Windows'
+        run: SANDBOX_STUDIO_DOWNLOAD_BASE="file://$RUNNER_TEMP/release" SANDBOX_STUDIO_VERSION="$NEXT" SANDBOX_STUDIO_INSTALL_DIR="$BIN" sh install.sh
+      - name: Upgrade (Windows)
+        # A running studio.exe can be renamed but not replaced.
+        if: runner.os == 'Windows'
+        run: |
+          "$BIN/studio.exe" quit
+          mv "$BIN/studio.exe" "$BIN/studio.exe.old"
+          cp "$RUNNER_TEMP/next/sandbox-studio_${NEXT}_$PLATFORM/studio.exe" "$BIN/studio.exe"
+      - name: Start the new build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/start-studio-windows.ps1
+      - name: After the upgrade, under the new build
+        timeout-minutes: 25
+        env:
+          BOOT: ${{ steps.doctor.outputs.boot != 'false' }}
+        run: |
+          STUDIO="$BIN/$EXE" scripts/upgrade-test.sh after
+          "$BIN/$EXE" doctor || true
+      - name: Quit Studio
+        run: '"$BIN/$EXE" quit'
+      - name: Logs
+        if: always()
+        run: |
+          "$BIN/$EXE" ls || true
+          echo "== the previous release's console"; cat "$RUNNER_TEMP/studio.log" || true
+          # install.sh's restart logs the new build there, as Windows does everything but warnings.
+          echo "== logs/studio.log"; cat "$SANDBOX_STUDIO_HOME/logs/studio.log" 2>/dev/null || true
           for f in "$HOME"/.microsandbox/sandboxes/*/logs/*.log; do
             [ -f "$f" ] && { echo "== $f"; tail -n 80 "$f"; }
           done

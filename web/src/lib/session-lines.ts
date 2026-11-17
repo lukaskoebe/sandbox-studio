@@ -185,9 +185,11 @@ export function buildBranches(
     flush()
   }
 
+  const spans = rejoinSpans(data.spans ?? [])
+
   // Runs and takeovers go on the branch of their terminal or browser session.
   const children = new Map<string, Span[]>()
-  for (const s of data.spans ?? []) {
+  for (const s of spans) {
     if ((s.kind === "run" || s.kind === "drive") && s.parent) {
       const k = `${s.sandboxId}\x00${s.parent}`
       const list = children.get(k)
@@ -203,7 +205,7 @@ export function buildBranches(
       label: c.label,
     }))
 
-  for (const s of data.spans ?? []) {
+  for (const s of spans) {
     const start = ms(s.openedAt)!
     const end = ms(s.closedAt)
     switch (s.kind) {
@@ -267,6 +269,62 @@ export function buildBranches(
     out.set(sandbox, groupPreviews(list))
   }
   return out
+}
+
+/** How soon a port that stopped listening comes back as the same preview (store.SpanRejoin). */
+export const spanRejoin = 3 * 60 * 1000
+
+/**
+ * One span per session again. A watcher that missed a sandbox for a beat closed all it had
+ * open, and before Studio reopened a session's row when it came back (store.rejoin), each
+ * return was a row of its own, from when the session began: a lane per return on Home. The
+ * keys of terminals, programs, browser sessions and takeovers carry when their session began,
+ * so their rows are one session however far apart; a port's rows join within spanRejoin.
+ */
+export function rejoinSpans(spans: Span[]): Span[] {
+  const bySession = new Map<string, Span[]>()
+  for (const s of spans) {
+    const k = `${s.kind}\x00${s.sandboxId}\x00${s.key}`
+    const list = bySession.get(k)
+    if (list) list.push(s)
+    else bySession.set(k, [s])
+  }
+  const out: Span[] = []
+  for (const list of bySession.values()) {
+    if (list.length === 1) {
+      out.push(list[0])
+      continue
+    }
+    list.sort((a, b) => ms(a.openedAt)! - ms(b.openedAt)!)
+    let cur = list[0]
+    for (const s of list.slice(1)) {
+      const end = ms(cur.closedAt)
+      const joins =
+        s.kind !== "preview" ||
+        end === undefined ||
+        ms(s.openedAt)! - end <= spanRejoin
+      if (!joins) {
+        out.push(cur)
+        cur = s
+        continue
+      }
+      const later = ms(s.closedAt)
+      cur = {
+        ...cur,
+        label: s.label || cur.label,
+        closedAt:
+          end === undefined || later === undefined
+            ? undefined
+            : later > end
+              ? s.closedAt
+              : cur.closedAt,
+      }
+    }
+    out.push(cur)
+  }
+  return out.sort(
+    (a, b) => ms(a.openedAt)! - ms(b.openedAt)! || a.id.localeCompare(b.id)
+  )
 }
 
 /** Previews that open within this long of each other's span may go on one branch. */

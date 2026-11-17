@@ -15,7 +15,6 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   TrayIcon,
-  UserCircleIcon,
 } from "@phosphor-icons/react"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { EnvironmentIcon } from "@/components/environment-icon"
@@ -49,6 +48,7 @@ import {
   type TeammateSearch,
 } from "@/lib/computer"
 import { openPalette } from "@/lib/palette"
+import { teammateSettings } from "@/lib/teammate-settings"
 import { chatStatus } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
@@ -67,39 +67,6 @@ type MenuEntry =
     }
 
 type SettingsId = (typeof settingsGroups)[number]["sections"][number]["id"]
-
-/** A teammate's settings page, by its groups; each row opens by its id (?open=). */
-const teammateSettings: { title?: string; rows: [string, string][] }[] = [
-  {
-    title: "Profile",
-    rows: [
-      ["identity", "Identity"],
-      ["agent", "Agent"],
-      ["git", "Git identity"],
-      ["approvals", "Approvals"],
-      ["soul", "Soul"],
-    ],
-  },
-  {
-    title: "Knowledge",
-    rows: [
-      ["memory", "Memory"],
-      ["tasks", "Tasks"],
-    ],
-  },
-  {
-    title: "Routine and access",
-    rows: [
-      ["checkins", "Check-ins"],
-      ["network", "New hosts"],
-      ["rules", "Network rules"],
-      ["browser", "Browser"],
-      ["secrets", "Secrets"],
-      ["copy", "Copy to another environment"],
-    ],
-  },
-  { rows: [["delete", "Delete"]] },
-]
 
 type Crumb = {
   key: string
@@ -207,18 +174,6 @@ export function Breadcrumbs({ env }: { env: string }) {
       })),
       { rule: true as const },
       { heading: t.name },
-      {
-        // Its card opens over the page it is on: its home, a thread or the desk.
-        label: "Profile",
-        lead: <UserCircleIcon />,
-        current: search.profile === "card",
-        run: () =>
-          goTeammate(t.id, {
-            ...(params.id === t.id ? search : {}),
-            profile: "card",
-            open: undefined,
-          }),
-      },
       {
         label: "Threads",
         right: String(allChats.filter((c) => c.teammateId === t.id).length),
@@ -350,7 +305,7 @@ export function Breadcrumbs({ env }: { env: string }) {
       if (search.profile === "settings") {
         const row = teammateSettings
           .flatMap((g) => g.rows)
-          .find(([id]) => id === search.open)
+          .find((r) => r.id === search.open)
         return [
           head,
           {
@@ -361,7 +316,7 @@ export function Breadcrumbs({ env }: { env: string }) {
             menu: teammateSettings.flatMap((g, i) => [
               ...(i ? [{ rule: true as const }] : []),
               ...(g.title ? [{ heading: g.title }] : []),
-              ...g.rows.map(([id, label]) => ({
+              ...g.rows.map(({ id, label }) => ({
                 label: id === "delete" ? `Delete ${t.name}` : label,
                 current: id === search.open,
                 run: () => goTeammate(t.id, { profile: "settings", open: id }),
@@ -372,7 +327,7 @@ export function Breadcrumbs({ env }: { env: string }) {
             ? [
                 {
                   key: "item",
-                  label: row[0] === "delete" ? `Delete ${t.name}` : row[1],
+                  label: row.id === "delete" ? `Delete ${t.name}` : row.label,
                 },
               ]
             : []),

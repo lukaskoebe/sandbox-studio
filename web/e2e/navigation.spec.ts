@@ -6,7 +6,7 @@ import {
   test,
 } from "./fixtures"
 
-test("the sidebar opens a teammate, whose profile opens its tasks, memory and settings", async ({
+test("the sidebar opens a teammate, whose settings open its tasks and memory", async ({
   page,
   api,
   env,
@@ -21,33 +21,48 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
     page.getByText(`This is where you and ${name} talk.`)
   ).toBeVisible()
 
-  // The crumb row's menu of the teammate opens the profile's card; its sections open as sheets,
-  // each kept in the URL.
-  const profile = { click: () => teammateMenu(page, name, "Profile") }
-  const card = page.getByRole("dialog", { name: `${name}'s profile` })
-  await profile.click()
-  await expect(page).toHaveURL(/[?&]profile=card/)
-  await card.getByRole("button", { name: /^Tasks/ }).click()
+  // The crumb row's menu of the teammate has no profile card any more: its Settings are the
+  // page, which says who the teammate is; its tasks and memory open from it as sheets, each
+  // kept in the URL, and lead back to it.
+  const menu = page.getByRole("menuitem", { name: "Profile", exact: true })
+  await page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("button", { name: `Switch teammate: ${name}` })
+    .click()
+  await expect(
+    page.getByRole("menuitem", { name: "Settings", exact: true })
+  ).toBeVisible()
+  await expect(menu).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await teammateMenu(page, name, "Settings")
+  await expect(page).toHaveURL(/[?&]profile=settings/)
+  const settings = page.getByRole("region", { name: `${name}'s settings` })
+  await expect(settings).toContainText("Claude Code · claude-sonnet-5-5")
+
+  await settings.getByRole("button", { name: /^Tasks/ }).click()
+  await settings.getByRole("button", { name: "New task" }).click()
+  await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await settings.getByRole("button", { name: `Open ${name}'s tasks` }).click()
   await expect(page).toHaveURL(/[?&]profile=tasks/)
   const tasks = page.getByRole("dialog", { name: `${name}'s tasks` })
   await expect(tasks).toBeVisible()
-  await page.keyboard.press("Escape")
+  await tasks
+    .getByRole("button", { name: `Back to ${name}'s settings` })
+    .click()
   await expect(tasks).toBeHidden()
 
-  await profile.click()
-  await card.getByRole("button", { name: /^Memory/ }).click()
+  await settings.getByRole("button", { name: /^Memory/ }).click()
+  await settings.getByRole("button", { name: `Open ${name}'s memory` }).click()
   await expect(page).toHaveURL(/[?&]profile=memory/)
   const memory = page.getByRole("dialog", { name: `What ${name} remembers` })
   await expect(
     memory.getByRole("navigation", { name: "Memory index" })
   ).toBeVisible()
-  await page.keyboard.press("Escape")
+  await memory
+    .getByRole("button", { name: `Back to ${name}'s settings` })
+    .click()
   await expect(memory).toBeHidden()
-
-  await profile.click()
-  await card.getByRole("button", { name: "Settings", exact: true }).click()
-  await expect(page).toHaveURL(/[?&]profile=settings/)
-  const settings = page.getByRole("region", { name: `${name}'s settings` })
   // Each section is a card that opens to its fields, one at a time, kept in the URL.
   await settings
     .getByRole("button", { name: `Identity ${name}`, exact: true })
@@ -65,18 +80,35 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
   await expect(settings).toBeHidden()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
 
-  // The menu's Settings opens them at once, and a row of the card opens the same row there.
-  await teammateMenu(page, name, "Settings")
+  // An address of the old profile card opens the settings, which took what it had.
+  await page.goto(`/e/${env}/teammates/${id}?profile=card`)
   await expect(page).toHaveURL(/[?&]profile=settings/)
   await expect(settings).toBeVisible()
-  await page.keyboard.press("Escape")
-  await expect(settings).toBeHidden()
-  await profile.click()
-  await card.getByRole("button", { name: /^New hosts/ }).click()
-  await expect(page).toHaveURL(/[?&]open=network/)
-  await expect(
-    settings.getByRole("button", { name: /^New hosts/ })
-  ).toHaveAttribute("aria-expanded", "true")
+})
+
+// Alt+← and Alt+→ go back and forward through Studio's pages, but not out of a text field,
+// where they move by word.
+test("Alt+arrows go back and forward, except in a text field", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Keys ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  await page.goto(`/e/${env}`)
+  await page.getByRole("link").filter({ hasText: name }).click()
+  const teammate = new RegExp(`/e/${env}/teammates/${id}$`)
+  await expect(page).toHaveURL(teammate)
+  const message = page.getByRole("textbox", { name: "Message" })
+  await message.fill("one two")
+  await message.press("Alt+ArrowLeft")
+  await expect(page).toHaveURL(teammate)
+
+  await page.locator("body").click({ position: { x: 1, y: 1 } })
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(page).toHaveURL(teammate)
 })
 
 test("a collapsed sidebar opens Home and every teammate", async ({
@@ -168,11 +200,12 @@ test("teaching a teammate puts the fact on its home, where it can be forgotten",
     "Learned from you that the staging database needs the VPN"
   )
   await expect(learned).toBeVisible()
-  // The profile counts what it knows.
-  await teammateMenu(page, name, "Profile")
-  await expect(
-    page.getByRole("dialog", { name: `${name}'s profile` }).getByText(fact)
-  ).toBeVisible()
+  // Its memory lists what it learned.
+  await teammateMenu(page, name, "Settings")
+  const settings = page.getByRole("region", { name: `${name}'s settings` })
+  await expect(settings.getByRole("button", { name: /^Memory/ })).toContainText(
+    "1 fact"
+  )
   await page.keyboard.press("Escape")
 
   await home.getByRole("button", { name: "Forget" }).click()

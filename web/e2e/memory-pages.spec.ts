@@ -135,8 +135,9 @@ test("memory is an index and a reader: pages folded by kind, a page's facts by k
   await expect(page.getByText(/^Webshop decision number \d+$/)).toHaveCount(11)
   await kinds.getByRole("button", { name: "Preferences 1" }).click()
   await expect(page.getByText(/^Webshop decision number \d+$/)).toHaveCount(0)
+  // The fact's row: once the page's text is written it lists the fact too, with its source.
   await expect(
-    page.getByText("The webshop prefers hosted checkout")
+    page.getByText("The webshop prefers hosted checkout", { exact: true })
   ).toBeVisible()
 
   // The facts on no page, by kind; the open group is in the URL.

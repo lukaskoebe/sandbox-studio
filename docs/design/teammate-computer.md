@@ -22,11 +22,11 @@ page, kept in the URL as search params so Back, Forward and links work.
 On a wide screen the page has three states (mocks J2 and J3 of the 2026-11-14 hierarchy round):
 
 - **Home**: no thread and no tab. The home takes the page: the Now card on top (what waits for
-  you, what it works on, Start work), then the threads, newest first, with the teammate's
+  you, what it works on), then the threads, newest first, with the teammate's
   computers as stacked cards beside them; the screen is folded to a rail. A phone has no rail,
   and the cards come before the threads (mocks R1 and PA, 2026-11-15/16).
 - **Desk**: no thread, a tab open. The computer takes most of the page and the home is a panel
-  beside it, with Start work, Bring X in, the threads in brief and the computers. Expand goes
+  beside it, with the threads in brief and the computers. Expand goes
   back to the home, Fold leaves the computer the page.
 - **Thread**: the conversation on the left, the screen on the right unless folded.
 
@@ -47,10 +47,10 @@ a thread or the desk shows as a chip after the crumbs.
 | `term` | a terminal session name | `main` |
 | `fold` | `1` | in a thread the screen is shown; with no thread and no tab it is folded (the home) |
 | `full` | `1`: the screen takes the page, the conversation is a strip | side by side |
-| `profile` | `card`, `tasks`, `memory`, `settings` (`open=` a settings card) | closed |
+| `profile` | `settings`, or the `tasks` or `memory` sheet over them (`open=` a settings card); the old `card` opens `settings` | closed |
 | `review` | an approval ID, on `changes` | the oldest waiting push of the computer |
 
-Esc closes the profile or a menu first, then leaves the thread.
+Esc closes a sheet, the settings or a menu first, then leaves the thread.
 
 A plain computer's page, `/sandboxes/$id`, takes the screen's params (`tab`, `term`, `review`),
 and `from=setup` for the way back to the guided setup. Its terminal sessions are a panel beside
@@ -63,11 +63,11 @@ old workspace address,
 
 | Today | In H |
 |---|---|
-| Teammate header: avatar, name, role · harness · presence, Wake, Readiness, ⋯ | Gone since 2026-11-16: the presence word, what keeps it from working and Start work are the home's Now card, Profile and Settings are in the crumb's teammate menu. Readiness problems also show above the composer. Wake is the bezel's power button. The teammate ⋯ menu (pause, delete …) is at the profile's foot. |
-| Tabs Conversation / Tasks / Memory / Browser / Settings | Conversation is the page. Browser is a screen tab. Tasks, Memory and Settings are profile sections. `/teammates/$id/{chats,tasks,memory,settings,browser}` redirect to the matching params. |
+| Teammate header: avatar, name, role · harness · presence, Wake, Readiness, ⋯ | Gone since 2026-11-16: the presence word and what keeps it from working are the home's Now card, Settings is in the crumb's teammate menu (a Profile card was there too until 2026-11-17; its identity line now heads the settings). Readiness problems also show above the composer. Wake is the bezel's power button. Copy and Delete are at the settings' foot. |
+| Tabs Conversation / Tasks / Memory / Browser / Settings | Conversation is the page. Browser is a screen tab. Tasks and Memory are rows of the settings, which open them as sheets. `/teammates/$id/{chats,tasks,memory,settings,browser}` redirect to the matching params. |
 | The conversation's flat turn list | Home lists the chats as thread cards grouped by day (title, an "on docs-site" chip for another computer, the last answer, the number of turns and the state), with the small events between them: learned facts, tasks, terminal summaries, check-ins. Opening a card opens the thread. |
-| Rail: Now, Computer card(s), Earlier chats, Knows, Check-ins | Now is the presence word and the working card. The computer *is* the screen. Earlier chats are the cards. Knows and Check-ins are in the profile. |
-| Composer modes Message / Task / Teach, New chat, sandbox picker | One composer. At home it starts a new thread on the computer shown; in a thread it replies (or queues while a turn runs). Teach and New task live in the profile. |
+| Rail: Now, Computer card(s), Earlier chats, Knows, Check-ins | Now is the presence word and the working card. The computer *is* the screen. Earlier chats are the cards. Knows and Check-ins are in the settings. |
+| Composer modes Message / Task / Teach, New chat, sandbox picker | One composer. At home it starts a new thread on the computer shown; in a thread it replies (or queues while a turn runs). Teach is the composer's; New task is also in the settings' Tasks row. |
 | Waiting for you (approval cards) | A compact row each at the end of home: the kind's tile, what is asked, where and how long ago. Answer opens the card in place; Review opens a push on Changes and a memory conflict in its sheet. Inline in the thread that asked, too. |
 | Sandbox page header: owner / name, state pill, Wake, Checkpoint, ⋯ | Bezel: the tabs, power, ⋯, enlarge and fold. The computer's name, status dot and switcher (forks indented under their source) are in the breadcrumb row: the "on …" chip on a teammate's page, the computer crumb on a plain one. The bezel had a switcher too until 2026-11-15; two switchers for one computer were one too many, and the bezel's was cut to "sh…" on phones. |
 | Sandbox ⋯ menu, details pill, Checkpoint button, status bar | The computer menu (⋯): name, template, size and uptime; CPU and memory meters; Checkpoint now; History and checkpoints; Fork; Merge into …; Rebase; Resources; Connections; Export; Another computer; Suspend or Resume; Delete. Ports are a chip on Preview; the ID and generation are in History. |
@@ -76,7 +76,7 @@ old workspace address,
 | Previews dropdown | The Preview tab: the framed app with a port chip, Open in a new tab, Open fresh. Hidden while previews are off, unless a link asks for it (`?tab=preview`), when it says previews are off and offers to turn them on. |
 | Chat page `/chats/$chat` | Redirects a teammate's chat to `?thread=`. Its header actions (open in terminal, delete) move to the thread header's ⋯. |
 | Merge banner | Above the display, on the screen of the fork. |
-| Sidebar tree: teammate → sandbox → sessions, New chat, All chats | Search; Home; Teammates (avatar, name, one status word or waiting count, and under each its live and latest threads; on hover `>_` and Start work); Your computers (plain sandboxes with a status dot); Environment (Computers, Network, Secrets, Memory, Activity); footer Settings, version, theme. New chat becomes the composer and Start work; All chats stays reachable from Home. |
+| Sidebar tree: teammate → sandbox → sessions, New chat, All chats | Search; Home; Teammates (avatar, name, one status word or waiting count, and under each its live and latest threads; on hover `>_` and + for a new thread); Your computers (plain sandboxes with a status dot); Environment (Computers, Network, Secrets, Memory, Activity); footer Settings, version, theme. New chat becomes the home's composer; All chats stays reachable from Home. |
 
 Iris without a computer gets a dashed screen, "Iris has no computer yet", with *Give Iris a
 computer*. A stopped computer shows a dark glass screen with Start (and the checkpoint it keeps).

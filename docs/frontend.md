@@ -72,7 +72,7 @@ to an environment.
 | `/e/$env/settings/<section>` | Settings (below) |
 | `/e/$env/teammates` | teammates |
 | `/e/$env/teammates/$id` | the teammate and its computer side by side ([design](design/teammate-computer.md)), below |
-| `/e/$env/teammates/$id/$view` | the old tabs: `chats` opens the teammate's home, `tasks`, `memory` and `settings` (with its `?open=`) the profile's sheet, `browser` the screen's Browser tab |
+| `/e/$env/teammates/$id/$view` | the old tabs: `chats` opens the teammate's home, `settings` (with its `?open=`) the settings page, `tasks` and `memory` their sheets, `browser` the screen's Browser tab |
 | `/e/$env/git/reviews/$id` | one git push review: the diff, commits and comments in tabs, decided there while it waits, its outcome after |
 | `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
 | `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |
@@ -130,13 +130,24 @@ it its threads (`lib/threads.ts`): every one that runs, waits or is in the termi
 working in a terminal with no chat (marked `>_`), and the two latest others of the last day,
 each with its state and, for a teammate with more than one computer, the computer; then "All N
 threads" to its home. On hover a teammate shows `>_`, a terminal on the computer last used for
-it, and +, Start work. Your computers lists the sandboxes without a teammate, each with its
+it, and +, a new thread: its home, with the composer focused (`lib/new-thread.ts`; ⌘K's
+"New thread with X" does the same). Your computers lists the sandboxes without a teammate, each with its
 status dot; Environment has Computers (every computer, with their count), Network, Secrets,
 Memory and Activity; the footer has Settings, the version and the theme switch. Teammates' +
 adds a teammate; Your computers' + makes a computer without one or imports one. A teammate is
 waiting on you while one of its approvals is pending (a browser action or credential, a memory
 share, or a tool permission in one of its chats), and working while one of its chats runs. The
 Settings page names the environment in its header.
+
+The palette finds teammates, each with its settings, tasks, memory and (with a computer) its
+browser, and the rows of its settings (but Delete) by what they hold; computers with their tabs
+(Terminal and Details, and while one runs Preview, Files and Changes); threads; Home and the
+Environment's pages; Settings' sections; and actions. A teammate's settings row or a computer's
+tab is a part: the name of its teammate or computer only narrows it, so "ada" lists Ada and its
+places, "ada soul" Ada's Soul row and "docs changes" the docs computer's Changes tab. A word
+matches a title as a run of letters, else as its letters in order close together ("actvty"),
+else, from six letters on, one typo away at a word's start ("netwrok"); the keys and the place
+only by a word's start, since what they matched isn't shown.
 
 Above every page a row of breadcrumbs (`components/breadcrumbs.tsx`) says where it is: Home,
 Environment › a page, Settings › a section, Computers › a computer of the user's own, or a
@@ -153,16 +164,14 @@ and Rebase all appears while some run an older base image. A row opens a teammat
 its desk and the user's own on its page, which has its terminal sessions in a panel beside the
 screen, folded until opened.
 
-Start work (`components/teammate/start-work.tsx`, opened by `lib/start-work.ts` from the
-teammate's Now card, the sidebar's + and the palette) asks how the teammate should work: in a
-chat (a new thread with the message), its harness in a terminal (a session of its own that the
-user can type along in), or just the computer, opened on its terminal; on which of its
-computers, or in a fresh fork of it, which it makes and waits for. Bring X in, on the desk,
-opens it as a chat on the computer shown, with the terminal's last lines and the uncommitted
-changes coming along unless unticked.
-
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
+
+The root route also maps Alt+← and Alt+→, and ⌘[ and ⌘] on a Mac, to Back and Forward
+(`hooks/use-history-keys.ts`): the desktop app's webview has no such keys, and a browser that
+has them gets the key handled once. They stay with a text field (word moves), the terminal (its
+shell) and the live view of a browser you drive (the remote page). Back stops at Studio's first
+page; there the key is the browser's again.
 
 Home and every Settings section are a `ColumnPage` (`components/column-page.tsx`): the title
 row and the page in one centred column, without a rule under the header.
@@ -174,10 +183,11 @@ its home, which takes the page with its computers beside the threads and the scr
 rail (none on a phone); its desk, a computer open with the home narrowed to a panel beside it (`tab=` with no
 thread); and a thread, the conversation on the left and the screen to the right. Everything it
 shows is in the URL's search, so Back, Forward and links work: `thread`, `computer`, `tab`,
-`term`, `review`, `fold`, `full`, `profile` (`card`, `tasks`, `memory`, `settings`), `open` (the open
-settings card) and `from=setup`. Esc closes the profile or a menu first, then leaves the thread.
-The page has no header of its own: the crumb row's teammate is its only name, and its menu
-switches teammate and opens the Profile, the Threads and the Settings.
+`term`, `review`, `fold`, `full`, `profile` (`settings`, or the `tasks` or `memory` sheet over
+them; the old `card` opens `settings`), `open` (the open settings card) and `from=setup`. Esc
+closes a sheet, the settings or a menu first, then leaves the thread. The page has no header of
+its own: the crumb row's teammate is its only name, and its menu switches teammate and opens the
+Threads and the Settings.
 
 The rim between the home or the conversation and the screen drags. From the home's rail a little
 drag opens the desk; past the panel's minimum the screen takes the page (`full`), and past its
@@ -185,7 +195,7 @@ maximum the screen folds to the rail again (`fold`), so the same rim reaches all
 Double-click resets the split; the arrows move it, and past either end fold or expand.
 
 - Home: first the **Now** card (`<name> now`): its presence word and since when, or what waits
-  for you, with what keeps it from working (`hooks/use-teammate-presence.ts`) and Start work;
+  for you, with what keeps it from working (`hooks/use-teammate-presence.ts`);
   then the waiting rows (Answer opens the card in place, Review opens a push on Changes), the
   threads it is working in and its agents in terminals, each with Open, and what it browses.
   With nothing alive it is one line, which names a harness or program in a terminal and links
@@ -198,15 +208,18 @@ Double-click resets the split; the arrows move it, and past either end fold or e
   thread there (two lines at most), and Terminal, Browser and Files, each opening the desk on
   that tab; then a dashed Give X another computer. A narrow page shows the first two and All N
   computers.
-- The desk: the home in brief beside the open computer: Start work, Bring X in, what waits,
+- The desk: the home in brief beside the open computer: what waits,
   the threads with their state, its agents in terminals, its computers, and the composer.
   Expand gives the home the page again, Fold leaves the computer the page.
 - A thread: Back to the teammate, its title and state, and ⋯ to continue it in the agent's
   terminal or delete it; then the chat and its composer. Its changes and terminal show on the
   screen.
-- The profile: Profile in the crumb's teammate menu opens a card with the open tasks, what it
-  knows, its computers and its settings; each opens as a sheet. **Settings** in the same menu
-  opens the settings sheet at once. The sheet uses the card's rows, an icon, the label, what it is
+- The settings: **Settings** in the crumb's teammate menu opens them as a page, in place of the
+  home or the thread. Its header names the teammate with its role, agent, model and presence
+  word. Until 2026-11-17 a Profile card opened from the same menu, with the open tasks, what it
+  knows, its computers and the settings that matter day to day; everything on it but the
+  identity line and New task was already here or on the home, so those two moved here and the
+  card went. The page uses rows, an icon, the label, what it is
   set to and a caret, each opening to its fields underneath, under the card's section labels:
   Profile (identity, agent, git identity, approvals, soul), Knowledge (memory: its pages,
   facts, facts this week and last dream, Open its memory, Add a fact, Dream now, and the
@@ -241,7 +254,12 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   the terminal.
 - Browser: the teammate's browser window (tabs, toolbar, live view; [browser](browser.md))
   with its Activity and Sites beside it, or over it on a narrow screen, from the toolbar's
-  clock or the site info's All sites.
+  clock or the site info's All sites. Its ⋯ menu opens Chrome's DevTools on the live page.
+  They dock under the view behind a rim that drags up and down (`ResizeHandle` with
+  `side="bottom"`; `top` and `bottom` drag rows as `left` and `right` drag columns), or
+  open in a window from the menu or the panel's header (`components/browser-devtools.tsx`;
+  [DevTools](browser.md#devtools)). In a browser other than Chromium the panel gives the
+  address instead.
 - Preview: the framed app with a port chip, Open in a new tab and Open fresh.
 - Files: the computer's files (`chat/files-panel.tsx`), marking those git reports changed and
   those the thread's request changed. It opens at `/workspace`; the path's root goes to `/tmp`

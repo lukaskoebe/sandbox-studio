@@ -57,6 +57,87 @@ test("Ctrl+K and the sidebar's Search open the palette, which finds and opens pl
   await expect(palette).toBeHidden()
 })
 
+test("the palette opens a teammate's browser, a computer's tabs, a settings row and Home", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Places ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const computer = sandboxName("places")
+  const sb = await api.createSandbox(computer, id)
+  await api.guestReady(sb)
+  await page.goto(`/e/${env}/settings/general`)
+  await expect(
+    page.getByRole("heading", { name: "General", exact: true })
+  ).toBeVisible()
+  const palette = page.getByRole("dialog", { name: "Search Studio" })
+  const input = palette.getByRole("combobox", { name: "Search Studio" })
+  const teammates = palette.getByRole("group", { name: "Teammates" })
+
+  // Its name lists the teammate and its places, not every row of its settings.
+  await page.keyboard.press("Control+k")
+  await input.fill(name)
+  const options = teammates.getByRole("option")
+  await expect(options).toHaveCount(5)
+  await expect(options.first()).toContainText(`${name}teammate`)
+  for (const place of ["settings", "tasks", "memory", "browser"])
+    await expect(options.filter({ hasText: `${name}'s ${place}` })).toHaveCount(
+      1
+    )
+  // A title that names its place doesn't repeat the place beside it.
+  await expect(options.filter({ hasText: `${name}'s tasks` })).toHaveText(
+    `${name}'s tasks`
+  )
+  // Its computer, but none of the computer's tabs.
+  const computers = palette
+    .getByRole("group", { name: "Computers" })
+    .getByRole("option")
+  await expect(computers).toHaveCount(1)
+  await expect(computers).toContainText(computer)
+
+  await input.fill(`${name} browser`)
+  await expect(teammates.getByRole("option").first()).toContainText(
+    `${name}'s browser`
+  )
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(
+    new RegExp(`/e/${env}/teammates/${id}\\?tab=browser$`)
+  )
+
+  // A computer's tab, by its name and the computer's.
+  await page.keyboard.press("Control+k")
+  await input.fill(`${computer} changes`)
+  const tab = palette
+    .getByRole("group", { name: "Computers" })
+    .getByRole("option")
+    .first()
+  await expect(tab).toContainText("Changes")
+  await expect(tab).toContainText(computer)
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(new RegExp(`computer=${sb}`))
+  await expect(page).toHaveURL(/tab=changes/)
+
+  // A row of the teammate's settings, by what it holds.
+  await page.keyboard.press("Control+k")
+  await input.fill(`${name} stealth`)
+  await expect(teammates.getByRole("option").first()).toHaveText(
+    new RegExp(`^Browser${name}'s settings`)
+  )
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(/profile=settings/)
+  await expect(page).toHaveURL(/open=browser/)
+  await expect(
+    page.getByRole("button", { name: /Browser.*Stealth mode/ })
+  ).toHaveAttribute("aria-expanded", "true")
+
+  await page.keyboard.press("Escape")
+  await page.keyboard.press("Control+k")
+  await input.fill("home")
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
+})
+
 test("> keeps the palette to actions, which run where they are", async ({
   page,
   env,
@@ -76,6 +157,32 @@ test("> keeps the palette to actions, which run where they are", async ({
   await page.keyboard.press("Control+k")
   await palette.getByRole("combobox").fill(">zzzz")
   await expect(palette.getByText(/Nothing matches/)).toBeVisible()
+})
+
+test("the palette forgives a typo and finds letters in order", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}/settings/general`)
+  await expect(
+    page.getByRole("heading", { name: "General", exact: true })
+  ).toBeVisible()
+  await page.keyboard.press("Control+k")
+  const palette = page.getByRole("dialog", { name: "Search Studio" })
+  const input = palette.getByRole("combobox")
+  const environment = palette.getByRole("group", { name: "Environment" })
+  // Two letters swapped.
+  await input.fill("netwrok")
+  await expect(environment.getByRole("option").first()).toContainText("Network")
+  await input.fill("secerts")
+  await expect(environment.getByRole("option").first()).toContainText("Secrets")
+  // Letters left out.
+  await input.fill("actvty")
+  await expect(environment.getByRole("option").first()).toContainText(
+    "Activity"
+  )
+  await page.keyboard.press("Enter")
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/activity$`))
 })
 
 test("/ searches the files of the computer in view and opens the pick in Files", async ({
@@ -105,6 +212,17 @@ test("/ searches the files of the computer in view and opens the pick in Files",
   await page.keyboard.press("Enter")
   await expect(page).toHaveURL(/tab=files/)
   await expect(page).toHaveURL(/file=web%2Fsrc%2Fcheckout%2Fcoupon\.ts/)
+
+  // Its letters in order find it too, with the letters marked.
+  await page
+    .locator('[data-sidebar="sidebar"]')
+    .getByRole("button", { name: /^Search/ })
+    .click()
+  await palette.getByRole("combobox").fill("/chkcoup")
+  const fuzzy = files.getByRole("option").first()
+  await expect(fuzzy).toContainText("web/src/checkout/coupon.ts")
+  await expect(fuzzy.locator("mark")).toHaveText([..."chkcoup"])
+  await page.keyboard.press("Escape")
 
   // Away from a computer, / says what it needs.
   await page.goto(`/e/${env}/settings/general`)

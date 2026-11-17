@@ -9,6 +9,7 @@ import { WindowBar, WindowEdges } from "@/components/window-bar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { useEvents } from "@/hooks/use-events"
+import { useHistoryKeys } from "@/hooks/use-history-keys"
 import { RouteError } from "@/components/route-error"
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
@@ -36,6 +37,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootLayout() {
   useEvents()
+  useHistoryKeys()
   return (
     <TooltipProvider>
       <Outlet />

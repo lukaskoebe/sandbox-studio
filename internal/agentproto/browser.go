@@ -67,6 +67,12 @@ const BrowserElementAt = "element-at"
 // the user drives. Like BrowserElementAt it runs the guest's own fixed, read-only script.
 const BrowserCursorAt = "cursor-at"
 
+// BrowserDevToolsPort is the third: Args [BrowserDevToolsPort] answer {"port": n}, the port
+// the session's Chromium serves its debugging protocol and DevTools on, inside the VM, as
+// Chromium wrote it to DevToolsActivePort in the profile. The guest only reads the file; the
+// host reaches the port as any other loopback port, for the user's DevTools (docs/browser.md).
+const BrowserDevToolsPort = "devtools-port"
+
 // BrowserResult is agent-browser's JSON response and the optional screenshot.
 type BrowserResult struct {
 	Output     json.RawMessage `json:"output"`

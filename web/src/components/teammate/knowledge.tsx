@@ -9,6 +9,7 @@ import {
   PlusIcon,
 } from "@phosphor-icons/react"
 import { invalidateMemory } from "@/components/memory-dialogs"
+import { TaskDialog } from "@/components/task-dialog"
 import { CopyTeammateDialog } from "@/components/teammate-options-menu"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -308,6 +309,7 @@ export function TeammateTaskList({
   onTasks: () => void
 }) {
   const t = useTaskSummary(env, teammate.id)
+  const [adding, setAdding] = useState(false)
   return (
     <>
       {t.open.length === 0 ? (
@@ -332,12 +334,22 @@ export function TeammateTaskList({
           )}
         </ul>
       )}
-      <div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+          <PlusIcon />
+          New task
+        </Button>
         <Button size="sm" variant="outline" onClick={onTasks}>
           Open {teammate.name}'s tasks
           <ArrowRightIcon />
         </Button>
       </div>
+      <TaskDialog
+        env={env}
+        teammateId={teammate.id}
+        open={adding}
+        onOpenChange={setAdding}
+      />
     </>
   )
 }

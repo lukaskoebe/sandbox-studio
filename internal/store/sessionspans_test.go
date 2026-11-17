@@ -121,3 +121,66 @@ func TestSessionSpansSyncedAtOnceOpenOnce(t *testing.T) {
 		t.Fatalf("%d spans: %+v", len(spans), spans)
 	}
 }
+
+// A watcher that misses a sandbox for a beat closes what it had open; when the sessions come
+// back they reopen their rows rather than open new ones (Home drew a lane per return).
+func TestSessionSpansRejoinWhenTheyComeBack(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, err := s.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Unix(1_800_000_000, 0)
+	sync := func(kind string, at time.Time, live ...SessionSpan) {
+		t.Helper()
+		if _, err := s.SyncSessionSpans(ctx, SpanScope{EnvironmentID: env.ID, SandboxID: "sb", Kind: kind}, live, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	main := SessionSpan{Key: "main@1", Label: "opencode", OpenedAt: t0.Add(-3 * time.Hour)}
+	port := SessionSpan{Key: "3000", Label: ":3000"}
+	sync(SpanTerminal, t0, main)
+	sync(SpanPreview, t0, port)
+	for i := 1; i <= 5; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		if _, err := s.CloseSessionSpansExcept(ctx, []string{SpanTerminal, SpanPreview}, nil, at); err != nil {
+			t.Fatal(err)
+		}
+		sync(SpanTerminal, at.Add(10*time.Second), main)
+		sync(SpanPreview, at.Add(10*time.Second), port)
+	}
+	// An hour away: the terminal is still the same session, the port a new server.
+	at := t0.Add(2 * time.Hour)
+	if _, err := s.CloseSessionSpansExcept(ctx, []string{SpanTerminal, SpanPreview}, nil, at); err != nil {
+		t.Fatal(err)
+	}
+	main.Label = "opencode 2"
+	sync(SpanTerminal, at.Add(time.Hour), main)
+	sync(SpanPreview, at.Add(time.Hour), port)
+
+	spans, err := s.SessionSpans(ctx, env.ID, t0.Add(-4*time.Hour), at.Add(2*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var terms, previews []SessionSpan
+	for _, sp := range spans {
+		switch sp.Kind {
+		case SpanTerminal:
+			terms = append(terms, sp)
+		case SpanPreview:
+			previews = append(previews, sp)
+		}
+	}
+	if len(terms) != 1 || terms[0].ClosedAt != nil || !terms[0].OpenedAt.Equal(main.OpenedAt) || terms[0].Label != "opencode 2" {
+		t.Errorf("terminals = %+v, want one open since it began, with the new label", terms)
+	}
+	if len(previews) != 2 || previews[0].ClosedAt == nil || !previews[0].ClosedAt.Equal(at) || !previews[0].OpenedAt.Equal(t0) ||
+		previews[1].ClosedAt != nil || !previews[1].OpenedAt.Equal(at.Add(time.Hour)) {
+		t.Errorf("previews = %+v, want one from t0 to the long gap and one open after it", previews)
+	}
+}

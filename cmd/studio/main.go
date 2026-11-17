@@ -39,6 +39,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
+	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
@@ -625,7 +626,8 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
 	registerControl(mux, st, engine, gw)
-	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mgr.CountPreview, previewLogins, mux)))
+	// DevTools hosts carry their grant and pass auth to the broker's route (internal/browser/devtools.go).
+	handler := api.Guard(auth.Middleware(browser.DevToolsRoute(brw, preview.Route(mgr.DialPreviewTCP, mgr.CountPreview, previewLogins, mux))))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up
 	// the shutdown.

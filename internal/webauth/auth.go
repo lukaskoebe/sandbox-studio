@@ -212,6 +212,13 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		if _, ok := DevToolsToken(r.Host); ok {
+			// The grant in the host is checked by the browser broker's route, which
+			// answers every request to these hosts (DevToolsToken).
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if a.previewHost(r.Host) {
 			if path == "/__studio/preview-login" {
 				a.servePreviewLogin(w, r, host)

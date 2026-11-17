@@ -202,7 +202,10 @@ visible thing, updated in place, not one row per chunk.
   `GET /sandboxes/{id}/files/index`: the guest's `files` stream with op `index`, which runs
   `git ls-files --cached --others --exclude-standard` in each repository and walks other
   folders past `node_modules` and the like, at most 20,000 paths, with `git status` for the
-  changed ones.
+  changed ones. It ranks them (`rank` in `web/src/lib/mentions.ts`, also ⌘K's `/` and Files'
+  Go to) as names that start with the query, names and then paths that contain it, then
+  names and then paths with its letters in order ("chkcoup" for checkout/coupon.ts), the
+  fuzzy ones only while the others leave room, so a vague query on a big index stays quick.
 - Only one turn runs per chat. A prompt sent while it runs goes into it where the agent
   takes messages mid-turn (`queuePrompt`, `chat.Service.Steer`), and shows in the turn as a
   user item after what the agent wrote until then; undoing the turn undoes it too. ACP v1

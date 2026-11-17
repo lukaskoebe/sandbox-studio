@@ -10,17 +10,11 @@ import {
   ArrowLineRightIcon,
   ArrowsInSimpleIcon,
   ArrowsOutSimpleIcon,
-  BrowserIcon,
-  FolderIcon,
-  GitDiffIcon,
-  InfoIcon,
-  MonitorIcon,
   PowerIcon,
-  TerminalWindowIcon,
   WarningIcon,
-  type Icon,
 } from "@phosphor-icons/react"
 import { BrowserRail, type RailTab } from "@/components/browser-rail"
+import { tabMeta } from "@/components/computer/tab-meta"
 import { BrowserWindow, type BrowserReplay } from "@/components/browser-window"
 import { ChangesView, FilesView } from "@/components/computer/changes"
 import { gitChangeCount, useGitStatus } from "@/components/computer/git-changes"
@@ -65,15 +59,6 @@ import { useOnboarding } from "@/lib/onboarding"
 export type ScreenChange = Partial<ScreenSearch> & {
   computer?: string
   push?: boolean
-}
-
-const tabMeta: Record<ScreenTab, { label: string; icon: Icon }> = {
-  terminal: { label: "Terminal", icon: TerminalWindowIcon },
-  browser: { label: "Browser", icon: BrowserIcon },
-  preview: { label: "Preview", icon: MonitorIcon },
-  files: { label: "Files", icon: FolderIcon },
-  changes: { label: "Changes", icon: GitDiffIcon },
-  details: { label: "Details", icon: InfoIcon },
 }
 
 /**
@@ -415,6 +400,7 @@ export function ComputerScreen({
                     key={owner.id}
                     env={env}
                     owner={owner}
+                    computer={sb.id}
                     rail={rail}
                     onRail={setRail}
                     replay={replay}
@@ -504,6 +490,7 @@ const railBeside = 46
 function BrowserTab({
   env,
   owner,
+  computer,
   rail,
   onRail,
   replay,
@@ -511,6 +498,7 @@ function BrowserTab({
 }: {
   env: string
   owner: Teammate
+  computer: string
   rail?: RailTab
   onRail: (rail?: RailTab) => void
   replay: BrowserReplay | null
@@ -527,6 +515,7 @@ function BrowserTab({
       <BrowserWindow
         env={env}
         teammate={owner.id}
+        computer={computer}
         activity={!!rail}
         onActivity={() => onRail(rail ? undefined : "activity")}
         onSites={() => onRail("sites")}

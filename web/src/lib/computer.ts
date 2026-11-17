@@ -75,8 +75,8 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   }
 }
 
-/** The teammate's profile: the card, or one of its sheets. */
-export const profileViews = ["card", "tasks", "memory", "settings"] as const
+/** The teammate's settings page, or one of the sheets over it. */
+export const profileViews = ["tasks", "memory", "settings"] as const
 export type ProfileView = (typeof profileViews)[number]
 
 /**
@@ -94,7 +94,11 @@ export type TeammateSearch = ScreenSearch & {
 export function teammateSearch(s: Record<string, unknown>): TeammateSearch {
   const thread = text(s.thread) ?? text(s.chat)
   const computer = text(s.computer)
-  const profile = profileViews.find((v) => v === s.profile)
+  // The profile card is gone: its old address opens the settings, which took what it had.
+  const profile =
+    s.profile === "card"
+      ? "settings"
+      : profileViews.find((v) => v === s.profile)
   const open = text(s.open)
   return {
     ...screenSearch(s),

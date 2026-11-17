@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -82,7 +83,8 @@ type SpanScope struct {
 // SyncSessionSpans makes the open spans in scope what live says is open at: a span whose
 // sandbox and key live lacks closes, and one live has that isn't open opens at its
 // OpenedAt, or at if that is unset or later. A span that stays open keeps its row, though its
-// label follows live's. It reports whether a span opened or closed.
+// label follows live's. A span that comes back reopens its last row (rejoins). It reports
+// whether a span opened or closed.
 func (s *Store) SyncSessionSpans(ctx context.Context, scope SpanScope, live []SessionSpan, at time.Time) (bool, error) {
 	// Watchers sync the same sandbox at once (a tab listing its terminals while the watcher
 	// passes): one at a time, each reading what the last one wrote.
@@ -132,6 +134,14 @@ func (s *Store) SyncSessionSpans(ctx context.Context, scope SpanScope, live []Se
 			continue
 		}
 		have[id(sp)] = true
+		back, err := rejoin(ctx, tx, scope, sp, at)
+		if err != nil {
+			return false, err
+		}
+		changed = true
+		if back {
+			continue
+		}
 		opened := sp.OpenedAt
 		if opened.IsZero() || opened.After(at) {
 			opened = at
@@ -141,9 +151,39 @@ func (s *Store) SyncSessionSpans(ctx context.Context, scope SpanScope, live []Se
 			sp.TeammateID, sp.Harness, opened.Unix()); err != nil {
 			return false, err
 		}
-		changed = true
 	}
 	return changed, tx.Commit()
+}
+
+// SpanRejoin is how soon a port that stopped listening comes back as the same preview.
+const SpanRejoin = 3 * time.Minute
+
+// rejoin reopens the last row of sp's session, if it closed, and reports whether it did. A
+// watcher that misses a sandbox for a beat (its guest reconnecting, a list that failed)
+// closes all it had open, and the next look sees them again: they were open all along. The
+// keys of terminals, programs, browser sessions and takeovers carry when their session began,
+// so a key that comes back is the same session however late; a port's comes back for any
+// server that listens on it, so a preview only rejoins within SpanRejoin.
+func rejoin(ctx context.Context, tx *sql.Tx, scope SpanScope, sp SessionSpan, at time.Time) (bool, error) {
+	var id string
+	var closed int64
+	err := tx.QueryRowContext(ctx, "SELECT id, closed_at FROM session_spans WHERE environment_id = ? AND sandbox_id = ? AND kind = ? AND key = ? "+
+		"AND closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT 1", scope.EnvironmentID, sp.SandboxID, scope.Kind, sp.Key).Scan(&id, &closed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if scope.Kind == SpanPreview && at.Sub(time.Unix(closed, 0)) > SpanRejoin {
+		return false, nil
+	}
+	label := cutLabel(sp.Label)
+	if _, err := tx.ExecContext(ctx, "UPDATE session_spans SET closed_at = NULL, label = CASE WHEN ? = '' THEN label ELSE ? END WHERE id = ?",
+		label, label, id); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // CloseSessionSpansExcept closes the open spans of kinds at, but those of the sandboxes in

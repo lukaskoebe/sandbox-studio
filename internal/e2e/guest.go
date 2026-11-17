@@ -243,6 +243,8 @@ func (g *Guest) handle(st net.Conn) {
 	case agentproto.KindTCP:
 		if b, t := g.screencastTab(h.Port); t != nil {
 			err = g.serveScreencast(st, br, b, t)
+		} else if b, t := g.devToolsTab(h.Port); t != nil {
+			err = g.serveDevTools(st, br, b, t, h.Port)
 		} else {
 			err = g.serveTCP(st, br, h.Port)
 		}

@@ -523,6 +523,14 @@ func (b *browserVM) command(req agentproto.BrowserCommand) (agentproto.BrowserRe
 	if req.Args[0] == "close" {
 		return res, errors.New(`browser command "close" is not allowed`)
 	}
+	if req.Args[0] == agentproto.BrowserDevToolsPort {
+		// The guest reads the port Chromium wrote; a session that hasn't started has none.
+		if t == nil || len(req.Args) != 1 {
+			return res, errors.New("the browser has not started")
+		}
+		res.Output = devToolsPortOf(req.Ephemeral)
+		return res, nil
+	}
 	switch {
 	case req.Fresh:
 		if t != nil {

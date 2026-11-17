@@ -260,6 +260,13 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 		if args, err = cursorAtArgs(req); err != nil {
 			return replyError(st, err)
 		}
+	} else if len(args) > 0 && args[0] == agentproto.BrowserDevToolsPort {
+		// The user's DevTools: the port is read from the profile, agent-browser isn't run.
+		out, err := devToolsPort(req, slot.profile)
+		if err != nil {
+			return replyError(st, err)
+		}
+		return agentproto.WriteJSONLine(st, agentproto.BrowserResult{Output: out})
 	} else if err := checkBrowserArgs(args, false); err != nil {
 		return replyError(st, err)
 	}

@@ -17,8 +17,9 @@ var ErrNoForward = errors.New("nothing is forwarded to this port")
 
 // forward makes localhost in the browser VM reach sb, the agent sandbox that drives it: the
 // VM listens on loopback at the ports sb listens on, and DialForward connects them to sb.
-// It runs before each of sb's calls, so a dev server started since is there by the next
-// one. A failure only leaves localhost as it was, so it is logged and the call goes on.
+// It runs before each of sb's calls, and before each page the user opens, reloads or goes
+// back or forward to while driving, so a dev server started since is there by the next one.
+// A failure only leaves localhost as it was, so it is logged and the call goes on.
 func (s *Service) forward(ctx context.Context, st *state, sb store.Sandbox) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -45,6 +46,29 @@ func (s *Service) forward(ctx context.Context, st *state, sb store.Sandbox) {
 	}
 }
 
+// localhostFor picks the sandbox localhost reaches while the user drives: computer, the one
+// on their screen, or else last, the sandbox that drove last. Either must still be one of
+// the teammate's own sandboxes in envID, as DialForward checks again for every connection;
+// a computer that isn't (deleted since, or another's) falls back to last.
+func (s *Service) localhostFor(ctx context.Context, envID, teammateID, computer string, last store.Sandbox) (store.Sandbox, bool) {
+	for _, id := range []string{computer, last.ID} {
+		if id == "" {
+			continue
+		}
+		sb, err := s.Store.LookupSandbox(ctx, id)
+		if err == nil && drivesFor(sb, envID, teammateID) {
+			return sb, true
+		}
+	}
+	return store.Sandbox{}, false
+}
+
+// drivesFor reports whether sb is an agent sandbox of teammateID in envID: no browser VM,
+// no build, nobody else's.
+func drivesFor(sb store.Sandbox, envID, teammateID string) bool {
+	return sb.Kind == "" && sb.BuildJobID == "" && sb.EnvironmentID == envID && sb.TeammateID == teammateID
+}
+
 // DialForward is agentchan.Hub.OnForward: it connects a browser VM's forwarded loopback
 // port to the same port in the agent sandbox whose ports the VM forwards. vmID is the VM
 // the stream came from, the only identity trusted.
@@ -65,8 +89,7 @@ func (s *Service) DialForward(ctx context.Context, vmID string, port int) (net.C
 	}
 	// The driver may have been deleted or moved since.
 	sb, err := s.Store.LookupSandbox(ctx, from)
-	if err != nil || sb.Kind != "" || sb.BuildJobID != "" ||
-		sb.EnvironmentID != vm.EnvironmentID || sb.TeammateID != vm.TeammateID {
+	if err != nil || !drivesFor(sb, vm.EnvironmentID, vm.TeammateID) {
 		return nil, ErrNoForward
 	}
 	return s.Runner.DialTCP(ctx, sb.ID, port)

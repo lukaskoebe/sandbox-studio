@@ -59,6 +59,9 @@ type fakeBrowser struct {
 	cursor any
 	// unscaled refuses a scale on set viewport, as a guest agent from before scales does.
 	unscaled bool
+	// devtoolsPort is what devtools-port answers, as Chromium wrote it; 0 is a browser
+	// that hasn't started.
+	devtoolsPort int
 }
 
 // fakeUpload is a file the fake sandboxes received.
@@ -149,6 +152,11 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 		return map[string]any{"result": f.element, "origin": f.url}, nil
 	case agentproto.BrowserCursorAt:
 		return map[string]any{"result": f.cursor, "origin": f.url}, nil
+	case agentproto.BrowserDevToolsPort:
+		if f.devtoolsPort == 0 {
+			return nil, fmt.Errorf("the browser has not started")
+		}
+		return map[string]int{"port": f.devtoolsPort}, nil
 	}
 	return nil, fmt.Errorf("unknown command %q", args[0])
 }

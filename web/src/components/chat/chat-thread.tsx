@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type Ref,
 } from "react"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
@@ -447,12 +448,17 @@ function holdPlace(viewport: HTMLElement) {
 export function ComposerDock({
   className,
   children,
+  ref,
 }: {
   className?: string
   children: ReactNode
+  ref?: Ref<HTMLDivElement>
 }) {
   return (
-    <div className="shrink-0 scrollbar-thin scrollbar-gutter-stable overflow-hidden">
+    <div
+      ref={ref}
+      className="shrink-0 scrollbar-thin scrollbar-gutter-stable overflow-hidden"
+    >
       <div className={cn("mx-auto w-full px-4 pb-2.5", className)}>
         {children}
       </div>

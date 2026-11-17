@@ -9,15 +9,19 @@ import {
 import { useMatches, useNavigate } from "@tanstack/react-router"
 import {
   ArrowsInLineHorizontalIcon,
+  BrowserIcon,
   ChatCircleIcon,
+  CheckSquareIcon,
   DesktopTowerIcon,
   FileIcon,
   FolderIcon,
   GearIcon,
+  HouseIcon,
   LightningIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   SidebarSimpleIcon,
+  SparkleIcon,
 } from "@phosphor-icons/react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Kbd } from "@/components/ui/kbd"
@@ -27,6 +31,7 @@ import { EnvironmentIcon } from "@/components/environment-icon"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { phase, phaseDot } from "@/components/status-badge"
 import { resetStoredSizes } from "@/components/resize-handle"
+import { tabMeta } from "@/components/computer/tab-meta"
 import {
   environmentPages,
   settingsGroups,
@@ -44,12 +49,15 @@ import { chatTitle, type Chat } from "@/lib/chats"
 import {
   lastComputer,
   screenComputer,
+  type ScreenTab,
   type TeammateSearch,
 } from "@/lib/computer"
 import { hasModKey } from "@/lib/keys"
 import { rank } from "@/lib/mentions"
 import { setPaletteOpen, usePaletteOpen } from "@/lib/palette"
-import { openStartWork } from "@/lib/start-work"
+import { newThreadWith } from "@/lib/new-thread"
+import { usePreviewSetting } from "@/lib/preview-setting"
+import { teammateSettings } from "@/lib/teammate-settings"
 import { setStyleName, useStyleName } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
@@ -75,6 +83,11 @@ type Item = {
   mono?: boolean
   /** Added to the score, so the likelier action comes first. */
   boost?: number
+  /**
+   * A part of the teammate or computer its place names, such as a tab: found by its own name or
+   * keys, which the place only narrows, so a name alone doesn't list every part of it.
+   */
+  part?: boolean
   run: () => void
 }
 
@@ -106,9 +119,30 @@ function saveRecent(ids: string[]) {
 const wordStart = /[\s/\-_.'’›:]/
 
 /**
+ * Whether a and b are at most one typo apart: a letter changed, added or dropped, or two
+ * swapped.
+ */
+function oneTypo(a: string, b: string) {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  if (a.length === b.length)
+    return (
+      a.slice(i + 1) === b.slice(i + 1) ||
+      (a[i] === b[i + 1] &&
+        a[i + 1] === b[i] &&
+        a.slice(i + 2) === b.slice(i + 2))
+    )
+  if (Math.abs(a.length - b.length) > 1) return false
+  return a.length > b.length
+    ? a.slice(i + 1) === b.slice(i)
+    : a.slice(i) === b.slice(i + 1)
+}
+
+/**
  * How well one word of the query matches s: as a run of letters, best at the start of s or of a
- * word in it, else as its letters in order and close together. The indexes are the matched
- * letters, for highlighting.
+ * word in it, else as its letters in order and close together, else, for a word of six letters
+ * or more, as the start of a word in s one typo away ("netwrok", "secerts"), last. The indexes
+ * are the matched letters, for highlighting.
  */
 function fuzzy(q: string, s: string): { score: number; idx: number[] } | null {
   const t = s.toLowerCase()
@@ -141,24 +175,43 @@ function fuzzy(q: string, s: string): { score: number; idx: number[] } | null {
     score -= span * 0.3 + idx[0] * 0.05
     if (!best || score > best.score) best = { score, idx }
   }
-  return best
+  if (best || q.length < 6) return best
+  for (let w = 0; w < t.length; w++) {
+    if (w > 0 && !wordStart.test(t[w - 1])) continue
+    if (t[w] !== q[0]) continue
+    for (const n of [q.length, q.length - 1, q.length + 1]) {
+      const seg = t.slice(w, w + n)
+      if (seg.length === n && !wordStart.test(seg) && oneTypo(q, seg))
+        return { score: 10, idx: [...seg].map((_, i) => w + i) }
+    }
+  }
+  return null
 }
 
-/** Every word of the query must match the title, or start a word of the keys or the place. */
+/**
+ * Every word of the query must match the title, or start a word of the keys or the place; a
+ * part needs a word of its own, in the title or the keys.
+ */
 function matchItem(q: string, it: Item) {
   let score = 0
+  let own = !it.part
   const hi = new Set<number>()
-  const words = ` ${it.keys} ${it.place}`.toLowerCase()
+  const keys = ` ${it.keys}`.toLowerCase()
+  const place = ` ${it.place}`.toLowerCase()
   for (const word of q.split(/\s+/).filter(Boolean)) {
     const a = fuzzy(word, it.title)
-    const kw = words.includes(` ${word}`) ? 34 : 0
+    const inKeys = keys.includes(` ${word}`)
+    const kw = inKeys || place.includes(` ${word}`) ? 34 : 0
     if (a && a.score >= kw) {
       score += a.score
+      own = true
       a.idx.forEach((i) => hi.add(i))
-    } else if (kw) score += kw
-    else return null
+    } else if (kw) {
+      score += kw
+      own ||= inKeys
+    } else return null
   }
-  return { score: score + (it.boost ?? 0), hi }
+  return own ? { score: score + (it.boost ?? 0), hi } : null
 }
 
 function Highlight({ text, hi }: { text: string; hi?: Set<number> }) {
@@ -175,9 +228,10 @@ function Highlight({ text, hi }: { text: string; hi?: Set<number> }) {
 }
 
 /**
- * The search palette (⌘K, Ctrl+K elsewhere): teammates, computers, threads, the environment's
- * pages, settings and actions, grouped by kind with where each lives on the right, so a search
- * also teaches the map. With nothing typed it lists what was opened last and what waits for you.
+ * The search palette (⌘K, Ctrl+K elsewhere): teammates with their browsers, tasks, memory and
+ * settings rows, computers with their tabs, threads, Home and the environment's pages, settings
+ * and actions, grouped by kind with where each lives on the right, so a search also teaches the
+ * map. With nothing typed it lists what was opened last and what waits for you.
  * `>` keeps a search to actions, `@` to teammates, and `/` searches the files of the computer in
  * view, opening the pick in its Files tab.
  */
@@ -202,6 +256,7 @@ export function CommandPalette({
   const navigate = useNavigate()
   const { toggleSidebar } = useSidebar()
   const style = useStyleName()
+  const previews = usePreviewSetting().enabled
   const [query, setQuery] = useState("")
   const [sel, setSel] = useState(0)
   const [recent, setRecent] = useState(loadRecent)
@@ -252,7 +307,8 @@ export function CommandPalette({
         group: "Teammates",
         title: `${t.name}'s settings`,
         place: t.name,
-        keys: "soul identity git model memory knowledge stealth settings",
+        // Its rows answer to what they hold, below.
+        keys: "settings profile",
         lead: <GearIcon />,
         run: () =>
           navigate({
@@ -261,6 +317,61 @@ export function CommandPalette({
             search: { profile: "settings" },
           }),
       })
+      // The browser is on the teammate's screen, which a teammate without a computer hasn't.
+      if (sandboxes.some((sb) => sb.teammateId === t.id))
+        out.push({
+          id: `tmbr:${t.id}`,
+          group: "Teammates",
+          title: `${t.name}'s browser`,
+          place: t.name,
+          keys: "browser web page tab devtools",
+          lead: <BrowserIcon />,
+          run: () =>
+            navigate({
+              to: "/e/$env/teammates/$id",
+              params: { env, id: t.id },
+              search: { tab: "browser" },
+            }),
+        })
+      for (const [view, label, keys, Icon] of [
+        ["tasks", "tasks", "tasks todo backlog", CheckSquareIcon],
+        ["memory", "memory", "memory facts knowledge learned", SparkleIcon],
+      ] as const)
+        out.push({
+          id: `tm${view}:${t.id}`,
+          group: "Teammates",
+          title: `${t.name}'s ${label}`,
+          place: t.name,
+          keys,
+          lead: <Icon />,
+          run: () =>
+            navigate({
+              to: "/e/$env/teammates/$id",
+              params: { env, id: t.id },
+              search: { profile: view },
+            }),
+        })
+      // Its settings rows, but not Delete, nor Memory and Tasks, which open as the two above.
+      for (const g of teammateSettings)
+        for (const r of g.rows) {
+          if (r.id === "delete" || r.id === "memory" || r.id === "tasks")
+            continue
+          out.push({
+            id: `tmrow:${t.id}:${r.id}`,
+            group: "Teammates",
+            title: r.label,
+            place: `${t.name}'s settings`,
+            keys: `${r.keywords} settings`,
+            part: true,
+            lead: <GearIcon />,
+            run: () =>
+              navigate({
+                to: "/e/$env/teammates/$id",
+                params: { env, id: t.id },
+                search: { profile: "settings", open: r.id },
+              }),
+          })
+        }
     }
     for (const sb of sandboxes) {
       const owner = sb.teammateId ? byId.get(sb.teammateId) : undefined
@@ -280,6 +391,45 @@ export function CommandPalette({
         run: () =>
           navigate({ to: "/e/$env/sandboxes/$id", params: { env, id: sb.id } }),
       })
+      // Its tabs, as its screen shows them: Terminal and Details while it is off too, and the
+      // browser not, which is its teammate's (above).
+      const p = phase(sb)
+      if (p === "creating" || p === "failed") continue
+      const tabs: ScreenTab[] = [
+        "terminal",
+        ...(p === "ready"
+          ? ([
+              ...(previews ? (["preview"] as const) : []),
+              "files",
+              "changes",
+            ] as const)
+          : []),
+        "details",
+      ]
+      for (const tab of tabs) {
+        const { label, icon: Icon } = tabMeta[tab]
+        out.push({
+          id: `tab:${sb.id}:${tab}`,
+          group: "Computers",
+          title: label,
+          place: sb.name,
+          keys: `${tab} tab ${tab === "preview" ? "ports app dev server" : ""}`,
+          part: true,
+          lead: <Icon />,
+          run: () =>
+            owner
+              ? navigate({
+                  to: "/e/$env/teammates/$id",
+                  params: { env, id: owner.id },
+                  search: { computer: sb.id, tab },
+                })
+              : navigate({
+                  to: "/e/$env/sandboxes/$id",
+                  params: { env, id: sb.id },
+                  search: { tab },
+                }),
+        })
+      }
     }
     const names = new Map(sandboxes.map((sb) => [sb.id, sb.name]))
     for (const c of [...chats].sort((a, b) =>
@@ -297,6 +447,15 @@ export function CommandPalette({
           navigate({ to: "/e/$env/chats/$chat", params: { env, chat: c.id } }),
       })
     }
+    out.push({
+      id: "env:home",
+      group: "Environment",
+      title: "Home",
+      place: "Studio",
+      keys: "start overview dashboard approvals requests lines timeline",
+      lead: <HouseIcon />,
+      run: () => navigate({ to: "/e/$env", params: { env } }),
+    })
     out.push({
       id: "env:computers",
       group: "Environment",
@@ -353,11 +512,17 @@ export function CommandPalette({
     )
     for (const t of teammates)
       act(
-        `start-work:${t.id}`,
-        `Start work with ${t.name}…`,
+        `new-thread:${t.id}`,
+        `New thread with ${t.name}`,
         t.name,
-        "new thread chat terminal task begin",
-        () => openStartWork({ teammate: t.id }),
+        "start work chat ask task begin",
+        () => {
+          newThreadWith(t.id)
+          void navigate({
+            to: "/e/$env/teammates/$id",
+            params: { env, id: t.id },
+          })
+        },
         <PlusIcon />
       )
     act(
@@ -403,6 +568,7 @@ export function CommandPalette({
     onNewComputer,
     style,
     toggleSidebar,
+    previews,
   ])
 
   const waiting = useMemo(
@@ -451,7 +617,7 @@ export function CommandPalette({
   const fileItems = useMemo((): (Item & { hi?: Set<number> })[] => {
     if (!filesMode || !inView || !all) return []
     return rank(all, query.slice(1).trim(), 12).shown.map((c) => {
-      const hi = new Set<number>()
+      const hi = new Set<number>(c.hits)
       if (c.match)
         for (let i = c.match[0]; i < c.match[1]; i++) hi.add(c.dir.length + i)
       const dir = c.folder ? c.path.slice(0, -1) : c.dir.slice(0, -1)
@@ -637,9 +803,14 @@ export function CommandPalette({
                         >
                           <Highlight text={it.title} hi={it.hi} />
                         </span>
-                        <span className="ml-auto min-w-0 shrink-[2] truncate pl-3 text-meta text-muted-foreground">
-                          {it.place}
-                        </span>
+                        {/* A title that names its place (Ada's tasks) doesn't repeat it. */}
+                        {!it.title
+                          .toLowerCase()
+                          .includes(it.place.toLowerCase()) && (
+                          <span className="ml-auto min-w-0 shrink-[2] truncate pl-3 text-meta text-muted-foreground">
+                            {it.place}
+                          </span>
+                        )}
                       </div>
                     )
                   })}
@@ -648,10 +819,11 @@ export function CommandPalette({
           )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-3.5 border-t bg-background px-3.5 py-1.5 text-meta text-muted-foreground">
-          <span>
+          {/* A phone has no arrows or Enter to point out, and the row keeps to one line. */}
+          <span className="max-sm:hidden">
             <Kbd>↑</Kbd> <Kbd>↓</Kbd> move
           </span>
-          <span>
+          <span className="max-sm:hidden">
             <Kbd>↵</Kbd> open
           </span>
           <span className="flex-1" />

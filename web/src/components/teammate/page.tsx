@@ -15,13 +15,10 @@ import { useWideScreen } from "@/components/side-panel"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateHome, teammateApprovals } from "@/components/teammate/home"
 import {
-  ProfileCard,
   ProfileSettingsPage,
   ProfileSheet,
 } from "@/components/teammate/profile"
 import { TeammateThread } from "@/components/teammate/thread"
-import { phase } from "@/components/status-badge"
-import { openStartWork } from "@/lib/start-work"
 import { Button } from "@/components/ui/button"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Teammate } from "@/lib/api/client"
@@ -43,8 +40,9 @@ export type SearchChange = Partial<Record<keyof TeammateSearch, unknown>>
  * beside the open computer, with no thread and no chat; and a thread, whose chat takes the
  * home's place while the computer side stays as it was. Either side folds to a rail, and the
  * line between them drags all the way: to the screen's rail, to any split, to the screen taking
- * the page. On phones the home has no rail: its computer cards open the screen. The profile
- * opens over the left side. Esc closes what is on top, then the thread.
+ * the page. On phones the home has no rail: its computer cards open the screen. Its settings
+ * are a page of their own, with its memory and tasks as sheets over them. Esc closes what is
+ * on top, then the thread.
  */
 export function TeammatePage({
   env,
@@ -179,14 +177,6 @@ export function TeammatePage({
       },
       true
     )
-  const startWork = (bring?: boolean) =>
-    openStartWork({
-      teammate: id,
-      computer: computer?.id,
-      ...(bring
-        ? { mode: "chat", bring: { term: search.term ?? "main" } }
-        : {}),
-    })
   // The desk: the home narrowed to a panel beside the open computer, no thread open.
   const desk = wide && !search.thread && !folded && !full
   // Memory or tasks opened from a settings row lead back to that row.
@@ -210,7 +200,7 @@ export function TeammatePage({
         t?.closest(
           "input, textarea, select, [contenteditable], .xterm, [role=dialog], [role=menu]:not([data-closed]), [role=listbox]"
         ) &&
-        !t.closest('[aria-label$="\'s profile"], [aria-label$="\'s settings"]')
+        !t.closest('[aria-label$="\'s settings"]')
       )
         return
       // A menu fading out after a pick stays in the page, with the focus, for its animation;
@@ -359,27 +349,9 @@ export function TeammatePage({
             onReview={(a) =>
               screen({ tab: "changes", review: a.id, computer: a.sandboxId })
             }
-            onStartWork={() => startWork()}
-            onBringIn={
-              desk && computer && phase(computer) === "ready"
-                ? () => startWork(true)
-                : undefined
-            }
             onOpenComputer={(c, tab) => screen({ computer: c.id, tab })}
             onExpand={() => screen({ fold: true })}
             onFold={() => screen({ full: true })}
-          />
-        )}
-        {search.profile === "card" && (
-          <ProfileCard
-            env={env}
-            teammate={teammate}
-            computers={owned}
-            onOpen={profile}
-            onComputer={(c) => {
-              profile(undefined)
-              screen({ computer: c })
-            }}
           />
         )}
       </div>
