@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.25.0 — 2026-11-17
 
 - On Windows, Studio starts after an update made while sandboxes ran. It stopped at its start
   with "Access is denied", because a running sandbox holds the guest agent open and Windows
