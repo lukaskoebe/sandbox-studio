@@ -277,6 +277,46 @@ func TestRestartFailsCreatesThatWereRunning(t *testing.T) {
 	}
 }
 
+// A create or fork that succeeded but couldn't drop its row left it saying "running". The
+// sandbox has started since, so a restart drops the row and leaves the healthy VM alone.
+func TestRestartKeepsASandboxWhoseCreateFinished(t *testing.T) {
+	f := newCheckpointFixture(t)
+	for _, op := range []string{OperationCreate, OperationFork} {
+		steps := createSteps
+		if op == OperationFork {
+			steps = forkSteps
+		}
+		left := Progress{Operation: op, State: ProgressRunning, Steps: steps, Step: steps[len(steps)-1]}
+		if err := f.manager.saveProgress(f.ctx, f.sandbox.ID, f.env.ID, left); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.store.MarkSandboxStarted(f.ctx, f.env.ID, f.sandbox.ID, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := f.manager.Reconcile(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		view, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if view.Status == StatusFailed || view.Progress != nil {
+			t.Fatalf("%s: sandbox = %+v; want it as it was, with no progress", op, view)
+		}
+		if n := f.runtime.countCall("remove:" + VMName(f.sandbox)); n != 0 {
+			t.Fatalf("%s: a restart removed the healthy VM (%d removals)", op, n)
+		}
+		saved, err := f.store.SettingsWithPrefix(f.ctx, progressKeyPrefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := saved[progressKeyPrefix+f.sandbox.ID]; ok {
+			t.Fatalf("%s: the stale row was kept", op)
+		}
+	}
+}
+
 // publishedFor reports whether a sandboxes event for id is waiting on changes.
 func publishedFor(changes <-chan events.Event, id string) bool {
 	for {

@@ -1,4 +1,9 @@
-import { useEffect, useSyncExternalStore } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+} from "react"
 
 /**
  * Which pending approvals the page shows in place: a chat's permission cards, Home's and a
@@ -14,9 +19,22 @@ function changed() {
   listeners.forEach((l) => l())
 }
 
-/** Claims the approvals with these IDs while the calling component is mounted. */
+const claimsHidden = createContext(false)
+
+/**
+ * Wraps a part of the page that stays mounted while out of sight, such as the teammate's
+ * conversation while the screen takes the page or covers it on a phone. While `value` is
+ * true nothing inside claims, so its approvals float in the stack instead of nowhere.
+ */
+export const ClaimsHidden = claimsHidden.Provider
+
+/**
+ * Claims the approvals with these IDs while the calling component is mounted and not inside
+ * a hidden `ClaimsHidden`.
+ */
 export function useClaimApprovals(ids: readonly (string | undefined)[]) {
-  const key = ids.filter(Boolean).sort().join("\n")
+  const hidden = useContext(claimsHidden)
+  const key = hidden ? "" : ids.filter(Boolean).sort().join("\n")
   useEffect(() => {
     if (!key) return
     const list = key.split("\n")

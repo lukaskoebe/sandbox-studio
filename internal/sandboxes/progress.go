@@ -434,7 +434,8 @@ func (m *Manager) saveProgress(ctx context.Context, id, envID string, p Progress
 }
 
 // recoverProgress loads the creates and forks saved at startup. One that was running when
-// Studio stopped has failed: its VM is removed, as after any failed create. It returns the
+// Studio stopped has failed: its VM is removed, as after any failed create. A row whose
+// sandbox has a start time is from one that succeeded and only failed to drop it. It returns the
 // IDs of the sandboxes whose creation failed; those have no VM to attach.
 func (m *Manager) recoverProgress(ctx context.Context, all []store.Sandbox) map[string]bool {
 	saved, err := m.Store.SettingsWithPrefix(ctx, progressKeyPrefix)
@@ -458,6 +459,14 @@ func (m *Manager) recoverProgress(ctx context.Context, all []store.Sandbox) map[
 			continue
 		}
 		p := rec.Progress
+		if p.State != ProgressFailed && sb.StartedAt != nil {
+			// Only a create or fork that succeeded marks its sandbox started, so this one ended
+			// well and only its row's delete failed: the sandbox is healthy and keeps its VM.
+			if err := m.Store.DeleteSetting(ctx, key); err != nil {
+				m.Log.Warn("sandbox progress recovery", "sandbox", id, "err", err)
+			}
+			continue
+		}
 		if p.State != ProgressFailed {
 			p.State, p.Error = ProgressFailed, "Studio stopped before this step finished"
 			if err := m.Runtime.Remove(ctx, VMName(sb)); err != nil {

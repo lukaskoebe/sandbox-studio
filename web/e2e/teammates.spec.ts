@@ -1,5 +1,6 @@
 import {
   addTeammate,
+  approvals,
   expect,
   sandboxName,
   teammateMenu,
@@ -220,6 +221,59 @@ test("the screen enlarges to take the page, and the conversation comes back", as
   await expect(strip).toBeHidden()
   await expect(composer).toBeVisible()
 })
+
+// The conversation stays mounted while the screen takes the page or covers it on a phone, and
+// the home in it shows the teammate's requests. Out of sight it lets them float, so a request
+// from a computer off the screen isn't shown nowhere.
+for (const phone of [false, true]) {
+  test(`a request floats while the screen hides the conversation${phone ? " on a phone" : ""}`, async ({
+    page,
+    api,
+    env,
+  }) => {
+    if (phone) await page.setViewportSize({ width: 390, height: 844 })
+    await api.dismissApprovals()
+    const name = `Hidden ${Math.random().toString(36).slice(2, 8)}`
+    const id = await addTeammate(api, env, name)
+    const shownName = sandboxName("shown")
+    const shown = await api.createSandbox(shownName, id)
+    const other = await api.createSandbox(sandboxName("other"), id)
+    await page.goto(
+      `/e/${env}/teammates/${id}?computer=${shown}&tab=terminal${phone ? "" : "&full=1"}`
+    )
+    await expect(
+      page.getByRole("region", { name: `${shownName}'s screen` })
+    ).toBeVisible({ timeout: 15_000 })
+
+    const host = `hidden-${Math.random().toString(36).slice(2, 8)}.example.org`
+    await api.connect(other, host)
+    const card = approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: host })
+    // A phone folds the stack behind the crumb row's count.
+    if (phone)
+      await page
+        .getByRole("navigation", { name: "Where you are" })
+        .getByRole("button", { name: "1 approval" })
+        .click()
+    await expect(card).toBeVisible()
+
+    // With the conversation back, its home shows the request in place again.
+    if (phone) await page.goto(`/e/${env}/teammates/${id}`)
+    else
+      await page
+        .getByRole("region", { name: `${name}'s conversation, folded` })
+        .getByRole("button", { name: "Show the conversation" })
+        .click()
+    await expect(
+      page
+        .getByRole("region", { name: "Waiting for you" })
+        .filter({ hasText: host })
+    ).toBeVisible()
+    await expect(card).toBeHidden()
+    await api.dismissApprovals()
+  })
+}
 
 test("a teammate's settings have one save bar for the changes in every section, and closing them with changes asks", async ({
   page,

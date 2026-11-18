@@ -342,10 +342,11 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	if err := rt.Boot(ctx, VMName(rec)); err != nil {
 		return err
 	}
-	m.markStarted(ctx, rec)
 	if err := m.awaitGuest(ctx, rec); err != nil {
 		return err
 	}
+	// Only once the fork succeeded: a restart takes a start time as proof that it did.
+	m.markStarted(ctx, rec)
 	if opts.Script {
 		m.startForkScript(ctx, rec)
 	}

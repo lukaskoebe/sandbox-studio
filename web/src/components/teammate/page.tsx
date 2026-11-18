@@ -22,6 +22,7 @@ import { TeammateThread } from "@/components/teammate/thread"
 import { Button } from "@/components/ui/button"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Teammate } from "@/lib/api/client"
+import { ClaimsHidden } from "@/lib/approval-claims"
 import { useChat, type Chat } from "@/lib/chats"
 import {
   lastComputer,
@@ -282,79 +283,82 @@ export function TeammatePage({
           onShow={() => screen({ full: false })}
         />
       )}
-      {/* Kept while the screen takes the page, so a draft and the scroll stay. */}
-      <div
-        className={cn(
-          "relative flex min-h-0 min-w-0 flex-col",
-          !computer
-            ? search.thread
-              ? "flex-[1.25]"
-              : "flex-1"
-            : folded
-              ? "flex-1"
-              : "flex-1 lg:min-w-[25rem]",
-          full && "hidden",
-          split && "flex-none"
-        )}
-        style={split ? { width: conversationWidth } : undefined}
-      >
-        {search.thread ? (
-          <TeammateThread
-            key={search.thread}
-            env={env}
-            teammate={teammate}
-            log={log}
-            // The crumb row names the thread's computer; this says only that it is off the screen.
-            computer={offScreen?.name}
-            onShowComputer={
-              offScreen ? () => screen({ computer: offScreen.id }) : undefined
-            }
-            onBack={leaveThread}
-            onShowChanges={(turn) => {
-              setTurnId(turn)
-              screen({
-                tab: "changes",
-                change: "thread",
-                review: undefined,
-                computer: thread?.sandboxId,
-              })
-            }}
-            onTerminal={(term) =>
-              screen({ tab: "terminal", term, computer: thread?.sandboxId })
-            }
-            onOpenFile={(file) =>
-              screen({
-                tab: "files",
-                file,
-                files: undefined,
-                computer: thread?.sandboxId,
-                push: true,
-              })
-            }
-          />
-        ) : (
-          <TeammateHome
-            env={env}
-            teammate={teammate}
-            chats={mine}
-            computers={owned}
-            computer={computer}
-            waiting={waiting}
-            watching={!folded && search.tab === "browser"}
-            compact={desk}
-            loaded={!!sandboxes.data}
-            onThread={openThread}
-            onProfile={(view) => profile(view)}
-            onWatch={() => screen({ tab: "browser" })}
-            onReview={(a) =>
-              screen({ tab: "changes", review: a.id, computer: a.sandboxId })
-            }
-            onOpenComputer={(c, tab) => screen({ computer: c.id, tab })}
-            onExpand={() => screen({ fold: true })}
-            onFold={() => screen({ full: true })}
-          />
-        )}
-      </div>
+      {/* Kept while the screen takes the page, so a draft and the scroll stay; meanwhile its
+          approvals float in the stack, as nothing here shows them. */}
+      <ClaimsHidden value={full || (!wide && !folded && !!computer)}>
+        <div
+          className={cn(
+            "relative flex min-h-0 min-w-0 flex-col",
+            !computer
+              ? search.thread
+                ? "flex-[1.25]"
+                : "flex-1"
+              : folded
+                ? "flex-1"
+                : "flex-1 lg:min-w-[25rem]",
+            full && "hidden",
+            split && "flex-none"
+          )}
+          style={split ? { width: conversationWidth } : undefined}
+        >
+          {search.thread ? (
+            <TeammateThread
+              key={search.thread}
+              env={env}
+              teammate={teammate}
+              log={log}
+              // The crumb row names the thread's computer; this says only that it is off the screen.
+              computer={offScreen?.name}
+              onShowComputer={
+                offScreen ? () => screen({ computer: offScreen.id }) : undefined
+              }
+              onBack={leaveThread}
+              onShowChanges={(turn) => {
+                setTurnId(turn)
+                screen({
+                  tab: "changes",
+                  change: "thread",
+                  review: undefined,
+                  computer: thread?.sandboxId,
+                })
+              }}
+              onTerminal={(term) =>
+                screen({ tab: "terminal", term, computer: thread?.sandboxId })
+              }
+              onOpenFile={(file) =>
+                screen({
+                  tab: "files",
+                  file,
+                  files: undefined,
+                  computer: thread?.sandboxId,
+                  push: true,
+                })
+              }
+            />
+          ) : (
+            <TeammateHome
+              env={env}
+              teammate={teammate}
+              chats={mine}
+              computers={owned}
+              computer={computer}
+              waiting={waiting}
+              watching={!folded && search.tab === "browser"}
+              compact={desk}
+              loaded={!!sandboxes.data}
+              onThread={openThread}
+              onProfile={(view) => profile(view)}
+              onWatch={() => screen({ tab: "browser" })}
+              onReview={(a) =>
+                screen({ tab: "changes", review: a.id, computer: a.sandboxId })
+              }
+              onOpenComputer={(c, tab) => screen({ computer: c.id, tab })}
+              onExpand={() => screen({ fold: true })}
+              onFold={() => screen({ full: true })}
+            />
+          )}
+        </div>
+      </ClaimsHidden>
       {wide && computer && boxWidth > 0 && (
         <ResizeHandle
           label={search.thread ? "the conversation" : "the home"}

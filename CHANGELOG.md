@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- A computer whose create or fork finished just as Studio stopped is no longer deleted when
+  Studio starts again. Studio keeps a note while a create or fork runs and removes it at the
+  end; if that removal didn't happen, the next start took the computer for one that failed
+  halfway and removed its VM. It now tells them apart by whether the computer ever started.
+- A computer can no longer slow Studio down or fill its memory by opening its agent's channel
+  and never introducing itself, or by sending an endless first line: it has ten seconds and
+  4 KB, and at most eight such channels wait at once.
+- A request waiting for you no longer disappears while the screen is enlarged over a
+  teammate's conversation, or covers it on a phone. The hidden conversation kept its requests
+  out of the floating stack, so they showed nowhere until you went back to it.
+
 ## v0.26.0 — 2026-11-18
 
 - `studio approve`, `studio deny` and the terminal UI decide a computer's write to a host of

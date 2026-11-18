@@ -391,3 +391,87 @@ func TestOpenACP(t *testing.T) {
 		t.Fatalf("echo = %q", line)
 	}
 }
+
+// TestHubHelloLimits checks that a connection that never finishes its hello can't hold
+// Studio's memory or the sandbox's socket: a hello line past its limit, one never sent and
+// connections past the waiting limit are closed, and the real agent still connects.
+func TestHubHelloLimits(t *testing.T) {
+	old := helloTimeout
+	helloTimeout = 1500 * time.Millisecond
+	t.Cleanup(func() { helloTimeout = old })
+
+	dir, err := os.MkdirTemp("", "hub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "s.sock")
+	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := h.Listen("sb1", path); err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close("sb1")
+
+	closedWithin := func(t *testing.T, sess *yamux.Session, d time.Duration, what string) {
+		t.Helper()
+		select {
+		case <-sess.CloseChan():
+		case <-time.After(d):
+			t.Fatalf("%s: the hub kept the connection open past %s", what, d)
+		}
+	}
+	dialSession := func(t *testing.T) *yamux.Session {
+		t.Helper()
+		nc, err := Dial(context.Background(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sess, err := yamux.Client(nc, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { sess.Close() })
+		return sess
+	}
+
+	t.Run("a line past the limit", func(t *testing.T) {
+		sess := dialSession(t)
+		st, err := sess.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// No newline: an unlimited reader would keep reading what the guest sends.
+		go func() { _, _ = st.Write([]byte(`{"kind":"` + strings.Repeat("x", 3*maxHelloLine))) }()
+		closedWithin(t, sess, helloTimeout+time.Second, "oversized hello")
+	})
+
+	t.Run("a hello never sent", func(t *testing.T) {
+		sess := dialSession(t)
+		if _, err := sess.Open(); err != nil {
+			t.Fatal(err)
+		}
+		closedWithin(t, sess, helloTimeout+time.Second, "silent hello stream")
+	})
+
+	t.Run("more waiting than allowed", func(t *testing.T) {
+		for range maxPendingHellos {
+			dialSession(t) // opens nothing, so each waits for its hello
+		}
+		start := time.Now()
+		extra := dialSession(t)
+		closedWithin(t, extra, helloTimeout/2, "a connection past the waiting limit")
+		if time.Since(start) >= helloTimeout {
+			t.Fatal("the extra connection waited for its hello instead of being closed at once")
+		}
+	})
+
+	// Once those waited out their time, the agent connects as usual.
+	time.Sleep(helloTimeout + 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	g := fakeGuest(t, path, make(chan agentproto.Config, 1))
+	defer g.Close()
+	if err := h.WaitConnected(ctx, "sb1"); err != nil {
+		t.Fatalf("the agent couldn't connect after the bad connections: %v", err)
+	}
+}

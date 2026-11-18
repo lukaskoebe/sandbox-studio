@@ -111,7 +111,21 @@ func (h *Hub) Disconnect(id string) {
 	}
 }
 
+// maxHelloLine bounds each of a hello's two lines: a short header, then the agent's
+// version, arch and host name.
+const maxHelloLine = 4096
+
+// helloTimeout bounds how long a new connection may take to open its hello stream and send
+// it. A var so tests can shorten it.
+var helloTimeout = 10 * time.Second
+
+// maxPendingHellos bounds a sandbox's connections that haven't said hello yet. Any process in
+// the guest can dial the socket, so more are closed at once rather than each held for
+// helloTimeout.
+const maxPendingHellos = 8
+
 func (h *Hub) accept(id string, ln net.Listener) {
+	pending := make(chan struct{}, maxPendingHellos)
 	for {
 		nc, err := ln.Accept()
 		if err != nil {
@@ -126,32 +140,25 @@ func (h *Hub) accept(id string, ln net.Listener) {
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		go h.serve(id, nc)
+		select {
+		case pending <- struct{}{}:
+		default:
+			h.log.Warn("too many guest connections waiting for their hello; closing one", "sandbox", id)
+			nc.Close()
+			continue
+		}
+		go h.serve(id, nc, func() { <-pending })
 	}
 }
 
-func (h *Hub) serve(id string, nc net.Conn) {
-	sess, err := yamux.Server(nc, yamux.DefaultConfig())
-	if err != nil {
-		nc.Close()
+// serve runs one connection of sandbox id's guest. helloDone is called once the connection
+// said hello or was dropped for not saying it.
+func (h *Hub) serve(id string, nc net.Conn, helloDone func()) {
+	hello, sess, ok := h.awaitHello(id, nc)
+	helloDone()
+	if !ok {
 		return
 	}
-	// The guest opens a hello stream first.
-	st, err := sess.AcceptStreamWithContext(timeoutCtx(10 * time.Second))
-	if err != nil {
-		sess.Close()
-		return
-	}
-	br := bufio.NewReader(st)
-	var hdr agentproto.Header
-	var hello agentproto.Hello
-	if err := agentproto.ReadJSONLine(br, &hdr); err != nil || hdr.Kind != agentproto.KindHello ||
-		agentproto.ReadJSONLine(br, &hello) != nil {
-		h.log.Warn("guest agent sent no hello", "sandbox", id)
-		sess.Close()
-		return
-	}
-	st.Close()
 
 	c := &conn{sess: sess, hello: hello, since: time.Now(), requestOpen: make(chan struct{}, 32)}
 	h.mu.Lock()
@@ -187,6 +194,38 @@ func (h *Hub) serve(id string, nc net.Conn) {
 	}
 	h.mu.Unlock()
 	h.log.Info("guest agent disconnected", "sandbox", id)
+}
+
+// awaitHello reads the hello a new connection must open with, within helloTimeout and
+// maxHelloLine a line, so a guest process can't hold Studio's memory or a slot for ever. It
+// closes the connection when that fails.
+func (h *Hub) awaitHello(id string, nc net.Conn) (agentproto.Hello, *yamux.Session, bool) {
+	sess, err := yamux.Server(nc, yamux.DefaultConfig())
+	if err != nil {
+		nc.Close()
+		return agentproto.Hello{}, nil, false
+	}
+	deadline := time.Now().Add(helloTimeout)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	// The guest opens a hello stream first.
+	st, err := sess.AcceptStreamWithContext(ctx)
+	if err != nil {
+		sess.Close()
+		return agentproto.Hello{}, nil, false
+	}
+	_ = st.SetReadDeadline(deadline)
+	br := bufio.NewReader(st)
+	var hdr agentproto.Header
+	var hello agentproto.Hello
+	if err := agentproto.ReadJSONLineLimit(br, &hdr, maxHelloLine); err != nil || hdr.Kind != agentproto.KindHello ||
+		agentproto.ReadJSONLineLimit(br, &hello, maxHelloLine) != nil {
+		h.log.Warn("guest agent sent no hello", "sandbox", id)
+		sess.Close()
+		return agentproto.Hello{}, nil, false
+	}
+	st.Close()
+	return hello, sess, true
 }
 
 // maxGuestCalls bounds the calls one guest has in flight; more wait in the guest's queue.
@@ -721,12 +760,3 @@ func (p *PTY) Resize(cols, rows uint16) error {
 
 // Close detaches; the tmux session keeps running in the guest.
 func (p *PTY) Close() error { return p.st.Close() }
-
-func timeoutCtx(d time.Duration) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), d)
-	go func() {
-		<-ctx.Done()
-		cancel()
-	}()
-	return ctx
-}
