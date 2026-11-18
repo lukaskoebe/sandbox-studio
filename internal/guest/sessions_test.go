@@ -104,6 +104,20 @@ func TestForeground(t *testing.T) {
 	}
 }
 
+// The kernel's boot time stays put, so a program's start comes out the same at every look,
+// however the uptime and the clock's second fall.
+func TestForegroundStartsFromTheBootTime(t *testing.T) {
+	proc := fakeProc(t, "1000.99 3000.10\n", map[int][2]string{20: {stat(20, 40050), "npm\x00run\x00dev\x00"}})
+	if err := os.WriteFile(filepath.Join(proc, "stat"), []byte("cpu  1 2 3\nintr 5\nbtime 1799999000\nprocesses 9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, now := range []time.Time{time.Unix(1_800_000_000, 0), time.Unix(1_800_000_000, 999_000_000), time.Unix(1_800_000_001, 0)} {
+		if _, started := foreground(proc, 20, now); started != 1_799_999_000+400 {
+			t.Errorf("at %v: started %d, want 400 s after boot", now, started)
+		}
+	}
+}
+
 func TestSplitCmdline(t *testing.T) {
 	many := strings.Repeat("a\x00", 20)
 	got := splitCmdline([]byte(many))

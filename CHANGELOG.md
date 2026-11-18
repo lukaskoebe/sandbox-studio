@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Home no longer shows a terminal twice. Studio named a terminal on Home by when it was
+  created, moved into its own clock, and that shift came out a second apart now and then, and
+  far apart after the computer slept: the name changed, and the terminal was two lanes, each
+  closing as the other opened. Terminals and the programs in them are now named by the
+  sandbox's own times, a program's start no longer moves by a second from one look to the
+  next, and Home joins the lanes already recorded.
 - An upgrade from v0.22.0 or older no longer leaves sandboxes unable to start when
   microsandbox's home is a link, such as `~/.microsandbox` pointing into another folder, and
   its folders were made under umask 0002, as Ubuntu's is. microsandbox 0.7.15 checks the path

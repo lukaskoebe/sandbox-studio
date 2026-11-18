@@ -109,11 +109,18 @@ type Session struct {
 	// Clock is the guest's time of the reply. Studio moves the times into its own clock
 	// (InHostClock) and clears it.
 	Clock int64 `json:"clock,omitempty" doc:"Unset in Studio's answers"`
+	// GuestCreated and GuestStarted are Created and Started as the guest's clock gave them,
+	// which InHostClock keeps: they never move for one session or program, while the shift
+	// into Studio's clock, whole seconds read on two clocks, changes by one now and then.
+	GuestCreated int64 `json:"-"`
+	GuestStarted int64 `json:"-"`
 }
 
 // InHostClock moves the session's times from the guest's clock into the host's, which reads
-// now: a guest's clock can be off, after the host slept for one.
+// now: a guest's clock can be off, after the host slept for one. GuestCreated and
+// GuestStarted keep the guest's.
 func (s Session) InHostClock(now int64) Session {
+	s.GuestCreated, s.GuestStarted = s.Created, s.Started
 	if s.Clock == 0 { // a guest before Clock
 		return s
 	}

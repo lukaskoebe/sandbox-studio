@@ -311,12 +311,30 @@ func foreground(proc string, pid int, now time.Time) ([]string, int64) {
 	}
 	var started int64
 	if f, ok := procStat(proc, tpgid); ok {
-		ticks, err := strconv.ParseInt(f[19], 10, 64)
-		if up, ok := uptime(proc); ok && err == nil {
-			started = now.Unix() - up + ticks/clockTicks // boot time plus the start time
+		if ticks, err := strconv.ParseInt(f[19], 10, 64); err == nil {
+			if boot, ok := bootTime(proc, now); ok {
+				started = boot + ticks/clockTicks
+			}
 		}
 	}
 	return args, started
+}
+
+// bootTime is when the guest booted, in unix seconds: the kernel's btime, which stays the
+// same until the clock is set, or else now less the uptime, which comes out a second apart
+// from one look to the next, and so did a program's start and the key of its span on Home.
+func bootTime(proc string, now time.Time) (int64, bool) {
+	if raw, err := os.ReadFile(filepath.Join(proc, "stat")); err == nil {
+		for _, line := range strings.Split(string(raw), "\n") {
+			if v, ok := strings.CutPrefix(line, "btime "); ok {
+				if boot, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && boot > 0 {
+					return boot, true
+				}
+			}
+		}
+	}
+	up, ok := uptime(proc)
+	return now.Unix() - up, ok
 }
 
 // uptime reads the seconds since boot from the /proc at proc.

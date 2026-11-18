@@ -140,3 +140,90 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     })
   }
 })
+
+test("a terminal stored under keys a second apart is one branch on home", async ({
+  page,
+  api,
+  env,
+}) => {
+  // Before Studio named terminals by the guest's own clock, the shift into the host's came
+  // out a second apart now and then: the same terminal under two keys, a row for each return.
+  const sandbox = sandboxName("keys")
+  const id = await api.createSandbox(sandbox)
+  const now = Date.now()
+  const at = (minAgo: number, sec = 0) =>
+    new Date(Math.floor((now - minAgo * 60_000) / 1000) * 1000 + sec * 1000)
+  const iso = (d: Date) => d.toISOString()
+  const unix = (d: Date) => Math.floor(d.getTime() / 1000)
+  const created = at(90)
+  const key = (sec: number) => `main@${unix(created) + sec}`
+  const term = (n: number, sec: number, closed?: Date) => ({
+    id: `t${n}`,
+    sandboxId: id,
+    kind: "terminal",
+    key: key(sec),
+    label: "workspace",
+    openedAt: iso(at(90, sec)),
+    closedAt: closed && iso(closed),
+  })
+  const started = at(60)
+  const run = (n: number, sec: number, closed: Date) => ({
+    id: `r${n}`,
+    sandboxId: id,
+    kind: "run",
+    key: `${key(sec)}@${unix(started) + sec}`,
+    parent: key(sec),
+    label: "pnpm dev",
+    openedAt: iso(at(60, sec)),
+    closedAt: iso(closed),
+  })
+  const spans = [
+    term(1, 0, at(50)),
+    term(2, 1, at(49)),
+    term(3, 0, at(20)),
+    term(4, 1),
+    run(1, 0, at(40)),
+    run(2, 1, at(40)),
+    {
+      id: "t5",
+      sandboxId: id,
+      kind: "terminal",
+      key: `2@${unix(at(30))}`,
+      label: "workspace",
+      openedAt: iso(at(30)),
+    },
+  ]
+  await page.route("**/api/environments/*/sessions?*", (route) =>
+    route.fulfill({
+      json: {
+        since: iso(at(120)),
+        until: iso(at(0)),
+        spans,
+        turns: [],
+        flags: [],
+        events: [],
+        activity: [
+          {
+            kind: "terminal",
+            sandboxId: id,
+            key: key(1),
+            at: iso(at(10)),
+            count: 3,
+            errors: 0,
+          },
+        ],
+      },
+    })
+  )
+  await page.goto(`/e/${env}`)
+  const lines = page.getByRole("region", { name: "Sandboxes" })
+  await lines.getByRole("button", { name: "2h", exact: true }).click()
+  const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
+  await expect(
+    own.getByRole("link", { name: /^2 · workspace · you, / })
+  ).toBeVisible()
+  await expect(
+    own.getByRole("link", { name: /^main · workspace · you, / })
+  ).toHaveCount(1)
+  await expect(lines.getByText("2 open", { exact: true })).toBeVisible()
+})

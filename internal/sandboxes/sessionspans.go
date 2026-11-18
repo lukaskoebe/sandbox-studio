@@ -1,6 +1,7 @@
 package sandboxes
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"time"
@@ -13,8 +14,18 @@ import (
 var spanKinds = []string{store.SpanTerminal, store.SpanRun, store.SpanPreview}
 
 // terminalKey names a terminal for its spans: its name and when it was created, so a new
-// session under an old name is a new span.
-func terminalKey(t Terminal) string { return fmt.Sprintf("%s@%d", t.Name, t.Created) }
+// session under an old name is a new span. The time is the guest's own (GuestCreated): moved
+// into Studio's clock it changes by a second now and then, and with it the key, which was a
+// span that closed and another that opened, two lanes on Home for one terminal.
+func terminalKey(t Terminal) string {
+	return fmt.Sprintf("%s@%d", t.Name, cmp.Or(t.GuestCreated, t.Created))
+}
+
+// runKey names the program in the foreground of terminal key, by when it started in the
+// guest's clock, as terminalKey does.
+func runKey(key string, t Terminal) string {
+	return fmt.Sprintf("%s@%d", key, cmp.Or(t.GuestStarted, t.Started))
+}
 
 // terminalSpans are the spans list shows open: each terminal, and the program in the
 // foreground of those that run one other than a harness.
@@ -33,7 +44,7 @@ func terminalSpans(list []Terminal) (terms, runs []store.SessionSpan) {
 		if t.State != TerminalBusy {
 			continue
 		}
-		run := store.SessionSpan{Key: fmt.Sprintf("%s@%d", key, t.Started), Parent: key, Label: commandLine(t.Foreground)}
+		run := store.SessionSpan{Key: runKey(key, t), Parent: key, Label: commandLine(t.Foreground)}
 		if t.Started > 0 {
 			run.OpenedAt = time.Unix(t.Started, 0)
 		}

@@ -96,6 +96,15 @@ that carry when their session began (terminals, programs, browser sessions, take
 however late, a port only within 3 minutes, as it may be another server. Before that, each
 return was a new row dated from the session's start, a lane per return on Home; Home joins
 those rows again (`rejoinSpans`) for the 14 days they are kept.
+The times in a terminal's and a program's key are the guest's own (`GuestCreated`,
+`GuestStarted`), and a program's start comes from the kernel's boot time (`btime`). Studio
+moves the guest's times into its own clock for everything else (`InHostClock`), and that
+shift, whole seconds read on two clocks a fraction apart, came out a second apart now and
+then, after the host slept by however far the guest's clock fell behind: the key changed, and
+one terminal was two lanes, each closing as the other opened. Home also joins a terminal's
+rows by its name and a start within 2 seconds (`sameStart`), and a program's by its
+terminal, command line and start, for the rows recorded before and the one change of key the
+update makes.
 Closed spans are kept for 14 days. Sandbox IDs carry no foreign key, so the history outlives a
 deleted sandbox until then.
 

@@ -80,12 +80,48 @@ func TestDescribeTerminalsNumbersShellsOpenedInOneSecondInTheirOrder(t *testing.
 
 func TestInHostClock(t *testing.T) {
 	// The guest's clock is 100 s behind the host's.
-	s := agentproto.Session{Activity: 900, Started: 800, Clock: 1000}.InHostClock(1100)
-	if s.Activity != 1000 || s.Started != 900 || s.Clock != 0 {
+	s := agentproto.Session{Created: 700, Activity: 900, Started: 800, Clock: 1000}.InHostClock(1100)
+	if s.Created != 800 || s.Activity != 1000 || s.Started != 900 || s.Clock != 0 || s.GuestCreated != 700 || s.GuestStarted != 800 {
 		t.Fatalf("got %+v", s)
 	}
-	if s := (agentproto.Session{Activity: 900}).InHostClock(1100); s.Activity != 900 {
+	if s := (agentproto.Session{Created: 700, Activity: 900}).InHostClock(1100); s.Activity != 900 || s.GuestCreated != 700 {
 		t.Fatalf("a guest without a clock: %+v", s)
+	}
+}
+
+// The shift into Studio's clock is whole seconds read on two clocks, so it comes out a
+// second apart now and then. The spans keep their keys, and Home one lane per terminal.
+func TestTerminalSpansKeepTheirKeysAsTheClockShiftMoves(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, err := s.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{Store: s}
+	at := time.Unix(1_800_000_000, 0)
+	guest := agentproto.Session{Name: "main", Created: 1_799_996_000, Foreground: []string{"npm", "run", "dev"}, Started: 1_799_999_000}
+	for i, shift := range []int64{100, 101, 100, 101, 5000} { // the last after the host slept
+		now := at.Add(time.Duration(i) * 10 * time.Second)
+		guest.Clock = now.Unix() - shift
+		list := describeTerminals([]agentproto.Session{guest.InHostClock(now.Unix())}, now)
+		m.recordTerminals(ctx, env.ID, "sb", list, now)
+	}
+	spans, err := s.SessionSpans(ctx, env.ID, at.Add(-48*time.Hour), at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spans) != 2 {
+		t.Fatalf("spans = %+v, want the terminal and its program once each", spans)
+	}
+	for _, sp := range spans {
+		if sp.ClosedAt != nil {
+			t.Errorf("%s %s closed at %v", sp.Kind, sp.Key, sp.ClosedAt)
+		}
 	}
 }
 

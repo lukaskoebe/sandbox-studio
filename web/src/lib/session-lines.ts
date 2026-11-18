@@ -110,8 +110,13 @@ export function buildBranches(
     kind === "chat" || kind === "browser"
       ? `${kind}\x00\x00${key}`
       : `${kind}\x00${sandbox}\x00${key}`
+  const { spans, renamed } = rejoinSpans(data.spans ?? [])
   for (const a of data.activity ?? []) {
-    const k = beatKey(a.kind, a.sandboxId, a.key)
+    const key =
+      a.kind === "terminal"
+        ? (renamed.get(`${a.sandboxId}\x00${a.key}`) ?? a.key)
+        : a.key
+    const k = beatKey(a.kind, a.sandboxId, key)
     const beat = { at: ms(a.at)!, count: a.count, errors: a.errors ?? 0 }
     const list = beatsOf.get(k)
     if (list) list.push(beat)
@@ -184,8 +189,6 @@ export function buildBranches(
     }
     flush()
   }
-
-  const spans = rejoinSpans(data.spans ?? [])
 
   // Runs and takeovers go on the branch of their terminal or browser session.
   const children = new Map<string, Span[]>()
@@ -275,27 +278,72 @@ export function buildBranches(
 export const spanRejoin = 3 * 60 * 1000
 
 /**
+ * How far apart the rows of one terminal or program may say it began and still be one
+ * session. Before Studio named them by the guest's own times, the shift into its clock came
+ * out a second apart now and then (agentproto.Session.InHostClock), and with it the key: a
+ * row for each, side by side. The update to the guest's times changes the key once more.
+ */
+export const sameStart = 2000
+
+/**
  * One span per session again. A watcher that missed a sandbox for a beat closed all it had
  * open, and before Studio reopened a session's row when it came back (store.rejoin), each
  * return was a row of its own, from when the session began: a lane per return on Home. The
  * keys of terminals, programs, browser sessions and takeovers carry when their session began,
- * so their rows are one session however far apart; a port's rows join within spanRejoin.
+ * so their rows are one session however far apart; a port's rows join within spanRejoin. A
+ * terminal's rows join by its name and a start within sameStart too, and a program's by its
+ * terminal, command line and start. renamed maps each terminal key, after its sandbox and
+ * "\x00", to the key its session goes by, for the activity recorded under the others.
  */
-export function rejoinSpans(spans: Span[]): Span[] {
+export function rejoinSpans(spans: Span[]): {
+  spans: Span[]
+  renamed: Map<string, string>
+} {
+  const byStart = [...spans].sort(
+    (a, b) => ms(a.openedAt)! - ms(b.openedAt)! || a.id.localeCompare(b.id)
+  )
+  const renamed = new Map<string, string>()
+  /** The first row of each session of a name, by the sessions' group. */
+  const firsts = new Map<string, Span[]>()
+  const sessionOf = (group: string, s: Span, key: string) => {
+    const list = firsts.get(group) ?? []
+    const first = list.find(
+      (f) =>
+        f.key === key ||
+        Math.abs(ms(f.openedAt)! - ms(s.openedAt)!) <= sameStart
+    )
+    if (first) return first.key
+    list.push({ ...s, key })
+    firsts.set(group, list)
+    return key
+  }
+  for (const s of byStart) {
+    if (s.kind !== "terminal") continue
+    const k = sessionOf(
+      `terminal\x00${s.sandboxId}\x00${terminalName(s.key)}`,
+      s,
+      s.key
+    )
+    renamed.set(`${s.sandboxId}\x00${s.key}`, k)
+  }
   const bySession = new Map<string, Span[]>()
-  for (const s of spans) {
-    const k = `${s.kind}\x00${s.sandboxId}\x00${s.key}`
+  for (let s of byStart) {
+    let k = `${s.kind}\x00${s.sandboxId}\x00${s.key}`
+    if (s.kind === "terminal") {
+      s = { ...s, key: renamed.get(`${s.sandboxId}\x00${s.key}`) ?? s.key }
+      k = `${s.kind}\x00${s.sandboxId}\x00${s.key}`
+    } else if (s.kind === "run" && s.parent) {
+      const parent = renamed.get(`${s.sandboxId}\x00${s.parent}`) ?? s.parent
+      const group = `run\x00${s.sandboxId}\x00${parent}\x00${s.label ?? ""}`
+      s = { ...s, parent, key: sessionOf(group, s, s.key) }
+      k = `${s.kind}\x00${s.sandboxId}\x00${s.key}`
+    }
     const list = bySession.get(k)
     if (list) list.push(s)
     else bySession.set(k, [s])
   }
   const out: Span[] = []
   for (const list of bySession.values()) {
-    if (list.length === 1) {
-      out.push(list[0])
-      continue
-    }
-    list.sort((a, b) => ms(a.openedAt)! - ms(b.openedAt)!)
     let cur = list[0]
     for (const s of list.slice(1)) {
       const end = ms(cur.closedAt)
@@ -322,9 +370,12 @@ export function rejoinSpans(spans: Span[]): Span[] {
     }
     out.push(cur)
   }
-  return out.sort(
-    (a, b) => ms(a.openedAt)! - ms(b.openedAt)! || a.id.localeCompare(b.id)
-  )
+  return {
+    spans: out.sort(
+      (a, b) => ms(a.openedAt)! - ms(b.openedAt)! || a.id.localeCompare(b.id)
+    ),
+    renamed,
+  }
 }
 
 /** Previews that open within this long of each other's span may go on one branch. */
