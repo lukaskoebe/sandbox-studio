@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -52,6 +53,9 @@ func (c *fakeChromium) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			_ = ws.Write(r.Context(), typ, append([]byte(strings.TrimPrefix(r.URL.Path, "/devtools/page/")+" "), msg...))
 		}
+	case r.URL.Path == "/devtools/devtools_app.html":
+		http.SetCookie(w, &http.Cookie{Name: "chromium", Value: "x"})
+		_, _ = w.Write([]byte(fakeDevToolsPage))
 	case strings.HasPrefix(r.URL.Path, "/devtools/"):
 		http.SetCookie(w, &http.Cookie{Name: "chromium", Value: "x"})
 		_, _ = w.Write([]byte("frontend " + r.URL.Path))
@@ -59,6 +63,12 @@ func (c *fakeChromium) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("leaked " + r.URL.Path))
 	}
 }
+
+// fakeDevToolsPage is the start of Chromium's devtools_app.html.
+const fakeDevToolsPage = `<!DOCTYPE html>
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'">
+<script type="module" src="./entrypoints/devtools_app/devtools_app.js"></script>
+<body class="undocked" id="-blink-dev-tools">`
 
 func (c *fakeChromium) seen() []*http.Request {
 	c.mu.Lock()
@@ -139,8 +149,10 @@ func TestDevTools(t *testing.T) {
 		"Cookie": {"studio_session=secret"}, "Origin": {"http://" + host}, "Referer": {"http://" + host + "/"},
 		"Authorization": {"Basic eDp5"},
 	})
-	if rec.Code != http.StatusOK || rec.Body.String() != "frontend /devtools/devtools_app.html" {
-		t.Errorf("frontend = %d %q", rec.Code, rec.Body.String())
+	// The page loads Studio's shim for WebKit before its own scripts.
+	shimmed := strings.Replace(fakeDevToolsPage, `<script type="module"`, `<script src="./studio-webkit.js"></script>`+"\n"+`<script type="module"`, 1)
+	if rec.Code != http.StatusOK || rec.Body.String() != shimmed || rec.Header().Get("Content-Length") != strconv.Itoa(len(shimmed)) {
+		t.Errorf("frontend = %d %q (Content-Length %s)", rec.Code, rec.Body.String(), rec.Header().Get("Content-Length"))
 	}
 	if rec.Header().Get("Set-Cookie") != "" || !strings.Contains(rec.Header().Get("Content-Security-Policy"), "frame-ancestors http://localhost:*") ||
 		rec.Header().Get("Referrer-Policy") != "no-referrer" {
@@ -157,9 +169,23 @@ func TestDevTools(t *testing.T) {
 		}
 	}
 
+	if rec := get("GET", host, "/devtools/other.html", nil); rec.Body.String() != "frontend /devtools/other.html" {
+		t.Errorf("another file = %q", rec.Body.String())
+	}
+
+	// Studio serves the shim itself, under the frontend's content policy.
+	before := len(chromium.seen())
+	rec = get("GET", host, "/devtools/studio-webkit.js", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "window.requestIdleCallback = function") ||
+		!strings.HasPrefix(rec.Header().Get("Content-Type"), "text/javascript") || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("shim = %d %v %q", rec.Code, rec.Header(), rec.Body.String())
+	}
+	if n := len(chromium.seen()); n != before {
+		t.Errorf("the shim was asked of Chromium")
+	}
+
 	// Nothing but the frontend and the grant's page: no listings, no browser-wide or other
 	// tabs' sockets, no other methods, no way around the path check.
-	before := len(chromium.seen())
 	for _, c := range []struct {
 		method, path string
 		upgrade      bool
@@ -175,6 +201,7 @@ func TestDevTools(t *testing.T) {
 		{"GET", "/devtools/../json/list", false, 404},
 		{"GET", "/devtools//json/list", false, 404},
 		{"GET", "/devtools/devtools_app.html", true, 404},
+		{"GET", "/devtools/studio-webkit.js", true, 404},
 		{"GET", "/other", false, 404},
 		{"POST", "/devtools/devtools_app.html", false, 405},
 		{"PUT", "/", false, 405},

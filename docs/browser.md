@@ -629,12 +629,19 @@ it again reuses that window. Code: `internal/browser/devtools.go`,
     never get a token, because no tool returns one.
   - Pages that DevTools navigate to still go through the gateway and its rules.
   - Emulation or throttling set in DevTools also applies to what agents see on that page.
-- **Chromium only.** The frontend is blank in Firefox, which throws on a language tag, and
-  WebKit wasn't tried. The panel checks `navigator.userAgentData.brands` for Chromium.
-  Elsewhere it shows the address to open in Chrome or Edge, with Copy and Open buttons.
-  - The desktop app on macOS and Linux is WebKit, so it shows the address too.
-  - Its `window.open` goes to the system browser, so the window option opens DevTools
-    there.
+- **Chromium and WebKit.** The frontend runs in Chromium and, with Studio's shim, in WebKit:
+  Safari and the desktop app on macOS and Linux.
+  - WebKit lacks `requestIdleCallback`, without which the frontend draws only the Elements
+    tree, with no panels or tabs. The route serves `/devtools/studio-webkit.js`, which adds
+    it, and puts a script tag for it before the first script of `devtools_app.html`. The
+    page's content policy allows its own origin's scripts. Chromium has the function, so
+    there the shim does nothing.
+  - WebKitGTK resolves `*.localhost` to loopback itself, though glibc doesn't.
+  - The frontend is blank in Firefox, which throws on a language tag. The panel shows
+    DevTools where the user agent names `AppleWebKit/`, which Chromium's does too. In
+    Firefox it shows the address to open in Chrome or Edge, with Copy and Open buttons.
+  - In the desktop app, `window.open` goes to the system browser, so the window option opens
+    DevTools there.
 - **Older guests.** A browser VM started before this version runs the older guest agent,
   which answers "is not allowed". The error tells the user to put the browser to sleep and
   wake it.
@@ -806,8 +813,9 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
   - the guest's port file and its refusals (`internal/guest`, `browser_devtools_test.go`);
   - the hosts and the middleware (`internal/webauth`);
   - the grant, the target pick, reuse and the bound, the route's refusals with no request
-    reaching the browser, the headers, the socket, the 409 while a credential shows, and
-    410 then 404 after sleep (`internal/browser`, `devtools_test.go`);
+    reaching the browser, the headers, the WebKit shim and its script tag, the socket, the
+    409 while a credential shows, and 410 then 404 after sleep (`internal/browser`,
+    `devtools_test.go`);
   - the panel, the window and the end in `e2e/browser.spec.ts`, through the fake's debugging
     server.
 
@@ -852,6 +860,13 @@ in that loop; a browser VM is.
 headless with `--remote-debugging-port`, sat behind the e2e fake's port
 (`STUDIO_E2E_DEVTOOLS`). Its own frontend loaded through the route, docked and in a window,
 and showed the page's elements, styles and console. Firefox 146 rendered the frontend blank.
+
+**Verified in WebKitGTK (2026-11-18):** DevTools. WebKitGTK 2.52.6, the engine of the Linux
+app, ran Studio's UI against the e2e Studio with the same real Chromium behind it. The
+browser's ⋯ menu opened DevTools docked under the page, through the route and its shim.
+Directly against that Chromium, Elements, Styles, Console (evaluating in the page),
+Sources and Network worked in WebKitGTK with the shim. Without it, only the Elements tree
+drew. macOS's WebKit wasn't tried.
 
 **Pending a live run:**
 

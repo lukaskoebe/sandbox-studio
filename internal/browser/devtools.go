@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -253,12 +254,16 @@ func (s *Service) devToolsTransport() *http.Transport {
 				for _, h := range []string{"Origin", "Cookie", "Authorization", "Referer"} {
 					pr.Out.Header.Del(h)
 				}
+				if pr.Out.URL.Path == devToolsPagePath {
+					// The page is read as text to add the shim; the transport undoes its own gzip.
+					pr.Out.Header.Del("Accept-Encoding")
+				}
 			},
 			Transport: s.devTransport,
 			ModifyResponse: func(res *http.Response) error {
 				res.Header.Del("Set-Cookie")
 				devToolsHeaders(res.Header)
-				return nil
+				return addDevToolsShim(res)
 			},
 			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 				devToolsPage(w, http.StatusBadGateway, "The browser's DevTools did not answer",
@@ -270,6 +275,56 @@ func (s *Service) devToolsTransport() *http.Transport {
 }
 
 type devGrantKey struct{}
+
+// devToolsPagePath is the frontend's page, which / redirects to.
+const devToolsPagePath = "/devtools/devtools_app.html"
+
+// devToolsShimPath is where a grant's host serves devToolsShim, which addDevToolsShim makes
+// the frontend's page load before its own scripts. The page's content policy allows scripts
+// of its own origin, which the shim is.
+const devToolsShimPath = "/devtools/studio-webkit.js"
+
+// devToolsShim adds what the DevTools frontend uses that WebKit lacks, so that DevTools run in
+// Safari and in the desktop app on macOS and Linux, whose web views are WebKit: without
+// requestIdleCallback the frontend draws only the Elements tree, with no panels or tabs.
+// Chromium has it, so there the shim does nothing. Firefox still can't run the frontend.
+const devToolsShim = `// Sandbox Studio: what Chrome's DevTools use that WebKit lacks (internal/browser/devtools.go).
+if (!window.requestIdleCallback) {
+  window.requestIdleCallback = function (callback) {
+    var start = Date.now()
+    return setTimeout(function () {
+      callback({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)) } })
+    }, 1)
+  }
+  window.cancelIdleCallback = function (id) { clearTimeout(id) }
+}
+`
+
+// addDevToolsShim puts a script tag for devToolsShim before the first script of the frontend's
+// page. A page with no script is left as it is.
+func addDevToolsShim(res *http.Response) error {
+	if res.Request == nil || res.Request.Method != http.MethodGet || res.Request.URL.Path != devToolsPagePath ||
+		res.StatusCode != http.StatusOK || res.Header.Get("Content-Encoding") != "" {
+		return nil
+	}
+	const limit = 1 << 20
+	body, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	res.Body.Close()
+	if err != nil {
+		return err
+	}
+	if len(body) > limit {
+		return errors.New("the DevTools page is larger than 1 MiB")
+	}
+	if i := bytes.Index(body, []byte("<script")); i >= 0 {
+		tag := `<script src="./` + path.Base(devToolsShimPath) + `"></script>` + "\n"
+		body = append(body[:i:i], append([]byte(tag), body[i:]...)...)
+	}
+	res.Body = io.NopCloser(bytes.NewReader(body))
+	res.ContentLength = int64(len(body))
+	res.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return nil
+}
 
 // devToolsHeaders keep the frontend in Studio's frames only and its URL, which holds the
 // token, out of Referer headers. Chromium's page sets its own content policy for the rest.
@@ -284,6 +339,7 @@ func devToolsHeaders(h http.Header) {
 //
 //   - / : a redirect to the frontend, connected to the grant's page;
 //   - /devtools/page/<target>: the page's debugging WebSocket, the grant's target only;
+//   - /devtools/studio-webkit.js: Studio's shim for WebKit (devToolsShim);
 //   - /devtools/<file>: the frontend's files.
 //
 // Nothing else: no /json listings, no browser-wide or other pages' sockets, no other methods.
@@ -339,7 +395,12 @@ func (s *Service) serveDevTools(w http.ResponseWriter, r *http.Request, token st
 		}
 		devToolsHeaders(w.Header())
 		q := url.Values{scheme: {r.Host + socket}}
-		http.Redirect(w, r, "/devtools/devtools_app.html?"+q.Encode(), http.StatusFound)
+		http.Redirect(w, r, devToolsPagePath+"?"+q.Encode(), http.StatusFound)
+		return
+	case p == devToolsShimPath && !upgrade:
+		devToolsHeaders(w.Header())
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		http.ServeContent(w, r, "", time.Time{}, strings.NewReader(devToolsShim))
 		return
 	case p == socket && upgrade:
 		if hidden {

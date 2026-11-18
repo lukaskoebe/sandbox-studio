@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- DevTools for the teammate's browser now open in the desktop app on macOS and Linux and in
+  Safari, docked under the page as in Chrome, where they used to show only their address to
+  copy into Chrome. Studio gives Chrome's DevTools the one thing they need that those
+  browsers' WebKit lacks. Firefox still shows the address.
 - Teammates can show you pictures in the chat, such as a screenshot of a page they changed. A
   teammate writes the picture's path into its message as `![what it shows](/path.png)`, and
   the chat shows it, larger on a click; teammates are told how, and the soul can ask for a

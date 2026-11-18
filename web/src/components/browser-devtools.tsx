@@ -13,17 +13,11 @@ export type OpenedDevTools = components["schemas"]["BrowserDevTools"]
 
 /**
  * Whether this browser runs Chrome's DevTools, whose frontend comes from the teammate's
- * Chromium and runs in Chromium only: Chrome, Edge, Brave, the Windows app's WebView2. Not
- * Firefox, Safari or the app's WebKit on macOS and Linux.
+ * Chromium: Chromium (Chrome, Edge, Brave, the Windows app's WebView2) and WebKit (Safari, the
+ * app on macOS and Linux), which Studio's DevTools host gives what the frontend needs of it
+ * (internal/browser/devtools.go). Not Firefox, where the frontend stays blank.
  */
-export const runsDevTools = (() => {
-  const data = (
-    navigator as Navigator & {
-      userAgentData?: { brands?: { brand: string }[] }
-    }
-  ).userAgentData
-  return !!data?.brands?.some((b) => b.brand === "Chromium")
-})()
+export const runsDevTools = navigator.userAgent.includes("AppleWebKit/")
 
 /**
  * Opens DevTools in a window of their own; the app sends it to the system browser. One window
@@ -113,9 +107,8 @@ function ElsewhereNotice({
   return (
     <div className="grid content-start gap-2 overflow-auto p-3 text-xs">
       <p className="max-w-prose text-muted-foreground">
-        Chrome's DevTools run in Chrome, Edge or another Chromium browser, not
-        in this one. Open their address in one: it works until the browser goes
-        to sleep.
+        Chrome's DevTools don't run in Firefox. Open their address in Chrome or
+        Edge: it works until the browser goes to sleep.
       </p>
       <div className="flex min-w-0 items-center gap-1.5">
         <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono">
