@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- An upgrade from v0.22.0 or older no longer leaves sandboxes unable to start when
+  microsandbox's home is a link, such as `~/.microsandbox` pointing into another folder, and
+  its folders were made under umask 0002, as Ubuntu's is. microsandbox 0.7.15 checks the path
+  as written too, where the link doesn't keep other accounts out, so it refused to move the
+  sandboxes' disks into folders of mode 775. Studio now takes group and other write off
+  microsandbox's folders as it starts when the home is a link: the home's own folders and the
+  sandboxes' folders, never what a guest sees (a sandbox's root filesystem, image layers,
+  volumes). `studio doctor` and Settings name the folder and the `chmod` for it, instead of
+  removing leftover VMs first and Move disks, which failed the same way.
 - The terminal UI's composer completes as you type, as the browser's does. `/` at the start
   of a prompt lists commands that go where a key would: `/term`, `/files`, `/changes`,
   `/browser`, `/details`, `/threads`, `/new`, `/stop`, `/start`, `/stop-computer`, `/home`,

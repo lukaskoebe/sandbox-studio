@@ -142,6 +142,90 @@ func TestPrepareHomeMakesTheHomePrivateAndLeavesItsParentsAlone(t *testing.T) {
 	}
 }
 
+// The case from a Linux upgrade from msb 0.7.8: ~/.microsandbox was a link, and the folders the
+// older msb made under umask 0002 were 775. msb 0.7.15 refused them on the link's path and
+// wouldn't move any sandbox's disks.
+func TestPrepareHomeTakesOthersWriteOffStorageBehindALink(t *testing.T) {
+	tmp := openTempDir(t)
+	real := filepath.Join(tmp, "git", ".microsandbox")
+	mode := func(path string) os.FileMode {
+		fi, err := os.Lstat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fi.Mode() & (os.ModePerm | os.ModeSticky)
+	}
+	set := func(path string, m os.FileMode) {
+		if err := os.Chmod(path, m); err != nil { // past the umask
+			t.Fatal(err)
+		}
+	}
+	sb := filepath.Join(real, "sandboxes", "ss-a-g1")
+	tmpInGuest := filepath.Join(sb, "runtime", "rootfs", "upperfs", "tmp")
+	layer := filepath.Join(real, "cache", "layers", "sha256-x", "tmp")
+	volume := filepath.Join(sb, "owned-volumes", "workspace_1")
+	for _, d := range []string{tmpInGuest, layer, volume, filepath.Join(real, "volumes", "named", "data"), filepath.Join(real, "db")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	disk := filepath.Join(volume, "disk.raw")
+	if err := os.WriteFile(disk, nil, 0o664); err != nil {
+		t.Fatal(err)
+	}
+	set(disk, 0o664)
+	for _, d := range []string{real, filepath.Join(real, "sandboxes"), sb, filepath.Join(sb, "runtime"),
+		filepath.Join(sb, "owned-volumes"), volume, filepath.Join(real, "cache"), filepath.Join(real, "cache", "layers"),
+		filepath.Join(real, "volumes"), filepath.Join(real, "volumes", "named"), filepath.Join(real, "volumes", "named", "data")} {
+		set(d, 0o775)
+	}
+	set(filepath.Join(sb, "runtime", "rootfs"), 0o700)
+	set(tmpInGuest, os.ModeSticky|0o777)
+	set(layer, os.ModeSticky|0o777)
+	link := filepath.Join(tmp, ".microsandbox")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+
+	tightened, err := PrepareHome(link)
+	if err != nil || !tightened {
+		t.Fatalf("PrepareHome = %v, %v", tightened, err)
+	}
+	for path, want := range map[string]os.FileMode{
+		real:                             0o700,
+		filepath.Join(real, "sandboxes"): 0o755,
+		sb:                               0o755,
+		filepath.Join(sb, "runtime"):     0o755,
+		volume:                           0o755,
+		filepath.Join(real, "cache"):     0o755,
+		filepath.Join(real, "volumes"):   0o755,
+		filepath.Join(real, "db"):        0o755,
+		// What the guests see stays as it is: a guest's /tmp, an image layer's, a volume's.
+		tmpInGuest:                             os.ModeSticky | 0o777,
+		layer:                                  os.ModeSticky | 0o777,
+		filepath.Join(real, "cache", "layers"): 0o775,
+		filepath.Join(real, "volumes", "named", "data"): 0o775,
+		disk: 0o664,
+	} {
+		if got := mode(path); got != want {
+			t.Errorf("%s is %v, want %v", strings.TrimPrefix(path, tmp), got, want)
+		}
+	}
+	if again, err := PrepareHome(link); again || err != nil {
+		t.Errorf("PrepareHome again = %v, %v", again, err)
+	}
+
+	// A home that is no link is private itself, which keeps everything below it safe: its
+	// folders stay as they are.
+	set(sb, 0o775)
+	if _, err := PrepareHome(real); err != nil {
+		t.Fatal(err)
+	}
+	if got := mode(sb); got != 0o775 {
+		t.Errorf("below a home that is no link, a sandbox's folder became %v", got)
+	}
+}
+
 func TestParseACLGrants(t *testing.T) {
 	trusted := map[string]bool{"user:root": true, "user:ada": true}
 	for out, want := range map[string]string{

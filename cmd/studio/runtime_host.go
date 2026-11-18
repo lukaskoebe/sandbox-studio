@@ -81,7 +81,7 @@ func prepareMSBHome(log *slog.Logger) error {
 	}
 	tightened, err := msbdb.PrepareHome(home)
 	if tightened {
-		log.Info("made microsandbox's home private to this account, as msb requires", "home", home)
+		log.Info("made microsandbox's home private to this account, and behind a link its storage folders writable only by it, as msb requires", "home", home)
 	}
 	if _, unsafe := errors.AsType[*msbdb.UnsafeHome](err); unsafe {
 		return err

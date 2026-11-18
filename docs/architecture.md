@@ -201,7 +201,10 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   first directory only the user can enter). Studio checks the same before it touches msb
   (`msbdb.PrepareHome`, after the update watchdog), makes `$MSB_HOME` itself 0700, and
   otherwise returns an error naming the directory and the `chmod`, so that an update that
-  can't run rolls back; the `msb-db` doctor check says the same. Then, before the SDK opens the
+  can't run rolls back; the `msb-db` doctor check says the same. msb also checks a path as it
+  is written, where a `$MSB_HOME` that is a link isn't the private directory that exempts what
+  is below it, so behind a link Studio takes group and other write off the home's own folders
+  and the sandboxes' folders too, never a sandbox's `runtime/rootfs` (`privateStorage`). Then, before the SDK opens the
   catalog, `msbdb.KeepBefore` copies it once per msb version as `msb.db.before-msb-<version>`
   (the newest two kept): a newer msb migrates it, and no older one can use it after.
 - The `msb-storage` doctor check asks msb (`DiagnoseStorage`) how far it has moved each

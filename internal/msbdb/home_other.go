@@ -6,3 +6,5 @@ package msbdb
 func inspectDir(string) (why string, mine, private bool, err error) { return "", true, false, nil }
 
 func makePrivate(string) (bool, error) { return false, nil }
+
+func privateStorage(string) (bool, error) { return false, nil }

@@ -390,3 +390,33 @@ func TestStorageLeavesLeftoverVMsToTheirCheck(t *testing.T) {
 		t.Fatalf("a leftover beside a VM to repair: %+v", c)
 	}
 }
+
+// The case from a Linux upgrade from msb 0.7.8 with ~/.microsandbox a link: msb refused to move
+// any sandbox's disks into folders of mode 775, and the leftover VMs it listed were refused the
+// same way, so removing them first would have changed nothing.
+func TestStorageNamesFoldersOtherAccountsCouldChange(t *testing.T) {
+	p := healthy()
+	p.MSBPath = func() (string, error) { return "/h/.microsandbox/bin/msb", nil }
+	refused := "migration destination namespace /h/.microsandbox/sandboxes is not protected from other accounts: storage directory permits untrusted namespace mutation; " +
+		"preserve the storage and secure its permissions before retrying"
+	p.Storage = func(context.Context) ([]StorageIssue, error) {
+		return []StorageIssue{
+			{Sandbox: "finn", VM: "ss-f-g1", Status: "maintenance_required", Reasons: []string{refused}},
+			{Sandbox: "test", VM: "ss-t-g2", Status: "maintenance_required", Reasons: []string{refused}},
+			{VM: "ss-old-g1", Status: "unavailable", Leftover: true},
+		}, nil
+	}
+	c, _ := findCheck(Run(context.Background(), p, Options{}), "msb-storage")
+	if c.Status != Fail || !strings.Contains(c.Message, "finn (") {
+		t.Fatalf("check %+v", c)
+	}
+	if !strings.HasPrefix(c.Fix, "Make /h/.microsandbox/sandboxes and the folders below it writable only by you: restart Studio") ||
+		strings.Count(c.Fix, "/h/.microsandbox/sandboxes") != 2 ||
+		!strings.Contains(c.Fix, "`find /h/.microsandbox/sandboxes -path '*/runtime/rootfs' -prune -o -type d -perm /022 -exec chmod g-w,o-w {} +`") ||
+		!strings.Contains(c.Fix, "Where it still can't: Move disks") || strings.Contains(c.Fix, "First remove") {
+		t.Errorf("fix %q", c.Fix)
+	}
+	if got := unprotectedDir("legacy disks"); got != "" {
+		t.Errorf("unprotectedDir of another reason = %q", got)
+	}
+}

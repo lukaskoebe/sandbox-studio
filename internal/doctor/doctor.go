@@ -342,6 +342,8 @@ func checkStorage(ctx context.Context, p Probes) Check {
 	msbCmd := msbCommand(p)
 	var restart, repair, waiting, leftovers []string
 	var repairVMs, waitingVMs []string
+	// The folders msb refused to move disks into because other accounts could change them.
+	var unprotected []string
 	for _, i := range issues {
 		if i.Leftover {
 			if i.Status != "eligible" || i.Running {
@@ -366,6 +368,11 @@ func checkStorage(ctx context.Context, p Probes) Check {
 			if len(i.Reasons) > 0 {
 				s += " (" + strings.Join(i.Reasons, "; ") + ")"
 			}
+			for _, r := range i.Reasons {
+				if dir := unprotectedDir(r); dir != "" && !slices.Contains(unprotected, dir) {
+					unprotected = append(unprotected, dir)
+				}
+			}
 			repair = append(repair, s)
 			repairVMs = append(repairVMs, i.VM)
 		}
@@ -386,10 +393,19 @@ func checkStorage(ctx context.Context, p Probes) Check {
 	if len(repair) > 0 {
 		status = Fail
 		msgs = append(msgs, "microsandbox must move the disks of "+strings.Join(repair, "; ")+" to its new layout before "+plural(len(repair), "it starts", "they start"))
-		fixes = append(fixes, "Move disks, in the notice on Home and on Computers, stops "+plural(len(repair), "it", "them")+", moves the disks, keeping the originals, "+
-			"and starts again what ran. Or stop the sandboxes and run "+repairCommands(msbCmd, repairVMs)+" in a terminal: it shows what it moves and asks before it changes anything.")
+		move := "Move disks, in the notice on Home and on Computers, stops " + plural(len(repair), "it", "them") + ", moves the disks, keeping the originals, " +
+			"and starts again what ran. Or stop the sandboxes and run " + repairCommands(msbCmd, repairVMs) + " in a terminal: it shows what it moves and asks before it changes anything."
+		if len(unprotected) > 0 {
+			// Moving them fails the same way until the folders are fixed, and so does a
+			// leftover's status, so neither is the first thing to do.
+			move = "Make " + strings.Join(unprotected, ", ") + " and the folders below " + plural(len(unprotected), "it", "them") +
+				" writable only by you: restart Studio, which does that when microsandbox's home is a link, or run `find " + strings.Join(unprotected, " ") +
+				" -path '*/runtime/rootfs' -prune -o -type d -perm /022 -exec chmod g-w,o-w {} +` in a terminal, which leaves out what the sandboxes see. " +
+				"Then microsandbox moves the disks as the sandboxes start. Where it still can't: " + move
+		}
+		fixes = append(fixes, move)
 	}
-	if len(leftovers) > 0 && (len(repair) > 0 || len(waiting) > 0) {
+	if len(leftovers) > 0 && (len(repair) > 0 || len(waiting) > 0) && len(unprotected) == 0 {
 		fixes = append([]string{"First remove " + strings.Join(leftovers, ", ") + ", as Leftover VMs says: no sandbox uses " + plural(len(leftovers), "it", "them") +
 			", and microsandbox won't move disks while " + plural(len(leftovers), "it seems", "one of them seems") + " to run."}, fixes...)
 	}
@@ -397,6 +413,23 @@ func checkStorage(ctx context.Context, p Probes) Check {
 		return c
 	}
 	return c.with(status, strings.Join(msgs, ". "), strings.Join(fixes, " "))
+}
+
+// unprotectedDir is the folder msb names in reason when it refuses to move disks into it because
+// other accounts could change it, or "" for another reason. msb says "migration destination
+// namespace <dir> is not protected from other accounts: ..." (crates/runtime
+// checkpoint/migration/namespace.rs).
+func unprotectedDir(reason string) string {
+	const before, after = "namespace ", " is not protected from other accounts"
+	end := strings.Index(reason, after)
+	if end < 0 {
+		return ""
+	}
+	start := strings.LastIndex(reason[:end], before)
+	if start < 0 {
+		return ""
+	}
+	return reason[start+len(before) : end]
 }
 
 // repairCommands are the msb self repair commands for vms.

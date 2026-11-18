@@ -29,8 +29,10 @@ func (e *UnsafeHome) Error() string {
 // it creates the home private to this account if it is missing, and makes an existing one of
 // this account's private (0700), as msb does with its db directory. Directories above it are
 // never changed: one another account could write to is an *UnsafeHome, with how to fix it.
-// It reports whether it changed the home's mode.
+// A home reached through a link has its storage folders made writable only by this account
+// too (privateStorage). It reports whether it changed a mode.
 func PrepareHome(home string) (tightened bool, err error) {
+	home = filepath.Clean(home)
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return false, err
 	}
@@ -42,7 +44,16 @@ func PrepareHome(home string) (tightened bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	return tightened, CheckHome(home)
+	if err := CheckHome(home); err != nil {
+		return tightened, err
+	}
+	// msb checks the path as it is written as well as the real one, and on the written one the
+	// link isn't the private directory that keeps others out of everything below it.
+	if fi, err := os.Lstat(home); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		more, err := privateStorage(real)
+		return tightened || more, err
+	}
+	return tightened, nil
 }
 
 // CheckHome reports, without changing anything, whether msb can keep its database in home:

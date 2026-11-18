@@ -100,6 +100,13 @@ A VM that fails to stop or move is reported with the reason, and the rest still 
 than one version of a disk, the error says to run `msb self repair --sandbox <vm>` in a terminal,
 which shows the versions. `studio doctor`'s `msb-storage` check names the same fix.
 
+msb also refuses to move disks into a folder that another account could change ("is not
+protected from other accounts"). That happened after an upgrade on Linux where
+`~/.microsandbox` is a link and the older msb made its folders under umask 0002 (mode 775):
+msb checks the path through the link as well, and the link doesn't keep others out of what is
+below it. Studio takes group and other write off those folders as it starts when the home is a
+link, and the `msb-storage` check names the folder with the `chmod` for it.
+
 ## Network
 
 Fixed at creation (`runtime.Create`):
