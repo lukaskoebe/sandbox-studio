@@ -111,6 +111,9 @@ func (m *app) sideKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyFlip) && m.hasSide():
 		m.flipTo(false)
 		return m, nil
+	case key.Matches(msg, keyBack) && m.lineCursorOn():
+		m.changes.lineRaw = 0 // esc lets go of the line cursor first
+		return m, nil
 	case key.Matches(msg, keyBack) && m.buttonsIdle():
 		return m, m.back()
 	case key.Matches(msg, keyHelp):

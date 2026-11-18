@@ -36,4 +36,4 @@
                               │                            │ diff --git a/src/login.test.tsx b/src/login.test.tsx                           
                               │                            │ new file mode 100644                                                           
 ──────────────────────────────┴────────────────────────────┴────────────────────────────────────────────────────────────────────────────────
-y approve and push  r request changes  n reject  i ignore  j/k change  1-5 tab │ \ sidebar │ esc/q back  ? more
+y approve and push  r request changes  n reject  i ignore  c comment  j/k change  1-5 tab │ \ sidebar │ esc/q back  ? more

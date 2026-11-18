@@ -1,0 +1,40 @@
+ ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 1 · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 1 ┃ ┃ The login form doesn't submit on enter.   │  Terminal   Files   Changes 5   Browser   Details   ● running 
+                              ┃ ┃ Can you fix it?                           │ ────────────────────━━━━━━━━━─────────────────────────────────
+ TEAMMATES                    ┃                                             │ ‹  M src/login.tsx                           +1 −1 · 3 of 6 ›
+▌ Iris frontend               ┃   ▸ Thought it through                      │ ──────────────────────────────────────────────────────────────
+  Finn backend            ▲ 1 ┃   ▸ ≡ Read src/login.tsx              ● done│ src/login.tsx                                            +1 −1
+  + New teammate              ┃   ▸ ✎ Edit src/login.tsx              ● done│ not staged · web
+                              ┃                                             │ 
+ YOUR COMPUTERS               ┃ Fixed                                       │ @@ -10,7 +10,7 @@ export function Login() {
+  ◐ demo              booting ┃                                             │    return (
+  + New computer              ┃ The form used a div as its button, so enter │      <form onSubmit={submit}>
+                              ┃ did nothing. It is a real submit button now:│        <input name="user" />
+ ENVIRONMENT                  ┃                                             │ -      <div onClick={submit}>Sign in</div>
+  Computers                 4 ┃   │ tsx                                     │ +      <button type="submit">Sign in</button>                 
+  Network                 ▲ 1 ┃   │ <button type="submit">Sign in</button>  │      </form>
+  Secrets                     ┃                                             │    )
+  Memory                      ┃ • Enter submits the form.                   │  }
+  Activity                    ┃ • The button is focusable.                  │ 
+  , Settings              dev ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃                                             │ 
+                              ┃ ╭─ › Iris ─ enter sends · ctrl+j new line ─╮│ 
+                              ┃ │ @web/src/login.tsx:13 Is this the only   ││ 
+                              ┃ │ button?▏                                 ││ 
+                              ┃ ╰──────────────────────────────────────────╯│ 
+──────────────────────────────┴─────────────────────────────────────────────┴───────────────────────────────────────────────────────────────
+enter send  ctrl+j new line │ esc close
+The comment is in the composer: enter sends it to Iris.

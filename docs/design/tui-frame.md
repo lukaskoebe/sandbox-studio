@@ -1,12 +1,13 @@
 # The TUI's frame: sidebar, thread and computer (design)
 
-Status: built in part (2026-11-18): the frame, the places, the thread beside its computer, and
-the computer's Terminal, Files, Changes, Browser and Details tabs. [tui.md](../tui.md#the-frame)
+Status: built in part (2026-11-18): the frame, the places, the thread beside its computer,
+the computer's Terminal, Files, Changes, Browser and Details tabs, and comments on the lines of
+a diff. [tui.md](../tui.md#the-frame)
 describes it as it is.
 It replaces Home as a sidebar and a pane ([tui-home-panes.md](tui-home-panes.md)) and the
 sessions on Home ([tui-sessions.md](tui-sessions.md)). It is mock A of the TUI revamp, with
-mock B's inbox as its Home. Still to come: comments on lines of a diff, Search Studio on
-`ctrl+k`, and `/` commands and `@` files in the composer.
+mock B's inbox as its Home. Still to come: Search Studio on `ctrl+k`, and `/` commands and
+`@` files in the composer.
 
 Where the build differs from the text below:
 
@@ -42,6 +43,18 @@ Where the build differs from the text below:
   sign-in. A browser that isn't running says what it does in the web's words.
 - Beside a thread that is an agent in a terminal the tabs are Files, Changes, Browser and
   Details; `1` there says the thread is the terminal.
+- Line comments take one line each, no ranges: a range is the browser's. `c` again lets go of
+  the cursor as `esc` does, and the key bar reads `c comment`. A review place takes none.
+- Side by side, a row that pairs a removed line with an added one is the added line's; `v`
+  gives the unified diff, where the removed line takes a comment of its own.
+- Only a push that waits takes comments (the feedback endpoint leaves a note on nothing else);
+  a pull request's are written on the forge. `L` leaves them on the push and they stay on
+  show; `r` sends them and they go. The note and the comments are capped at the endpoint's
+  8000 characters, and the TUI says so instead of cutting them.
+- A comment on a change sends its mention now, not in phase 5: the composer keeps the
+  mentions it was given (`chat.Mention{Path, Start}`) and sends those still in the text as
+  whole words, as the web's `keptMentions` does. A removed line mentions its file without a
+  line and says which line it was.
 
 ## The frame keeps its five fixed rows
 

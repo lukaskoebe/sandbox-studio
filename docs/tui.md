@@ -415,6 +415,30 @@ change's diff is read when the cursor comes to it (`GET .../git/diff?repo&path&a
 changes are read while docs-site runs. Details, then s starts it.` A computer whose agent is
 from an older Studio says `Restart the computer to see its git changes`.
 
+**Comments on lines.** `c` puts a cursor on the line of a diff at the top of main, reversed,
+in the accent while the computer has the keys. `↑/↓` move it from line to line of the files,
+past the hunks' heads, and the other scroll keys bring it along with the page. `enter` asks for
+the comment in the notice line, and `esc` (or `c` again) lets go of the cursor. Side by side, a
+row with a removed line beside an added one takes the comment on the added line; `v` shows the
+diff as it comes, where the removed line takes its own. Where the comment goes depends on the
+row:
+
+- **On a push that waits**, the comments collect: each shows dim under its line,
+  `╰ Why did this go?`, and the notice counts them. `enter` on a line with a comment edits it,
+  and an empty comment takes it back. `r` sends them with what to change (see
+  [Reviewing a push](#reviewing-a-push)), and `L` leaves them on the push without deciding
+  it, for any agent on the computer to read (`POST .../approvals/{id}/feedback` with
+  `{note}` alone): `Left 2 comments on fix-login for Finn to read.` A decided push takes no
+  comments, nor does a pull request, whose comments are written on the forge.
+- **On a change or a request**, the comment goes into the thread's composer, on a line of its
+  own: `@web/src/login.tsx:13 Is this the only button?`. The path is the file's in
+  `/workspace`, the repository's path first, and the composer gets the keys. The prompt sends
+  the file as a mention (`mentions: [{path, start}]`), as the web's `@` does, while its text
+  still names it. A removed line is no line of the file any more, so its comment mentions the
+  file alone and says which line it was:
+  ``@web/src/login.tsx (removed line 13, `<div onClick={submit}>Sign in</div>`)``. Without a
+  thread on the computer beside the tab, `c` says to open one.
+
 #### Browser
 
 The teammate's browser, to look at. The top line is the page's address, `No page yet` before
@@ -545,7 +569,16 @@ push to a branch other than the default one, `p` says whether approving opens a 
 too, and `o` opens it after a push without one. `r` requests changes: it asks for a note,
 rejects the push with it, and for a teammate's push sends it to a new thread on the computer
 (`POST .../approvals/{id}/feedback` with `{note, newChat: true}`), as the web's Request
-changes does. Comments on lines of the diff are written in the browser.
+changes does. The [comments on lines](#changes) left on the push go with the note, after it,
+as the web writes them, and the note may then be empty:
+
+```
+Comments on the diff:
+- src/login.tsx:13 (removed line), on `<div onClick={submit}>Sign in</div>`:
+  Why did this go?
+```
+
+A review place takes no comments: they are written in the browser there.
 
 ### Activity
 
@@ -649,8 +682,8 @@ the first time. Only a running computer has terminals.
 
 Editing Settings, providers, templates and the template editor, rules, memory, lineage,
 secrets and the git forges; creating or editing a teammate; deleting or renaming checkpoints
-and their schedule; editing a computer's files and uploading to it; comments on lines of a
-diff; and driving the teammate's browser and its DevTools. Some answers stay there too, because they need more than a key:
+and their schedule; editing a computer's files and uploading to it; comments on a range of a
+diff's lines, and in a review place; and driving the teammate's browser and its DevTools. Some answers stay there too, because they need more than a key:
 
 - keeping both facts of a memory conflict, or editing one: two texts to edit;
 - a chat question that is a form of several fields, or a list: a form to fill;
@@ -765,7 +798,8 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `computer.go` is the computer pane: its tabs and their keys. `tab_terminal.go` is the
   Terminal tab, with its chips and new shells, `tab_files.go` the Files tab, with its reads, the
   list and the file opened, `changes.go` the Changes tab, with git's reads, the rail and what it
-  shows, `tab_browser.go` the Browser tab, which draws `picture.go`'s reads at the pane's size,
+  shows, `comments.go` its line cursor, the comments on a push and the note they make, and a
+  comment on a change put into the composer with its mention, `tab_browser.go` the Browser tab, which draws `picture.go`'s reads at the pane's size,
   and `tab_details.go` the Details tab, which draws
   `detail.go`'s facts or `charts.go`'s dashboard. `homepane.go` is the live terminal's state and
   keys and the approval banner, and `pane.go` the terminal itself, an emulator between the

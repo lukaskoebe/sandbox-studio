@@ -271,12 +271,15 @@ func (m *app) helpBody() []string {
 			{"y / F", "a push: approve and push, or open its pull request; F force-pushes"},
 			{"p / o", "whether approving opens a pull request too; open it later"},
 			{"r / n / i", "ask for changes in a note; reject; ignore"},
+			{"c", "a cursor on main's lines: ↑/↓ move it, enter comments, esc lets go"},
+			{"L", "leave the comments on a push for its agent, deciding nothing"},
 			{"1-5 / m", "another tab; the teammate's next computer"},
 			{"tab / esc", "back to the thread; esc back a place"},
 		}
 		footer = []string{
-			"Git is read every 5 seconds while the tab shows. Comments on lines of a",
-			"diff are written in the browser.",
+			"Git is read every 5 seconds while the tab shows. Comments on a push go",
+			"with r's note, under it; on a change, into the thread's composer as",
+			"@path:line.",
 		}
 	case m.helpBack == screenMain && m.helpPart == "files":
 		title = "Files"

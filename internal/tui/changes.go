@@ -3,6 +3,7 @@ package tui
 import (
 	"cmp"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -95,6 +96,13 @@ type changesState struct {
 	scroll  int  // main's first line on show, for what isn't a review
 	unified bool // v turned side by side off
 	view    changeView
+
+	// The line cursor c puts on main: the row it is for, and the line's file and place in its
+	// diff, which stay as the layout changes; lineRaw 0 for none.
+	lineKey  string
+	lineFile string
+	lineRaw  int
+	comments map[string][]lineComment // a waiting push's comments on lines, by approval
 }
 
 // changeView is main laid out for a row and a width, which a long diff makes worth keeping.
@@ -105,6 +113,7 @@ type changeView struct {
 	side    bool
 	lines   []string
 	files   []diffFile
+	refs    []diffRef
 }
 
 type (
@@ -798,26 +807,23 @@ func (m *app) lineCounts(adds, dels int, binary bool) string {
 	return strings.Join(parts, " ")
 }
 
-// changeMain is what main shows for the row r in w cells and h rows, in a pane of pw cells.
+// changeMain is what main shows for the row r in w cells and h rows, in a pane of pw cells,
+// with the line cursor on its line.
 func (m *app) changeMain(r *changeRow, w, pw, h int) []string {
-	c := &m.changes
 	if r == nil {
 		return nil
 	}
-	if r.kind == crWaiting || r.kind == crPushed {
-		a := r.approval
-		if !isGit(a) {
-			return m.cardLines(card{approvals: []api.ApprovalView{a}}, true, w)
-		}
-		m.reviewOn(a)
-		lines := m.pagerLines(w, m.changesSide(pw))
-		p := &m.pager
-		p.scroll = min(max(p.scroll, 0), max(len(lines)-h, 0))
-		return lines[p.scroll:min(p.scroll+h, len(lines))]
+	if (r.kind == crWaiting || r.kind == crPushed) && !isGit(r.approval) {
+		return m.cardLines(card{approvals: []api.ApprovalView{r.approval}}, true, w)
 	}
-	lines, _ := m.changeLines(*r, w, m.changesSide(pw))
-	c.scroll = min(max(c.scroll, 0), max(len(lines)-h, 0))
-	return lines[c.scroll:min(c.scroll+h, len(lines))]
+	lines, _, refs, scroll := m.mainView(*r, w, pw)
+	*scroll = min(max(*scroll, 0), max(len(lines)-h, 0))
+	view := lines[*scroll:min(*scroll+h, len(lines))]
+	if at, ok := m.lineCursor(*r, refs); ok && at >= *scroll && at < *scroll+len(view) {
+		view = slices.Clone(view)
+		view[at-*scroll] = m.cursorLine(view[at-*scroll], w)
+	}
+	return view
 }
 
 // changesSide reports whether the tab shows diffs side by side in a pane of pw cells.
@@ -836,26 +842,27 @@ func (m *app) reviewOn(a api.ApprovalView) {
 	}
 }
 
-// changeLines lays out what main shows for a repository, a change or a request in w cells, and
-// where each file's diff starts.
-func (m *app) changeLines(r changeRow, w int, side bool) ([]string, []diffFile) {
+// changeLines lays out what main shows for a repository, a change or a request in w cells,
+// where each file's diff starts, and what each line of a diff is.
+func (m *app) changeLines(r changeRow, w int, side bool) ([]string, []diffFile, []diffRef) {
 	c := &m.changes
 	v := &c.view
 	if v.lines != nil && v.key == r.key && v.version == c.version && v.width == w && v.side == side {
-		return v.lines, v.files
+		return v.lines, v.files, v.refs
 	}
 	var lines []string
 	var files []diffFile
+	var refs []diffRef
 	switch r.kind {
 	case crRepo:
 		lines = m.repoLines(c.status[r.repo], w)
 	case crChange:
-		lines, files = m.changeDiffLines(r, w, side)
+		lines, files, refs = m.changeDiffLines(r, w, side)
 	case crTurn:
-		lines, files = m.turnLines(r, w, side)
+		lines, files, refs = m.turnLines(r, w, side)
 	}
-	*v = changeView{key: r.key, version: c.version, width: w, side: side, lines: lines, files: files}
-	return lines, files
+	*v = changeView{key: r.key, version: c.version, width: w, side: side, lines: lines, files: files, refs: refs}
+	return lines, files, refs
 }
 
 // repoLines are a repository's facts: its branch, upstream and changes.
@@ -892,38 +899,40 @@ func (m *app) repoLines(r agentproto.GitRepo, w int) []string {
 	return append(lines, "", styleDim.Render(clip("j and k go through its changes; enter folds them.", w)))
 }
 
-// changeDiffLines are a change's head and its diff.
-func (m *app) changeDiffLines(r changeRow, w int, side bool) ([]string, []diffFile) {
+// changeDiffLines are a change's head and its diff, whose lines name the file by its path in
+// /workspace.
+func (m *app) changeDiffLines(r changeRow, w int, side bool) ([]string, []diffFile, []diffRef) {
 	c := &m.changes
 	repo := c.status[r.repo]
 	ch := repo.Changes[r.change]
-	path := ch.Path
+	name := ch.Path
 	if ch.From != "" {
-		path = ch.From + " → " + ch.Path
+		name = ch.From + " → " + ch.Path
 	}
-	head := spread(styleBold.Render(clip(path, w-12)), m.lineCounts(ch.Added, ch.Removed, ch.Binary), w)
+	head := spread(styleBold.Render(clip(name, w-12)), m.lineCounts(ch.Added, ch.Removed, ch.Binary), w)
 	where := areaNames[ch.Area] + " · " + firstNonEmpty(repo.Path, "workspace")
 	lines := []string{head, styleDim.Render(clip(where, w)), ""}
 	d, ok := c.diffs[r.key]
 	switch {
 	case ch.Binary:
-		return append(lines, styleDim.Render("A binary file: git shows no lines of it.")), nil
+		return append(lines, styleDim.Render("A binary file: git shows no lines of it.")), nil, nil
 	case !ok:
-		return append(lines, styleDim.Render("Reading the diff…")), nil
+		return append(lines, styleDim.Render("Reading the diff…")), nil, nil
 	case d.err != "":
-		return append(lines, styleFailed.Render(clip(d.err, w))), nil
+		return append(lines, styleFailed.Render(clip(d.err, w))), nil, nil
 	case strings.TrimSpace(d.diff) == "":
-		return append(lines, styleDim.Render("No lines changed.")), nil
+		return append(lines, styleDim.Render("No lines changed.")), nil, nil
 	}
-	diff, files := m.diffLines(hunksOnly(d.diff), w, side)
+	diff, files, refs := m.diffLines(hunksOnly(d.diff), w, side)
 	for i := range files {
 		files[i].line += len(lines)
 	}
+	refs = append(make([]diffRef, len(lines)), inFile(refs, path.Join(repo.Path, ch.Path))...)
 	lines = append(lines, diff...)
 	if d.truncated {
 		lines = append(lines, "", styleDim.Render("The diff is cut at 512 KiB."))
 	}
-	return lines, files
+	return lines, files, refs
 }
 
 // hunksOnly is one file's diff from its first hunk: the head over it names the file already.
@@ -938,7 +947,7 @@ func hunksOnly(diff string) string {
 }
 
 // turnLines are the files a request changed, each with its diff.
-func (m *app) turnLines(r changeRow, w int, side bool) ([]string, []diffFile) {
+func (m *app) turnLines(r changeRow, w int, side bool) ([]string, []diffFile, []diffRef) {
 	c := &m.changes
 	t := r.turn
 	lines := []string{styleBold.Render(clip(firstNonEmpty(oneLine(t.Prompt), "A request"), w))}
@@ -951,11 +960,12 @@ func (m *app) turnLines(r changeRow, w int, side bool) ([]string, []diffFile) {
 	d, ok := c.diffs[r.key]
 	switch {
 	case !ok:
-		return append(lines, styleDim.Render("Reading the changes…")), nil
+		return append(lines, styleDim.Render("Reading the changes…")), nil, nil
 	case d.err != "":
-		return append(lines, styleFailed.Render(clip(d.err, w))), nil
+		return append(lines, styleFailed.Render(clip(d.err, w))), nil, nil
 	}
 	var files []diffFile
+	var refs []diffRef
 	for _, f := range d.files {
 		files = append(files, diffFile{path: f.Path, adds: f.Added, dels: f.Removed, line: len(lines)})
 		lines = append(lines, spread(m.changeMark(f.Status)+" "+styleBold.Render(clip(f.Path, w-14)), m.lineCounts(f.Added, f.Removed, f.Binary), w))
@@ -965,7 +975,8 @@ func (m *app) turnLines(r changeRow, w int, side bool) ([]string, []diffFile) {
 		case f.Diff == "":
 			lines = append(lines, styleDim.Render("  Its diff is gone with the request's snapshot."))
 		default:
-			diff, _ := m.diffLines(hunksOnly(f.Diff), w, side)
+			diff, _, dr := m.diffLines(hunksOnly(f.Diff), w, side)
+			refs = append(append(refs, make([]diffRef, len(lines)-len(refs))...), inFile(dr, f.Path)...)
 			lines = append(lines, diff...)
 		}
 		if f.Truncated {
@@ -976,7 +987,7 @@ func (m *app) turnLines(r changeRow, w int, side bool) ([]string, []diffFile) {
 	if d.more > 0 {
 		lines = append(lines, styleDim.Render(fmt.Sprintf("and %d more %s", d.more, plural(d.more, "file", "files"))))
 	}
-	return lines, files
+	return lines, files, refs
 }
 
 // computerKeys reports whether Studio's keys go to the computer pane.
@@ -1010,9 +1021,11 @@ func (m *app) changesKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keyRailDown):
 		m.moveChange(1)
+		c.lineRaw = 0
 		return nil
 	case key.Matches(msg, keyRailUp):
 		m.moveChange(-1)
+		c.lineRaw = 0
 		return nil
 	case key.Matches(msg, keySide):
 		c.unified = !c.unified
@@ -1032,23 +1045,25 @@ func (m *app) changesKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	w, h, pw := m.changesMainRect()
-	if r.kind == crWaiting || r.kind == crPushed {
-		if !isGit(r.approval) {
-			cd := card{approvals: []api.ApprovalView{r.approval}}
-			if cardTakes(msg, cd) {
-				return m.cardKey(msg, cd)
-			}
-			return nil
+	review := r.kind == crWaiting || r.kind == crPushed
+	if review && !isGit(r.approval) {
+		cd := card{approvals: []api.ApprovalView{r.approval}}
+		if cardTakes(msg, cd) {
+			return m.cardKey(msg, cd)
 		}
-		m.reviewOn(r.approval)
-		lines := m.pagerLines(w, m.changesSide(pw))
-		if scrollKey(msg, &m.pager.scroll, len(lines), m.pager.files, h) {
-			return nil
-		}
+		return nil
+	}
+	if cmd, ok := m.commentKey(msg, r, w, h, pw); ok {
+		return cmd
+	}
+	lines, files, _, scroll := m.mainView(r, w, pw)
+	if scrollKey(msg, scroll, len(lines), files, h) {
+		m.cursorIntoView(r, w, h, pw)
+		return nil
+	}
+	if review {
 		return m.reviewKey(msg)
 	}
-	lines, files := m.changeLines(r, w, m.changesSide(pw))
-	scrollKey(msg, &c.scroll, len(lines), files, h)
 	return nil
 }
 
@@ -1069,6 +1084,11 @@ func (m *app) wheelChanges(x, dir int) {
 		scroll = &m.pager.scroll
 	}
 	*scroll = max(*scroll+dir*wheelLines, 0)
+	if w, h, pw := m.changesMainRect(); m.changes.lineRaw != 0 {
+		lines, _, _, s := m.mainView(rows[at], w, pw)
+		*s = min(*s, max(len(lines)-h, 0))
+		m.cursorIntoView(rows[at], w, h, pw)
+	}
 }
 
 // scrollKey scrolls a view of n lines, h of them on show, by its key: a line, a page, an end or
@@ -1120,10 +1140,13 @@ func (m *app) changesBindings() []key.Binding {
 	review := false
 	if at >= 0 {
 		r := rows[at]
+		if r.key == m.changes.lineKey && m.lineCursorOn() {
+			return m.commentBindings(r, true)
+		}
 		switch {
 		case (r.kind == crWaiting || r.kind == crPushed) && isGit(r.approval):
 			m.reviewOn(r.approval)
-			bindings, review = m.reviewBindings(), true
+			bindings, review = append(m.reviewBindings(), m.commentBindings(r, false)...), true
 		case r.kind == crWaiting:
 			for _, k := range kindBindings(r.approval) {
 				if k.Help().Desc != "back" {
@@ -1132,6 +1155,8 @@ func (m *app) changesBindings() []key.Binding {
 			}
 		case r.kind == crRepo:
 			bindings = []key.Binding{keyFold}
+		default:
+			bindings = m.commentBindings(r, false)
 		}
 	}
 	bindings = append(bindings, keyRailBar)

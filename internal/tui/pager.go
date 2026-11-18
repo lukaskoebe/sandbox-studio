@@ -29,6 +29,7 @@ type pagerState struct {
 	side  bool
 	lines []string
 	files []diffFile
+	refs  []diffRef
 }
 
 // diffFile is one file of a push's diff: its path, its lines added and removed, and the line of
@@ -109,7 +110,7 @@ func (m *app) decided() tea.Cmd {
 func (m *app) pagerLines(w int, side bool) []string {
 	p := &m.pager
 	if p.lines == nil || p.width != w || p.side != side {
-		p.lines, p.files = m.reviewLines(p.approval, w, side)
+		p.lines, p.files, p.refs = m.reviewLines(p.approval, w, side)
 		p.width, p.side = w, side
 	}
 	return p.lines
@@ -175,7 +176,7 @@ func (m *app) currentFile() int {
 // reviewLines lays out a git approval as the web's review does: the facts, the pull request,
 // the commits and the diff, its hunks side by side when side is set. It returns where each
 // file's diff starts.
-func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []diffFile) {
+func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []diffFile, []diffRef) {
 	git := a.Git
 	title := styleAccent.Render(kindTitle(a.Kind))
 	if !m.look.plain {
@@ -285,17 +286,17 @@ func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []dif
 			lines = append(lines, "  "+styleDim.Render("No changes."))
 		}
 		if rv.Diff != "" {
-			diff, files := m.diffLines(rv.Diff, w, side)
+			diff, files, refs := m.diffLines(rv.Diff, w, side)
 			for i := range files {
 				files[i].line += len(lines)
 			}
-			return append(lines, diff...), files
+			return append(lines, diff...), files, append(make([]diffRef, len(lines)), refs...)
 		}
 	}
 	if rv == nil && pr == nil {
 		lines = append(lines, "", styleDim.Render("Studio has no review of this push."))
 	}
-	return lines, nil
+	return lines, nil, nil
 }
 
 // changeStrip is the review's summary: the files, the lines added and removed, and their share
@@ -315,10 +316,16 @@ func (m *app) changeStrip(files, adds, dels int) string {
 }
 
 // diffLines lays out a unified diff in w cells, as it comes or with its hunks side by side, and
-// says where each file starts in it and how many lines it adds and removes.
-func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
+// says where each file starts in it and how many lines it adds and removes, and what each line
+// laid out is, for a comment on it.
+func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile, []diffRef) {
 	var out []string
 	var files []diffFile
+	var refs []diffRef
+	emit := func(s string, ref diffRef) {
+		out = append(out, s)
+		refs = append(refs, ref)
+	}
 	half := max((w-1)/2, 12)
 	num := func(n int) string { return styleDim.Render(fmt.Sprintf("%4d ", n)) }
 	added, removed := styleAdded, styleFailed
@@ -326,36 +333,43 @@ func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
 		added, removed = m.pal.added, m.pal.removed
 	}
 	var dels, adds []string
-	var delAt, addAt []int
+	var delRefs, addRefs []diffRef
 	oldN, newN := 0, 0
+	file := ""
 	// flush pairs the removed lines of a run with the added ones, row by row, and marks the words
-	// each pair changes: side by side, or the removed lines above the added ones.
+	// each pair changes: side by side, or the removed lines above the added ones. A row side by
+	// side is its added line, for a comment, when it has one.
 	flush := func() {
 		left, right := pairedLines(dels, adds, removed, added)
 		if !side {
-			for _, l := range left {
-				out = append(out, removed.Render("-")+l)
+			for i, l := range left {
+				emit(removed.Render("-")+l, delRefs[i])
 			}
-			for _, l := range right {
-				out = append(out, added.Render("+")+l)
+			for i, l := range right {
+				emit(added.Render("+")+l, addRefs[i])
 			}
-			dels, adds, delAt, addAt = nil, nil, nil, nil
+			dels, adds, delRefs, addRefs = nil, nil, nil, nil
 			return
 		}
 		for i := range max(len(left), len(right)) {
 			l, r := strings.Repeat(" ", half), ""
+			var ref diffRef
 			if i < len(left) {
-				l = num(delAt[i]) + fitStyled(left[i], half-5)
+				l = num(delRefs[i].line) + fitStyled(left[i], half-5)
+				ref = delRefs[i]
 			}
 			if i < len(right) {
-				r = num(addAt[i]) + fitStyled(right[i], half-5)
+				r = num(addRefs[i].line) + fitStyled(right[i], half-5)
+				left := ref.raw
+				ref = addRefs[i]
+				ref.left = left
 			}
-			out = append(out, l+styleDim.Render("│")+r)
+			emit(l+styleDim.Render("│")+r, ref)
 		}
-		dels, adds, delAt, addAt = nil, nil, nil, nil
+		dels, adds, delRefs, addRefs = nil, nil, nil, nil
 	}
 	hunk := false
-	for _, l := range strings.Split(strings.TrimRight(diff, "\n"), "\n") {
+	for raw, l := range strings.Split(strings.TrimRight(diff, "\n"), "\n") {
 		if strings.HasPrefix(l, "diff --git") {
 			flush()
 			hunk = false
@@ -363,6 +377,7 @@ func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
 			if i := strings.LastIndex(l, " b/"); i >= 0 {
 				path = l[i+3:]
 			}
+			file = path
 			files = append(files, diffFile{path: path, line: len(out)})
 		}
 		if strings.HasPrefix(l, "@@") {
@@ -380,39 +395,53 @@ func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
 				files[f].dels++
 			}
 		}
+		// A line of a hunk is a line of the file, numbered in the new file or, removed, in the
+		// old one; its code is what follows its mark, as the web quotes it.
+		var ref diffRef
+		if hunk && !strings.HasPrefix(l, "@@") && !strings.HasPrefix(l, "\\") {
+			ref = diffRef{file: file, raw: raw + 1, code: strings.TrimSpace(l[min(len(l), 1):])}
+			switch {
+			case strings.HasPrefix(l, "+"):
+				ref.line = newN
+				newN++
+			case strings.HasPrefix(l, "-"):
+				ref.line, ref.removed = oldN, true
+				oldN++
+			default:
+				ref.line, ref.old = newN, oldN
+				oldN++
+				newN++
+			}
+		}
 		// The plain look shows the diff as it comes; the visual one marks changed words.
 		if !hunk || (!side && m.look.plain) {
 			flush()
-			out = append(out, diffLine(l, added, removed))
+			emit(diffLine(l, added, removed), ref)
 			continue
 		}
 		text := strings.ReplaceAll(l, "\t", "    ")
 		switch {
 		case !side && !strings.HasPrefix(l, "+") && !strings.HasPrefix(l, "-"):
 			flush()
-			out = append(out, diffLine(l, added, removed))
+			emit(diffLine(l, added, removed), ref)
 		case strings.HasPrefix(l, "@@"):
 			flush()
-			out = append(out, styleAccent.Render(clip(text, w)))
+			emit(styleAccent.Render(clip(text, w)), ref)
 		case strings.HasPrefix(l, "+"):
-			adds, addAt = append(adds, text[1:]), append(addAt, newN)
-			newN++
+			adds, addRefs = append(adds, text[1:]), append(addRefs, ref)
 		case strings.HasPrefix(l, "-"):
-			dels, delAt = append(dels, text[1:]), append(delAt, oldN)
-			oldN++
+			dels, delRefs = append(dels, text[1:]), append(delRefs, ref)
 		case strings.HasPrefix(l, "\\"):
 			flush()
-			out = append(out, styleDim.Render(text))
+			emit(styleDim.Render(text), ref)
 		default:
 			flush()
 			text = strings.TrimPrefix(text, " ")
-			out = append(out, num(oldN)+fit(text, half-5)+styleDim.Render("│")+num(newN)+fit(text, half-5))
-			oldN++
-			newN++
+			emit(num(ref.old)+fit(text, half-5)+styleDim.Render("│")+num(ref.line)+fit(text, half-5), ref)
 		}
 	}
 	flush()
-	return out, files
+	return out, files, refs
 }
 
 // diffLine colors one line of a unified diff, as the web's diff view does: added lines in
@@ -587,18 +616,32 @@ func (m *app) approvePush(a api.ApprovalView, openPR bool) tea.Cmd {
 	return m.decide(card{approvals: []api.ApprovalView{a}}, d, "Approved", what)
 }
 
-// askChanges asks what the agent should change, and then rejects the push with it as the note.
-// For a teammate's sandbox the note also goes to a new chat there, as the web's review does by
-// default, so the agent picks it up and pushes again.
+// askChanges asks what the agent should change, and then rejects the push with it as the note,
+// the comments on its lines after it. For a teammate's sandbox the note also goes to a new chat
+// there, as the web's review does by default, so the agent picks it up and pushes again.
 func (m *app) askChanges(a api.ApprovalView) {
 	who := firstNonEmpty(a.Git.Push.TeammateName, "the agent")
+	var comments []lineComment
+	if takesComments(a) {
+		comments = m.changes.comments[a.ID]
+	}
+	label := "What should " + who + " change? "
+	switch n := len(comments); {
+	case n == 1:
+		label += "The comment on a line goes with it. "
+	case n > 1:
+		label += fmt.Sprintf("The %d comments on lines go with it. ", n)
+	}
 	m.ask(&linePrompt{
-		label: "What should " + who + " change? ",
+		label: label,
 		enter: keySendNote,
 		submit: func(text string) (string, tea.Cmd) {
-			note := strings.TrimSpace(text)
-			if note == "" {
+			note := composeNote(text, comments)
+			switch {
+			case note == "":
 				return "say what to change", nil
+			case len(note) > maxNote:
+				return "the note and comments are too long: shorten them", nil
 			}
 			return "", tea.Batch(m.requestChanges(a, note), m.decided())
 		},
@@ -617,13 +660,13 @@ func (m *app) requestChanges(a api.ApprovalView, note string) tea.Cmd {
 			return actionDone{err: fmt.Errorf("could not decide: %w", err)}
 		}
 		if !toChat {
-			return actionDone{done: "Asked for changes on " + gitBranch(a) + "."}
+			return actionDone{done: "Asked for changes on " + gitBranch(a) + ".", sent: a.ID}
 		}
 		path := "/api/environments/" + a.EnvironmentID + "/approvals/" + a.ID + "/feedback"
 		if err := client.Do(rctx, http.MethodPost, path, map[string]any{"note": note, "newChat": true}, nil); err != nil {
-			return actionDone{err: fmt.Errorf("rejected the push, but could not send the note: %w", err)}
+			return actionDone{err: fmt.Errorf("rejected the push, but could not send the note: %w", err), sent: a.ID}
 		}
-		return actionDone{done: "Asked " + a.Git.Push.TeammateName + " for changes on " + gitBranch(a) + " in a new thread."}
+		return actionDone{done: "Asked " + a.Git.Push.TeammateName + " for changes on " + gitBranch(a) + " in a new thread.", sent: a.ID}
 	}
 }
 

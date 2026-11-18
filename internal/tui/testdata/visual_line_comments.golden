@@ -1,0 +1,24 @@
+ ≡  [1mFinn › desk[m                                            [36m●[m api-refactor[2m · [m[1;38;5;221m▲ 1[m 
+[2m────────────────────────────────────────────────────────────────────────────────[m
+ [2mTerminal[m   [2mFiles[m   [1mChanges[m   [2mBrowser[m   [2mDetails[m                       [36m●[m [2mrunning[m 
+[2m────────────────────[m━━━━━━━[2m─────────────────────────────────────────────────────[m
+ [1;38;5;141mWAITING FOR YOU[m[2m  1[m     [2m│[m   [2m77d0b2c[m Submit the login form on enter [2mFinn · 5m ago[m
+[36m▌[m [1mPush to fix-login[m     [2m│[m           [2mThe sign-in control was a div.[m              
+                        [2m│[m                                                       
+                        [2m│[m [1mDiff[m                                                  
+                        [2m│[m [1mdiff --git a/src/login.tsx b/src/login.tsx[m            
+                        [2m│[m index 3b18e51..a4c2f0d 100644                         
+                        [2m│[m [2m--- a/src/login.tsx[m                                   
+                        [2m│[m [2m+++ b/src/login.tsx[m                                   
+                        [2m│[m [36m@@ -10,7 +10,7 @@ export function Login() {[m           
+                        [2m│[m    return (                                           
+                        [2m│[m      <form onSubmit={submit}>                         
+                        [2m│[m        <input name="user" />                          
+                        [2m│[m [38;5;203m-[m[38;5;203m      <[m[7;38;5;203mdiv[m[38;5;203m [m[7;38;5;203monClick[m[38;5;203m=[m[7;38;5;203m{[m[38;5;203msubmit[m[7;38;5;203m}[m[38;5;203m>Sign in</[m[7;38;5;203mdiv[m[38;5;203m>[m            
+                        [2m│[m [2m  ╰ Why did this go? The test clicks the div.[m         
+                        [2m│[m [7;36m+      <button type="submit">Sign in</button>         [m
+                        [2m│[m      </form>                                          
+                        [2m│[m    )                                                  
+[2m────────────────────────┴───────────────────────────────────────────────────────[m
+[1menter[m [2mcomment[m  [1m↑↓[m [2mline[m  [1mesc[m [2mdone[m  [1m1-5[m [2mtab[m[2m │ [m[1m\[m [2msidebar[m[2m │ [m[1m?[m [2mmore[m
+1 comment on the push: r sends it with what to change, L leaves it for Finn.

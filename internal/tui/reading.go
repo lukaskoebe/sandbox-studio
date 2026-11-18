@@ -38,7 +38,7 @@ func (m *app) readingReview(a api.ApprovalView, rc rect) []string {
 	in := &m.inbox
 	if in.review.id != a.ID || in.review.w != rc.w || in.review.lines == nil {
 		in.review.id, in.review.w = a.ID, rc.w
-		in.review.lines, _ = m.reviewLines(a, rc.w, false)
+		in.review.lines, _, _ = m.reviewLines(a, rc.w, false)
 	}
 	lines := in.review.lines
 	in.scroll = min(in.scroll, max(len(lines)-rc.h, 0))

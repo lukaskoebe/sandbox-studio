@@ -320,8 +320,8 @@ func (m *app) bindings() []key.Binding {
 	switch {
 	case m.focus == focusSide && m.sidePane() == paneComputer, m.mainPane() == paneComputer:
 		bindings = m.computerBindings()
-		if !m.hasSide() || m.focus != focusSide && m.layoutFor(m.width).side > 0 {
-			bindings = append(bindings, keyBack)
+		if (!m.hasSide() || m.focus != focusSide && m.layoutFor(m.width).side > 0) && !m.lineCursorOn() {
+			bindings = append(bindings, keyBack) // esc lets go of a line cursor first
 		}
 	case m.mainPane() == paneHomeList:
 		return append(m.inboxBindings(), keySidebarTo)

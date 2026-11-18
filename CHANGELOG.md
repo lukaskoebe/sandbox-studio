@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The terminal UI's Changes tab takes comments on the lines of a diff. `c` puts a cursor on the
+  diff, `↑` and `↓` move it, `enter` asks for the comment and `esc` lets go. On a push that
+  waits, the comments show under their lines until you decide it: `r` sends them with what to
+  change, written as the browser writes them, and `L` leaves them on the push for its agent
+  without deciding it. On a change or a request of the thread, the comment goes into the
+  thread's composer as `@web/src/login.tsx:13` and its text, with the file sent to the agent as
+  the browser's `@` does.
 - The terminal UI's computer has the browser's Files and Browser tabs. Files lists a folder of
   the computer, folders first with each file's size and age, and shows the file you open beside
   the list with its line numbers, or as a picture on a terminal of 256 colors or more; `j` and

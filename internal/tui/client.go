@@ -321,20 +321,23 @@ func (c *Client) Chat(ctx context.Context, env, id string, last, before int) (ch
 
 // prompt is the body of a prompt: the TUI sends text only.
 type prompt struct {
-	Text string `json:"text"`
+	Text     string         `json:"text"`
+	Mentions []chat.Mention `json:"mentions,omitempty"`
 }
 
-// CreateChat starts a chat with the sandbox's teammate and sends it the first prompt.
-func (c *Client) CreateChat(ctx context.Context, env, sandbox, text string) (store.Chat, error) {
+// CreateChat starts a chat with the sandbox's teammate and sends it the first prompt, with the
+// files it mentions.
+func (c *Client) CreateChat(ctx context.Context, env, sandbox, text string, mentions []chat.Mention) (store.Chat, error) {
 	var out store.Chat
-	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+sandbox+"/chats", nil, prompt{Text: text}, &out)
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+sandbox+"/chats", nil, prompt{Text: text, Mentions: mentions}, &out)
 	return out, err
 }
 
-// SendPrompt starts a turn of a chat. Studio refuses it while a turn runs.
-func (c *Client) SendPrompt(ctx context.Context, env, id, text string) (chat.Turn, error) {
+// SendPrompt starts a turn of a chat, with the files the prompt mentions. Studio refuses it
+// while a turn runs.
+func (c *Client) SendPrompt(ctx context.Context, env, id, text string, mentions []chat.Mention) (chat.Turn, error) {
 	var out chat.Turn
-	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/chats/"+id+"/prompt", nil, prompt{Text: text}, &out)
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/chats/"+id+"/prompt", nil, prompt{Text: text, Mentions: mentions}, &out)
 	return out, err
 }
 

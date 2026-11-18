@@ -335,6 +335,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg.undo.until = time.Now().Add(undoFor)
 			m.home.undo = msg.undo
 		}
+		if msg.sent != "" {
+			delete(m.changes.comments, msg.sent)
+		}
 		return m, m.refresh()
 	}
 	return m, nil

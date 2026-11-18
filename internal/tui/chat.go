@@ -57,9 +57,10 @@ type chatState struct {
 	fold     int                     // the folded item under the cursor, among the foldable ones; -1 for none
 	scroll   int                     // rows the transcript is scrolled up from its end
 
-	composing bool  // the composer takes the keys
-	draft     input // the prompt being written
-	sending   bool  // a prompt is on its way
+	composing bool           // the composer takes the keys
+	draft     input          // the prompt being written
+	mentions  []chat.Mention // the files the draft mentions, those it still names going with it
+	sending   bool           // a prompt is on its way
 }
 
 // The messages of the chat screens. gen ties a chat's messages to the chat they were for.
@@ -318,6 +319,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 			return nil, true
 		}
 		c.draft.set("")
+		c.mentions = nil
 		m.setNotice("", false)
 		return m.threadStarted(msg.chat), true
 	case promptSent:
@@ -331,6 +333,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 			return nil, true
 		}
 		c.draft.set("")
+		c.mentions = nil
 		c.fold, c.scroll = -1, 0
 	default:
 		return nil, false
@@ -563,16 +566,17 @@ func (m *app) send() tea.Cmd {
 	}
 	c.composing, c.sending = false, true
 	ctx, client, env, sandbox, id, gen := m.ctx, m.client, m.env.ID, c.sandbox.ID, c.id, c.gen
+	mentions := keptMentions(text, c.mentions)
 	if id == "" {
 		m.setNotice("Starting the thread…", false)
 		return func() tea.Msg {
-			created, err := client.CreateChat(ctx, env, sandbox, text)
+			created, err := client.CreateChat(ctx, env, sandbox, text, mentions)
 			return chatCreated{chat: created, err: err}
 		}
 	}
 	m.setNotice("", false)
 	return func() tea.Msg {
-		_, err := client.SendPrompt(ctx, env, id, text)
+		_, err := client.SendPrompt(ctx, env, id, text, mentions)
 		return promptSent{gen: gen, err: err}
 	}
 }

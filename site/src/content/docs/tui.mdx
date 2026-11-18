@@ -11,6 +11,7 @@ import computer from '../../../../internal/tui/testdata/visual_computer.golden?r
 import changes from '../../../../internal/tui/testdata/visual_changes.golden?raw'
 import files from '../../../../internal/tui/testdata/visual_files.golden?raw'
 import browserTab from '../../../../internal/tui/testdata/visual_browser.golden?raw'
+import lineComments from '../../../../internal/tui/testdata/visual_line_comments.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It is
 laid out as the browser is: a sidebar with your teammates, their threads and your computers,
@@ -298,6 +299,22 @@ the diff, `‹ M src/login.tsx +1 −1 · 3 of 7 ›`, and `j` and `k` still mov
 The tab reads git every few seconds while it shows, and at once when a request of the thread
 ends. A stopped computer's changes are read once it runs again.
 
+#### Comments on lines
+
+`c` puts a cursor on a line of the diff. Move it with `↑` and `↓`, press `enter` and write the
+comment, and press `esc` when you're done. Where the comment goes depends on what you're
+looking at:
+
+- **A push that waits:** the comments stay on the push, each one under its line, until you
+  decide it. `r` sends them along with what to change, and `L` leaves them on the push without
+  deciding it, for the agent to read. `enter` on a line with a comment edits it; clear the text
+  to take it back.
+- **A change or a request:** the comment goes into the thread's box as
+  `@web/src/login.tsx:13 Is this the only button?`, with the file attached for the agent as `@`
+  does in the browser. Add more, or press `enter` to send them.
+
+<TerminalScreen ansi={lineComments} label="A push to fix-login waiting in the Changes tab: a comment under its removed line, Why did this go? The test clicks the div, and the notice saying r sends it with what to change and L leaves it for Finn" />
+
 ### Browser
 
 The Browser tab shows the page the teammate's browser is on: its address, who drove it last,
@@ -391,7 +408,8 @@ you:
 - **Review a git push:** `enter` opens the push in its computer's [Changes tab](#changes):
   the repository, branch and change, the commits, and the diff with added lines in green and
   removed ones in red. Scroll with the arrows, `pgup`/`pgdn` (or `b`/`space`), `g` and `G`.
-  Then `y` approves and pushes it, `n` rejects it, and `i` ignores it. From its row on Home, `y`
+  Then `y` approves and pushes it, `n` rejects it, `r` asks for changes in a note, with your
+  [comments on its lines](#comments-on-lines), and `i` ignores it. From its row on Home, `y`
   asks once more before it pushes. A push that rewrites its branch lists the commits it drops,
   and only `F` force-pushes it. A pull request shows its title and description, and `y` opens
   it. Once it's out, the push is listed under PUSHED in the tab for a day, and in Activity under
@@ -458,7 +476,7 @@ you're back in the terminal.
 
 Editing Settings, providers, teammates, templates, the rules, memory, secrets and the git forges
 happens in the browser; `,` lists the sections with what each is set to, and `enter` prints the
-address of one. Editing a computer's files, driving its browser and its DevTools, comments on
-the lines of a diff, and a few answers stay there too: keeping both facts of a memory conflict,
+address of one. Editing a computer's files, driving its browser and its DevTools, comments on a
+range of a diff's lines, and a few answers stay there too: keeping both facts of a memory conflict,
 questions with several fields, and a preview's first login. The TUI prints their addresses where
 it has a key for them, and `?` shows where the browser is.

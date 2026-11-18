@@ -1,7 +1,8 @@
 ---
 // A terminal screen from its ANSI text, such as a golden file of the TUI's tests, drawn as
 // colored spans on a dark terminal in both site themes. It knows the SGR codes the TUI
-// writes: reset, bold, dim, the 16 basic colors, the 256-color palette and 24-bit color. A half
+// writes: reset, bold, dim, reverse, the 16 basic colors, the 256-color palette and 24-bit
+// color. A half
 // block ▀, of which the TUI draws pictures, is a cell in its two colors, top and bottom, so the
 // picture has no gaps between its lines. The colors the TUI
 // uses are read from --t-* properties when a page sets them, as the landing page does to follow
@@ -41,7 +42,7 @@ function palette(n: number): string {
   return `#${v}${v}${v}`
 }
 
-type Style = { bold?: boolean; dim?: boolean; fg?: string; bg?: string }
+type Style = { bold?: boolean; dim?: boolean; reverse?: boolean; fg?: string; bg?: string }
 type Run = { text: string; style: Style }
 
 function apply(style: Style, params: number[]): Style {
@@ -52,6 +53,8 @@ function apply(style: Style, params: number[]): Style {
     else if (p === 1) s.bold = true
     else if (p === 2) s.dim = true
     else if (p === 22) s.bold = s.dim = false
+    else if (p === 7) s.reverse = true
+    else if (p === 27) s.reverse = false
     else if (p >= 30 && p <= 37) s.fg = color(p - 30)
     else if (p >= 90 && p <= 97) s.fg = color(p - 90 + 8)
     else if (p === 39) delete s.fg
@@ -91,10 +94,13 @@ const symbol = (t: string) => /^[\u2190-\u24ff\u2580-\u2bff]$/.test(t)
 // half is a half block's two colors: the text's on top, the background's below.
 const half = (s: Style) => `background:linear-gradient(${s.fg ?? 'currentColor'} 50%, ${s.bg ?? 'transparent'} 50%)`
 
-const css = (s: Style) =>
-  [s.fg && `color:${s.fg}`, s.bg && `background:${s.bg}`, s.bold && 'font-weight:700']
-    .filter(Boolean)
-    .join(';')
+// css is a run's style. Reversed, as the TUI draws a cursor's line and a diff's changed words,
+// the text takes the background's color, the terminal's own where it has none, and the reverse.
+const css = (s: Style) => {
+  const fg = s.reverse ? (s.bg ?? 'var(--t-bg, #0f1417)') : s.fg
+  const bg = s.reverse ? (s.fg ?? 'var(--t-fg, #d7dae0)') : s.bg
+  return [fg && `color:${fg}`, bg && `background:${bg}`, s.bold && 'font-weight:700'].filter(Boolean).join(';')
+}
 ---
 
 <figure class="terminal-screen not-content" aria-label={label}>

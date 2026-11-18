@@ -42,6 +42,7 @@ type (
 		done string
 		err  error
 		undo *undoState // a decision u can undo for a while
+		sent string     // the push whose line comments went out with its decision
 	}
 )
 

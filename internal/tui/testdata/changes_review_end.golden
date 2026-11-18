@@ -20,4 +20,4 @@
                         │ +    expect(form).toBeTruthy()                        
                         │ +})                                                   
 ────────────────────────┴───────────────────────────────────────────────────────
-y approve and push  r request changes  n reject  i ignore  j/k change  1-5 tab  
+y approve and push  r request changes  n reject  i ignore  c comment  j/k change
