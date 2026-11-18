@@ -92,7 +92,7 @@ var Tools = []Tool{
 			"kind":     str("What sort of fact", "enum", kinds),
 			"entity":   str("What it is about, e.g. a repo, service or person"),
 			"scope":    str("teammate (default) saves privately; shared proposes it for everyone and needs the user's approval", "enum", []string{"teammate", "shared"}),
-			"source":   str("user: the user said so; verified: you ran it and it worked; inferred (default): your conclusion", "enum", []string{"user", "verified", "inferred"}),
+			"source":   str("user: the user said so (kept as inferred until Studio finds it in the user's own words); verified: you ran it and it worked; inferred (default): your conclusion", "enum", []string{"user", "verified", "inferred"}),
 			"evidence": str("A short quote or the command and its result", "maxLength", 500),
 		})},
 	{agentproto.MethodShare, "Propose a fact for shared memory, which every teammate reads. The user approves it first.",

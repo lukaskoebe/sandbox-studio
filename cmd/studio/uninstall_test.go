@@ -94,6 +94,33 @@ func TestUninstallRemovesEverythingOnceConfirmed(t *testing.T) {
 	}
 }
 
+// On Windows the running studio.exe can't delete itself: the rest goes, and the user is told
+// which file to delete, not to run uninstall again.
+func TestUninstallOnWindowsLeavesOnlyTheRunningProgram(t *testing.T) {
+	u, _, _ := newInstall(t)
+	u.exeStays = true
+	var out bytes.Buffer
+	if code := u.confirmAndRun(context.Background(), strings.NewReader("uninstall\n"), &out, false); code != 0 {
+		t.Fatalf("code %d: %s", code, &out)
+	}
+	for _, gone := range []string{filepath.Join(filepath.Dir(u.exe), "studio-app"), u.data, u.msbHome} {
+		if exists(gone) {
+			t.Errorf("%s is still there", gone)
+		}
+	}
+	if !exists(u.exe) {
+		t.Error("the running program was removed")
+	}
+	for _, want := range []string{"stays, as Windows", "Delete " + u.exe + " by hand"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the output doesn't say %q:\n%s", want, &out)
+		}
+	}
+	if strings.Contains(out.String(), "run studio uninstall again") {
+		t.Errorf("it asks to run uninstall again:\n%s", &out)
+	}
+}
+
 func TestUninstallRemovesNothingWithoutTheWord(t *testing.T) {
 	for _, answer := range []string{"", "\n", "y\n", "yes\n", "UNINSTALL\n"} {
 		u, vms, entry := newInstall(t)

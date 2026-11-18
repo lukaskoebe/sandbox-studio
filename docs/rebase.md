@@ -56,7 +56,7 @@ resumed.
   it. The gateway hands the request body on to the import's stdin, which is fast, and
   answers once the import has read it all. A guest that can't upload, failing before it sent
   anything, exports over stdout as before. Measured on 2026-10-31 (msb 0.7.8, amd64, four
-  CPUs, [`spikes/transfer-speed`](../spikes/transfer-speed/README.md)):
+  CPUs, [`spikes/transfer-speed`](https://github.com/lukaskoebe/sandbox-studio/blob/9080a56f/spikes/transfer-speed/README.md)):
 
   | From the guest | MB/s |
   |---|---:|
@@ -96,7 +96,7 @@ resumed.
   batch; a batch waits for the one before, so at most two are cached. A file larger than 32 MiB
   starts each chunk's writeback once it is written and waits for it a chunk later
   (`internal/guest/pagecache.go`). Measured on 2026-11-04
-  ([`spikes/transfer-memory`](../spikes/transfer-memory/README.md)), copying 1.8 GiB in a 2
+  ([`spikes/transfer-memory`](https://github.com/lukaskoebe/sandbox-studio/blob/9080a56f/spikes/transfer-memory/README.md)), copying 1.8 GiB in a 2
   GiB VM: 2106 MiB resident at the peak and 48 s before, 256 MiB and 29 s after. Directory
   entries and inodes stay cached, about 1 KiB per file, until the guest needs the memory.
 - The export reads ahead: its walk runs up to 32 entries ahead of the archive in its own

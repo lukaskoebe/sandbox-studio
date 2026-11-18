@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -506,6 +507,7 @@ func decideFlags(fs *flag.FlagSet, c *call) {
 	fs.BoolVar(&o.once, "once", false, "for a network request: decide this one connection, without a rule")
 	fs.StringVar(&o.scope, "scope", "", "for a network rule: sandbox, teammate or environment (default: the teammate's usual scope)")
 	fs.BoolVar(&o.sandboxes, "sandboxes", false, "for a browser request: the rule also covers the sandboxes' own connections")
+	fs.BoolVar(&c.yes, "yes", false, "for a push: allow it without showing its commits and asking first")
 }
 
 // decide answers an approval of any environment: the ID is enough to find it. A browser
@@ -528,6 +530,13 @@ func decide(action string) func(*call, []string) error {
 		}
 		if found == nil {
 			return fmt.Errorf("no pending approval %q; `studio approvals` lists them", rest[0])
+		}
+		// Allowing a push sends the commits out, so it shows them and asks, as a card shows
+		// them before its Push button.
+		if action == "allow" && found.Git != nil && found.Git.Review != nil {
+			if err := c.confirmPush(found.Git.Review); err != nil {
+				return err
+			}
 		}
 		body := map[string]any{"action": action}
 		network := found.Network != nil
@@ -569,6 +578,60 @@ func decide(action string) func(*call, []string) error {
 		fmt.Fprintf(c.opts.Stdout, "%s: %s\n", out.Status, clean(out.Subject))
 		return nil
 	}
+}
+
+// confirmPush shows what a push sends and asks to go on, unless --yes. Without a terminal to
+// ask in it takes --yes.
+func (c *call) confirmPush(r *gitreview.PushReview) error {
+	if c.yes {
+		return nil
+	}
+	if !c.opts.Interactive {
+		return usagef("allowing a push sends its commits out: add --yes to allow it without seeing them, or run it in a terminal")
+	}
+	w := c.opts.Stderr
+	repo := strings.Trim(r.Owner+"/"+r.Repo, "/")
+	from := r.Sandbox
+	if r.Teammate != "" {
+		from = r.Teammate + " on " + r.Sandbox
+	}
+	fmt.Fprintf(w, "%s pushes to %s on %s (%s):\n", clean(from), clean(r.Branch), clean(repo), clean(r.Forge))
+	switch {
+	case r.Old == "":
+		fmt.Fprintln(w, "  a new branch")
+	case r.Forced:
+		dropped := len(r.Dropped) + r.MoreDropped
+		fmt.Fprintf(w, "  rewrites the branch, dropping %d %s it has now\n", dropped, plural(dropped, "commit", "commits"))
+	}
+	n := len(r.Commits) + r.MoreCommits
+	fmt.Fprintf(w, "  %d %s, %d %s changed, +%d -%d\n", n, plural(n, "commit", "commits"), r.Files, plural(r.Files, "file", "files"), r.Additions, r.Deletions)
+	for _, cm := range r.Commits {
+		fmt.Fprintf(w, "    %s %s (%s)\n", shortSHA(cm.SHA), clean(cm.Subject), clean(cm.Author))
+	}
+	if r.MoreCommits > 0 {
+		fmt.Fprintf(w, "    and %d more\n", r.MoreCommits)
+	}
+	fmt.Fprint(w, "Push it? [y/N] ")
+	line, _ := bufio.NewReader(c.opts.Stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return nil
+	}
+	return failure{status: ExitFailed, msg: "cancelled"}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // browserScope is the scope of a browser request's rule, as the web card starts it: the

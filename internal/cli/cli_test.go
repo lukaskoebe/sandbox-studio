@@ -14,6 +14,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -106,7 +107,16 @@ func (f *fakeStudio) handler(t *testing.T) http.Handler {
 				Approval: store.Approval{ID: "ap3", EnvironmentID: envID, SandboxID: sbID, Kind: "network.request", Subject: "api.github.com:443", Status: "pending", CreatedAt: time.Now()},
 				Network:  &writeRequest,
 				Teammate: &api.ApprovalTeammate{ID: "tm1", Name: "Finn", ApprovalScope: "teammate"},
+			}, {
+				Approval: store.Approval{ID: "ap4", EnvironmentID: envID, SandboxID: sbID, Kind: "git.push", Subject: "acme/api feature", Status: "pending", CreatedAt: time.Now()},
+				Git: &gitreview.GitDetail{Review: &gitreview.PushReview{
+					Teammate: "Finn", Sandbox: "finn", Forge: "GitHub", Owner: "acme", Repo: "api", Branch: "feature",
+					Commits: []gitreview.Commit{{SHA: "0123456789abcdef", Author: "Finn", Subject: "Add the login page"}},
+					Files:   2, Additions: 30, Deletions: 4,
+				}},
 			}})
+		case "POST /api/environments/env1/approvals/ap4/decide":
+			reply(w, api.ApprovalView{Approval: store.Approval{ID: "ap4", Status: "approved", Subject: "acme/api feature"}})
 		case "POST /api/environments/env1/approvals/ap1/decide":
 			reply(w, api.ApprovalView{Approval: store.Approval{ID: "ap1", Status: "approved", Subject: "registry.npmjs.org:443"}})
 		case "POST /api/environments/env1/approvals/ap2/decide":
@@ -259,6 +269,34 @@ func TestRemoveAsksFirst(t *testing.T) {
 	}
 	if status, _, _ := f.run(t, "", false, "rm", "--yes", "finn"); status != ExitOK {
 		t.Fatalf("rm --yes: %d", status)
+	}
+}
+
+// Allowing a push shows its commits and asks first; a script says --yes. Denying it doesn't ask.
+func TestApprovePushShowsItsCommitsAndAsks(t *testing.T) {
+	f := &fakeStudio{}
+	const decide = "POST /api/environments/env1/approvals/ap4/decide"
+	if status, _, errOut := f.run(t, "", false, "approve", "ap4"); status != ExitUsage || !strings.Contains(errOut, "--yes") || f.bodies[decide] != nil {
+		t.Fatalf("approve without a terminal: %d %s", status, errOut)
+	}
+	status, _, errOut := f.run(t, "n\n", true, "approve", "ap4")
+	if status != ExitFailed || f.bodies[decide] != nil {
+		t.Fatalf("approve answered no: %d %s", status, errOut)
+	}
+	for _, want := range []string{"Finn on finn pushes to feature on acme/api (GitHub)", "1 commit, 2 files changed, +30 -4", "0123456 Add the login page (Finn)", "Push it?"} {
+		if !strings.Contains(errOut, want) {
+			t.Fatalf("approve shows no %q:\n%s", want, errOut)
+		}
+	}
+	if status, out, errOut := f.run(t, "y\n", true, "approve", "ap4"); status != ExitOK || !strings.Contains(out, "approved") || !jsonEqual(f.bodies[decide], map[string]any{"action": "allow"}) {
+		t.Fatalf("approve answered yes: %d %s %s %v", status, out, errOut, f.bodies[decide])
+	}
+	delete(f.bodies, decide)
+	if status, _, errOut := f.run(t, "", false, "approve", "--yes", "ap4"); status != ExitOK || f.bodies[decide] == nil {
+		t.Fatalf("approve --yes: %d %s", status, errOut)
+	}
+	if status, _, errOut := f.run(t, "", false, "deny", "ap4"); status != ExitOK || !jsonEqual(f.bodies[decide], map[string]any{"action": "deny"}) {
+		t.Fatalf("deny: %d %s", status, errOut)
 	}
 }
 

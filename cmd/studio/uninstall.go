@@ -9,7 +9,9 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"syscall"
@@ -47,6 +49,9 @@ type loginEntry struct {
 type uninstaller struct {
 	exe, data, msbHome string
 	keepData, keepMSB  bool
+	// exeStays: Windows doesn't let a running program delete itself, so exe is left for the
+	// user to delete by hand.
+	exeStays bool
 
 	vms        vmHost
 	entries    []loginEntry
@@ -135,6 +140,9 @@ func (u *uninstaller) describe(w io.Writer, p uninstallPlan) {
 	fmt.Fprintln(w, "This removes Sandbox Studio from this computer:")
 	fmt.Fprintln(w)
 	for _, program := range p.programs {
+		if u.exeStays && program == u.exe {
+			continue
+		}
 		fmt.Fprintf(w, "  %s\n", program)
 	}
 	for _, e := range u.entries {
@@ -159,6 +167,9 @@ func (u *uninstaller) describe(w io.Writer, p uninstallPlan) {
 	}
 	if u.keepData {
 		fmt.Fprintf(w, "\nThe data in %s and the sandboxes stay, stopped, and come back when you install Studio again.\n", u.data)
+	}
+	if u.exeStays {
+		fmt.Fprintf(w, "\n%s stays, as Windows doesn't let a running program delete itself: delete it by hand afterwards.\n", u.exe)
 	}
 	if len(p.notes) > 0 {
 		fmt.Fprintln(w)
@@ -236,6 +247,9 @@ func (u *uninstaller) run(ctx context.Context, w io.Writer, p uninstallPlan) []e
 		return failed
 	}
 	for _, program := range p.programs {
+		if u.exeStays && program == u.exe {
+			continue
+		}
 		note(removeTree(program), "remove %s", program)
 	}
 	return failed
@@ -291,6 +305,10 @@ func (u *uninstaller) confirmAndRun(ctx context.Context, in io.Reader, w io.Writ
 		}
 		return 1
 	}
+	if u.exeStays && exists(u.exe) {
+		fmt.Fprintf(w, "Sandbox Studio is uninstalled except for this program, which Windows doesn't let delete itself while it runs. Delete %s by hand.\n", u.exe)
+		return 0
+	}
 	fmt.Fprintln(w, "Sandbox Studio is uninstalled.")
 	return 0
 }
@@ -319,9 +337,16 @@ func hostUninstaller(ctx context.Context, addr string) (*uninstaller, error) {
 			release, _, err := lockMSB()
 			return release, err
 		},
+		exeStays:   goruntime.GOOS == "windows",
 		running:    func() bool { return holdsData(p) },
 		stopStudio: func(ctx context.Context) error { return stopStudio(ctx, p, addr) },
 		closeApps: func() {
+			if goruntime.GOOS == "windows" {
+				// Neither holds data, and Studio has stopped. A tray or app of another
+				// installation closes too, as Windows names processes by their file only.
+				_ = exec.Command("taskkill", "/F", "/IM", "studiow.exe", "/IM", "studio-app.exe").Run()
+				return
+			}
 			for _, pid := range runningApps(appPaths(exe)) {
 				if proc, err := os.FindProcess(pid); err == nil {
 					_ = proc.Signal(syscall.SIGTERM)

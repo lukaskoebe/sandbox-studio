@@ -184,7 +184,8 @@ func TestRememberOldScopeName(t *testing.T) {
 func TestScopeEnforcement(t *testing.T) {
 	f := newFixture(t)
 	secret := f.remember(f.sbAda.ID, "Ada's deploy target is the staging cluster")
-	if secret.Scope != memory.TeammateScope(f.ada.ID) || secret.AuthorTeammate != f.ada.ID || secret.Tier != memory.TierUser {
+	// The agent says the user said it, which proves nothing: it is kept as inferred.
+	if secret.Scope != memory.TeammateScope(f.ada.ID) || secret.AuthorTeammate != f.ada.ID || secret.Tier != memory.TierInferred {
 		t.Fatalf("remembered %+v", secret)
 	}
 

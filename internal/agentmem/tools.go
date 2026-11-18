@@ -197,9 +197,14 @@ func (s *Service) toolRemember(ctx context.Context, c caller, params json.RawMes
 		return nil, err
 	}
 	switch in.Source {
-	case "":
+	case "", memory.TierInferred:
 		in.Source = memory.TierInferred
-	case memory.TierUser, memory.TierVerified, memory.TierInferred:
+	case memory.TierUser:
+		// The agent's word that the user said it proves nothing, and the user tier outranks
+		// the rest, so it is kept as inferred. Extraction raises it once the user's own words
+		// say it, as a duplicate keeps the better tier.
+		in.Source = memory.TierInferred
+	case memory.TierVerified:
 	default:
 		return nil, userErrorf("source must be user, verified or inferred")
 	}

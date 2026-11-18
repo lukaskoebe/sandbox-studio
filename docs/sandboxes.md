@@ -204,7 +204,7 @@ the memory ceiling it booted with. So Studio boots every VM with room to grow
   cores: 1 CPU boots with room for 2, 2 for 4, 4 for 8 and 8 for 12.
 
 The memory ceiling is free. The spare vCPUs are not: each one's thread keeps polling while the
-vCPU is offline, which is why the CPU room is capped. Measured with `spikes/live-resize` on
+vCPU is offline, which is why the CPU room is capped. Measured with [`spikes/live-resize`](https://github.com/lukaskoebe/sandbox-studio/tree/9080a56f/spikes/live-resize) on
 2026-10-26 (msb 0.7.8, idle 1-CPU VMs, host CPU over 20 s):
 
 | VM booted with | Host CPU idle |

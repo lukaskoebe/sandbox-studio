@@ -12,6 +12,18 @@
 - A request waiting for you no longer disappears while the screen is enlarged over a
   teammate's conversation, or covers it on a phone. The hidden conversation kept its requests
   out of the floating stack, so they showed nowhere until you went back to it.
+- `studio approve` on a push shows its branch, commits and file counts and asks before
+  pushing, as the card shows them before its Push button. Without a terminal, or in a script,
+  it takes `--yes`.
+- A teammate can no longer mark a memory as something you said. A fact it saves with
+  `source: user` is kept as its own conclusion, and becomes yours once Studio finds your
+  words for it in the conversation.
+- `studio uninstall` on Windows closes the tray and the desktop app, and ends by naming the
+  one file it can't remove, the running `studio.exe`, instead of asking to run it again.
+- SECURITY.md and the API docs say what a browser session can't do: it lasts 30 days and
+  can't be revoked before, and the web app has no logout.
+- The spike programs Studio was planned with are archived; their results stay in
+  `docs/spikes.md`, which names the commit that still has the code.
 
 ## v0.26.0 — 2026-11-18
 

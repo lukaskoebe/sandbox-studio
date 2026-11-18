@@ -384,8 +384,11 @@ where.
 slug), `remember(text, kind, entity?, scope, source?)`, `share(fact_id | text)`,
 `correct(fact_id, text)` (a new fact supersedes the old), `forget(fact_id)` (retracts) and
 `memory_page(slug, title?, kind?, compiled?, timeline?, scope?)`. The `correct` and `forget`
-take only the teammate's own facts. `memory_get` adds a page's links and up to 20 backlinks
-the teammate can read; a search hit names its entity's page when there is one.
+take only the teammate's own facts. A `remember` with `source: user` is stored as `inferred`:
+an agent's word that the user said something proves nothing, and the user tier outranks the
+rest. Extraction raises the fact to `user` once it finds the user's own words for it.
+`memory_get` adds a page's links and up to 20 backlinks the teammate can read; a search hit
+names its entity's page when there is one.
 
 `memory_page` writes a page of the teammate's own scope directly, as tier `inferred` with the
 teammate as author, and appends `timeline` as an entry. A shared page, or new compiled truth

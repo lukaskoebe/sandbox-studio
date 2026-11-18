@@ -16,7 +16,7 @@ three are the same binary. The user page is [Command line](../site/src/content/d
 | `shell <sandbox> [terminal]` | the sandbox's main terminal, or the one named (such as an agent's, `claude`), in this one, as in the TUI; `Ctrl-]` detaches |
 | `ask <sandbox> <prompt>` | a chat with the sandbox's teammate, the answer printed as it streams; `-` reads the prompt from stdin, `--chat <id>` continues a chat |
 | `approvals` | the pending approvals of every environment |
-| `approve`, `deny <approval>` | decides one; a network request gets a rule with the teammate's usual scope (`--scope` to choose), or `--once` for this connection only. A browser request's rule covers only the browsers, as on the web; `--sandboxes` lets it cover the sandboxes too. A sandbox's write to a host of the curated list gets a rule for the sandboxes and for writes like it (its method and path, such as `POST /repos/*`), as the web card starts |
+| `approve`, `deny <approval>` | decides one; a network request gets a rule with the teammate's usual scope (`--scope` to choose), or `--once` for this connection only. A browser request's rule covers only the browsers, as on the web; `--sandboxes` lets it cover the sandboxes too. A sandbox's write to a host of the curated list gets a rule for the sandboxes and for writes like it (its method and path, such as `POST /repos/*`), as the web card starts. A network rule names the exact host, even for a teammate whose usual rule is a wildcard, as no card shows the wildcard here. Allowing a push first shows its branch, commits and file counts and asks; a script adds `--yes` |
 | `checkpoints <sandbox>`, `checkpoint <sandbox> [name]` | lists or saves checkpoints; a checkpoint saved without a name is named `Checkpoint YYYY-MM-DD HH:MM:SS UTC`, as on the web |
 | `restore <sandbox> <checkpoint>` | puts the sandbox back to a checkpoint, by name or ID; asks first |
 | `envs` | the environments |
@@ -81,8 +81,10 @@ If Studio doesn't stop, nothing changes. After that the stages run in order: the
 entries, the VMs, microsandbox or the checkpoints, the data, the programs. A failure among the VMs,
 microsandbox or the data ends it there, as the catalog tells whose the VMs are and the program is
 what runs it again. An entry that can't be removed keeps only the programs. A data or microsandbox directory that holds the home directory, or doesn't look like
-Studio's, stays: those locations come from the environment. On Windows the running `studio.exe`
-can't remove itself, so that step reports it and the file stays.
+Studio's, stays: those locations come from the environment. On Windows uninstall closes the tray
+and the app with `taskkill` (by file name, so another installation's close too), and the running
+`studio.exe` can't remove itself: everything else goes, and the last line names the file to delete
+by hand.
 
 ## Not in the CLI
 

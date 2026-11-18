@@ -312,7 +312,7 @@ web/                  Vite + React + TanStack Router + shadcn (Base UI); e2e tes
 images/base/          base image (Dockerfile + rootfs)
 images/browser/       browser VM image
 site/                 user documentation (Astro Starlight)
-spikes/               spike and qualification programs, not production code
+spikes/               the template-jobs qualification; the archived spikes are in docs/spikes.md
 docs/                 developer documentation
 ```
 
@@ -334,7 +334,8 @@ docs/                 developer documentation
   where `internal/e2e` replaces the VM runtime and the guest agent with fakes. See
   [frontend](frontend.md#end-to-end-tests).
 - `internal/harness/opencode-plugin.test.mjs` tests the OpenCode plugin with `node --test`.
-- Live qualifications are programs under `spikes/`; results are in [spikes](spikes.md).
+- Live qualifications were programs under `spikes/`, now archived but for `template-jobs`;
+  results are in [spikes](spikes.md).
 - CI (`.github/workflows/ci.yml`): on Linux, macOS and Windows, `go vet`, `go test`,
   `go build` and the Linux guest agent build; on Linux and macOS the `install.sh` tests; on
   Linux also gofmt, golangci-lint, the OpenAPI schema check and shellcheck. The web job checks the generated API types, then runs

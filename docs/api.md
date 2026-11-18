@@ -35,6 +35,11 @@ from other local users and from web pages:
   URL fragment, removed before the app loads data, and exchanged once within ten minutes for
   a host-bound, signed `studio_session` cookie (HttpOnly, SameSite=Strict, 30 days). In a
   terminal Studio also opens a second link in the browser (`-no-browser` turns that off).
+- The cookie is stateless: Studio keeps no list of sessions, so one can't be revoked before
+  its 30 days end, and the web app has no logout (only the TUI's client calls
+  `/api/auth/logout`, which clears its own cookie). The login ticket shows in `studio.log`
+  (mode 0600) and in the browser command's arguments, where another local user could see it;
+  it works once, for ten minutes.
 - The web app's login gate polls `/api/auth/status` every three seconds while its tab is
   visible, so a page opened while Studio was down, or left on the gate during a restart,
   connects by itself with the cookie it has.

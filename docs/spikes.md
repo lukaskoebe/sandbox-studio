@@ -2,8 +2,11 @@
 
 The M0 spikes answered the risky questions before the build; later sections record live
 qualifications of template builds. Host for all Linux results: Ryzen 5 3450U laptop (4
-cores/8 threads, 14 GiB RAM), Linux 7.0, microsandbox 0.7.7, Go 1.26. Spike code lives in
-`spikes/` and is not production code. Sections are records of what was true when they were
+cores/8 threads, 14 GiB RAM), Linux 7.0, microsandbox 0.7.7, Go 1.26. Spike code is not
+production code. Only `spikes/template-jobs` stays in the tree, as template builds still use it;
+the others were archived on 2026-11-19 and live in git at
+[9080a56f](https://github.com/lukaskoebe/sandbox-studio/tree/9080a56f/spikes): check that commit out to run one again, such as
+S1 on a Mac. Sections are records of what was true when they were
 written; current behavior is in the component pages linked from the [index](README.md).
 
 | # | Question | Done when | Linux | macOS | Windows |
