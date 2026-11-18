@@ -743,6 +743,9 @@ func TestWorkerLoopKeepsQueuedWorkBehindPendingCleanup(t *testing.T) {
 	}
 	h.pending.Store(false)
 	h.w.signal()
+	// The queued job runs its whole build from here, so it gets its own time: a busy machine
+	// can spend most of the first deadline waiting for the cleanup.
+	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		got := h.job(t, queued.ID)
 		if got.Status == store.BuildReady && !got.CleanupPending {
@@ -750,7 +753,8 @@ func TestWorkerLoopKeepsQueuedWorkBehindPendingCleanup(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	t.Fatalf("next job did not finish after cleanup: %+v", h.job(t, queued.ID))
+	text, _, _ := h.st.BuildLog(context.Background(), h.env, queued.ID)
+	t.Fatalf("next job did not finish after cleanup: %+v\nlog:\n%s", h.job(t, queued.ID), text)
 }
 
 func TestSecondWorkerCannotRecoverLiveBuild(t *testing.T) {

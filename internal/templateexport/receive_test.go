@@ -370,10 +370,10 @@ func (c *observedConn) Read(p []byte) (int, error) {
 // cleanup restores the guard.
 func modelDisk(t *testing.T, capacity, floor uint64, interval int64) {
 	t.Helper()
-	oldFloor, oldInterval, oldFree := exportFloorBytes, exportCheckBytes, freeSpace
-	t.Cleanup(func() { exportFloorBytes, exportCheckBytes, freeSpace = oldFloor, oldInterval, oldFree })
+	oldFloor, oldInterval, oldFree := exportFloorBytes, exportCheckBytes, FreeSpace
+	t.Cleanup(func() { exportFloorBytes, exportCheckBytes, FreeSpace = oldFloor, oldInterval, oldFree })
 	exportFloorBytes, exportCheckBytes = floor, interval
-	freeSpace = func(dir string) (uint64, error) {
+	FreeSpace = func(dir string) (uint64, error) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return 0, err
@@ -448,7 +448,7 @@ func TestReceiveStopsWhenTheDiskFillsDuringTheExport(t *testing.T) {
 
 func TestReceiveKeepsGoingWhenFreeSpaceIsUnknown(t *testing.T) {
 	modelDisk(t, 1, 4096, 1024)
-	freeSpace = func(string) (uint64, error) { return 0, errors.New("free space is unknown") }
+	FreeSpace = func(string) (uint64, error) { return 0, errors.New("free space is unknown") }
 	dir := t.TempDir()
 	layer, err := Receive(context.Background(), dir, io.NopCloser(bytes.NewReader(makeExportWire(t, makeTestTar(t)))), ocilayer.Limits{})
 	if err != nil {

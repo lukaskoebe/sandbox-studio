@@ -90,6 +90,11 @@
 - The teammate's browser shows its Esc, Tab, Ctrl, arrow and keyboard keys under the page by
   itself only on a phone or a tablet. A narrow window or a laptop with a touch screen has the
   toolbar's keyboard button for them.
+- A change made while a page loads, such as a connection asking to be allowed, shows without
+  a reload. The page reads again once Studio's stream of changes is open, as it already did
+  after the stream came back from an error.
+- Two shells opened in the same second keep their names in the order they were opened: the
+  first is `workspace` and the next `workspace 2`, where the two could swap before.
 
 ## v0.25.0 — 2026-11-17
 

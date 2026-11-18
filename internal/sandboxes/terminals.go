@@ -75,7 +75,7 @@ func describeTerminals(sessions []agentproto.Session, now time.Time) []Terminal 
 		order[i] = i
 	}
 	slices.SortStableFunc(order, func(a, b int) int {
-		return cmp.Or(cmp.Compare(out[a].Created, out[b].Created), strings.Compare(out[a].Name, out[b].Name))
+		return cmp.Or(cmp.Compare(out[a].Created, out[b].Created), compareSessionNames(out[a].Name, out[b].Name))
 	})
 	seen := map[string]int{}
 	for _, i := range order {
@@ -85,6 +85,24 @@ func describeTerminals(sessions []agentproto.Session, now time.Time) []Terminal 
 		}
 	}
 	return out
+}
+
+// compareSessionNames orders sessions created in the same second as they were opened, as the
+// web's tabs do: main is the first shell, the ones opened after it are numbered (2 before 10),
+// and any other name comes last. tmux lists them by name, which puts 2 before main.
+func compareSessionNames(a, b string) int {
+	rank := func(name string) (int, int) {
+		if name == "main" {
+			return 0, 0
+		}
+		if n, err := strconv.Atoi(name); err == nil {
+			return 1, n
+		}
+		return 2, 0
+	}
+	ra, na := rank(a)
+	rb, nb := rank(b)
+	return cmp.Or(cmp.Compare(ra, rb), cmp.Compare(na, nb), strings.Compare(a, b))
 }
 
 func describeTerminal(s agentproto.Session, now time.Time) Terminal {

@@ -30,7 +30,9 @@ func TestHubRejectsDuplicateWhileSessionLiveAndAllowsReconnect(t *testing.T) {
 	}
 	defer h.Close(id)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Every wait ends as soon as what it waits for happens; the bound is for a busy runner,
+	// where Windows took the whole of 5 s once to see the duplicate closed.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	configs := make(chan agentproto.Config, 1)
 	first := fakeGuest(t, path, configs)

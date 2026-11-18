@@ -2,6 +2,7 @@ package sandboxes
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -60,6 +61,20 @@ func TestDescribeTerminalsNumbersInCreationOrder(t *testing.T) {
 	}, time.Now())
 	if got[0].Label != "workspace 2" || got[1].Label != "workspace" {
 		t.Fatalf("labels %q, %q", got[0].Label, got[1].Label)
+	}
+}
+
+func TestDescribeTerminalsNumbersShellsOpenedInOneSecondInTheirOrder(t *testing.T) {
+	// tmux lists 10 and 2 before main; all three were opened in the same second.
+	got := describeTerminals([]agentproto.Session{
+		{Name: "10", Created: 10, Path: "/workspace"},
+		{Name: "2", Created: 10, Path: "/workspace"},
+		{Name: "main", Created: 10, Path: "/workspace"},
+		{Name: "dev", Created: 10, Path: "/workspace"},
+	}, time.Now())
+	labels := []string{got[0].Label, got[1].Label, got[2].Label, got[3].Label}
+	if want := []string{"workspace 3", "workspace 2", "workspace", "workspace 4"}; !slices.Equal(labels, want) {
+		t.Fatalf("labels %q, want %q", labels, want)
 	}
 }
 

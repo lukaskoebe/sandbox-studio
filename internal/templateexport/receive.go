@@ -235,8 +235,12 @@ func (w *countingWriter) Write(p []byte) (int, error) {
 var (
 	exportFloorBytes uint64 = 1 << 30
 	exportCheckBytes int64  = 64 << 20
-	freeSpace               = diskspace.Free
 )
+
+// FreeSpace reads the free space of the disk holding a directory. It is a variable so that the
+// tests of the packages receiving layers model a disk instead of depending on the one they
+// run on: a machine with less than the floor free would fail every export.
+var FreeSpace = diskspace.Free
 
 // ErrDiskSpace reports that the disk can't hold a received layer and its publish copy.
 var ErrDiskSpace = errors.New("not enough free disk space for the template layer")
@@ -254,7 +258,7 @@ func (g *spaceGuard) check(written int64) error {
 		return nil
 	}
 	g.nextAt = written + exportCheckBytes
-	free, err := freeSpace(g.dir)
+	free, err := FreeSpace(g.dir)
 	if err != nil {
 		return nil
 	}

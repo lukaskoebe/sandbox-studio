@@ -36,8 +36,10 @@ test("Ctrl+K and the sidebar's Search open the palette, which finds and opens pl
   await page.keyboard.press("Enter")
   await expect(page).toHaveURL(new RegExp(`/e/${env}/sandboxes/${sb}`))
 
-  // A page answers to what it holds, not only its name.
-  await page.keyboard.press("Control+k")
+  // A page answers to what it holds, not only its name. The computer's terminal takes the
+  // focus once it connects, and Ctrl+K in a terminal is the shell's, so Search opens it here.
+  await search.click()
+  await expect(palette).toBeVisible()
   await input.fill("rules")
   await expect(
     palette.getByRole("group", { name: "Environment" }).getByRole("option")

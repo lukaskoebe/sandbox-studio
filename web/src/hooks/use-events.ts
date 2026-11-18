@@ -72,7 +72,6 @@ export function useEvents() {
     let source: EventSource | undefined
     let retry: ReturnType<typeof setTimeout> | undefined
     let backoff = 1000
-    let opened = false
     let closed = false
 
     const connect = () => {
@@ -82,9 +81,10 @@ export function useEvents() {
       source = new EventSource("/api/events")
       source.onopen = () => {
         backoff = 1000
-        // The first open is the normal start. A later one follows an error, so events may have been missed.
-        if (opened) queryClient.invalidateQueries()
-        opened = true
+        // Studio listens for this stream's changes from here on. What was read before, or is
+        // still being read, may have missed one in between: at the start a page's first
+        // queries race the stream, and a later open follows an error. Those read again.
+        queryClient.invalidateQueries()
       }
       source.onmessage = (msg: MessageEvent<string>) => {
         const change = JSON.parse(msg.data) as { topic: string }

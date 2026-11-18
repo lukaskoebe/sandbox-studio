@@ -16,6 +16,33 @@ release one of the dry run's too, so formatting, lint, a failing test or a stale
 should never be what fails them. What only GitHub's runners can show (the macOS and Windows
 builds, the app starting on macOS, the smoke tests) is what the branch's runs are for.
 
+Then look for flaky tests since the last release, in the runs on main, the release branch and
+the tag, the green ones too: Playwright retries a failed test once and a run that passed on the
+retry is green, with `N flaky` in its summary.
+
+```sh
+gh run list --workflow ci.yml --limit 30   # every run since the last tag
+gh run view <id> --log | grep -E -- '--- FAIL|✘|[0-9]+ flaky'
+```
+
+Each test that failed once is fixed on main before the release branch, or said in the
+release's notes to be known and why it stays. Find out why it failed before making it wait
+longer. The flakes so far came from:
+
+- the machine running the test: a nearly full disk under a free-space check, the version a
+  tag's build stamps (a release build, not a development one, which asks GitHub and may be
+  refused);
+- two things in the same second, ordered by a name that sorts differently;
+- a change made between a page's first fetch and its event stream's subscription;
+- a URL or state the test caught on its way past, where the page moves on to another;
+- a focus the page moves by itself: a terminal takes the keys once it connects, and a
+  shortcut pressed after that goes to the shell;
+- a shared deadline on a slow runner (Windows), where a longer one costs a passing run
+  nothing.
+
+Several of these were bugs in Studio as well, so check the app's side of the race before
+fixing only the test.
+
 Then look at what changed. Tests check that the UI works, not that it looks right: a long
 address running out of a card passed every test. So every feature added or changed since the
 last release that shows in the UI gets looked at, in the e2e Studio (`bin/studio-e2e`, with
@@ -65,7 +92,7 @@ looked at isn't ready.
    ```
 
    A fix goes onto the branch (and into main); push it and wait again. A flake is re-run with
-   `gh run rerun <id> --failed`.
+   `gh run rerun <id> --failed`, and noted to be fixed on main after the release, as above.
 
 3. Tag the head that passed and push the tag, which builds again and publishes:
 

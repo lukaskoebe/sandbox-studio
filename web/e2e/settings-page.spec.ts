@@ -317,20 +317,31 @@ test("Check for updates asks now and says what it found", async ({
 }) => {
   await page.goto(`/e/${env}/settings/updates`)
   const check = page.getByRole("button", { name: "Check for updates" })
-  // The e2e Studio is a development build, which never asks GitHub.
-  await check.click()
-  await expect(
-    page.getByText("a development build doesn't check for releases")
-  ).toBeVisible()
-
-  // What a release build hears back, without reaching GitHub.
   const state = (await (
     await page.request.get("/api/system/updates")
   ).json()) as Record<string, unknown>
+  // The e2e Studio is a development build, which never asks GitHub, except on a tag: the
+  // Makefile stamps the tag as its version (v1.2.3 or v1.2.3-rc.1), and a release build asks.
+  // git describe's builds (v1.2.3-4-gabcdef, -dirty) are development builds, as in updates.go.
+  const current = String(state.current)
+  const release =
+    /^v?\d+\.\d+\.\d+([-+].*)?$/.test(current) &&
+    !current.includes("-g") &&
+    !current.endsWith("-dirty")
+  if (!release) {
+    await check.click()
+    await expect(
+      page.getByText("a development build doesn't check for releases")
+    ).toBeVisible()
+  }
+
+  // What a release build hears back, without reaching GitHub. Its own check at the start may
+  // have failed (GitHub refusing a runner), and a check that answers clears that.
   let found: Record<string, unknown> = {
     ...state,
     latest: state.current,
     checkedAt: new Date(),
+    error: undefined,
   }
   await page.route("**/api/system/updates/check", (route) =>
     route.fulfill({ json: found })
