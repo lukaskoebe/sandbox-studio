@@ -19,7 +19,7 @@ import (
 type forgeGuest struct {
 	mu       sync.Mutex
 	branch   string
-	outdated bool // a guest without FilesGitRemotes
+	outdated bool                   // a guest without FilesGitRemotes
 	remotes  []agentproto.GitRemote // the checkout's remotes, when not origin through "forge"
 	written  []agentproto.HomeDir
 }
