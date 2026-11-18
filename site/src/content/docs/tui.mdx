@@ -13,6 +13,7 @@ import files from '../../../../internal/tui/testdata/visual_files.golden?raw'
 import browserTab from '../../../../internal/tui/testdata/visual_browser.golden?raw'
 import lineComments from '../../../../internal/tui/testdata/visual_line_comments.golden?raw'
 import search from '../../../../internal/tui/testdata/visual_search.golden?raw'
+import composerSlash from '../../../../internal/tui/testdata/visual_composer_slash.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It is
 laid out as the browser is: a sidebar with your teammates, their threads and your computers,
@@ -61,7 +62,7 @@ Who has your keys is always in view:
   `alt+1` to `alt+9`, which switch to another of the computer's terminals, `alt+z`, and `alt+a`,
   which [answers a request](#answer-from-a-terminal).
 - **The composer** of a thread: `enter` sends, `ctrl+j` starts a new line, `esc` puts the draft
-  aside.
+  aside. `/` at its start lists [commands](#commands-and-files), and `@` the computer's files.
 - **Studio**: the sidebar, the thread or the computer beside it, marked by a bright line on its
   left. `\` moves to the sidebar and back, and `tab` between a thread and its computer.
 
@@ -276,6 +277,29 @@ and `enter` opens its review in the computer's Changes tab. `c` shows that tab t
 A thread that is an agent in a terminal, such as `claude`, is that terminal, with the
 computer's Details beside it.
 
+### Commands and files
+
+Type `/` at the start of a prompt to list what you can do from the thread, and `@` to mention
+a file of its computer. A box over the composer lists them, and what you type next filters it.
+
+<TerminalScreen ansi={composerSlash} label="The composer of Iris's thread with / typed: a box over it lists /term, /files, /changes, /browser, /details, /threads, /new, /stop-computer and /home, each with what it does on blub" />
+
+| Key | In the box |
+|---|---|
+| `↑` `↓` | move |
+| `enter` | run the command, or add the file |
+| `tab` | complete the command's name, or open the folder |
+| `esc` | close the box and keep the text |
+
+The commands are `/term`, `/files`, `/changes`, `/browser` and `/details` for the computer's
+tabs, `/threads` for the teammate's threads in the sidebar, `/new` for a new thread, `/stop` to
+stop the turn, `/start` and `/stop-computer` for the computer, and `/home`, `/search` and
+`/keys`. Only the ones that can run are listed. A prompt that starts with `/` but names no
+command is sent as it is.
+
+`@` lists the computer's files, changed files first. Picking one writes `@web/src/login.tsx`
+into the prompt, and the agent gets the file with it. Add `:12` or `:12-20` to name lines.
+
 ## The computer
 
 A computer has the browser's tabs: **Terminal**, **Files**, **Changes**, **Browser** and
@@ -487,7 +511,8 @@ The mouse works too:
 - A click on a column gives it the cursor, and a click on a terminal gives it your keys.
 - A click on `≡` opens the sidebar, on the computer's chip shows the teammate's next computer,
   and on what waits goes Home.
-- A click on a key, on a card or in the key bar, presses it.
+- A click on a key, on a card or in the key bar, presses it, and a click on a row of the
+  composer's box picks it.
 - The wheel scrolls.
 - Hold shift to select text as usual.
 

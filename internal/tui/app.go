@@ -247,7 +247,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.key(msg)
 	case tea.PasteMsg:
-		m.paste(msg.Content)
+		return m, m.paste(msg.Content)
 	case clockMsg:
 		m.now = time.Time(msg)
 		return m, clock()
@@ -363,8 +363,9 @@ func (m *app) refresh() tea.Cmd {
 }
 
 // paste takes pasted text into the field that takes the keys: search, the notice line's prompt,
-// Activity's filter or the composer.
-func (m *app) paste(text string) {
+// Activity's filter or the composer: a paste into the composer can open its menu, which reads
+// the files.
+func (m *app) paste(text string) tea.Cmd {
 	switch {
 	case m.search.open:
 		m.search.query.paste(strings.Join(strings.Fields(text), " "))
@@ -378,11 +379,13 @@ func (m *app) paste(text string) {
 		m.activity.cursor = 0
 	case m.chats.on && m.chats.composing:
 		m.chats.draft.paste(text)
+		return m.menuEdited()
 	case m.paneFocused() && m.pane.term != nil:
 		m.pane.term.paste(text)
 	case m.screen == screenNew && m.newSb.step == stepName:
 		m.newSb.name.paste(strings.ToLower(strings.Join(strings.Fields(text), "")))
 	}
+	return nil
 }
 
 // setApprovals stores the pending approvals. The first load announces nothing; a later load

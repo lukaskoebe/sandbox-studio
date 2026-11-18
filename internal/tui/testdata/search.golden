@@ -18,6 +18,6 @@ button n│ SETTINGS                                                     │
     registry.npmjs.org:443                                                      
     pattern *.npmjs.org   scope Iris's computers   ports default                
                                                                                 
- › Write to Iris…                                                   enter write 
+ › Write to Iris…  @ file  / command                                enter write 
 ────────────────────────────────────────────────────────────────────────────────
 ↑/↓ move  enter open  esc close

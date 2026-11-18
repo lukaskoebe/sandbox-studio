@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 )
 
 // Search Studio (ctrl+k, or / where the screen has no filter of its own) finds anything by name,
@@ -986,7 +987,16 @@ func (m *app) openFileOf(id string, c fileCandidate) tea.Cmd {
 func (m *app) searchFiles() tea.Cmd {
 	raw := m.search.query.value()
 	sb := m.computerOn()
-	if !strings.HasPrefix(raw, "/") || sb == nil || phaseOf(*sb) != phaseReady || m.client == nil {
+	if !strings.HasPrefix(raw, "/") || sb == nil {
+		return nil
+	}
+	return m.readFileIndex(*sb)
+}
+
+// readFileIndex reads the file index of computer sb, unless a read runs or the copy is fresh.
+// Search Studio's / and the composer's @ share it.
+func (m *app) readFileIndex(sb sandboxes.View) tea.Cmd {
+	if phaseOf(sb) != phaseReady || m.client == nil {
 		return nil
 	}
 	if m.search.files == nil {

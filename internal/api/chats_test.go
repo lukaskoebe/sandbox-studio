@@ -194,6 +194,48 @@ func TestChats(t *testing.T) {
 	}
 }
 
+// A prompt's mentions are stored on its user item and reach the agent as links to the files,
+// as the terminal UI's @ and the browser's composer send them.
+func TestChatPromptMentionsFiles(t *testing.T) {
+	agent := &acptest.Agent{SessionID: "ses_1", Turns: []acptest.Turn{{}, {}}}
+	h, s, _, env := newChatServer(t, agent)
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+
+	rec := do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"Fix @web/src/login.tsx:13 "}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	base := envBase + "/chats/" + decode[store.Chat](t, rec).ID
+	waitIdle(t, h, base)
+	rec = do(h, "POST", base+"/prompt", `{"text":"And @docs/logging.md","mentions":[{"path":"docs/logging.md"},{"path":"web/src/login.tsx","start":13,"end":20}]}`)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("prompt: %d %s", rec.Code, rec.Body)
+	}
+	log := waitIdle(t, h, base)
+	want := []chat.Mention{{Path: "docs/logging.md"}, {Path: "web/src/login.tsx", Start: 13, End: 20}}
+	var got []chat.Mention
+	for _, it := range log.Items {
+		if it.User != nil && it.User.Text == "And @docs/logging.md" {
+			got = it.User.Mentions
+		}
+	}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("stored mentions %+v", got)
+	}
+	prompts, _, _ := agent.Snapshot()
+	last := string(prompts[len(prompts)-1])
+	for _, uri := range []string{`"uri":"file:///workspace/docs/logging.md"`, `"uri":"file:///workspace/web/src/login.tsx?start=13\u0026end=20#L13-L20"`} {
+		if !strings.Contains(last, uri) && !strings.Contains(last, strings.ReplaceAll(uri, `\u0026`, "&")) {
+			t.Errorf("the agent's prompt lacks %s: %s", uri, last)
+		}
+	}
+	if rec := do(h, "POST", base+"/prompt", `{"text":"x","mentions":[{"path":"../etc/passwd"}]}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a path out of /workspace: %d %s", rec.Code, rec.Body)
+	}
+}
+
 // An image an agent can't take is refused with the attachments as the error's location, which
 // the browser notes read to send their text alone; a new chat whose first prompt was refused
 // goes again.

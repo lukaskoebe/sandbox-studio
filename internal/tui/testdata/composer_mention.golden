@@ -1,0 +1,23 @@
+ ≡  Iris › Fix the login form                                    ● blub ▾ · ▲ 1 
+────────────────────────────────────────────────────────────────────────────────
+  ▸ Edit src/login.tsx                                                      done
+                                                                                
+Fixed                                                                           
+                                                                                
+The form used a `div` as its button, so enter did nothing. It is a real submit  
+button now:                                                                     
+                                                                                
+    <button type="submit">Sign in</button>                                      
+                                                                                
+• Enter submits the form.                                                       
+• The button is focusable.                                                      
+╭─ Files in /workspace ─ “log” ────────────────────────────────────────────────╮
+│> web/src/login.tsx       changed                                             │
+│  docs/logging.md                                                             │
+│  web/src/login.test.tsx                                                      │
+╰─ ↑↓ · enter adds · tab into a folder · :12 lines ────────────────────────────╯
+╭─ › Iris ───────────────────────────────────── enter sends · ctrl+j new line ─╮
+│ look at @log▏                                                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+────────────────────────────────────────────────────────────────────────────────
+↑/↓ move  enter add  tab into a folder  esc close

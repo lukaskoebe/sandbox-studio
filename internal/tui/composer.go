@@ -52,17 +52,24 @@ func (m *app) composer(w int) []string {
 		// Not writing, the composer is one line, so the transcript keeps the rows: a field on the
 		// keycaps' background, or dim text where there is none.
 		hint := "Write to " + m.teammateName() + "…"
+		completes := false
 		switch {
 		case c.sending:
 			hint = "Sending…"
 		case c.draft.value() != "":
 			hint = clip(oneLine(c.draft.value()), max(w-24, 8)) + "  (a draft)"
+		default:
+			completes = true
 		}
 		write := "p write "
 		if cd, ok := m.threadCard(); ok && cardTakes(pressOf("p"), cd) {
 			write = "enter write " // p is the card's
 		} else if m.here.kind == placeMate {
 			write = "enter write "
+		}
+		// What the composer completes, where it fits whole.
+		if more := hint + "  @ file  / command"; completes && lipgloss.Width(" › "+more)+lipgloss.Width(write)+2 <= w {
+			hint = more
 		}
 		line := spread(" › "+hint, write, w)
 		if m.pal.capBg && !m.look.plain {
@@ -105,4 +112,20 @@ func withComposer(lines, box []string, h int) []string {
 		lines = append(lines, "")
 	}
 	return append(lines[:min(len(lines), max(h-len(box), 0))], box...)
+}
+
+// withMenu puts the composer's / or @ menu over its box comp, the menu at most room rows. The
+// box goes at the bottom of h rows, which says where the menu's rows are for the mouse.
+func (m *app) withMenu(comp []string, w, room, h int) []string {
+	if comp == nil {
+		return nil
+	}
+	menu, shows := m.menuBox(w, room)
+	top := h - len(comp) - len(menu)
+	for y, i := range shows {
+		if i >= 0 {
+			m.hitRow(top+y, 0, w, rowMenu, i)
+		}
+	}
+	return append(menu, comp...)
 }

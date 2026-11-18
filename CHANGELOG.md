@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The terminal UI's composer completes as you type, as the browser's does. `/` at the start
+  of a prompt lists commands that go where a key would: `/term`, `/files`, `/changes`,
+  `/browser`, `/details`, `/threads`, `/new`, `/stop`, `/start`, `/stop-computer`, `/home`,
+  `/search` and `/keys`, only the ones that can run, filtered by what you type. `enter` runs
+  one, `tab` completes it, and a prompt that names no command is sent as text. `@` lists the
+  files of the thread's computer, changed files first; picking one writes `@path` into the
+  prompt and sends the file to the agent, with lines after `:12` or `:12-20`.
 - The terminal UI finds anything by name with `ctrl+k`, as `⌘K` does in the browser, with the
   same words and the same order: a teammate, a computer or one of its tabs (`blub files`), a
   thread, a place of the environment, a section of Settings, or an action such as a new thread

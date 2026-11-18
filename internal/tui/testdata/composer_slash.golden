@@ -1,0 +1,23 @@
+ ≡  Iris › Fix the login form                                    ● blub ▾ · ▲ 1 
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+    <button type="submit">Sign in</button>                                      
+                                                                                
+• Enter submits the form.                                                       
+• The button is focusable.                                                      
+╭──────────────────────────────────────────────────────────────────────────────╮
+│> /term           blub's terminal                                             │
+│  /files          browse blub's files                                         │
+│  /changes        what changed on blub, as a diff                             │
+│  /browser        Iris's browser on blub                                      │
+│  /details        blub's status, ports and checkpoints                        │
+│  /threads        Iris's threads, in the sidebar                              │
+│  /new            a new thread with Iris                                      │
+│  /stop-computer  stop blub                                                   │
+│  /home           what waits for you, what works and what is quiet            │
+╰─ ↑↓ · tab completes · enter runs ────────────────────────────────────────────╯
+╭─ › Iris ───────────────────────────────────── enter sends · ctrl+j new line ─╮
+│ /▏                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+────────────────────────────────────────────────────────────────────────────────
+↑/↓ move  tab complete  enter run  esc close

@@ -26,6 +26,7 @@ const (
 	rowFilesEntry                      // an entry of the Files tab's list, by its index
 	rowTree                            // a row of the sidebar, by its index among homeRows
 	rowSetting                         // a section of Settings
+	rowMenu                            // a row of the composer's / or @ menu
 )
 
 // rowHit is a row of the screen, or the part of it from x0 to x1, and what it leads to.
@@ -103,6 +104,13 @@ var enterKey = tea.KeyPressMsg{Code: tea.KeyEnter}
 func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if msg.Button == tea.MouseLeft && !m.look.plain && m.search.open {
 		return m.searchClick(msg)
+	}
+	if msg.Button == tea.MouseLeft && !m.look.plain && m.composerKeys() {
+		for _, r := range m.mouse.rows { // the composer's menu takes clicks while it writes
+			if r.target == rowMenu && r.y == msg.Y && msg.X >= r.x0 && msg.X < r.x1 {
+				return m, m.menuClick(r.index)
+			}
+		}
 	}
 	if msg.Button != tea.MouseLeft || m.look.plain || m.typingKeys() {
 		return m, nil
@@ -239,6 +247,8 @@ func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 			m.openEntry()
 		}
 		return m, nil
+	case rowMenu:
+		return m, m.menuClick(r.index)
 	case rowFold:
 		m.chats.fold = r.index
 		m.chats.scroll = m.foldScroll(r.index)

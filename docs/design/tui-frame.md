@@ -2,11 +2,11 @@
 
 Status: built in part (2026-11-18): the frame, the places, the thread beside its computer,
 the computer's Terminal, Files, Changes, Browser and Details tabs, comments on the lines of
-a diff, and Search Studio. [tui.md](../tui.md#the-frame)
+a diff, Search Studio, and `/` commands and `@` files in the composer. [tui.md](../tui.md#the-frame)
 describes it as it is.
 It replaces Home as a sidebar and a pane ([tui-home-panes.md](tui-home-panes.md)) and the
 sessions on Home ([tui-sessions.md](tui-sessions.md)). It is mock A of the TUI revamp, with
-mock B's inbox as its Home. Still to come: `/` commands and `@` files in the composer.
+mock B's inbox as its Home. Every phase of the plan is built.
 
 Where the build differs from the text below:
 
@@ -65,6 +65,19 @@ Where the build differs from the text below:
   opens on its own, as on the Computers screen.
 - Recent keeps the last 6 places opened from Search Studio, in memory for the session: not
   the actions, files or requests.
+- The composer's commands are a list of their own (`complete.go`), not Search Studio's
+  actions: each says what it does on the thread's computer and is listed only where it can
+  run. `/stop` stops the turn and `/stop-computer` the computer, so that neither word means
+  both. `/term` is the Terminal tab with the keys, as `t`.
+- `/` opens the commands only as the first character, and they stay open while the draft has
+  no space. `esc` closes the box for that `/` or `@`; typing it anew opens it again.
+- The `@` box says "Files in /workspace" and the query, not a count: the ranked list mixes
+  folders and files, and a count of either misleads. A folder narrows the box (`@web/`) as on
+  the web, with `tab` or `enter`.
+- `@` reads the same index as Search Studio's `/` and shares its 30-second copy, so either
+  warms the other.
+- `:-9` after a mention names no lines: Studio takes an end only after a start.
+- The idle line's `@ file  / command` shows only where the whole of it fits.
 
 ## The frame keeps its five fixed rows
 

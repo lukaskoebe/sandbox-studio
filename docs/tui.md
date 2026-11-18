@@ -87,7 +87,8 @@ screen, and back; a resize keeps it there. A terminal in full screen keeps one s
    Studio), `alt+1` to `alt+9` (another of the computer's terminals), `alt+z` (full screen) and
    `alt+a` (to the [banner](#the-approval-banner)'s buttons).
 2. **The composer.** Text goes to the draft. `enter` sends it, `ctrl+j` starts a new line,
-   `esc` puts it aside.
+   `esc` puts it aside. `/` at its start lists [commands](#commands-and-files-in-the-composer)
+   and `@` the computer's files.
 3. **Studio.** The sidebar, the main column or the computer beside it has the cursor. The split
    left of that column is the accent's `┃`; the others are a dim `│`. `\` moves the cursor to the
    sidebar and back, and `tab` between a thread and its computer.
@@ -114,7 +115,7 @@ it.
 | **Search Studio** (from `ctrl+k`, or `/` outside the composer and Activity) | [anything by name](#search-studio), grouped by kind, over the place | type to search · `↑/↓` move · `enter` open · `>` actions only · `@` teammates only · `/` the files of the computer in view · `esc` or `ctrl+k` close |
 | **The sidebar** (from `\`, or beside the place from 100 columns) | Home, TEAMMATES with their [threads](#threads), YOUR COMPUTERS, and ENVIRONMENT | `↑/↓` `j/k` move · `enter` open the row's place · `+` a new thread with the teammate under the cursor, or a new computer · `→`/`←` show or hide a teammate's older threads · `tab` the next thread that waits · `u` undo · `/` search · `l` `,` `e` · `\` or `esc` back to the place · `?` · `q` quit |
 | **A teammate's home** (from its row) | [who it is](#a-teammates-home), its computers, tasks and what it knows, over a composer | `enter` write to it · `+` another computer · `t` its computer's terminal · `c` its changes · `m` its next computer · `tab` the computer · `esc` back |
-| **A thread** (from its row, or a request's) | the [transcript](#thread), streaming, a request it waits on as a card, and the composer | `p` or `enter` write · `↑/↓` the tool calls · `x` stop · `y` `a` `n` its permission · the card's keys · `+` a new thread · `t` the terminal · `c` the changes · `m` the next computer · `tab` the computer · `esc` back |
+| **A thread** (from its row, or a request's) | the [transcript](#thread), streaming, a request it waits on as a card, and the composer | `p` or `enter` write (`/` commands, `@` files) · `↑/↓` the tool calls · `x` stop · `y` `a` `n` its permission · the card's keys · `+` a new thread · `t` the terminal · `c` the changes · `m` the next computer · `tab` the computer · `esc` back |
 | **A computer** (beside a thread or a teammate's home, from `tab`, or on its own) | [its tabs](#the-computer): Terminal, Changes and Details | `1`–`5` a tab · on Terminal `enter` type in, `alt+1`–`alt+9` another terminal, `+` a new shell, `T` the agent · on Changes `j/k` the rail's row, `↑/↓` scroll, `enter` fold a repository, `v` side by side, and a push's [review keys](#reviewing-a-push) · on Details `s` start, stop or resume, `z` suspend, `f` fork, `h` checkpoints, `d` delete, `l` its Activity, `t` the terminal, `T` the agent · `m` the next computer · `tab` back to the thread · `esc` back |
 | **Computers** (from ENVIRONMENT › Computers) | every computer of the environment, the teammates' and then yours, one row each with its owner, template, requests and status. From 100 columns, the dashboard of the one under the cursor beside the list | `↑/↓` move · `enter` the computer · `t` its terminal · `s` `z` `f` `h` `d` as on Details · `+` a new computer · `esc` back, the cursor where it was |
 | **Checkpoints** (from `h`) | the computer's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
@@ -363,8 +364,8 @@ More than one says how many more, which Home answers.
 
 The composer is a box at the bottom of the thread, in the chat's color, with the teammate's
 name in its frame and its keys on the right; it grows with the prompt to six lines. While no
-prompt is written it is one line on the keycaps' background: `› Write to Iris…`, `Sending…` or
-the draft put aside. `p` (or `enter` with no fold selected) opens it: `enter` sends, `ctrl+j`
+prompt is written it is one line on the keycaps' background: `› Write to Iris…  @ file  /
+command` (the second half where it fits), `Sending…` or the draft put aside. `p` (or `enter` with no fold selected) opens it: `enter` sends, `ctrl+j`
 (or `shift+enter` where the terminal reports it) starts a new line, `esc` puts the draft aside.
 A prompt is sent with `POST .../chats/{chat}/prompt`; while a turn runs Studio answers 409, and
 the draft stays. `x` stops the running turn (`POST .../chats/{chat}/cancel`). `+` starts a new
@@ -378,6 +379,41 @@ the teammate's next computer beside the thread.
 A thread that is an agent in a terminal, such as `claude`, has no transcript: the main column
 is that terminal, with the computer's terminals as chips over it, and beside it is the
 computer's Details tab. Its keys are the [Terminal tab's](#terminal).
+
+### Commands and files in the composer
+
+The composer completes what you type in a box over it, of at most nine rows, as the browser's
+composer does (`web/src/components/chat/composer.tsx`). `↑/↓` (or `ctrl+p`/`ctrl+n`) move in
+it, a click picks a row, and `esc` closes it and keeps the text; it opens again once its `/` or
+`@` is typed anew. A second `esc` puts the draft aside, as always.
+
+**`/` at the start** of the draft lists commands, and what follows it filters them: those whose
+name starts with it first, then those with its letters in order (`/chnges` finds `/changes`).
+`enter` runs the one under the cursor and clears the draft, and `tab` completes its name. A
+draft that starts with `/` and names no command is sent as text, so `/usr is full` reaches the
+teammate. The commands go where a key would:
+
+| Command | Does |
+|---|---|
+| `/term` | the computer's Terminal tab with the keys, as `t`; its hint names the terminals |
+| `/files`, `/changes`, `/browser`, `/details` | that tab of the thread's computer, with the cursor |
+| `/threads` | the sidebar, on this teammate's threads |
+| `/new` | a new thread with the teammate, as `+` |
+| `/stop` | stops the running turn, as `x` |
+| `/start`, `/stop-computer` | starts (or resumes) the thread's computer, or stops it |
+| `/home`, `/search`, `/keys` | Home, [Search Studio](#search-studio), the keys of this place |
+
+A command is listed only where it can go: `/files` and `/changes` while the computer runs,
+`/browser` on a teammate's computer, `/stop` while a turn runs, `/new` on a thread that exists.
+
+**`@` at the start of a word** lists the files of the thread's computer, changed files first,
+ranked as Search Studio's `/` ranks them (`GET .../sandboxes/{id}/files/index`, the same read,
+kept 30 seconds), eight at a time. What follows the `@` filters them, and `:12` or `:12-20`
+after it names lines. `enter` or `tab` on a file puts `@path ` in the draft and mentions the
+file; on a folder it narrows the list to what is in it. The prompt sends the mentions its text
+still names (`mentions: [{path, start, end}]`), and the agent gets a link to each, as from the
+browser. A computer that doesn't run says to start it, and `enter` with nothing listed sends
+the draft.
 
 ### The computer
 
@@ -853,7 +889,7 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   the TUI answers. `pager.go` lays out a push's review and decides it, and is the review place.
 - `thread.go` is a thread (its card above the composer and its keys) and a teammate's home,
   which `mate.go` reads. `chat.go` is the chat: the stream, the transcript's layout and folds.
-  `composer.go` is the composer's box.
+  `composer.go` is the composer's box, and `complete.go` its `/` commands and `@` files.
 - `computer.go` is the computer pane: its tabs and their keys. `tab_terminal.go` is the
   Terminal tab, with its chips and new shells, `tab_files.go` the Files tab, with its reads, the
   list and the file opened, `changes.go` the Changes tab, with git's reads, the rail and what it

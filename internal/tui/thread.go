@@ -196,7 +196,7 @@ func (m *app) threadBindings() []key.Binding {
 func (m *app) mateHome(w, h int) []string {
 	var box []string
 	if m.chats.on && m.chats.id == "" {
-		box = m.composer(w)
+		box = m.withMenu(m.composer(w), w, h-4, h)
 	}
 	return withComposer(m.matePane(w, max(h-len(box), 1)), box, h)
 }

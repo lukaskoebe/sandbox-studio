@@ -108,6 +108,12 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 		"search":       func(_ *testing.T, m *app) *app { return searchFor(sampleChat(m), "log") },
 		"search empty": func(_ *testing.T, m *app) *app { return press(m, "ctrl+k") },
 		"search files": func(_ *testing.T, m *app) *app { return searchFor(withFileIndex(sampleChat(m), "sb1"), "/log") },
+		"composer /":   func(_ *testing.T, m *app) *app { return typeText(composing(m), "/") },
+		"composer @":   func(_ *testing.T, m *app) *app { return typeText(withFileIndex(composing(m), "sb1"), "see @lo") },
+		"mate /": func(_ *testing.T, m *app) *app {
+			m.open(place{kind: placeMate, mate: "t1"})
+			return typeText(press(m, "enter"), "/")
+		},
 		"thread row": func(t *testing.T, m *app) *app {
 			m.goHome()
 			for _, r := range m.inboxRows() {

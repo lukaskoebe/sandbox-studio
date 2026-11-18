@@ -1,0 +1,23 @@
+ ≡  [1mIris › Fix the login form[m                                    [36m●[m blub ▾[2m · [m[1;38;5;221m▲ 1[m 
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[2m  │ tsx[m                                                                         
+[2m  │ [m<button type="submit">Sign in</button>                                      
+                                                                                
+[2m•[m Enter submits the form.                                                       
+[2m•[m The button is focusable.                                                      
+[38;5;114m╭──────────────────────────────────────────────────────────────────────────────╮[m
+[38;5;114m│[m[36m▌[m [1m/term[m           [2mblub's terminal[m                                             [38;5;114m│[m
+[38;5;114m│[m  /files          [2mbrowse blub's files[m                                         [38;5;114m│[m
+[38;5;114m│[m  /changes        [2mwhat changed on blub, as a diff[m                             [38;5;114m│[m
+[38;5;114m│[m  /browser        [2mIris's browser on blub[m                                      [38;5;114m│[m
+[38;5;114m│[m  /details        [2mblub's status, ports and checkpoints[m                        [38;5;114m│[m
+[38;5;114m│[m  /threads        [2mIris's threads, in the sidebar[m                              [38;5;114m│[m
+[38;5;114m│[m  /new            [2ma new thread with Iris[m                                      [38;5;114m│[m
+[38;5;114m│[m  /stop-computer  [2mstop blub[m                                                   [38;5;114m│[m
+[38;5;114m│[m  /home           [2mwhat waits for you, what works and what is quiet[m            [38;5;114m│[m
+[38;5;114m╰─[m[2m ↑↓ · tab completes · enter runs [m[38;5;114m────────────────────────────────────────────╯[m
+[38;5;114m╭─[m[1;38;5;114m › Iris [m[38;5;114m─────────────────────────────────────[m[2m enter sends · ctrl+j new line [m[38;5;114m─╮[m
+[38;5;114m│[m /[36m▏[m                                                                           [38;5;114m│[m
+[38;5;114m╰──────────────────────────────────────────────────────────────────────────────╯[m
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1m↑/↓[m [2mmove[m  [1mtab[m [2mcomplete[m  [1menter[m [2mrun[m[2m │ [m[1mesc[m [2mclose[m

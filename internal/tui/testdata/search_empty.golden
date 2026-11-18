@@ -18,7 +18,7 @@ enter wr│ ⇅ api-refactor wants 3 hosts              Finn · pypi.org +2 │
                                                                                 
                                                                                 
                                                                                 
- › Write to Iris…                                                   enter write 
+ › Write to Iris…  @ file  / command                                enter write 
 ────────────────────────────────────────────────────────────────────────────────
 ↑/↓ move  enter open  esc close
 open in browser: http://127.0.0.1:7878/e/env1/secrets

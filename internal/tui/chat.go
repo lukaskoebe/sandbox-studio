@@ -61,6 +61,8 @@ type chatState struct {
 	draft     input          // the prompt being written
 	mentions  []chat.Mention // the files the draft mentions, those it still names going with it
 	sending   bool           // a prompt is on its way
+	menuSel   int            // the row of the composer's / or @ menu under the cursor
+	menuShut  menuAnchor     // the menu esc closed, kept closed while its / or @ stays
 }
 
 // The messages of the chat screens. gen ties a chat's messages to the chat they were for.
@@ -319,7 +321,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 			return nil, true
 		}
 		c.draft.set("")
-		c.mentions = nil
+		c.mentions, c.menuShut = nil, menuAnchor{}
 		m.setNotice("", false)
 		return m.threadStarted(msg.chat), true
 	case promptSent:
@@ -333,7 +335,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 			return nil, true
 		}
 		c.draft.set("")
-		c.mentions = nil
+		c.mentions, c.menuShut = nil, menuAnchor{}
 		c.fold, c.scroll = -1, 0
 	default:
 		return nil, false
@@ -528,15 +530,21 @@ func (m *app) askAnswer(item string, f questionField) {
 // composeKey types the prompt: enter sends it, ctrl+j starts a new line, esc puts it aside.
 func (m *app) composeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	c := &m.chats
+	if cmd, ok := m.menuKey(msg); ok {
+		return m, cmd
+	}
 	switch {
 	case key.Matches(msg, keyNewline):
 		c.draft.paste("\n")
+		return m, m.menuEdited()
 	case key.Matches(msg, keySend):
 		return m, m.send()
 	case key.Matches(msg, keyEsc):
 		c.composing = false // the draft stays for the next time
 	default:
-		c.draft.key(msg)
+		if c.draft.key(msg) {
+			return m, m.menuEdited()
+		}
 	}
 	return m, nil
 }
@@ -1199,7 +1207,7 @@ func (m *app) chatBody(w, h int) []string {
 		lines = []string{spread(styleBold.Render(title), state, w)}
 	}
 	card, caps := m.threadCardLines(w)
-	box := append(card, m.composer(w)...)
+	box := append(card, m.withMenu(m.composer(w), w, h-len(lines)-len(card)-2, h)...)
 	defer func() { // the card's keycaps, once its rows are known
 		top := bodyTop + h - len(box)
 		for _, k := range caps {
@@ -1250,6 +1258,9 @@ func (m *app) threadStarted(ch store.Chat) tea.Cmd {
 func (m *app) chatBindings() []key.Binding {
 	c := &m.chats
 	if c.composing {
+		if a, _ := m.menu(); a.kind != menuNone {
+			return m.menuBindings()
+		}
 		return []key.Binding{keySend, keyNewline, keyLeave}
 	}
 	var bindings []key.Binding
