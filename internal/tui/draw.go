@@ -172,7 +172,7 @@ func keyGroup(b key.Binding) int {
 	h := b.Help()
 	switch h.Key + " " + h.Desc {
 	case "t terminal", "tab computer", "tab thread", "\\ sidebar", "m next computer", "l activity", "e env",
-		"h checkpoints", "/ filter", "/ computer", ", settings", "r rules (browser)":
+		"h checkpoints", "/ search", "/ computer", ", settings", "r rules (browser)":
 		return groupGo
 	case "? help", "q quit", "esc/q back", "esc back", "esc cancel", "esc close":
 		return groupApp

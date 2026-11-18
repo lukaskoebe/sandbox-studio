@@ -12,6 +12,7 @@ import changes from '../../../../internal/tui/testdata/visual_changes.golden?raw
 import files from '../../../../internal/tui/testdata/visual_files.golden?raw'
 import browserTab from '../../../../internal/tui/testdata/visual_browser.golden?raw'
 import lineComments from '../../../../internal/tui/testdata/visual_line_comments.golden?raw'
+import search from '../../../../internal/tui/testdata/visual_search.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It is
 laid out as the browser is: a sidebar with your teammates, their threads and your computers,
@@ -71,7 +72,8 @@ and in the sidebar, where it quits.
 
 The keys are the same everywhere, and they can't be changed. The key bar at the bottom shows
 the ones that apply where you are, and `?` lists them all. `n` never means new: it says no to
-a request, and `+` makes something new.
+a request, and `+` makes something new. `ctrl+k` [searches Studio](#search-studio) from
+everywhere, the composer too, except while a terminal has the keys.
 
 | Key | On Home |
 |---|---|
@@ -82,6 +84,7 @@ a request, and `+` makes something new.
 | `pgup` `pgdn` | scroll the reading pane |
 | `u` | undo the network decision you just made, for a minute |
 | `+` | create a new computer |
+| `/` or `ctrl+k` | [search Studio](#search-studio) |
 | `l` `,` `e` | Activity, Settings, switch environment |
 | `\` | give the keys to [the sidebar](#the-sidebar) |
 | `?` | help |
@@ -94,7 +97,7 @@ a request, and `+` makes something new.
 | `+` | on a teammate or its thread, a new thread with it; elsewhere a new computer |
 | `→` `←` | on a teammate: show or hide its older threads |
 | `tab` | the next thread that waits for you, then the next one that's done |
-| `/` | filter by name, teammate or template |
+| `/` or `ctrl+k` | [search Studio](#search-studio) |
 | `l` `,` `e` | Activity, Settings, switch environment |
 | `\` or `esc` | back to the place on show |
 
@@ -171,7 +174,7 @@ narrow terminal, the sidebar slides in like this:
 
 ```
  ◆ Studio          Default ▾  │                             ▲ 4 waiting for you
- / Filter                     │─────────────────────────────────────────────────
+ / Search              ctrl+k │─────────────────────────────────────────────────
   Home                    ▲ 4 │
                               │ure/login on GitHub/acme/web   api-refactor  30s
  TEAMMATES                    │osts                            pypi.org +2   1m
@@ -208,6 +211,33 @@ Each thread shows what it's doing:
 **Computers** lists every computer with its owner, template, requests and status. `enter`
 opens the one under the cursor, `t` its terminal, and `s` `z` `f` `h` `d` work on it as on its
 Details tab. From 100 columns its dashboard is beside the list.
+
+## Search Studio
+
+`ctrl+k` finds anything in Studio by name, as `⌘K` does in the browser: a teammate, a
+computer or one of its tabs, a thread, a place of the environment, a section of Settings, or
+an action such as a new thread with a teammate, a new computer, or stopping the computer on
+show. `/` opens it too, except in the composer and on Activity, where `/` filters by computer.
+
+<TerminalScreen ansi={search} label="Search Studio over a thread: log finds the thread Fix the login form, Activity and General settings, grouped by kind with where each lives on the right" />
+
+Type a few letters of a word: they match at a word's start, inside it, in order, or with one
+typo, so `netwrok` finds Network and `log` finds Activity. A tab needs a word of its own:
+`blub` finds the computer blub, `blub files` its Files tab. With nothing typed, the box lists
+what you opened from it last and the first requests that wait for you; `enter` on a request
+goes Home with the cursor on it.
+
+| Key | In Search Studio |
+|---|---|
+| letters | search |
+| `↑` `↓`, `ctrl+p` `ctrl+n`, `tab` | move |
+| `enter` | open the hit |
+| `>` first | search the actions only |
+| `@` first | search the teammates only |
+| `/` first | search the files of the computer on show; `enter` opens the file in its Files tab |
+| `esc` or `ctrl+k` | close |
+
+A click opens a hit, and a click outside the box closes it.
 
 ## A teammate's home
 

@@ -1,0 +1,39 @@
+ ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 4 · 12:00 
+ / Search              ctrl+k │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 4 │ › The login form doesn't submit on enter.   │  Terminal   Files   Changes   Browser   Details     ● running 
+                              │   Can ╭─ Search Studio ──────────────────────────────────────────────╮──────────────────────────────────────
+ TEAMMATES                    │       │ › log▏                                                       │                                      
+  Iris frontend           ▲ 2 │   ▸ Th│──────────────────────────────────────────────────────────────│─────────────────────────────────────┐
+▸   ▲ Fix the login form      │   ▸ Re│ THREADS                                                      │npmjs.org:443 · 1 more               │
+    ○ Rename the guides       │   ▸ Ed│▸▲ Fix the login form                             Iris · blub │ n Deny  a More…   ←/→ space         │
+    ◷ Update the deploy notes │       │ ENVIRONMENT                                                  │─────────────────────────────────────┘
+  Finn backend            ▲ 2 │ Fixed │ ◆ Activity                                       Environment │
+    ▲ Port the parser to go   │       │ SETTINGS                                                     │
+  + New teammate              │ The fo│ , General                        Settings › This environment │
+                              │ enter ╰─ ↑↓ move · enter open · esc close ───────────────────────────╯
+ YOUR COMPUTERS               │ button now:                                 │ 
+  ◐ demo              booting │                                             │ 
+  + New computer              │     <button type="submit">Sign in</button>  │ 
+                              │                                             │ 
+ ENVIRONMENT                  │ • Enter submits the form.                   │ 
+  Computers                 4 │ • The button is focusable.                  │ 
+  Network                 ▲ 2 │                                             │ 
+  Secrets                     │                                             │ 
+  Memory                      │                                             │ 
+  Activity                    │                                             │ 
+  , Settings              dev │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │ ▸ Network access  blub · Default · 10m ago  │ 
+                              │     registry.npmjs.org:443                  │ 
+                              │     pattern *.npmjs.org   scope Iris's comp…│ 
+                              │                                             │ 
+                              │  › Write to Iris…               enter write │ 
+──────────────────────────────┴─────────────────────────────────────────────┴───────────────────────────────────────────────────────────────
+↑/↓ move  enter open  esc close

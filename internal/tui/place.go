@@ -85,7 +85,6 @@ func (m *app) back() tea.Cmd {
 func (m *app) goHome() {
 	m.history = nil
 	m.show(place{})
-	m.filter = ""
 }
 
 // placeLives reports whether what a place shows is still there.

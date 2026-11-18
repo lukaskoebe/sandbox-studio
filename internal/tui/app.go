@@ -99,8 +99,8 @@ type app struct {
 	choices     map[string]*choice // the approvals' choices, by the ID of a card's first approval
 	split       map[string]bool    // the approvals reviewed one by one, out of their group
 	picker      int                // the environment picker's cursor
-	filter      string             // the text the filter narrows the list by: a name, teammate or template
-	filtering   bool               // the filter takes the keys
+	filtering   bool               // Activity's filter takes the keys
+	search      searchState        // Search Studio, ctrl+k
 	confirm     *sandboxes.View    // the sandbox a delete waits for y or n about
 	typing      *linePrompt        // the line of text the notice line asks for, if any
 	notice      notice
@@ -209,6 +209,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.filesUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.searchUpdate(msg); ok {
 		return m, cmd
 	}
 	if cmd, ok := m.homeUpdate(msg); ok {
@@ -359,18 +362,20 @@ func (m *app) refresh() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// paste takes pasted text into the field that takes the keys: the filter, the notice line's
-// prompt or the composer.
+// paste takes pasted text into the field that takes the keys: search, the notice line's prompt,
+// Activity's filter or the composer.
 func (m *app) paste(text string) {
 	switch {
+	case m.search.open:
+		m.search.query.paste(strings.Join(strings.Fields(text), " "))
+		m.search.sel = 0
 	case m.typing != nil && m.typing.name:
 		m.typing.text.paste(strings.ToLower(strings.Join(strings.Fields(text), "")))
 	case m.typing != nil:
 		m.typing.text.paste(strings.Join(strings.Fields(text), " "))
 	case m.filtering:
-		id := m.selectedID()
-		*m.filterTarget() += strings.Join(strings.Fields(text), " ")
-		m.filtered(id)
+		m.activity.filter += strings.Join(strings.Fields(text), " ")
+		m.activity.cursor = 0
 	case m.chats.on && m.chats.composing:
 		m.chats.draft.paste(text)
 	case m.paneFocused() && m.pane.term != nil:
@@ -447,19 +452,9 @@ func (m *app) selected() *sandboxes.View {
 	return &sb
 }
 
-// visible is the sandboxes the filter lets through, in the order the API lists them.
+// visible is the sandboxes, in the order the API lists them.
 func (m *app) visible() []sandboxes.View {
-	query := m.filter
-	if query == "" {
-		return m.sandboxes
-	}
-	var out []sandboxes.View
-	for _, sb := range m.sandboxes {
-		if matches(query, sb.Name, m.teammates[sb.TeammateID], sb.TemplateName) {
-			out = append(out, sb)
-		}
-	}
-	return out
+	return m.sandboxes
 }
 
 // pendingFor counts the pending approvals of one sandbox.

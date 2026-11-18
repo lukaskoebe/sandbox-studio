@@ -82,12 +82,12 @@ func (m *app) keyBar(w, y int) string {
 	return m.keys.ShortHelpView(m.bindings())
 }
 
-// noticeLine is the line under the key bar: the filter while it is typed, a question that is
-// waiting for an answer, the last result, or the state of the connection.
+// noticeLine is the line under the key bar: Activity's filter while it is typed, a question that
+// is waiting for an answer, the last result, or the state of the connection.
 func (m *app) noticeLine(w int) string {
 	switch {
 	case m.filtering:
-		return styleBold.Render("/ ") + *m.filterTarget() + styleAccent.Render("▏")
+		return styleBold.Render("/ ") + m.activity.filter + styleAccent.Render("▏")
 	case m.typing != nil:
 		return m.typing.view(w)
 	case m.confirm != nil:
@@ -111,8 +111,6 @@ func (m *app) noticeLine(w int) string {
 	case m.paneFocused():
 		x, _ := m.paneTarget()
 		return styleDim.Render(clip("Typing into "+x.title()+". ctrl+] gives the keys back.", w))
-	case m.filter != "" && m.screen == screenMain:
-		return styleDim.Render("filtered by “" + m.filter + "”")
 	case m.offline:
 		return styleDim.Render("Connection to Studio lost. Reconnecting…")
 	}
@@ -131,9 +129,10 @@ func (m *app) helpBody() []string {
 		{"+", "a new thread with the teammate under the cursor, or a computer"},
 		{"→ ←", "show or hide a teammate's older threads"},
 		{"u", "undo the last network decision, for a minute after it"},
-		{"e / /", "switch environment; filter by name, teammate or template"},
+		{"ctrl+k, /", "Search Studio: teammates, computers, threads, settings, actions"},
+		{"e", "switch environment"},
 		{"l / ,", "Activity; Settings"},
-		{"esc", "back a place, Home last; it clears the filter first"},
+		{"esc", "back a place, Home last"},
 		{"? / q", "this help; quit, from Home and the sidebar"},
 	}
 	title := "Keys"
@@ -159,7 +158,8 @@ func (m *app) helpBody() []string {
 			{"←/→ space", "move over the request's choices; space or enter presses one"},
 			{"pgup/pgdn", "scroll the reading pane"},
 			{"\\", "the sidebar: teammates, their threads and computers; \\ comes back"},
-			{"+ / e / /", "new computer; switch environment; filter the sidebar"},
+			{"+ / e", "new computer; switch environment"},
+			{"ctrl+k, /", "Search Studio; > actions, @ teammates, / a computer's files"},
 			{"l / ,", "Activity; Settings"},
 			{"? / q", "this help; quit"},
 		}

@@ -130,7 +130,6 @@ func (m *app) newUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		n.created = &msg.sb
 		m.screen = screenProgress
 		m.setNotice("", false)
-		m.filter = ""
 		return m.refresh(), true
 	case sandboxForked:
 		return m.forked(msg), true
@@ -490,6 +489,5 @@ func (m *app) forked(msg sandboxForked) tea.Cmd {
 	m.newSb = newState{created: &msg.sb}
 	m.screen = screenProgress
 	m.setNotice("", false)
-	m.filter = ""
 	return m.refresh()
 }

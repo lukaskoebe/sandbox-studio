@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The terminal UI finds anything by name with `ctrl+k`, as `⌘K` does in the browser, with the
+  same words and the same order: a teammate, a computer or one of its tabs (`blub files`), a
+  thread, a place of the environment, a section of Settings, or an action such as a new thread
+  with a teammate or stopping the computer on show. A typo is forgiven (`netwrok` finds
+  Network). With nothing typed it lists what you opened from it last and what waits for you.
+  `>` searches the actions only, `@` the teammates, and `/` the files of the computer on show,
+  opening the one you pick in its Files tab. `/` opens it too, except in the composer and on
+  Activity, and the sidebar's `/ Filter` is now `/ Search`.
 - The terminal UI's Changes tab takes comments on the lines of a diff. `c` puts a cursor on the
   diff, `↑` and `↓` move it, `enter` asks for the comment and `esc` lets go. On a push that
   waits, the comments show under their lines until you decide it: `r` sends them with what to

@@ -71,11 +71,9 @@ type homeRow struct {
 	section string // the section's label, drawn before its first row
 }
 
-// homeRows are the rows of the sidebar, in order. While the filter narrows the list, only the
-// teammates and computers that match show, with their threads and terminals.
+// homeRows are the rows of the sidebar, in order.
 func (m *app) homeRows() []homeRow {
 	visible := m.visible()
-	filtering := m.filter != ""
 	index := map[string]int{}
 	for i, sb := range visible {
 		index[sb.ID] = i
@@ -95,14 +93,9 @@ func (m *app) homeRows() []homeRow {
 		}
 		rows = append(rows, r)
 	}
-	if !filtering {
-		add(homeRow{kind: atHome, sb: -1, sub: -1}, "")
-	}
+	add(homeRow{kind: atHome, sb: -1, sub: -1}, "")
 	for _, t := range m.team {
 		list := m.sandboxesOf(t.ID)
-		if filtering && len(list) == 0 && !matches(m.filter, t.Name) {
-			continue
-		}
 		r := homeRow{kind: atMate, mate: t.ID, sb: -1, sub: -1}
 		if len(list) > 0 {
 			r.sb = at(list[0].ID)
@@ -112,14 +105,9 @@ func (m *app) homeRows() []homeRow {
 			add(homeRow{kind: atThread, mate: t.ID, sb: at(x.sandbox), sub: j}, sectionTeammates)
 		}
 	}
-	if !filtering {
-		add(homeRow{kind: atAction, action: actionNewTeammate, sb: -1, sub: -1}, sectionTeammates)
-	}
+	add(homeRow{kind: atAction, action: actionNewTeammate, sb: -1, sub: -1}, sectionTeammates)
 	for _, i := range m.yourComputers() {
 		add(homeRow{sb: i, sub: -1}, sectionComputers)
-	}
-	if filtering {
-		return rows
 	}
 	add(homeRow{kind: atAction, action: actionNewComputer, sb: -1, sub: -1}, sectionComputers)
 	for _, p := range envPlaces {

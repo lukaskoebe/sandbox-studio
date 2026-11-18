@@ -69,8 +69,8 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 	case "alt+a", "alt+z":
 		return tea.KeyPressMsg{Code: rune(k[4]), Mod: tea.ModAlt}
-	case "ctrl+c":
-		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "ctrl+c", "ctrl+k", "ctrl+n", "ctrl+p":
+		return tea.KeyPressMsg{Code: rune(k[5]), Mod: tea.ModCtrl}
 	default:
 		return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 	}
@@ -109,29 +109,6 @@ func TestEnterOpensTheSandboxAndEscGoesBack(t *testing.T) {
 	}
 	if m = press(m, "esc"); m.here.kind != placeHome || m.screen != screenMain {
 		t.Fatalf("esc from the computer: here %+v, screen %v", m.here, m.screen)
-	}
-}
-
-func TestFilterNarrowsTheListAndEscClearsIt(t *testing.T) {
-	m := sampleApp()
-	toSidebar(m)
-	m = press(m, "/", "a", "p", "i")
-	if got := names(m.visible()); got != "api-refactor" {
-		t.Fatalf("filtered to %q", got)
-	}
-	m = press(m, "enter")
-	if m.filtering || m.filter != "api" {
-		t.Fatalf("enter keeps the filter: filtering %v, filter %q", m.filtering, m.filter)
-	}
-	if got := len(press(m, "esc").visible()); got != 4 {
-		t.Fatalf("esc clears the filter: %d sandboxes shown", got)
-	}
-}
-
-func TestTeammateNamesFilterToo(t *testing.T) {
-	m := press(sampleApp(), "/", "f", "i", "n", "n")
-	if got := names(m.visible()); got != "api-refactor" {
-		t.Fatalf("filter by teammate: %q", got)
 	}
 }
 
@@ -328,13 +305,6 @@ func TestFitPadsAndCuts(t *testing.T) {
 }
 
 // names joins the names of sandboxes, for comparisons.
-func names(list []sandboxes.View) string {
-	var out []string
-	for _, sb := range list {
-		out = append(out, sb.Name)
-	}
-	return strings.Join(out, ",")
-}
 
 // z suspends a running sandbox, and says why it doesn't for one that isn't.
 func TestSuspendFollowsThePhase(t *testing.T) {

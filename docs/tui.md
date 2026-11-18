@@ -104,12 +104,15 @@ place of its own, its review alone.
 
 Keys are the same on every screen and cannot be changed. The key bar shows the ones that apply,
 and `?` lists the keys of the place it is pressed in. `n` never means new: it says no to a
-request, and `+` makes something new.
+request, and `+` makes something new. `ctrl+k` opens [Search Studio](#search-studio) from every
+screen, the composer included; only a terminal with the keys and a line the notice asks for keep
+it.
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | [Home's list](#home): what waits for you, what works and what is quiet, with a reading pane for the row under the cursor | `↑/↓` `j/k` move over the rows · `tab` the next request · the row's own answers, such as `y` `n` `o` on a network request · `enter` open the row · `pgup/pgdn` scroll the reading pane · `u` undo · `+` new computer · `l` Activity · `,` Settings · `e` environment · `\` the sidebar · `?` help · `q` quit |
-| **The sidebar** (from `\`, or beside the place from 100 columns) | Home, TEAMMATES with their [threads](#threads), YOUR COMPUTERS, and ENVIRONMENT | `↑/↓` `j/k` move · `enter` open the row's place · `+` a new thread with the teammate under the cursor, or a new computer · `→`/`←` show or hide a teammate's older threads · `tab` the next thread that waits · `u` undo · `/` filter by name, teammate or template · `l` `,` `e` · `\` or `esc` back to the place · `?` · `q` quit |
+| **Home** | [Home's list](#home): what waits for you, what works and what is quiet, with a reading pane for the row under the cursor | `↑/↓` `j/k` move over the rows · `tab` the next request · the row's own answers, such as `y` `n` `o` on a network request · `enter` open the row · `pgup/pgdn` scroll the reading pane · `u` undo · `+` new computer · `/` search · `l` Activity · `,` Settings · `e` environment · `\` the sidebar · `?` help · `q` quit |
+| **Search Studio** (from `ctrl+k`, or `/` outside the composer and Activity) | [anything by name](#search-studio), grouped by kind, over the place | type to search · `↑/↓` move · `enter` open · `>` actions only · `@` teammates only · `/` the files of the computer in view · `esc` or `ctrl+k` close |
+| **The sidebar** (from `\`, or beside the place from 100 columns) | Home, TEAMMATES with their [threads](#threads), YOUR COMPUTERS, and ENVIRONMENT | `↑/↓` `j/k` move · `enter` open the row's place · `+` a new thread with the teammate under the cursor, or a new computer · `→`/`←` show or hide a teammate's older threads · `tab` the next thread that waits · `u` undo · `/` search · `l` `,` `e` · `\` or `esc` back to the place · `?` · `q` quit |
 | **A teammate's home** (from its row) | [who it is](#a-teammates-home), its computers, tasks and what it knows, over a composer | `enter` write to it · `+` another computer · `t` its computer's terminal · `c` its changes · `m` its next computer · `tab` the computer · `esc` back |
 | **A thread** (from its row, or a request's) | the [transcript](#thread), streaming, a request it waits on as a card, and the composer | `p` or `enter` write · `↑/↓` the tool calls · `x` stop · `y` `a` `n` its permission · the card's keys · `+` a new thread · `t` the terminal · `c` the changes · `m` the next computer · `tab` the computer · `esc` back |
 | **A computer** (beside a thread or a teammate's home, from `tab`, or on its own) | [its tabs](#the-computer): Terminal, Changes and Details | `1`–`5` a tab · on Terminal `enter` type in, `alt+1`–`alt+9` another terminal, `+` a new shell, `T` the agent · on Changes `j/k` the rail's row, `↑/↓` scroll, `enter` fold a repository, `v` side by side, and a push's [review keys](#reviewing-a-push) · on Details `s` start, stop or resume, `z` suspend, `f` fork, `h` checkpoints, `d` delete, `l` its Activity, `t` the terminal, `T` the agent · `m` the next computer · `tab` back to the thread · `esc` back |
@@ -118,7 +121,7 @@ request, and `+` makes something new.
 | **New computer** (from `+` or `+ New computer`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
 | **A review** (from `enter` on a push of another environment's computer, or of one that went) | the push's facts, commits and diff, or the pull request | the [review keys](#reviewing-a-push) · `↑/↓` `j/k` scroll · `esc` back |
 | **Activity** (from `l`, or ENVIRONMENT › Activity; Network opens it on network) | connections of the environment's computers and every decision, newest first | `←/→` the kind: all, network, git, agents, memory · `enter` the entry and its rule · `/` filter by computer · `r` print the URL of Settings → Network · `esc` back |
-| **Settings** (from `,`) | the web's Settings sections in their three groups, each with what it is set to | `↑/↓` move · `enter` Activity opens here, the others print their address in the browser · `l` Activity · `esc` back |
+| **Settings** (from `,`) | the web's Settings sections in their three groups, each with what it is set to | `↑/↓` move · `enter` Activity opens here, the others print their address in the browser · `l` Activity · `/` search · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
 
 What waits counts the requests of every environment, so requests that arrived together count
@@ -147,8 +150,64 @@ with the cursor on the row of the place on show again.
   the version.
 
 Its first two rows are `◆ Studio` with the environment, which a click opens the picker on, and
-`/ Filter`. `esc` clears a filter before it goes back. A filter leaves out Home's row, the
-places and the teammates with nothing that matches.
+`/ Search   ctrl+k`, which a click opens [Search Studio](#search-studio) on.
+
+### Search Studio
+
+`ctrl+k` finds anything of Studio by name, as `⌘K` does on the web, with the same words and the
+same order. `/` opens it too, except where `/` is text or a filter of its own: the composer and
+Activity. It is a box over the body, at most 64 cells wide and 16 rows high, below the crumb
+row; below 44 columns it takes the whole body.
+
+```
+╭─ Search Studio ──────────────────────────────────────────────╮
+│ › log▏                                                       │
+│──────────────────────────────────────────────────────────────│
+│ THREADS                                                      │
+│▸▲ Fix the login form                             Iris · blub │
+│ ENVIRONMENT                                                  │
+│ ◆ Activity                                       Environment │
+│ SETTINGS                                                     │
+│ , General                        Settings › This environment │
+╰─ ↑↓ move · enter open · esc close ───────────────────────────╯
+```
+
+It finds, in this order:
+
+- **Teammates**, by name and role. `enter` opens the teammate's home.
+- **Computers**, by name, template and `base`, with their owner and status on the right. A
+  computer opens on its own. Its tabs are hits too, `blub › Files`, but only for a word of their
+  own: `blub` finds the computer, `blub files` its Files tab, which opens beside the thread
+  when the computer is already in view. Files and Changes are there while the computer runs,
+  Browser for a teammate's.
+- **Threads**, every computer's, the newest first, with the teammate and the computer on the
+  right. `enter` opens the thread as its row in the sidebar does.
+- **Environment**: Home (`inbox`), Computers, Network, Secrets, Memory and Activity, as the
+  sidebar has them, each with words that lead to it, such as `rules` for Network and `log` for
+  Activity.
+- **Settings**: the sections of the Settings screen. `enter` opens the screen on the section
+  and prints its address in the browser.
+- **Actions**: a new thread with each teammate, a new computer, a new teammate, switch
+  environment, stop, start or resume the computer in view, the keys, and quit.
+
+Each group lists 5 hits, 12 with a prefix. A word matches at its start, inside a word, with its
+letters in order, or with one typo (`netwrok` finds Network); every word typed must match. With
+nothing typed, it lists **Recent**, the last 6 hits it opened that weren't an action, a file
+or a request, and **Waiting for you**, the first 5 requests of [Home's list](#home); `enter` on a request goes Home with the cursor on it.
+
+Three prefixes keep a search to one kind: `>` actions, `@` teammates, and `/` the files of the
+computer in view. `/` reads the computer's file list from Studio, as the web's `@` in the
+composer does, and keeps it for 30 seconds. With nothing after `/` it lists the files that
+changed and the top of the workspace; then names that start with what you typed come first,
+then names and paths that have it, then the ones with its letters in order, and a slash looks
+in that folder (`/web/src/`). `enter` on a file
+opens it in the computer's [Files](#files) tab; on a folder, the folder. Home and a full screen
+have no computer in view, and a computer that isn't running can't list its files; the box says
+so.
+
+`↑/↓` (or `ctrl+p`, `ctrl+n`, `tab`) move, and wrap; the wheel moves too. `enter` or a click
+opens the hit, `esc`, `ctrl+k` or a click outside closes the box. A pasted text goes to the
+query.
 
 ### Home
 

@@ -25,6 +25,8 @@ func (m *app) mainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyZoom):
 		m.zoom = !m.zoom
 		return m, nil
+	case key.Matches(msg, keySearch):
+		return m, m.openSearch("")
 	}
 	if m.sidebarKeys() {
 		return m.sidebarKey(msg)
@@ -181,14 +183,7 @@ func (m *app) sidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openActivity("")
 	case key.Matches(msg, keyEnv):
 		m.openEnvs()
-	case key.Matches(msg, keyFilter):
-		m.startFilter()
 	case key.Matches(msg, keyEsc):
-		if m.filter != "" {
-			m.filter = ""
-			m.reselect(m.selectedID())
-			return m, nil
-		}
 		m.drawer, m.focus = false, focusMain
 		m.cursorToHere() // the sidebar shows where you are again
 	case key.Matches(msg, keyHelp):

@@ -1,5 +1,5 @@
  ◆ Studio          Default ▾  │ Home                                                                            ▲ 4 waiting for you · 12:00 
- / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / Search              ctrl+k │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Home                    ▲ 4 │  WAITING FOR YOU · 4                          │ ± GIT PUSH  Push 2 commits to feature/login on GitHub/acme/…
                               │ ▌± Finn  Push 2 commits t…  api-refactor  30s │ 2 files  +7 −1  █████████████▒▒                             
  TEAMMATES                    │  ⇅ Finn  api-refactor want…  pypi.org +2   1m │                                                             
@@ -36,4 +36,4 @@
                               │                                               │ @@ -0,0 +1,6 @@                                             
                               │                                               │ +import { render } from "@testing-library/react"            
 ──────────────────────────────┴───────────────────────────────────────────────┴─────────────────────────────────────────────────────────────
-enter open  ↑/k up  + new thread  →/← older threads  tab next waiting │ \ sidebar  / filter  , settings  l activity  e env │ ? more  q quit
+enter open  ↑/k up  + new thread  →/← older threads  tab next waiting │ \ sidebar  / search  , settings  l activity  e env │ ? more  q quit

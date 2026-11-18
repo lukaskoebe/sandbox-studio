@@ -1,5 +1,5 @@
  ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 1 · 12:00 
- / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / Search              ctrl+k │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Home                    ▲ 1 │ ┃ The login form doesn't submit on enter.   │  Terminal   Files   Changes   Browser   Details     ● running 
                               │ ┃ Can you fix it?                           │ ────────────━━━━━─────────────────────────────────────────────
  TEAMMATES                    │                                             │  login.tsx  /workspace/src · 218 B

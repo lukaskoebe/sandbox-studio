@@ -49,7 +49,6 @@ func (m *app) openComputers() {
 
 // openComputersAt shows the Computers screen, its cursor on the computer id, or the first.
 func (m *app) openComputersAt(id string) {
-	m.filter = ""
 	m.computers.id, m.computers.cursor = id, 0
 	m.screen = screenComputers
 	m.computersFollow()

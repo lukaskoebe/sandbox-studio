@@ -21,7 +21,7 @@ var (
 	keyCancel    = key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("esc", "cancel"))
 	keyQuit      = key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit"))
 	keyHelp      = key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help"))
-	keyFilter    = key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter"))
+	keySearch    = key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search"))
 	keyEnv       = key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "env"))
 	keyLifecycle = key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start/stop"))
 	keySuspend   = key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "suspend"))
@@ -50,11 +50,22 @@ var (
 // first, then a shell with the keys (ctrl+c too: it interrupts the agent there, not the TUI),
 // the composer, the full screens, and in the frame the part of it that has the cursor.
 func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.search.open {
+		return m.searchKey(msg)
+	}
 	if !m.filtering && m.typing == nil && m.confirm == nil && m.paneFocused() {
 		return m.paneKey(msg)
 	}
 	if key.Matches(msg, keyInterrupt) {
 		return m, tea.Quit
+	}
+	// ctrl+k opens Search Studio from anywhere but a field and a shell with the keys; / from the
+	// screens without a filter of their own.
+	if !m.filtering && m.typing == nil && m.confirm == nil && m.checkpoints.restoring == nil {
+		if key.Matches(msg, keySearchAny) ||
+			key.Matches(msg, keySearch) && (m.screen == screenSettings || m.screen == screenComputers) {
+			return m, m.openSearch("")
+		}
 	}
 	switch {
 	case m.filtering:
@@ -117,7 +128,7 @@ func (m *app) envsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenMain
 		if m.picker < len(m.envs) && m.envs[m.picker].ID != m.env.ID {
 			m.env = m.envs[m.picker]
-			m.sandboxes, m.loaded, m.cursor, m.sub, m.filter = nil, false, 0, -1, ""
+			m.sandboxes, m.loaded, m.cursor, m.sub = nil, false, 0, -1
 			m.at, m.mate = atHome, ""
 			m.stopChat()
 			m.goHome()
@@ -127,11 +138,9 @@ func (m *app) envsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// filterKey types into the filter of the screen on show: the sandbox list's, or Activity's.
-// Enter keeps the filter, esc clears it.
+// filterKey types into Activity's filter by computer. Enter keeps the filter, esc clears it.
 func (m *app) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	id := m.selectedID()
-	target := m.filterTarget()
+	target := &m.activity.filter
 	switch {
 	case key.Matches(msg, keyKeep):
 		m.filtering = false
@@ -144,26 +153,8 @@ func (m *app) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case msg.Text != "":
 		*target += msg.Text
 	}
-	m.filtered(id)
+	m.activity.cursor = 0
 	return m, nil
-}
-
-// filterTarget is the filter the user types into on the screen on show.
-func (m *app) filterTarget() *string {
-	if m.screen == screenActivity {
-		return &m.activity.filter
-	}
-	return &m.filter
-}
-
-// filtered keeps the cursor in place after the filter changed: on the sandbox id on the list,
-// at the top of the Activity log.
-func (m *app) filtered(id string) {
-	if m.screen == screenActivity {
-		m.activity.cursor = 0
-		return
-	}
-	m.reselect(id)
 }
 
 // confirmKey answers a pending delete: y deletes the sandbox, any other key keeps it.
@@ -266,10 +257,6 @@ func (m *app) openHelp() {
 	m.screen = screenHelp
 }
 
-func (m *app) startFilter() {
-	m.filtering = true
-}
-
 // selectedID is the ID of the selected sandbox, or "" when none is visible.
 func (m *app) selectedID() string {
 	if sb := m.selected(); sb != nil {
@@ -281,6 +268,8 @@ func (m *app) selectedID() string {
 // bindings are the keys the key bar shows for the current mode and screen.
 func (m *app) bindings() []key.Binding {
 	switch {
+	case m.search.open:
+		return m.searchBindings()
 	case m.filtering:
 		return []key.Binding{keyKeep, keyClear}
 	case m.typing != nil:
@@ -354,5 +343,5 @@ func (m *app) sidebarBindings() []key.Binding {
 	if m.undoable() != nil {
 		bindings = append(bindings, keyUndo)
 	}
-	return append(bindings, keyWaiting, keySidebarTo, keyHelp, keyQuit, keyFilter, keySettings, keyActivity, keyEnv)
+	return append(bindings, keyWaiting, keySidebarTo, keyHelp, keyQuit, keySearch, keySettings, keyActivity, keyEnv)
 }

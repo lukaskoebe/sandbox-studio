@@ -377,9 +377,6 @@ func (m *app) inboxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.env.ID != "" {
 			return m, m.openNew()
 		}
-	case key.Matches(msg, keyFilter):
-		m.toggleSidebar()
-		m.startFilter()
 	case key.Matches(msg, keyReadDn):
 		in.scroll += max(m.readingRows()-1, 1)
 	case key.Matches(msg, keyReadUp):

@@ -74,6 +74,8 @@ func pressOf(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "space":
 		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+	case "ctrl+k":
+		return tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl}
 	case "pgup":
 		return tea.KeyPressMsg{Code: tea.KeyPgUp}
 	case "pgdown":
@@ -88,7 +90,7 @@ func pressOf(k string) tea.KeyPressMsg {
 
 // typingKeys reports whether a field takes the keys, so a click would land in the middle of it.
 func (m *app) typingKeys() bool {
-	return m.filtering || m.typing != nil || m.confirm != nil ||
+	return m.search.open || m.filtering || m.typing != nil || m.confirm != nil ||
 		(m.checkpoints.restoring != nil && m.screen == screenCheckpoints) ||
 		m.composerKeys()
 }
@@ -99,6 +101,9 @@ var enterKey = tea.KeyPressMsg{Code: tea.KeyEnter}
 // click answers a click: on a part of the crumb row or a key it acts as that does, on a row it
 // selects it, a double click opens it as enter does, and a click in a column gives it the cursor.
 func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if msg.Button == tea.MouseLeft && !m.look.plain && m.search.open {
+		return m.searchClick(msg)
+	}
 	if msg.Button != tea.MouseLeft || m.look.plain || m.typingKeys() {
 		return m, nil
 	}
@@ -119,6 +124,9 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	for _, k := range m.mouse.keys {
 		if k.y == msg.Y && msg.X >= k.x0 && msg.X < k.x1 {
 			m.mouse.last = time.Time{} // a key is pressed once per click
+			if k.key == "ctrl+k" {
+				return m, m.openSearch("") // the sidebar's search row, a shell with the keys or not
+			}
 			return m.key(pressOf(k.key))
 		}
 	}
@@ -259,6 +267,10 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 	case tea.MouseWheelDown:
 		dir = 1
 	default:
+		return
+	}
+	if m.search.open {
+		m.searchMove(dir)
 		return
 	}
 	switch m.screen {

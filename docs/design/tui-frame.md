@@ -1,20 +1,20 @@
 # The TUI's frame: sidebar, thread and computer (design)
 
 Status: built in part (2026-11-18): the frame, the places, the thread beside its computer,
-the computer's Terminal, Files, Changes, Browser and Details tabs, and comments on the lines of
-a diff. [tui.md](../tui.md#the-frame)
+the computer's Terminal, Files, Changes, Browser and Details tabs, comments on the lines of
+a diff, and Search Studio. [tui.md](../tui.md#the-frame)
 describes it as it is.
 It replaces Home as a sidebar and a pane ([tui-home-panes.md](tui-home-panes.md)) and the
 sessions on Home ([tui-sessions.md](tui-sessions.md)). It is mock A of the TUI revamp, with
-mock B's inbox as its Home. Still to come: Search Studio on `ctrl+k`, and `/` commands and
-`@` files in the composer.
+mock B's inbox as its Home. Still to come: `/` commands and `@` files in the composer.
 
 Where the build differs from the text below:
 
 - `+` in the sidebar starts a thread with the teammate under the cursor, and on any other row
   opens New computer. It doesn't ask "`t` thread · `c` computer · `m` teammate" yet.
 - On a teammate's home `+` gives the teammate another computer, and `enter` writes to it.
-- The sidebar's second row is `/ Filter` until Search Studio replaces the filter.
+- The sidebar's filter is gone: its second row is `/ Search   ctrl+k`, which opens Search
+  Studio. Activity keeps its own `/` filter by computer.
 - The Changes tab took the Git screen and the git review, and `g` on Home is gone. A decided
   push is in the tab's PUSHED for a day, and in Activity under git after that.
 - PUSHED is read from `GET .../approvals?status=approved` every third read of git (about 15
@@ -55,12 +55,22 @@ Where the build differs from the text below:
   mentions it was given (`chat.Mention{Path, Start}`) and sends those still in the text as
   whole words, as the web's `keptMentions` does. A removed line mentions its file without a
   line and says which line it was.
+- Search Studio searches what is waiting only with nothing typed, as the web's palette does,
+  and a computer's files only after `/`. A typed query finds the request's thread instead.
+- A Settings hit opens the Settings screen on its section and prints the section's address,
+  since the sections themselves are the browser's. Network, Secrets, Memory and Activity are
+  hits of ENVIRONMENT only, not again under Settings.
+- A computer's tab is a hit of its own (`blub › Files`), found only by a word of the tab's;
+  it opens beside the thread when that computer is already in view. A teammate's computer
+  opens on its own, as on the Computers screen.
+- Recent keeps the last 6 places opened from Search Studio, in memory for the session: not
+  the actions, files or requests.
 
 ## The frame keeps its five fixed rows
 
 The frame is the crumb row, a rule, the body (`h-5` rows), a rule, the key bar and the notice
 line. The mocks draw no notice line, so their bodies are one row taller than what shipped. The
-notice line stays: the filter, the one-line prompts (`linePrompt`), confirmations and results
+notice line stays: Activity's filter, the one-line prompts (`linePrompt`), confirmations and results
 live there. At 80×24 the body is 19 rows.
 
 ## Widths

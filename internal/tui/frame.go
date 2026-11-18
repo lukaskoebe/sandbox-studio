@@ -167,6 +167,9 @@ func (m *app) mainFrame(w, h int) []string {
 	if box := m.toastBox(w); box != nil && len(box) <= rows {
 		overlay(lines, box, bodyTop, w)
 	}
+	if m.search.open {
+		m.drawSearch(lines, w, rows)
+	}
 	lines = append(lines, m.bottomRule(w, l))
 	if m.drawer && l.sidebar == 0 && m.screen == screenMain {
 		m.drawDrawer(lines, w)
@@ -447,8 +450,8 @@ func (m *app) threadTitle() string {
 	return "Thread"
 }
 
-// sidebarColumn is the sidebar in w cells and h rows: Studio and the environment, the filter,
-// and the list.
+// sidebarColumn is the sidebar in w cells and h rows: Studio and the environment, the search
+// row, and the list.
 func (m *app) sidebarColumn(w, h int) []string {
 	head := " " + m.pal.brand.Render("◆") + " " + styleBold.Render("Studio")
 	if m.look.plain {
@@ -456,21 +459,15 @@ func (m *app) sidebarColumn(w, h int) []string {
 	}
 	env := firstNonEmpty(m.env.Name, "…") + " ▾ "
 	m.mouse.crumb = append(m.mouse.crumb, crumbSpan{x0: w - lipgloss.Width(env), x1: w - 1, part: crumbEnv})
-	filter := styleDim.Render(" / Filter")
-	switch {
-	case m.filtering:
-		filter = " / " + m.filter + styleAccent.Render("▏")
-	case m.filter != "":
-		filter = spread(" / "+styleBold.Render(m.filter), styleDim.Render("esc clears "), w-1)
-	}
-	lines := []string{spread(head, env, w-1), filter}
+	// The search row opens Search Studio, by click too.
+	search := spread(styleDim.Render(" / Search"), styleDim.Render("ctrl+k"), w-1)
+	m.mouse.keys = append(m.mouse.keys, keyHit{y: 1, x0: 0, x1: w - 1, key: "ctrl+k"})
+	lines := []string{spread(head, env, w-1), search}
 	rows := m.homeRows()
 	switch {
 	case m.env.ID == "":
 	case !m.loaded:
 		lines = append(lines, "", styleDim.Render(" Loading…"))
-	case m.filter != "" && len(rows) == 0:
-		lines = append(lines, "", styleDim.Render(clip(" Nothing matches “"+m.filter+"”.", w-1)))
 	default:
 		lines = append(lines, m.treeLines(rows, w-1, h-2)...)
 	}

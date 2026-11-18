@@ -55,11 +55,6 @@ func TestGoldenHomeLoading(t *testing.T) {
 	golden(t, "home_loading", m)
 }
 
-func TestGoldenFilter(t *testing.T) {
-	m := press(sampleApp(), "/", "a", "p", "i")
-	golden(t, "filter", m)
-}
-
 func TestGoldenComputerDetails(t *testing.T) {
 	golden(t, "computer_details", withDetailData(openComputer(sampleApp(), "sb2", tabDetails)))
 }

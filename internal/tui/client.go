@@ -389,6 +389,14 @@ func (c *Client) Files(ctx context.Context, env, sandbox, root, path string) (ap
 	return out, err
 }
 
+// FileIndex lists the files of a sandbox's workspace, relative to /workspace, and the ones git
+// sees changed, as @ mentions and Search Studio find them.
+func (c *Client) FileIndex(ctx context.Context, env, sandbox string) (api.FileIndex, error) {
+	var out api.FileIndex
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/files/index", nil, nil, &out)
+	return out, err
+}
+
 // FileContent reads a file of a sandbox, path relative to root as Files has it: text and
 // images of at most 1 MiB with their data, other files with why not.
 func (c *Client) FileContent(ctx context.Context, env, sandbox, root, path string) (api.FileContent, error) {

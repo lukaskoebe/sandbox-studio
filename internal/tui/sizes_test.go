@@ -104,7 +104,10 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 			m.openReview(a)
 			return m
 		},
-		"push asks": func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "y") },
+		"push asks":    func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "y") },
+		"search":       func(_ *testing.T, m *app) *app { return searchFor(sampleChat(m), "log") },
+		"search empty": func(_ *testing.T, m *app) *app { return press(m, "ctrl+k") },
+		"search files": func(_ *testing.T, m *app) *app { return searchFor(withFileIndex(sampleChat(m), "sb1"), "/log") },
 		"thread row": func(t *testing.T, m *app) *app {
 			m.goHome()
 			for _, r := range m.inboxRows() {

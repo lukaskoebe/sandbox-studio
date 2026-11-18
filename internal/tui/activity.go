@@ -331,7 +331,7 @@ func (m *app) activityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			a.entry = &e
 			m.screen = screenEntry
 		}
-	case key.Matches(msg, keyFilter):
+	case key.Matches(msg, keyFilterSandbox):
 		m.filtering = true
 	case key.Matches(msg, keyRules):
 		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/settings/network"), false)
