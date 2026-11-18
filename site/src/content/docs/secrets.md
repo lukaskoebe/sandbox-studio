@@ -7,17 +7,20 @@ Secrets belong to an environment, a teammate or a single sandbox, and stay on th
 
 ## Add a secret
 
-Choose **Secrets → Add secret**, then enter:
+Open **Secrets** under **Environment** in the sidebar and choose **Add secret**, then enter:
 
-- **Name:** the environment variable name a sandbox will see, such as `SERVICE_TOKEN`;
-- **Value:** the actual key or credential;
+- **Kind:** **Value** for a key or token sent as it is, or **AWS access key** (see below);
+- **Name:** the environment variable name a sandbox will see, such as `SERVICE_TOKEN`, in capitals, digits and `_`;
+- **Value:** the actual key or credential, sealed on arrival and never shown again;
 - **Hosts:** the hosts where Studio is allowed to send the value, such as `api.example.com`;
 - **Scope:** the sandboxes that see it: every sandbox in the environment, every sandbox of one teammate, or one sandbox;
 - **Note:** an optional reminder.
 
-![Settings → Secrets showing secret names and their allowed hosts](../../assets/screenshots/secrets.jpg)
+The list's **Placeholder** column shows what sandboxes get in place of the value.
 
-Studio returns placeholders to sandboxes instead of secret values. For HTTPS requests, the gateway checks request headers and URL paths and queries. It replaces a known placeholder only when the destination host is allowed for that secret; if an inspected header or URL contains a known placeholder for a secret that is not bound to that host, Studio refuses the request. Placeholder substitution in request bodies is not supported.
+![The Secrets page: each secret's name, hosts and placeholder, in a section per scope](../../assets/screenshots/secrets.jpg)
+
+Studio returns placeholders to sandboxes instead of secret values. For HTTPS requests, the gateway checks request headers, the user name and password of Basic authorization, and URL paths and queries. It replaces a known placeholder only when the destination host is allowed for that secret; if an inspected header or URL contains a known placeholder for a secret that is not bound to that host, Studio refuses the request. Placeholder substitution in request bodies is not supported.
 
 For intercepted HTTP responses, Studio attempts to mask exact matches for secret values in headers and bodies. This is a safeguard, not a guarantee: shortened, encoded, or otherwise transformed values may not match. Avoid pasting real values into instructions, commands, or project files. A service you call receives the credential, so bind each secret only to hosts that need it and use the narrowest host pattern that works.
 
@@ -32,7 +35,7 @@ For **AWS access key**, enter the access key ID and secret access key, and optio
 
 The secret's name becomes an AWS profile, in lower case, in the sandbox's `~/.aws/config`; Studio adds it there without touching the rest of the file. When a sandbox sees one AWS secret, `AWS_PROFILE` selects it, so `aws` and the SDKs use it without further setup; with several, choose one with `--profile` or `AWS_PROFILE`.
 
-The first time a sandbox asks for credentials, Home shows a **Credentials** card: **Allow until it stops** lets that sandbox have them until it stops, **Always for** a teammate lets every sandbox of that teammate have them, and **Deny** refuses. The credentials last an hour and the tools renew them on their own; the sandbox never sees the access key itself.
+The first time a sandbox asks for credentials, a **Credentials** card waits for you on Home and over Studio's other pages: **Allow until it stops** lets that sandbox have them until it stops, **Always for** a teammate lets every sandbox of that teammate have them, and **Deny** refuses; for a sandbox without a teammate, **Always** is for that sandbox only. The credentials last an hour and the tools renew them on their own; the sandbox never sees the access key itself.
 
 Kinds for other services that sign their requests will follow.
 
@@ -40,14 +43,14 @@ Kinds for other services that sign their requests will follow.
 
 A sandbox sees the secrets of its environment, of the teammate that owns it, and those scoped to the sandbox itself. When the same name is set at several scopes, the sandbox gets the most specific one, so each teammate can have its own `GITHUB_TOKEN`. A request that uses the placeholder of a secret the sandbox doesn't see is refused.
 
-**Settings → Secrets** lists them in a section per scope: **Environment** first, then each teammate and each sandbox by name. The **+** button of a section adds a secret with that scope already chosen.
+The **Secrets** page lists them in a section per scope: **Environment** first, then each teammate and each sandbox by name, and each teammate's [browser logins](../browser/#save-logins), which only its browser uses and which show the username instead of a placeholder, with **Copy password**. The **+** button of a section adds a secret with that scope already chosen.
 
-A teammate's **Settings** tab has a **Secrets** section with everything its sandboxes see: the teammate's own secrets, those of its sandboxes, and the environment's ones, marked **Inherited**. A teammate's secret that has the same name as an environment one says that it replaces it, and the inherited one shows which teammate secret replaces it. **Add secret** there adds a secret for that teammate.
+In a teammate's settings, **Secrets** under **Routine and access** lists everything its sandboxes see: the teammate's own secrets, those of its sandboxes, and the environment's ones, marked **Inherited**. A teammate's secret that has the same name as an environment one says that it replaces it, and the inherited one shows which teammate secret replaces it. **Add secret** there adds a secret for that teammate.
 
 ## Change a secret
 
-Use the edit control to replace a value, change its allowed hosts, or update its note. The name and scope stay the same; to change them, delete the secret and add it again. Deleting it removes it from the environment. If an agent needs the changed value, start a new session or retry its request after the secret update.
+Use the edit control to replace a value, change its allowed hosts, or update its note. The name and scope stay the same; to change them, delete the secret and add it again. Deleting it removes it from the environment. The placeholder stays the same too, so a new value applies from the sandbox's next request.
 
 When a host answers **401 Unauthorized** three times within ten minutes to requests that carried a secret, Home shows a card saying the host keeps refusing it: the value is probably wrong or expired, which the sandbox can't tell because it only sees the placeholder. **Update secret** opens the secret's edit dialog; for a provider's API key, **Update key** opens **Settings → AI providers**. **Not now** stops asking about that secret and host for a day.
 
-Provider API keys and Git forge credentials are managed under **Settings → AI providers** and **Settings → Git forges**. Studio-only Git credentials cannot be added to sandbox requests. See [Teammates and providers](../teammates-providers/) and [Git review](../git-review/).
+Provider API keys and Git forge credentials show in the list too, marked **Provider**, **Forge token** or **Forge SSH key**, with a link to **Settings → AI providers** or **Settings → Git forges**, where you change them. Studio-only Git credentials cannot be added to sandbox requests. See [Teammates and providers](../teammates-providers/) and [Git review](../git-review/).

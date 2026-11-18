@@ -45,7 +45,7 @@ still change between releases.
 | Docker container | What you mount, usually the project, read-write. |
 | Docker Sandboxes | The workspace, read-write at the same path as on your computer; or the repository read-only with a private clone to work in; or nothing.[^ds-security] |
 | agents-sandbox | The project, read-write at `/workspace`. By default it also copies the agent's configuration in, which can hold credential files.[^as] |
-| Sandbox Studio | None. Nothing on your computer is mounted: the workspace lives in the VM, and the agent clones repositories through Studio. |
+| Sandbox Studio | None is mounted: the workspace lives in the VM, and the agent clones repositories through Studio. If you add a folder of repositories as a forge, sandboxes can fetch from it, and a push into it waits for you. |
 
 ## Where its connections go
 
@@ -56,7 +56,7 @@ still change between releases.
 | Docker container | Anywhere: containers can connect out by default.[^docker-network] |
 | Docker Sandboxes | Through a proxy on your computer, denied unless a policy allows it. The default policy allows broad wildcards such as `*.googleapis.com`. UDP and ICMP are blocked.[^ds-security] |
 | agents-sandbox | Denied unless a profile or rule allows it.[^as] |
-| Sandbox Studio | Every TCP connection, Docker's included, goes through Studio's gateway. A [security level](../network/) decides what connects without asking: nothing, a curated list of development hosts, an AI reviewer's choice, or every public host. A host on your local network or your computer itself is never allowed by a level. |
+| Sandbox Studio | Every TCP connection, Docker's included, goes through Studio's gateway. A [security level](../network/) decides what connects without asking: nothing, a curated list of development hosts, an AI reviewer's choice, or every public host. A host on your local network or your computer itself is never allowed by a level. A name is looked up outside only when the sandbox may already connect to it, so a lookup can't carry data out. The curated list allows reads only: a push or publish to GitHub, npm or Docker Hub asks. UDP and ICMP are blocked. |
 
 ## Where your keys are
 
@@ -67,7 +67,7 @@ still change between releases.
 | Docker container | Inside, as environment variables or files you pass in. |
 | Docker Sandboxes | Outside. The agent sees a stand-in, and the proxy puts the real key into requests that leave the VM.[^ds-arch] |
 | agents-sandbox | Outside for secrets you declare: the guest sees a placeholder.[^as] |
-| Sandbox Studio | Outside, encrypted on your computer. The VM sees a placeholder, which the gateway replaces only in requests to the hosts the [secret](../secrets/) is bound to. |
+| Sandbox Studio | Outside, encrypted on your computer. The VM sees a placeholder, which the gateway replaces only in requests to the hosts the [secret](../secrets/) is bound to. AWS keys stay outside too: the VM gets credentials made from the key, an hour at a time. |
 
 ## Git pushes
 
@@ -78,7 +78,7 @@ still change between releases.
 | Docker container | Sent with the credentials you pass in. |
 | Docker Sandboxes | Its documentation describes no review before a push.[^ds-faq] |
 | agents-sandbox | Its README describes no review before a push.[^as] |
-| Sandbox Studio | The sandbox holds no forge credentials. A push goes to Studio, you [read the diff](../git-review/), and Studio pushes upstream once you approve. |
+| Sandbox Studio | The sandbox holds no forge credentials. A push goes to Studio, you [read the diff](../git-review/), and Studio pushes upstream once you approve. Opening a pull request, and posting a review or a comment on one, wait for you too. |
 
 ## Browsing the web
 
@@ -98,7 +98,7 @@ still change between releases.
 | Docker container | Nothing, once it runs. |
 | Docker Sandboxes | Nothing: the agent runs without prompts, and the sandbox is the boundary. Rules are set ahead, by you or by an organization's admins.[^ds-faq] |
 | agents-sandbox | Rules are set ahead; its README describes no questions while the agent works.[^as] |
-| Sandbox Studio | A connection to a host no rule covers waits for your answer, as do pushes, browser actions and shared memories. You answer on the web page, in the terminal UI or with the CLI, and an answer can become a rule. |
+| Sandbox Studio | A connection to a host no rule covers waits for your answer, as do pushes and pull requests, browser actions and password fills, short-lived AWS credentials and shared memories. You answer on the web page, in the Studio app, in the terminal UI or with the CLI, and an answer can become a rule. |
 
 ## Where it runs
 

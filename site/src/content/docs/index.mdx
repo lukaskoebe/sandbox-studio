@@ -39,8 +39,8 @@ import browser from '../../assets/screenshots/browser.jpg'
     items={[
       {
         icon: 'box',
-        title: 'A sandbox for every teammate',
-        text: 'Each teammate works in its own microVM with a persistent workspace, a terminal and Docker. Your own files stay out of reach.',
+        title: 'A computer for every teammate',
+        text: 'Each teammate works in a microVM of its own, or several, with a persistent workspace, terminals and Docker. Your own files stay out of reach.',
         link: 'sandboxes/',
       },
       {
@@ -70,7 +70,7 @@ import browser from '../../assets/screenshots/browser.jpg'
       {
         icon: 'brain',
         title: 'Teammates that remember',
-        text: 'Each teammate keeps a memory across sessions and sandboxes, next to a shared team memory. Embeddings run locally.',
+        text: 'Each teammate keeps a memory across sessions and computers, next to a shared team memory. Embeddings run locally.',
         link: 'memory/',
       },
     ]}
@@ -80,13 +80,14 @@ import browser from '../../assets/screenshots/browser.jpg'
 <Section number="02" kicker="In practice" title="Stay in the loop, not in the way.">
   <Showcase
     image={approval}
-    alt="A sandbox's terminal with a network approval card for example.com in the corner"
+    alt="A teammate's computer with a network request for example.com waiting, with Allow and Deny"
     kicker="Approvals"
     title="Questions come to you, where you are"
   >
     <p>
-      When a teammate reaches for a host it hasn't used before, the connection waits and a card
-      pops up; the TUI and the CLI list it too. Allow it once, for an hour or always. An answer
+      When a teammate reaches for a host it hasn't used before, the connection waits, up to a
+      minute, and Studio asks you: a card on the page you're on, or a count on the computer's
+      screen. Home, the TUI and the CLI list it too. Allow it once, for an hour or always. An answer
       that lasts becomes a rule, so you aren't asked twice.
     </p>
     <p>
@@ -123,7 +124,7 @@ import browser from '../../assets/screenshots/browser.jpg'
       {
         icon: 'terminal',
         title: 'Real Linux, root included',
-        text: 'Persistent microVMs on KVM or Hypervisor.framework with Docker inside. Previews of any port, suspend and resume, fork, export and import.',
+        text: 'Persistent microVMs on KVM, Hypervisor.framework or Windows Hypervisor Platform with Docker inside. Previews of any port, suspend and resume, fork, bases, export and import.',
         link: 'sandboxes/',
       },
       {
@@ -135,7 +136,7 @@ import browser from '../../assets/screenshots/browser.jpg'
       {
         icon: 'layers',
         title: 'Templates and checkpoints',
-        text: 'Studio builds a cached template from the spec. Disk checkpoints capture a sandbox while it runs.',
+        text: 'Studio builds a cached template from the spec. Disk checkpoints capture a computer while it runs, by hand or on a schedule.',
         link: 'templates/',
       },
       {
@@ -157,11 +158,13 @@ import browser from '../../assets/screenshots/browser.jpg'
   <Guides
     items={[
       { title: 'Getting started', text: 'Install Studio and create your first teammate.', link: 'getting-started/' },
+      { title: 'Computers', text: 'Create computers, work in their terminals, files and previews.', link: 'sandboxes/' },
       { title: 'Chat', text: 'Talk to a teammate, answer its questions, and undo its changes.', link: 'chat/' },
       { title: 'Network rules and approvals', text: 'Decide which hosts sandboxes can reach.', link: 'network/' },
       { title: 'Secrets', text: 'Keep API keys and passwords out of sandboxes.', link: 'secrets/' },
       { title: 'Git review', text: 'Approve pushes before they reach a forge.', link: 'git-review/' },
-      { title: 'Command line', text: 'Script sandboxes and approvals with the studio CLI.', link: 'cli/' },
+      { title: 'Terminal UI', text: 'Run Studio from a terminal, over SSH too.', link: 'tui/' },
+      { title: 'Command line', text: 'Script computers and approvals with the studio CLI.', link: 'cli/' },
       { title: 'How Studio compares', text: 'Side by side with containers, OS sandboxes and Docker Sandboxes.', link: 'comparison/' },
     ]}
   />

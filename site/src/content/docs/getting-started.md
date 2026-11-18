@@ -56,21 +56,21 @@ studio
 
 Studio opens its local UI at `http://127.0.0.1:7878` in your browser, and prints a one-time link to it too. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`, or start `studio` again: a second start opens the running Studio. To only print the link, start it with `studio -no-browser`.
 
-On Windows, double-click `studiow.exe` instead to run Studio without a console window. It starts `studio.exe` in the background, opens Studio in your browser and puts an icon in the notification area: click it to open Studio, or right-click it for **Logs**, **Start at login** and **Quit**. **Quit** stops Studio; your sandboxes keep running. With `studiow.exe` next to `studio.exe`, **Start at login** in Settings starts the tray too.
+On Windows, double-click `studiow.exe` instead to run Studio without a console window. It starts `studio.exe` in the background, opens Studio in your browser and puts an icon in the notification area: click it to open Studio, or right-click it for **Logs**, **Start at login** and **Quit**. **Quit** stops Studio; your computers keep running. With `studiow.exe` next to `studio.exe`, **Start at login** in Settings starts the tray too.
 
 This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add a provider in the environment first: an API key, or a Claude Pro/Max or ChatGPT subscription sign-in.
 
-Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
+Studio listens on loopback, so other machines on your network cannot open its UI. The UI and the computers' services stay on the machine running Studio.
 
 Studio is square by default, with titles, buttons and labels in mono. For a soft, rounded look in sans, set **Style** to **Quiet** under **Settings → General**. Each browser keeps its own style, as it does light or dark, which you pick at the bottom of the sidebar.
 
-To stop Studio, run `studio quit` or use **Shut down** under **Settings → General**; sandboxes keep running. Installing a new version restarts a running Studio by itself. To remove Studio and everything it created, run `studio uninstall`, which lists what goes and asks you to confirm.
+To stop Studio, run `studio quit` or use **Shut down** under **Settings → General**; computers keep running. `studio restart` stops Studio and starts it again. Installing a new version restarts a running Studio by itself. To remove Studio and everything it created, run `studio uninstall`, which lists what goes and asks you to confirm.
 
 To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default.
 
-Studio checks GitHub for a newer release once a day and shows it under **Settings → General → Updates** and in the sidebar. Set **Updates** to **Off** to stop the check, or to **Install automatically** to have Studio install releases itself: it downloads the release, verifies it against `checksums.txt` and its GitHub build attestation, and restarts into it once no chat, template build or sign-in is running. If the new version doesn't start, the old one and its database come back. Studio can install itself only where it may write to the folder its binary is in, as with `install.sh`.
+Studio checks GitHub for a newer release once a day. **Settings → Updates** shows it, and **Settings** in the sidebar says **Update available**. **Check for updates** looks right away, and **Update now** installs the release. Set **Updates** to **Off** to stop the check, or to **Install automatically** to have Studio install releases itself: it downloads the release, verifies it against `checksums.txt` and its GitHub build attestation, and restarts into it once no chat, template build or sign-in is running. If the new version doesn't start, the old one and its database come back. Studio can install itself only where it may write to the folder its binary is in, as with `install.sh`.
 
-On a first start, Studio opens a guided setup at `/setup`. It checks the host, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
+On a first start, Studio opens a guided setup at `/setup`. It checks the host, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first computer. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there. After it, Home shows **Get to know Studio**: a first task to give a teammate, and five features that tick off as you use them. The first time each one happens, a tip beside it explains it; **Stop tips** closes them all, and **Settings → General → Tips** shows them again.
 
 ![The guided setup with the host check done](../../assets/screenshots/setup.jpg)
 
@@ -80,20 +80,39 @@ On a first start, Studio opens a guided setup at `/setup`. It checks the host, a
 studio app
 ```
 
-`studio app` opens Studio in a window of its own, with an icon in the tray or menu bar and the system's notifications. It starts Studio in the background if it isn't running, and leaves it running when you close the app, so the browser keeps working beside it. The tray menu has **Open Studio**, **Open in browser**, **Close the app** and **Quit Studio**, which stops Studio too; your sandboxes keep running. Links to other sites, sign-ins and previews open in your browser.
+`studio app` opens Studio in a window of its own, with an icon in the tray or menu bar and the system's notifications. On Linux it is also in the desktop's launcher. It starts Studio in the background if it isn't running, and leaves it running when you close the app, so the browser keeps working beside it. The tray menu has **Open Studio**, **Open in browser**, **Close the app** and **Quit Studio**, which stops Studio too; your computers keep running. Links to other sites, sign-ins and previews open in your browser.
+
+The window has no system title bar on Linux and macOS. On Linux a slim bar at the top of the page moves the window, and a double click maximises it; on macOS the window's buttons sit over the top of the sidebar. Set `SANDBOX_STUDIO_TITLEBAR=system` to bring the system's title bar back. `studio uninstall` also removes the launcher entry.
 
 On Linux the app needs GTK 3 and WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Debian and Ubuntu, `webkit2gtk4.1` on Fedora). Without them, or without a display, `studio app` opens Studio in your browser instead and says why. On NixOS the prebuilt app finds its libraries through [nix-ld](https://github.com/nix-community/nix-ld): enable `programs.nix-ld` with `programs.nix-ld.libraries = [ pkgs.gtk3 pkgs.webkitgtk_4_1 pkgs.libsoup_3 pkgs.glib pkgs.gdk-pixbuf pkgs.xorg.libX11 ]`. The install script puts `studio-app` next to `studio`.
 
 Or install Studio as a web app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The web app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
 
+## Find your way around
+
+![Home: a network request that needs you above the computers' timelines](../../assets/screenshots/home.jpg)
+
+**Home** shows what needs you, such as a network request or a push to review, and below it a timeline of each computer: its chats, terminals, browser sessions and previews branch off its line as they open and rejoin it as they close. **Earlier** lists what happened before. The sidebar lists, from the top:
+
+- the environment you are in, which switches to [another](../environments/);
+- **Search** (⌘K or Ctrl+K), which finds teammates, computers, threads, settings and actions;
+- **Teammates**, each with its threads, a terminal button and **+** for a new thread;
+- **Your computers**, the [computers](../sandboxes/) without a teammate;
+- **Environment**: **Computers**, [**Network**](../network/), [**Secrets**](../secrets/), [**Memory**](../memory/) and **Activity**, which lists what was decided and what happened;
+- **Settings**, the version, and the theme.
+
+![Search Studio with "ada" typed: the teammate, its tasks, memory, browser and settings, and a new thread](../../assets/screenshots/search.jpg)
+
+The bar at the top names where you are; each part of it opens a menu that switches teammate, computer or settings section. Alt+← and Alt+→ go back and forward through Studio's pages, and so do ⌘[ and ⌘] on a Mac.
+
 ## Prepare your first agent
 
-The guided setup adds the provider, creates a default teammate named Iris for it, and creates the first sandbox with Iris. To do the same by hand:
+The guided setup adds the provider, creates a default teammate named Iris for it, and gives Iris the first computer. To do the same by hand:
 
 1. In **Settings → AI providers**, sign in with a Claude Pro/Max or ChatGPT subscription, or add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
-2. In Teammates, create a teammate and choose its harness, provider, model, role, and optional working instructions (“soul”).
-3. Create a sandbox and select that teammate. Ownership is fixed when the sandbox is created.
-4. Open the teammate and write to it: the conversation runs the agent in its sandbox. To work beside it, open a **New shell** in the sandbox's terminal and start the agent there yourself, or press `T` in the [terminal UI](../tui/).
+2. Choose **+** next to **Teammates** in the sidebar. Give the teammate a name and role, and pick its provider, harness and default model. Its optional working instructions (“soul”) can come later.
+3. Open the teammate and choose **Give Iris a computer**, or pick the teammate in **New computer**. You can change a computer's teammate later, while it is stopped, on its **Details** tab.
+4. Write to the teammate in the box on its home. Each message starts a thread, which runs the agent on the computer named under the box. To work beside it, open a **New shell** (**+** in the terminal's tabs) and start the agent there yourself, or press `T` in the [terminal UI](../tui/).
 
 See [Teammates and providers](../teammates-providers/) for supported combinations, and [Network rules](../network/) for how the first outbound request is handled.
 

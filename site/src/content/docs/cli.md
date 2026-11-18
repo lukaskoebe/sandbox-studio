@@ -29,13 +29,13 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 | `studio start <sandbox>` | Starts a sandbox, or resumes it when it is suspended. |
 | `studio stop <sandbox>` | Stops a sandbox. Its disks stay. |
 | `studio suspend <sandbox>`, `studio resume <sandbox>` | Suspends a sandbox with its memory, and resumes it where it was. |
-| `studio create <name>` | Creates a sandbox and waits until it runs. `--teammate Finn` gives it an owner, `--template node@3` starts from a template, `--cpus` and `--memory` (in GiB) size it, and `--no-wait` returns once Studio has accepted it. |
+| `studio create <name>` | Creates a sandbox and waits until it runs. `--teammate Finn` gives it an owner, `--template node@3` starts from a template, `--cpus` and `--memory` (in GiB) size it, and `--no-wait` returns once Studio has accepted it. A template sets the resources, so `--cpus` and `--memory` don't go with `--template`. |
 | `studio fork <sandbox> <name>` | Forks a sandbox into a new one with a copy of its disks, and waits until it runs, unless `--no-wait`. |
 | `studio rm <sandbox>` | Deletes a sandbox and its disks. Asks for its name first. |
-| `studio shell <sandbox> [terminal]` | Opens the sandbox's main terminal in yours, or the one you name, such as an agent's (`claude`). `Ctrl-]` detaches; the terminal keeps running. When an approval of the sandbox arrives, the title says so and the bell rings, and `Ctrl-]` asks about it instead: `o` allows it once, `y` allows it, `n` denies it, and `enter` returns to the terminal. |
-| `studio ask <sandbox> <prompt>` | Asks the sandbox's teammate and prints the answer as it comes. |
+| `studio shell <sandbox> [terminal]` | Opens the sandbox's main terminal in yours, or the one you name, such as an agent's (`claude`). `Ctrl-]` detaches; the terminal keeps running. When an approval of the sandbox arrives, the title says so and the bell rings, and `Ctrl-]` asks about it instead: for a network request, `o` allows it once, `y` allows it and `n` denies it; other requests are answered in `studio tui` or the browser. `enter` returns to the terminal, and `q` detaches. |
+| `studio ask <sandbox> <prompt>` | Asks the sandbox's teammate and prints the answer as it comes. `--quiet` prints only the answer, without the tool calls on standard error. |
 | `studio approvals` | Lists what is waiting for you, in every environment. |
-| `studio approve <id>`, `studio deny <id>` | Decides an approval. |
+| `studio approve <id>`, `studio deny <id>` | Decides an approval. `--once` answers a network request without a rule, `--scope sandbox`, `teammate` or `environment` sets the rule's scope, and `--sandboxes` lets a browser request's rule cover the sandboxes too. |
 | `studio checkpoints <sandbox>` | Lists a sandbox's checkpoints. |
 | `studio checkpoint <sandbox> [name]` | Saves a checkpoint. Without a name, it is named after the time. |
 | `studio restore <sandbox> <checkpoint>` | Puts a sandbox back to a checkpoint. Asks first. Studio refuses it for now, because the current runtime cannot restore checkpoints. |
@@ -52,16 +52,16 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 | Command | Does |
 |---|---|
 | `studio` | Starts Studio, prints a one-time login link and, in a terminal, opens it in the browser; `-no-browser` leaves it printed. If Studio already runs with the same data directory, it opens that one instead and exits. |
-| `studio doctor` | Checks that this machine can run Studio and says how to fix what can't. Exits 1 if a check fails. |
+| `studio doctor` | Checks that this machine can run Studio and says how to fix what can't: virtualization (KVM, Hypervisor.framework or Windows Hypervisor Platform), the microsandbox runtime, the base image, the data directory, free disk space, the port, the SSH agent, the memory model, microsandbox's database, the sandbox VMs, leftover VMs and the sandboxes' storage. Exits 1 if a check fails. **Settings → Runtime** shows the same checks. |
 | `studio login-url` | Prints a fresh one-time login link for the running Studio. |
 | `studio tui` | Opens the [terminal UI](../tui/). |
 | `studio app` | Opens Studio in [a window of its own](../getting-started/#studio-in-a-window-of-its-own), starting Studio if it isn't running. Without the app or a display it opens the browser. |
-| `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. |
+| `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. **Shut down** under **Settings → General** does the same from the browser. |
 | `studio restart` | Stops the running Studio and starts this binary in its place. The installer runs it. Sandboxes keep running. |
-| `studio uninstall [-keep-data] [-keep-microsandbox] [-yes]` | Removes Studio, its data and its sandboxes, and microsandbox unless that has sandboxes of its own. It lists what goes and asks you to type `uninstall`. `-keep-data` keeps the data and sandboxes for installing again. |
+| `studio uninstall [-keep-data] [-keep-microsandbox] [-yes]` | Removes Studio, its data and its sandboxes, and microsandbox unless that has sandboxes of its own. It lists what goes and asks you to type `uninstall`. It also removes the start-at-login entry, the line in your SSH config and, on Linux, the launcher entry. `-keep-data` keeps the data and sandboxes for installing again, `-keep-microsandbox` keeps microsandbox and its images but not Studio's VMs, and `-yes` doesn't ask, for scripts. |
 | `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |
 | `studio ssh enable`, `disable`, `status` | Lets any SSH client reach the sandboxes as `<name>.studio`, or stops doing so. See [Connect over SSH](../sandboxes/#connect-over-ssh). Studio's SSH config runs `studio ssh-proxy`, which needs Studio running; you don't run it yourself. |
-| `studio restore-msb-db [-replace] [file]` | Rebuilds microsandbox's database from one Studio moved aside as damaged. Quit Studio and stop any sandbox VM still running first. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm). |
+| `studio restore-msb-db [-replace] [file]` | Rebuilds microsandbox's database from a copy: one of Studio's own, kept every few minutes while it changes, or one a repair moved aside. Without a file it lists what each copy knows and picks the one that knows the most of your sandboxes. Quit Studio and stop any sandbox VM still running first; if the database in place knows sandboxes, it needs `-replace`. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm). |
 | `studio version` | Prints Studio's version and its base image. |
 
 ## Asking a teammate
@@ -97,6 +97,23 @@ studio approve k2j4h6g8f0d1s --sandboxes  # a browser request: the sandboxes may
 A browser request's rule covers only the browsers, as on the web. `--sandboxes` makes it
 cover the sandboxes' own connections too.
 
+## Inside a computer
+
+On a computer, the `studio` command runs Studio's tools for its teammate. Agents use it, and you can too, in a terminal or over SSH:
+
+| Command | What it does |
+| --- | --- |
+| `studio info` | Says which computer this is, its teammate, the ports it serves with their preview links, and its network level and rules. |
+| `studio memory search`, `get`, `page`, `remember`, `share`, `correct`, `forget` | Searches and changes the teammate's [memory](../memory/); `~/memory` holds it as files. |
+| `studio task list`, `create`, `status`, `note` | Reads and changes the teammate's tasks. |
+| `studio git pushes`, `git repos` | Lists the computer's pushes and what became of them, and the forges' repositories. |
+| `studio pr list`, `read`, `status`, `create`, `review`, `review-status`, `checks`, `comment` | Works with pull requests; see [Git review](../git-review/#pull-requests-on-the-computer). `~/forge` holds them as files, and `studio forge sync` writes it again. |
+| `studio browser …` | Drives the teammate's [browser](../browser/); `studio browser --help` lists its commands. |
+| `studio wait <approval>` | Waits for your answer to something that needs it, and says what became of it. |
+| `studio call <tool> '<json>'` | Calls any of Studio's tools by name. |
+
+Flags come from each tool's arguments, and `--<flag>-file` reads one from a file. `--json` prints JSON, `--wait` waits for an approval instead of returning, and `-o` writes a screenshot or other output to a file. A pull request command takes the forge, repository and branch from the checkout it runs in. The command exits 0 when done, 1 when refused or failed, 2 for a wrong command line, and 75 when it waits for your approval; `studio pr checks` exits 8 while a check runs.
+
 ## Environments
 
 Commands work in the first environment, as the browser opens. Pick another with
@@ -104,7 +121,7 @@ Commands work in the first environment, as the browser opens. Pick another with
 
 ## Scripts
 
-Every command takes `--json` and prints Studio's own objects. The exit status is 0 when the
+Every command but `completion` takes `--json` and prints Studio's own objects. The exit status is 0 when the
 command did what it says, 1 when it failed (an `ask` whose turn ended in an error included),
 2 for a wrong command line, and 130 after Ctrl-C.
 
@@ -119,7 +136,7 @@ source <(studio completion zsh)      # in ~/.zshrc
 studio completion fish | source      # in ~/.config/fish/config.fish
 ```
 
-Completion offers commands, flags, sandbox names, environments and approval IDs. The names come
+Completion offers commands, flags, sandbox names, teammate names after `--teammate`, environments and approval IDs. The names come
 from the running Studio; without one, you get commands and flags.
 
 ## Another address

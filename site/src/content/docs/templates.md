@@ -1,15 +1,17 @@
 ---
 title: Templates and builds
-description: Build a reusable sandbox root filesystem from a small YAML specification.
+description: Build a reusable root filesystem for computers from a small YAML specification.
 ---
 
-A template describes the software in a sandbox's root filesystem. Its YAML can set CPU, memory, workspace, and Docker sizes; install Node.js, Python, Go, or Nix; install apt packages; and run a setup script.
+A template describes the software in a computer's root filesystem. Its YAML can set CPUs, memory, and the size of the workspace, Docker and home disks; install Node.js, Python, Go, or Nix; install apt packages; and run a setup script. Templates are under **Settings → Templates**, and belong to the environment you are in.
+
+A lighter way to start every new computer from the same setup is a [base](../sandboxes/#a-fresh-computer-per-task): a computer you prepared by hand, which new computers copy.
 
 ![The Templates settings page with the template build dialog](../../assets/screenshots/build-dialog.jpg)
 
 ## Example
 
-New builds start from this Web app template. **Insert example** in the editor puts it back.
+New builds start from this **Web app** template. **Insert example** in the editor puts it back, or inserts **Studio dev**, the template Studio's own development uses.
 
 ```yaml
 resources:
@@ -34,12 +36,12 @@ Quote tool versions. The currently supported tools are `go`, `node`, `nix`, and 
 
 As you type, the editor highlights the YAML, suggests keys, tool names, and size units, and marks each problem at its line and column. These checks use the same parser as the build and create nothing.
 
-After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on **Settings → Templates**. A successful template is cached for later builds. **A ready build does not start a sandbox**; choose **Create sandbox** separately when you want to use it.
+After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on **Settings → Templates**. A successful template is cached for later builds. **A ready build does not start a computer**; choose **Create sandbox** separately when you want to use it.
 
-**Download YAML** saves the draft or the source submitted for a build. It does not export a built image, secrets, or sandbox disks.
+**Download YAML** saves the draft or the source submitted for a build. It does not export a built image, secrets, or a computer's disks.
 
-## Create a sandbox from a template
+## Create a computer from a template
 
-On **Settings → Templates**, open a ready build and choose **Create sandbox** on its sheet or its page. Studio boots a new sandbox using the template's root filesystem. The new sandbox has a fresh, empty `/workspace` and Docker disk, and a home directory seeded from the template; it does not inherit a previous sandbox's files or containers.
+On **Settings → Templates**, open a ready build and choose **Create sandbox** on its sheet or its page. Studio boots a new computer using the template's root filesystem. The new computer has a fresh, empty `/workspace` and Docker disk, and a home directory seeded from the template; it does not inherit another computer's files or containers.
 
-Template builds and ready templates belong to one environment. A ready template can also be used when rebasing a sandbox. Rebase carries over `/workspace`, the home folder and the tools from `mise use`, but drops terminal sessions, and Docker's data unless you ask to keep it. A template built on an older base image than this Studio's has **Rebuild on the current base**, which builds the same spec again as the template's next version. See [Sandboxes](../sandboxes/).
+Template builds and ready templates belong to one environment. A ready template can also be used when rebasing a computer: choose **Rebase…** under **Maintenance** on its **Details** tab. Rebase carries over `/workspace`, the home folder and the tools from `mise use`, but drops terminal sessions, and Docker's data unless you ask to keep it. A template built on an older base image than this Studio's has **Rebuild on the current base**, which builds the same spec again as the template's next version. See [Computers](../sandboxes/#rebase-onto-a-newer-base).
