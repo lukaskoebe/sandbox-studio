@@ -183,23 +183,25 @@ func Listen(addr string, upstreams []string, log *slog.Logger) (*Server, error) 
 }
 
 // listenPair binds UDP and TCP on one port, since clients reach the resolver at one ip:port
-// over both transports. With port 0 the kernel picks the UDP port, which can already be busy
-// for TCP, so another port is tried.
+// over both transports. With port 0 the kernel picks the TCP port, which can already be busy
+// for UDP, so another port is tried. TCP picks first because Windows keeps blocks of TCP ports
+// out of use (its excluded port ranges, for Hyper-V and WinNAT) and hands out UDP ports one
+// after another: a UDP port it picked was refused for TCP ten times in a row.
 func listenPair(addr string) (net.PacketConn, net.Listener, error) {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, nil, err
 	}
 	for attempt := 1; ; attempt++ {
-		pc, err := net.ListenPacket("udp", addr)
+		ln, err := net.Listen("tcp", addr)
 		if err != nil {
 			return nil, nil, err
 		}
-		ln, err := net.Listen("tcp", pc.LocalAddr().String())
+		pc, err := net.ListenPacket("udp", ln.Addr().String())
 		if err == nil {
 			return pc, ln, nil
 		}
-		pc.Close()
+		ln.Close()
 		if port != "0" || attempt == 10 {
 			return nil, nil, err
 		}

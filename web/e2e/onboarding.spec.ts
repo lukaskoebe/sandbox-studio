@@ -135,13 +135,17 @@ test("a feature's tip shows the first time it happens, once, and Settings shows 
     )
     .toBe(true)
   await page.reload()
-  await expect(page.getByRole("button", { name: "Add secret" })).toBeVisible()
+  // The header's button; an environment without secrets has another in its empty page.
+  await expect(
+    page.getByRole("button", { name: "Add secret" }).first()
+  ).toBeVisible()
   await expect(tip).toBeHidden()
 
-  // Settings → General shows them again.
+  // Settings → General shows them again. The request is answered first: with every tip unseen
+  // again, its card over the page would carry the network tip, which comes first.
+  await api.dismissApprovals()
   await page.goto(`/e/${env}/settings`)
   await page.getByRole("button", { name: "Show tips again" }).click()
   await page.goto(`/e/${env}/secrets`)
   await expect(tip).toHaveAttribute("data-feature", "secret")
-  await api.dismissApprovals()
 })
