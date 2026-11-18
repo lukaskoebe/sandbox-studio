@@ -17,7 +17,7 @@ import (
 // matches the web stack (docs/approvals.md), which the server's second-resolution times approximate.
 const groupWindow = 3 * time.Second
 
-// card is one entry of the approvals screen: an approval, or the network requests of one sandbox
+// card is one request of Home's list: an approval, or the network requests of one sandbox
 // (or one browser page) that came together, which decide as one.
 type card struct {
 	approvals []api.ApprovalView
@@ -160,7 +160,7 @@ func approvalCards(list []api.ApprovalView, split map[string]bool) []card {
 	return cards
 }
 
-// cards are the approvals screen's cards, from the pending approvals.
+// cards are the requests of Home's list, from the pending approvals.
 func (m *app) cards() []card {
 	return approvalCards(m.approvals, m.split)
 }
@@ -336,55 +336,12 @@ func apiStatus(err error) int {
 	return 0
 }
 
-// approvalsKey answers the approvals screen: the cursor moves between cards, and the keys decide
-// the card under it.
-func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	cards := m.cards()
-	m.approvalCursor = min(m.approvalCursor, max(len(cards)-1, 0))
-	if len(cards) == 0 {
-		switch {
-		case key.Matches(msg, keyBack):
-			m.screen = m.back
-		case key.Matches(msg, keyGit):
-			return m, m.openGit()
-		case key.Matches(msg, keyHelp):
-			m.openHelp()
-		}
-		return m, nil
-	}
-	c := cards[m.approvalCursor]
+// cardKey decides the request c with its keys: a network request's choices and answers, a
+// group's, or another kind's as kindKey says.
+func (m *app) cardKey(msg tea.KeyPressMsg, c card) tea.Cmd {
 	a := c.first()
 	ch := m.choiceOf(c)
-	if k, ok := m.buttonKey(msg, cardOwner(c), cardControls(c, *ch), len(cardToggles(c))); ok {
-		if k == "" {
-			return m, nil
-		}
-		msg = pressOf(k) // the focused control's key
-	}
 	switch {
-	case key.Matches(msg, keyBack) && m.resuming != nil:
-		r := m.resuming
-		m.resuming = nil
-		m.screen = m.back
-		if r.pane && m.screen == screenHome {
-			m.pane.focus = true
-		}
-	case key.Matches(msg, keyBack):
-		m.screen = m.back
-	case key.Matches(msg, keyHelp):
-		m.openHelp()
-	case key.Matches(msg, keyGit):
-		return m, m.openGit()
-	case key.Matches(msg, keyUp):
-		m.approvalCursor = max(m.approvalCursor-1, 0)
-	case key.Matches(msg, keyDown):
-		m.approvalCursor = min(m.approvalCursor+1, len(cards)-1)
-	case isGit(a) && key.Matches(msg, keyOpen):
-		m.openPager(a)
-	case isGit(a):
-		if key.Matches(msg, keyAllow, keyDeny, keyIgnore) {
-			m.setNotice("Review it first: enter opens the diff.", false)
-		}
 	case !isNetwork(a) || c.group:
 		return m.otherCardKey(msg, c)
 	case key.Matches(msg, keyPattern):
@@ -394,48 +351,47 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyPort):
 		ch.anyPort = !ch.anyPort
 	case key.Matches(msg, keyAllow):
-		return m, m.decide(c, decisionFor(a, *ch, "allow"), "Allowed", "")
+		return m.decide(c, decisionFor(a, *ch, "allow"), "Allowed", "")
 	case key.Matches(msg, keyDeny):
-		return m, m.decide(c, decisionFor(a, *ch, "deny"), "Denied", "")
+		return m.decide(c, decisionFor(a, *ch, "deny"), "Denied", "")
 	case key.Matches(msg, keyHour):
 		d := decisionFor(a, *ch, "allow")
 		expires := time.Now().Add(time.Hour)
 		d.ExpiresAt = &expires
-		return m, m.decide(c, d, "Allowed", hostOf(a)+" for 1 hour")
+		return m.decide(c, d, "Allowed", hostOf(a)+" for 1 hour")
 	case key.Matches(msg, keyOnce):
-		return m, m.decide(c, decisionFor(a, *ch, "allow_once"), "Allowed", hostOf(a)+" once")
+		return m.decide(c, decisionFor(a, *ch, "allow_once"), "Allowed", hostOf(a)+" once")
 	case key.Matches(msg, keyOnceDeny):
-		return m, m.decide(c, decisionFor(a, *ch, "deny_once"), "Denied", hostOf(a)+" once")
+		return m.decide(c, decisionFor(a, *ch, "deny_once"), "Denied", hostOf(a)+" once")
 	case key.Matches(msg, keyIgnore):
-		return m, m.decide(c, decisionFor(a, *ch, "dismiss"), "Ignored", "")
+		return m.decide(c, decisionFor(a, *ch, "dismiss"), "Ignored", "")
 	case key.Matches(msg, keySite) && a.Network != nil && a.Network.Navigation && a.Network.Site != "":
-		return m, m.decide(c, decisionFor(a, *ch, "allow_site"), "Allowed", "site "+a.Network.Site+" for this browser session")
+		return m.decide(c, decisionFor(a, *ch, "allow_site"), "Allowed", "site "+a.Network.Site+" for this browser session")
 	}
-	return m, nil
+	return nil
 }
 
 // otherCardKey answers the keys of a group card, or of a card of another kind: the group decides
 // all its hosts or splits into single cards, and the other kinds decide as kindKey says.
-func (m *app) otherCardKey(msg tea.KeyPressMsg, c card) (tea.Model, tea.Cmd) {
+func (m *app) otherCardKey(msg tea.KeyPressMsg, c card) tea.Cmd {
 	a := c.first()
 	if !c.group {
-		return m, m.kindKey(msg, c)
+		return m.kindKey(msg, c)
 	}
 	ch := m.choiceOf(c)
 	switch {
 	case key.Matches(msg, keyScope):
 		ch.cycleScope(a)
 	case key.Matches(msg, keyAllowAll):
-		return m, m.decide(c, decisionFor(a, *ch, "allow"), "Allowed", "")
+		return m.decide(c, decisionFor(a, *ch, "allow"), "Allowed", "")
 	case key.Matches(msg, keyDenyAll):
-		return m, m.decide(c, decisionFor(a, *ch, "deny"), "Denied", "")
+		return m.decide(c, decisionFor(a, *ch, "deny"), "Denied", "")
 	case key.Matches(msg, keySplit):
 		for _, x := range c.approvals {
 			m.split[x.ID] = true
 		}
-		m.approvalCursor = 0
 	}
-	return m, nil
+	return nil
 }
 
 // cycleScope steps the card's scope, or a browser request's reach.
@@ -471,70 +427,6 @@ func (m *app) approvalURL(a api.ApprovalView) string {
 		return m.browserURL(env + "/chats/" + a.ChatPermission.ChatID)
 	}
 	return m.browserURL(env)
-}
-
-// openApprovals shows the approvals screen, from wherever the user is.
-func (m *app) openApprovals() {
-	if m.screen != screenApprovals {
-		m.back = m.screen
-	}
-	m.screen = screenApprovals
-	m.approvalCursor = 0
-}
-
-// approvalsBody lists the cards, the cursor's card in view.
-func (m *app) approvalsBody(w, h int) []string {
-	cards := m.cards()
-	if len(cards) == 0 {
-		return []string{
-			styleDim.Render("Nothing waits for you."),
-			"",
-			styleDim.Render("Requests from computers show up here as they come in."),
-		}
-	}
-	lines := []string{styleBold.Render("Requests") + styleDim.Render(" from every environment, newest first"), ""}
-	cursorAt, cursorLen := len(lines), 0
-	starts := make([]int, 0, len(cards)+1)
-	var keys []keyHit // the cursor's card's keycaps, on the lines of the list
-	for i, c := range cards {
-		var block []string
-		if m.look.plain {
-			block = m.cardLines(c, i == m.approvalCursor, w)
-		} else {
-			var caps []keyHit
-			block, caps = m.visualCard(c, i == m.approvalCursor, w)
-			hidden := len(block) - m.sliding(c, len(block))
-			block = block[hidden:]
-			for _, k := range caps {
-				if k.y >= hidden {
-					k.y += len(lines) - hidden
-					keys = append(keys, k)
-				}
-			}
-		}
-		if i == m.approvalCursor {
-			cursorAt, cursorLen = len(lines), len(block)
-		}
-		starts = append(starts, len(lines))
-		lines = append(lines, block...)
-	}
-	starts = append(starts, len(lines))
-	// Keep the cursor's card in view: the list scrolls just far enough to show it.
-	offset := 0
-	if cursorAt+cursorLen > h {
-		offset = min(cursorAt+cursorLen-h, cursorAt)
-	}
-	for i := range cards {
-		for line := max(starts[i], offset); line < starts[i+1] && line-offset < h; line++ {
-			m.hitRow(line-offset, 0, w, rowCard, i)
-		}
-	}
-	for _, k := range keys {
-		if line := k.y - offset; line >= 0 && line < h {
-			m.hitKeys(bodyTop+line, k.x0, []keySpan{{x1: k.x1 - k.x0, key: k.key}})
-		}
-	}
-	return lines[offset:]
 }
 
 // cardLines is one card: its kind, source and age, what it asks, and its choices. A card is

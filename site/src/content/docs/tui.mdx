@@ -5,17 +5,18 @@ description: Work with your teammates' threads, create, fork and check computers
 
 import TerminalScreen from '../../components/TerminalScreen.astro'
 // The TUI's own golden test draws this screen, so it shows the TUI as it is.
-import home from '../../../../internal/tui/testdata/visual_home.golden?raw'
+import home from '../../../../internal/tui/testdata/visual_inbox.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. Its
-list is the browser's sidebar: your teammates with their threads, your computers, and the
-environment's places. It creates, forks and suspends computers, and saves and restores their
-checkpoints. It answers requests and reviews git pushes, works in a thread with a teammate,
-follows the network Activity, and shows a computer's terminals and agents live, beside the
-list, or in full screen. Everything else stays in the browser, and the TUI prints the address
-of the page where you need it.
+Home is one list of what waits for you, what works and what is quiet, and each request is
+answered with a key from its row. Beside it, its sidebar is the browser's: your teammates with
+their threads, your computers, and the environment's places. It creates, forks and suspends
+computers, and saves and restores their checkpoints. It reviews git pushes, works in a thread
+with a teammate, follows the network Activity, and shows a computer's terminals and agents
+live, beside the list, or in full screen. Everything else stays in the browser, and the TUI
+prints the address of the page where you need it.
 
-<TerminalScreen ansi={home} label="The TUI's Home: two teammates, one with a request waiting, your computer, and the environment" />
+<TerminalScreen ansi={home} label="The TUI's Home: four requests waiting, a push, a group of hosts, an agent's permission and a host, then the quiet threads, a scheduled run and your computer, with the permission under the cursor read in full" />
 
 ## Start it
 
@@ -35,14 +36,26 @@ it there.
 The keys are the same on every screen, and they can't be changed. The key bar at the bottom
 shows the ones that apply where you are, and `?` lists them all.
 
-| Key | On Home's list |
+| Key | On Home |
+|---|---|
+| `↑` `↓` or `j` `k` | move the cursor over the rows |
+| `tab` | the next request |
+| `y` `n` and the others on the key bar | answer the request under the cursor, as [its card](#requests) does |
+| `enter` | open the row: a push's review, a thread, a computer |
+| `pgup` `pgdn` | scroll the reading pane |
+| `u` | undo the network decision you just made, for a minute |
+| `\` | give the keys to [the sidebar](#the-sidebar) |
+| `n` | create a new computer |
+| `l` `,` `g` `e` | Activity, Settings, Git, switch environment |
+| `?` | help |
+| `q` | quit |
+
+| Key | In the sidebar |
 |---|---|
 | `↑` `↓` or `j` `k` | move the cursor, over Home, teammates and their threads, your computers and the places |
 | `1` to `9` | go into that thread or terminal |
-| `enter` | go into the thread or terminal under the cursor; on a computer, open it: its facts, its open ports, and the same keys; on a place, open it |
-| `tab` | the next thread that waits for you, then [what waits for you](#what-waits-for-you); there, the next card |
-| `y` `a` `n` | on Home's row: allow, always or deny the card under the cursor |
-| `u` | undo the network decision you just made, for a minute |
+| `enter` | go into the thread or terminal under the cursor; on a computer, open it: its facts, its open ports, and the same keys; on a place, open it; on Home, back to Home's list |
+| `tab` | the next thread that waits for you, then Home |
 | `→` `←` | on a teammate: show or hide its older threads |
 | `+` | on a teammate: another computer for it |
 | `alt+z` | the pane in full screen, and back (from 100 columns) |
@@ -59,13 +72,12 @@ shows the ones that apply where you are, and `?` lists them all.
 | `d` | delete the computer; the TUI asks first |
 | `c` | the newest thread with the computer's teammate, or a new one |
 | `C` | a new thread |
-| `a` | requests, from every environment |
 | `l` | Activity: connections and every decision |
 | `,` | Settings: what each section is set to |
 | `g` | Git: the pushes and pull requests waiting for your review, then the decided ones |
 | `e` | switch environment |
 | `/` | filter by name, teammate or template |
-| `esc` | back to Home's row |
+| `\` or `esc` | back to Home's list |
 | `?` | help |
 | `q` | quit |
 
@@ -78,10 +90,36 @@ When the TUI asks before it deletes a computer or restores a checkpoint, its cho
 line at the bottom, `y Delete  [n Keep]`. Keep is chosen, so `enter` keeps; press `y`, or `←`
 and then `enter`, to go ahead.
 
-## Home's list
+## Home
 
-The list has the sections of the browser's sidebar. It starts on **Home**, which says how many
-things wait for you, or that all is clear. Then come:
+Home lists everything in three sections:
+
+- **Waiting for you**: every request of every environment, newest first: network requests,
+  pushes to review, agents' permissions, memory and browser requests. A row says who asked,
+  what for, where, and how long ago.
+- **Working**: the threads at work.
+- **Quiet**: the threads that ended in the last day, each teammate's next scheduled run, and
+  your own computers.
+
+Under them, **Earlier today** lists what you decided today.
+
+The cursor starts on the top row, so the first request to arrive is under it, and after you
+answer one it is on the next. `tab` goes to the next request. The keys on the row answer it,
+as [its card](#requests) does: `y` allows, `n` denies, and on an agent's permission `a` allows
+always. The key bar shows them. A push asks once more when you press `y`, because you haven't
+read its diff: `y` again pushes it, any other key keeps it. `enter` opens the row: a push's
+review, a permission's thread, a computer. A network decision that made a rule can be taken
+back with `u` for a minute afterwards.
+
+The reading pane shows the row under the cursor in full: a request's card with its choices, a
+push's commits and diff, a thread's transcript or a computer's dashboard. It is under the list
+in a narrow terminal and beside it in a wide one; `pgup` and `pgdn` scroll it.
+
+## The sidebar
+
+The sidebar has the sections of the browser's sidebar. From 100 columns it is beside Home; in a
+narrower terminal `\` shows it instead of Home, and `\` or `esc` goes back. It starts on
+**Home**, which says how many things wait for you, or that all is clear. Then come:
 
 - **Teammates**, each with its role, a spinner while it works and a count of what waits on
   it, with [its threads](#threads) under it. **+ New teammate** prints the address of the
@@ -95,15 +133,6 @@ things wait for you, or that all is clear. Then come:
 On **Computers**, `enter` lists every computer with its owner, template, requests and status,
 and the keys of a computer work on the one under the cursor. From 100 columns its dashboard is
 beside the list. `esc` goes back to Home.
-
-### What waits for you
-
-On Home's row, the pane (or the whole screen, in a narrow terminal) lists what waits for you
-as cards: network requests, pushes to review, agents' permissions, memory and browser
-requests. `tab` moves to the next card, and the keys on the card decide it: `y` allows, `n`
-denies, and on an agent's permission `a` allows always. `enter` opens a push's review. A
-network decision that made a rule can be taken back with `u` for a minute afterwards. Below
-the cards are the threads and agents working now and what was decided earlier today.
 
 ### A teammate
 
@@ -120,9 +149,10 @@ last day, and the one you have open; `+ n older` (or `→` on the teammate) show
 `←` hides them again. A thread a teammate started on someone else's computer is listed under
 the teammate too.
 
-The first nine rows are numbered. Press a number and you're in: a terminal opens, and a thread
+The first nine rows of the sidebar are numbered. Press a number and you're in: a terminal opens, and a thread
 opens ready for your prompt. `Ctrl-]` leaves a terminal, and `esc` a thread, back to the list
-with the cursor where you were. To switch to another, press `Ctrl-]` and its number.
+with the cursor where you were. To switch to another, press `Ctrl-]` and its number. In a
+narrow terminal, the sidebar looks like this:
 
 ```
 Sandbox Studio · Default                                     ▲ 4 waiting for you
@@ -162,8 +192,8 @@ ones.
 
 ## The pane
 
-In a terminal 100 columns wide or more, the list becomes a sidebar, and the pane beside it
-shows what the cursor is on, live:
+In a terminal 100 columns wide or more, the sidebar is beside Home. While the sidebar has the
+keys, the pane beside it shows what its cursor is on, live:
 
 - on an agent or a terminal, its screen, as it runs;
 - on a thread, its transcript;
@@ -196,8 +226,8 @@ choices as buttons: **Allow once**, **Allow**, **Deny** and **More…** for a ne
 - While you type in the pane, your keys go to the agent, so the box says `alt+a answers it`.
   `alt+a` puts you on its buttons; once you've answered, or pressed `esc`, your keys go back
   to the agent.
-- `a` (**More…**) opens the request's card, where you choose the host pattern and the scope.
-  Once you've decided, you're back where you were.
+- `a` (**More…**) takes you to the request on Home, where you choose the host pattern and the
+  scope. Once you've decided, you're back where you were.
 
 A terminal in full screen has no room for a box. When a request arrives while you're in one,
 the terminal's title says what waits and the bell rings. `Ctrl-]` then takes you straight to
@@ -242,8 +272,8 @@ hours.
 
 ## Requests
 
-Requests from one computer that come in close together are one card, as they are on the web.
-A card lets you:
+Each request is a row on Home, and its card is in the reading pane. Requests from one computer
+that come in close together are one row and one card, as they are on the web. A card lets you:
 
 - **Allow or deny** a network request. `y` and `n` make a rule for the host pattern and the
   scope you chose; `o` and `O` answer only this connection, with no rule; `1` allows it for
@@ -260,7 +290,7 @@ A card lets you:
 - **Review a git push:** `enter` opens the push in a pager: the repository, branch and change,
   the commits, and the diff with added lines in green and removed ones in red. Scroll with the
   arrows, `pgup`/`pgdn` (or `b`/`space`), `g` and `G`. Then `y` approves and pushes it, `n`
-  rejects it, and `i` ignores it. A push that rewrites its branch lists the commits it drops,
+  rejects it, and `i` ignores it. From its row on Home, `y` asks once more before it pushes. A push that rewrites its branch lists the commits it drops,
   and only `F` force-pushes it. A pull request shows its title and description, and `y`
   opens it. `g` lists every push and pull request, the ones waiting for you first and then the
   decided ones with what came of them; `enter` opens one.
@@ -324,8 +354,8 @@ choices are listed under it.
   print the thread's address.
 
 When a request waits on the thread's computer, such as a host one of the agent's tools wants,
-it shows as a box under the title. `alt+a` opens it, and once you've answered you're back in
-the thread.
+it shows as a box under the title. `alt+a` takes you to it on Home, and once you've answered
+you're back in the thread.
 
 ## Activity
 
@@ -341,14 +371,15 @@ browser; `r` prints the address.
 ## Look, wide terminals and the mouse
 
 On a terminal with colors, the TUI uses the web's colors. Each area has its own hue: network,
-git, browser, memory and threads. Status dots are colored, and requests show as cards. From 81
+git, browser, memory and threads. Status dots are colored, and a request in the reading pane is a card. From 81
 columns, the header becomes tabs: Home, Activity and Settings.
 
 Wider terminals use the extra room:
 
-- From 100 columns, Home is a sidebar and [the pane](#the-pane), with what waits for you beside
-  it on Home's row, and on a computer's row the dashboard, which
-  charts its CPU and memory. When the computer's teammate's browser runs, the dashboard ends
+- From 100 columns, the sidebar is beside Home, or beside [the pane](#the-pane) when it has
+  the keys; on a computer's row the pane is the dashboard, which charts its CPU and memory.
+  When Home has 90 columns or more to itself, its reading pane is beside the list instead of
+  under it. When the computer's teammate's browser runs, the dashboard ends
   with the page it is on and a small picture of it, on terminals with 256 colors or more.
 - From 120 columns, the git review lists the changed files, and `[` and `]` jump between them.
 - From 160 columns, the diff is side by side, and `v` toggles it.

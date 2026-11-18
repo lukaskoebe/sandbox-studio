@@ -1,23 +1,23 @@
 Sandbox Studio · Default                                     ▲ 3 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
-Waiting for you · 3                                                tab next card
-────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────────────────────────────────────────────────────────╮
-┃ ± GIT PUSH   Push 2 commits to feature/lo…  api-refactor · Default · 30s ago │
-┃  enter  Review the diff                                                      │
-╰──────────────────────────────────────────────────────────────────────────────╯
-▲ ⇅ api-refactor wants 3 hosts
-▲ ⇅ blub wants registry.npmjs.org:443
+ WAITING FOR YOU · 3
+▌± Finn  Push 2 commits to feature/login on GitHub/acme/web   api-refactor  30s 
+ ⇅ Finn  api-refactor wants 3 hosts                            pypi.org +2   1m 
+ ⇅ Iris  blub wants registry.npmjs.org:443                     *.npmjs.org  10m 
 
- TEAMMATES
-  Iris frontend                                                              ▲ 1
-  1 ▲ claude                                           in the terminal · waiting
-  2 ▲ Fix the login form                                        thread · waiting
-  3 ◷ Update the deploy notes                                 scheduled · 5h ago
-      + 4 older
-  4   main                                                   terminal · attached
-  Finn                                                                       ▲ 2
-  5 ▲ codex                                            in the terminal · waiting
-  6 ▲ Port the parser to go                                     thread · waiting
+ QUIET
+ ◷ Iris  Update the deploy notes                                 docs-site   5h 
+ ◐ demo  your computer · booting                                      base      
 ────────────────────────────────────────────────────────────────────────────────
-tab next card  enter review  ↓/j down  1-9 jump in  , settings  n new …
+± GIT PUSH  Push 2 commits to feature/login on GitHub/acme/web
+2 files  +7 −1  █████████████▒▒
+
+  Repository GitHub/acme/web
+  Computer   api-refactor
+  Branch     feature/login · new branch
+  Change     ∅ → a4c2f0d · 2 files +7 −1
+
+Nothing reaches the forge until you approve; the agent sees a rejection on
+its next fetch.
+────────────────────────────────────────────────────────────────────────────────
+y approve and push  r request changes  n reject  enter review  tab next …

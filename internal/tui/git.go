@@ -104,8 +104,6 @@ func (m *app) gitKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyOpen) && g.cursor < len(g.list):
 		m.openPager(g.list[g.cursor])
 		m.pager.back = screenGit
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	case key.Matches(msg, keyActivity):
 		return m, m.openActivity("")
 	}

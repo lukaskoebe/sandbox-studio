@@ -36,7 +36,6 @@ var (
 	keyYes       = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "delete"))
 	keyNo        = key.NewBinding(key.WithKeys("n", "esc"), key.WithHelp("n", "keep"))
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
-	keyApprovals = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "requests"))
 	keyTerminal  = key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "terminal"))
 	keyActivity  = key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "activity"))
 	keyAllow     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow"))
@@ -80,8 +79,6 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.detailKey(msg)
 	case screenEnvs:
 		return m.envsKey(msg)
-	case screenApprovals:
-		return m.approvalsKey(msg)
 	case screenChat:
 		return m.chatKey(msg)
 	case screenActivity:
@@ -109,14 +106,14 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.inboxKeys() {
+		return m.inboxKey(msg)
+	}
 	if cmd, ok := m.bannerKey(msg); ok {
 		return m, cmd
 	}
 	if key.Matches(msg, keyUndo) && m.undoable() != nil {
 		return m, m.undo()
-	}
-	if cmd, ok := m.needsKey(msg); ok {
-		return m, cmd
 	}
 	if cmd, ok := m.mateKey(msg); ok {
 		return m, cmd
@@ -137,6 +134,10 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.nextWaiting()
 	case key.Matches(msg, keyZoom) && inPane:
 		m.pane.zoom = !m.pane.zoom
+	case key.Matches(msg, keyToList):
+		m.goHome() // the list of Home's rows takes the keys
+	case key.Matches(msg, keyOpen) && m.at == atHome:
+		m.inbox.sidebar = false
 	case key.Matches(msg, keyOpen) && inPane:
 		return m, m.focusPane()
 	case key.Matches(msg, keyOpen) && m.at == atPlace:
@@ -148,7 +149,7 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.enterSession()
 		}
 		if m.selected() != nil {
-			m.screen, m.detailBack = screenDetail, screenHome
+			m.screen, m.detailBack, m.detailHome = screenDetail, screenHome, nil
 		}
 	case key.Matches(msg, keyNew):
 		if m.env.ID != "" {
@@ -174,8 +175,6 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openEnvs()
 	case key.Matches(msg, keyFilter):
 		m.startFilter()
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	case key.Matches(msg, keyGit):
 		return m, m.openGit()
 	case key.Matches(msg, keyTerminal):
@@ -198,7 +197,7 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keyBack):
-		m.screen = m.detailBack
+		m.leaveDetail()
 	case key.Matches(msg, keyLifecycle):
 		return m, m.toggle(m.selected())
 	case key.Matches(msg, keySuspend):
@@ -219,8 +218,6 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if sb := m.selected(); sb != nil {
 			return m, m.openActivity(sb.Name)
 		}
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	case key.Matches(msg, keyGit):
 		return m, m.openGit()
 	case key.Matches(msg, keyTerminal):
@@ -368,7 +365,7 @@ func (m *app) openEnvs() {
 
 // openHelp lists the keys of the screen on show. Any key returns to it.
 func (m *app) openHelp() {
-	m.helpBack = m.screen
+	m.helpBack, m.helpInbox = m.screen, m.inboxKeys()
 	m.screen = screenHelp
 }
 
@@ -403,8 +400,6 @@ func (m *app) bindings() []key.Binding {
 		return []key.Binding{keyUp, keyChoose, keyCancel}
 	case screenHelp:
 		return []key.Binding{keyBack}
-	case screenApprovals:
-		return m.approvalBindings()
 	case screenChat:
 		return m.chatBindings()
 	case screenActivity, screenEntry:
@@ -423,11 +418,14 @@ func (m *app) bindings() []key.Binding {
 	if m.paneFocused() {
 		return m.paneBindings()
 	}
+	if m.inboxKeys() {
+		return m.inboxBindings()
+	}
 	if b := m.bannerBindings(); b != nil {
 		return b
 	}
 	if m.at == atHome {
-		return m.needsBindings()
+		return []key.Binding{keyOpen, keyUp, keyNumber, keyWaiting, keyToList, keyHelp, keyQuit, keySettings, keyActivity, keyEnv}
 	}
 	if m.at == atMate {
 		return m.mateBindings()
@@ -442,12 +440,12 @@ func (m *app) bindings() []key.Binding {
 		} else if waiting {
 			bindings = append(bindings, keyReviewIt)
 		}
-		return append(bindings, keyApprovals, keyHelp, keyQuit, keyZoom, keyAgent, keyChatNew)
+		return append(bindings, keyToList, keyHelp, keyQuit, keyZoom, keyAgent, keyChatNew)
 	}
 	if _, ok := m.selectedSession(); ok {
-		return []key.Binding{keyEnter, keyNumber, keyWaiting, keyApprovals, keyHelp, keyQuit, keyAgent, keyChatNew}
+		return []key.Binding{keyEnter, keyNumber, keyWaiting, keyToList, keyHelp, keyQuit, keyAgent, keyChatNew}
 	}
-	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyApprovals, keyTerminal, keyChat, keyHelp, keyQuit}
+	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyToList, keyTerminal, keyChat, keyHelp, keyQuit}
 }
 
 // detailBindings are the keys the key bar shows on a sandbox's detail: suspend only while it runs.
@@ -458,22 +456,4 @@ func (m *app) detailBindings() []key.Binding {
 		bindings = append(bindings, keySuspend)
 	}
 	return append(bindings, keyCheckpoints, keyFork)
-}
-
-// approvalBindings are the keys the key bar shows for the approvals card under the cursor.
-func (m *app) approvalBindings() []key.Binding {
-	cards := m.cards()
-	if m.approvalCursor >= len(cards) || len(cards) == 0 {
-		return []key.Binding{keyBack}
-	}
-	c := cards[m.approvalCursor]
-	switch {
-	case c.group:
-		return []key.Binding{keyAllowAll, keyDenyAll, keySplit, keyScope, keyBack, keyLeft}
-	case isNetwork(c.first()):
-		return []key.Binding{keyAllow, keyDeny, keyOnce, keyHour, keyPattern, keyScope, keyBack}
-	case isGit(c.first()):
-		return []key.Binding{keyReview, keyBack}
-	}
-	return append(kindBindings(c.first()), keyLeft)
 }

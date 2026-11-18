@@ -4,8 +4,8 @@ Keys
   1-9        go into that thread or terminal; Ctrl-] returns to the list
   enter      go into the thread or terminal under the cursor, or open the row
   alt+1-9    from a thread or terminal, go into another; alt+z: full screen
-  tab        the next thread that waits for you, then Home's cards
-  y / a / n  Home's card: allow, always or deny; tab moves to the next
+  tab        the next thread that waits for you, then Home's requests
+  \          Home's list of requests and threads; esc too
   u          undo the last network decision, for a minute after it
   y / o / n  an agent's banner: allow, allow once or deny what blocks it
   t / T      the computer's main terminal; T starts its teammate's agent
@@ -15,7 +15,7 @@ Keys
   f / h      fork the computer; its checkpoints, to save or restore one
   n          new computer: a teammate, a template and a name
   e / /      switch environment; filter by name, teammate or template
-  a / l / ,  requests, from every environment; Activity; Settings
+  l / ,      Activity; Settings
   ↑/↓, j/k   move the cursor
   esc / q    Home; esc clears the filter first, q quits from the list
   ?          this help

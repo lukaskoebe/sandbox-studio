@@ -52,7 +52,7 @@ func (m *app) pictureWanted() string {
 	if !m.dashShows() {
 		return ""
 	}
-	if sb := m.selected(); sb != nil {
+	if sb := m.dashSandbox(); sb != nil {
 		return sb.TeammateID
 	}
 	return ""

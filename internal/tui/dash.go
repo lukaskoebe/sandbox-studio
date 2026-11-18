@@ -33,7 +33,7 @@ func (m *app) netWanted() string {
 	if !m.dashShows() {
 		return ""
 	}
-	return m.selectedID()
+	return m.dashID()
 }
 
 // watchNet reads the connections of the network column's sandbox, again every activityEvery

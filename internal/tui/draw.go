@@ -272,7 +272,7 @@ func barKey(b key.Binding) string {
 func keyGroup(b key.Binding) int {
 	h := b.Help()
 	switch h.Key + " " + h.Desc {
-	case "t terminal", "c thread", "l activity", "a requests", "e env", "h checkpoints", "/ filter", "/ computer", "r rules (browser)":
+	case "t terminal", "c thread", "l activity", "\\ list", "e env", "h checkpoints", "/ filter", "/ computer", "r rules (browser)":
 		return groupGo
 	case "? help", "q quit", "esc/q back", "esc cancel", "esc close":
 		return groupApp

@@ -17,10 +17,11 @@ import (
 )
 
 // teamApp is the sample with its teammates loaded: Iris has blub and docs-site, Finn has
-// api-refactor alone, and demo has no teammate.
+// api-refactor alone, and demo has no teammate. The cursor is on the sidebar's Home row, and the
+// sidebar has the keys, as after \.
 func teamApp() *app {
 	m := sampleApp()
-	m.at, m.mate = atHome, ""
+	m.at, m.mate, m.inbox.sidebar = atHome, "", true
 	return m
 }
 
@@ -126,7 +127,7 @@ func TestHomeIsWhereTheListStarts(t *testing.T) {
 	}
 }
 
-func TestHomePaneListsWhatNeedsYou(t *testing.T) {
+func TestHomeListsWhatNeedsYou(t *testing.T) {
 	m := withSessions(teamApp())
 	m.width = 140
 	sampleApprovals(m)
@@ -138,15 +139,16 @@ func TestHomePaneListsWhatNeedsYou(t *testing.T) {
 			Review: &gitreview.PushReview{Sandbox: "blub", Branch: "fix"},
 		},
 	}}
-	out := ansi.Strip(strings.Join(m.needsPane(90, 30, false), "\n"))
-	for _, want := range []string{"Waiting for you · ", "WORKING NOW", "EARLIER TODAY", "Pushed fix"} {
+	m.goHome()
+	out := shown(m)
+	for _, want := range []string{"WAITING FOR YOU · 3", "QUIET", "EARLIER TODAY", "Pushed fix"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("Home's pane lacks %q:\n%s", want, out)
+			t.Errorf("Home's list lacks %q:\n%s", want, out)
 		}
 	}
 	m = press(m, "tab")
-	if m.approvalCursor != 1 {
-		t.Errorf("tab moves to the next card: %d", m.approvalCursor)
+	if want := "card/" + m.cards()[1].first().ID; m.inbox.cursor != want {
+		t.Errorf("tab moves to the next request: %q, want %q", m.inbox.cursor, want)
 	}
 }
 
@@ -249,10 +251,12 @@ func TestHomeDecidesAndUndoesThroughTheServer(t *testing.T) {
 	}
 	m := newApp(ctx, connect(t, s), s.Addr)
 	m = run(m, m.loadEnvs())
+	m = run(m, m.loadSandboxes())
 	m = run(m, m.loadApprovals())
-	if m.at != atHome || len(m.cards()) != 1 {
-		t.Fatalf("Home's row with one card: at %v, %d cards", m.at, len(m.cards()))
+	if !m.inboxKeys() || len(m.cards()) != 1 {
+		t.Fatalf("Home's list with one request: at %v, the list has the keys %v, %d cards", m.at, m.inboxKeys(), len(m.cards()))
 	}
+	quietHome(m)
 	m, cmd := pressCmd(m, "y")
 	m = run(m, cmd)
 	if rules, _ := s.Store.Rules(ctx, s.Env.ID); len(rules) != 1 || !strings.Contains(m.notice.text, "u undoes it") {

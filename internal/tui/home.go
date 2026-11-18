@@ -174,8 +174,8 @@ func (m *app) homeBody(w, h int) []string {
 	if m.homeSplit(w) {
 		return m.splitBody(w, h)
 	}
-	if m.at == atHome {
-		return m.narrowHome(w, h)
+	if m.inboxShows() {
+		return m.paneBody(w, h) // Home's list, or the session it shows in full screen
 	}
 	return m.sidebar(w, h)
 }

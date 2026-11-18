@@ -16,7 +16,7 @@ const wheelLines = 3
 type rowTarget int
 
 const (
-	rowCard       rowTarget = iota + 1 // an approval's card
+	rowInbox      rowTarget = iota + 1 // a row of Home's list, by its index among inboxRows
 	rowEntry                           // an entry of the Activity log
 	rowCheckpoint                      // a checkpoint
 	rowEnv                             // an environment of the picker
@@ -127,7 +127,7 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	// A click in Home's pane gives it the keys.
-	if m.paneShows() && msg.X >= m.paneX() && msg.Y >= bodyTop && msg.Y < bodyTop+m.bodyRows() {
+	if _, ok := m.paneTarget(); ok && m.paneRect().has(msg.X, msg.Y) {
 		return m, m.focusPane()
 	}
 	return m, nil
@@ -136,14 +136,17 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 // clickRow selects what a row leads to; a double click opens it, as enter would.
 func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 	switch r.target {
-	case rowCard:
-		m.approvalCursor = r.index
+	case rowInbox:
+		if rows := m.inboxRows(); r.index < len(rows) {
+			m.inboxTo(rows, r.index)
+			m.inbox.sidebar, m.pane.focus = false, false
+		}
 	case rowEntry:
 		m.activity.cursor = r.index
 	case rowTree:
 		if rows := m.homeRows(); r.index < len(rows) {
 			m.setCursor(rows[r.index])
-			m.pane.focus = false
+			m.pane.focus, m.inbox.sidebar = false, true
 		}
 	case rowCheckpoint:
 		m.checkpoints.cursor = r.index
@@ -190,11 +193,18 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 	case screenChat:
 		m.wheelChat(dir)
 	case screenHome:
+		_, onSession := m.paneTarget()
+		reading, readingOn := m.readingRect()
+		x0, _ := m.homeColumn()
 		switch {
-		case m.chats.inPane && m.paneShows() && msg.X >= m.paneX():
+		case m.chats.inPane && onSession && m.paneRect().has(msg.X, msg.Y):
 			m.wheelChat(dir)
-		case m.paneFocused() || (m.paneShows() && msg.X >= m.paneX()):
+		case m.paneFocused() || onSession && m.paneRect().has(msg.X, msg.Y):
 			// a terminal in the pane scrolls itself: its program reads the keys
+		case readingOn && reading.has(msg.X, msg.Y):
+			m.inbox.scroll = max(m.inbox.scroll+dir*wheelLines, 0)
+		case m.inboxShows() && msg.X >= x0:
+			m.inboxMove(dir)
 		default:
 			k := tea.KeyPressMsg{Code: tea.KeyDown}
 			if dir < 0 {
@@ -202,7 +212,7 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 			}
 			m.key(k)
 		}
-	case screenApprovals, screenActivity, screenCheckpoints, screenEnvs:
+	case screenActivity, screenCheckpoints, screenEnvs:
 		if m.checkpoints.restoring != nil && m.screen == screenCheckpoints {
 			return
 		}

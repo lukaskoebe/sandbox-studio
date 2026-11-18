@@ -95,7 +95,7 @@ func (m *app) motionUpdate(msg tea.Msg) (ok bool) {
 		return true
 	case slideTick:
 		m.slide.moving = false
-		if m.slide.step++; m.slide.step >= slideSteps-1 || m.screen != screenApprovals {
+		if m.slide.step++; m.slide.step >= slideSteps-1 || !m.inboxShows() {
 			m.slide = slideState{}
 		}
 		return true

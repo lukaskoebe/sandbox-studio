@@ -23,7 +23,6 @@ const (
 	screenDetail
 	screenEnvs
 	screenHelp
-	screenApprovals
 	screenChat        // one thread's transcript
 	screenActivity    // the connections and decisions log
 	screenEntry       // one entry of the log, and its rule
@@ -74,35 +73,35 @@ type app struct {
 	stream     <-chan events.Event
 	refreshing bool // a debounced refresh is scheduled
 
-	screen         screen
-	back           screen             // where the approvals screen returns to
-	helpBack       screen             // where help returns to, and whose keys it lists
-	chats          chatState          // the chat screens
-	activity       activityState      // the Activity screens
-	pager          pagerState         // the review of a git approval
-	git            gitState           // the Git screen
-	newSb          newState           // a new computer, from its form to its create's end
-	checkpoints    checkpointState    // the checkpoints screen
-	ports          portsState         // the open ports of the sandbox on the detail screen
-	at             rowKind            // what the cursor of Home's list is on: Home, a teammate, a thread, a computer, a place
-	mate           string             // the teammate whose row or thread the cursor is on
-	cursor         int                // the selected computer, among the visible ones
-	sub            int                // the thread or terminal the cursor is on, under its teammate or computer; -1 for the computer
-	rowPlace       envPlace           // the ENVIRONMENT row the cursor is on
-	rowAction      rowAction          // the + row the cursor is on
-	sess           sessionsState      // the threads and terminals, which Home lists under teammates and computers
-	computers      computersState     // the Computers screen
-	detailBack     screen             // where the computer's detail returns to
-	approvalCursor int                // the selected card of the approvals screen
-	choices        map[string]*choice // the approvals' choices, by the ID of a card's first approval
-	split          map[string]bool    // the approvals reviewed one by one, out of their group
-	picker         int                // the environment picker's cursor
-	filter         string             // the text the filter narrows the list by: a name, teammate or template
-	filtering      bool               // the filter takes the keys
-	confirm        *sandboxes.View    // the sandbox a delete waits for y or n about
-	typing         *linePrompt        // the line of text the notice line asks for, if any
-	notice         notice
-	keys           help.Model
+	screen      screen
+	helpBack    screen             // where help returns to, and whose keys it lists
+	helpInbox   bool               // help was opened from Home's list, so it lists the list's keys
+	chats       chatState          // the chat screens
+	activity    activityState      // the Activity screens
+	pager       pagerState         // the review of a git approval
+	git         gitState           // the Git screen
+	newSb       newState           // a new computer, from its form to its create's end
+	checkpoints checkpointState    // the checkpoints screen
+	ports       portsState         // the open ports of the sandbox on the detail screen
+	at          rowKind            // what the cursor of Home's list is on: Home, a teammate, a thread, a computer, a place
+	mate        string             // the teammate whose row or thread the cursor is on
+	cursor      int                // the selected computer, among the visible ones
+	sub         int                // the thread or terminal the cursor is on, under its teammate or computer; -1 for the computer
+	rowPlace    envPlace           // the ENVIRONMENT row the cursor is on
+	rowAction   rowAction          // the + row the cursor is on
+	sess        sessionsState      // the threads and terminals, which Home lists under teammates and computers
+	computers   computersState     // the Computers screen
+	detailBack  screen             // where the computer's detail returns to
+	detailHome  *homeCursor        // the cursor of Home's list the detail was opened from, for esc
+	choices     map[string]*choice // the approvals' choices, by the ID of a card's first approval
+	split       map[string]bool    // the approvals reviewed one by one, out of their group
+	picker      int                // the environment picker's cursor
+	filter      string             // the text the filter narrows the list by: a name, teammate or template
+	filtering   bool               // the filter takes the keys
+	confirm     *sandboxes.View    // the sandbox a delete waits for y or n about
+	typing      *linePrompt        // the line of text the notice line asks for, if any
+	notice      notice
+	keys        help.Model
 
 	look     look         // plain, or visual with the palette
 	pal      palette      // the visual look's colors
@@ -119,6 +118,7 @@ type app struct {
 	buttons  buttonFocus  // the control the arrows are on
 	resuming *resumeState // what a decision away from a session returns to
 	home     homeState    // Home's row: the decisions it lists, and the last one u undoes
+	inbox    inboxState   // Home's list: its cursor, the reading pane's scroll and the teammates' next runs
 	mates    mateState    // the tasks and facts of the teammate on show
 	settings settingsState
 }
@@ -165,7 +165,7 @@ func (m *app) Init() tea.Cmd {
 // usage and history the visual look draws, and the spinner turns while something on show runs.
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
-	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
+	return next, tea.Batch(cmd, m.watchInbox(), m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
 		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions(), m.watchPane(),
 		m.watchHome(), m.watchMate())
 }
@@ -206,6 +206,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.homeUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.inboxUpdate(msg); ok {
 		return m, cmd
 	}
 	if cmd, ok := m.mateUpdate(msg); ok {
@@ -273,7 +276,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		found := m.reselect(prev)
 		if !found && m.screen == screenDetail {
-			m.screen = m.detailBack // the computer on show is gone
+			m.leaveDetail() // the computer on show is gone
 			m.report("That computer was deleted.", true)
 		}
 		if m.screen == screenComputers || m.screen == screenDetail && m.detailBack == screenComputers {
@@ -327,7 +330,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.waiting != "":
 			// An approval came in while the terminal was attached: show it, and attach the
 			// terminal again once it is decided.
-			m.openApprovalsOn(msg.waiting, &resumeState{approval: msg.waiting, back: screenHome,
+			m.goWaiting(msg.waiting, &resumeState{approval: msg.waiting, back: screenHome,
 				attach: &attachTarget{id: msg.id, sandbox: msg.sandbox, name: msg.name}})
 			m.setNotice("Answer it, and you're back in "+msg.name+". esc stays here.", false)
 		default:
@@ -388,7 +391,7 @@ func (m *app) setApprovals(list []api.ApprovalView) tea.Cmd {
 	}
 	m.approvals, m.known, m.primed = list, known, true
 	if len(fresh) > 0 {
-		if m.screen == screenApprovals {
+		if m.inboxShows() {
 			m.slideIn(fresh)
 		}
 		return bell()

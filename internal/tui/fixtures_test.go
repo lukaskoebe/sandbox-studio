@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -21,11 +22,31 @@ func onSession(t testing.TB, m *app, sandbox, title string) *app {
 		}
 		if x, ok := m.rowSession(r, visible); ok && x.sandbox == sandbox && x.title() == title {
 			m.setCursor(r)
+			m.inbox.sidebar = true
 			return settle(m)
 		}
 	}
 	t.Fatalf("Home's list has no row of %q in %s", title, sandbox)
 	return m
+}
+
+// onCard puts m on Home's list, its cursor on the i-th request.
+func onCard(m *app, i int) *app {
+	m.goHome()
+	m.inbox.cursor = "card/" + m.cards()[i].first().ID
+	m.inboxCursor(m.inboxRows()) // as the next frame does
+	quietHome(m)
+	return m
+}
+
+// cursorCard is the request under the cursor of Home's list.
+func cursorCard(t testing.TB, m *app) card {
+	t.Helper()
+	r, ok := m.inboxRow()
+	if !ok || r.card == nil {
+		t.Fatalf("the cursor of Home's list is on %q, not a request", m.inbox.cursor)
+	}
+	return *r.card
 }
 
 // settle runs what Update runs after every message, as a key that moved the cursor would.
@@ -41,6 +62,7 @@ func onComputer(t testing.TB, m *app, id string) *app {
 	for _, r := range m.homeRows() {
 		if r.kind == atSandbox && r.sub < 0 && visible[r.sb].ID == id {
 			m.setCursor(r)
+			m.inbox.sidebar = true
 			return settle(m)
 		}
 	}
@@ -69,7 +91,7 @@ func sampleMorning(m *app) *app {
 	sampleApprovals(m)
 	m.approvals[0].Git.Push.TeammateName = "Finn"
 	m.approvals[0].Teammate = &api.ApprovalTeammate{ID: "t2", Name: "Finn"}
-	m.approvals = append(m.approvals, api.ApprovalView{
+	m.approvals = slices.Insert(m.approvals, len(m.approvals)-1, api.ApprovalView{ // newest first, as Studio lists them
 		Approval: store.Approval{ID: "p1", EnvironmentID: "env1", SandboxID: "sb1", Kind: "chat.permission", Status: "pending", CreatedAt: ago(3 * time.Minute)},
 		ChatPermission: &chat.PermissionPayload{
 			ChatID: "c1", ChatTitle: "Fix the login form", SandboxName: "blub", TeammateName: "Iris", Title: "npm test", ToolKind: "execute",
@@ -97,4 +119,10 @@ func onComputersScreen(t testing.TB, m *app, id string) *app {
 	}
 	t.Fatalf("the Computers screen has no row of %s", id)
 	return m
+}
+
+// quietHome keeps Home from reading the decided requests, the threads and the teammates' tasks on
+// the next key, so that the command a key returns is the key's own.
+func quietHome(m *app) {
+	m.inbox.busy, m.home.busy, m.sess.busy = true, true, true
 }

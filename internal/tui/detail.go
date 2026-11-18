@@ -77,9 +77,9 @@ func (m *app) waitingCard(sb sandboxes.View, w int) []string {
 	if first == nil {
 		return nil
 	}
-	more := "a requests"
+	more := "Home answers it"
 	if n > 1 {
-		more = fmt.Sprintf("%d more · a requests", n-1)
+		more = fmt.Sprintf("%d more · Home answers them", n-1)
 	}
 	block, _ := m.visualCard(*first, false, w) // not the cursor's card, so it draws no keycaps
 	return append(block, "  "+styleDim.Render(more))

@@ -53,15 +53,27 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 		},
 		"chat":      func(_ *testing.T, m *app) *app { return press(sampleChat(m), "p", "h", "i") },
 		"asks":      func(_ *testing.T, m *app) *app { return pendingAsks(sampleChat(m), `{"type":"object"}`) },
-		"approvals": func(_ *testing.T, m *app) *app { sampleApprovals(m); return press(m, "a", "j", "j", "right") },
+		"inbox":     func(_ *testing.T, m *app) *app { sampleApprovals(m); return press(onCard(m, 2), "right") },
 		"git":       func(_ *testing.T, m *app) *app { samplePush(m); return press(m, "g") },
-		"review":    func(_ *testing.T, m *app) *app { samplePush(m); return press(m, "a", "enter") },
-		"activity":  func(_ *testing.T, m *app) *app { return press(sampleActivity(m), "l") },
-		"detail":    func(_ *testing.T, m *app) *app { return press(m, "enter") },
-		"delete":    func(_ *testing.T, m *app) *app { return press(m, "d") },
-		"help":      func(_ *testing.T, m *app) *app { return press(m, "?") },
-		"new":       func(_ *testing.T, m *app) *app { return press(m, "n") },
-		"envs":      func(_ *testing.T, m *app) *app { return press(m, "e") },
+		"review":    func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "enter") },
+		"push asks": func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "y") },
+		"thread row": func(t *testing.T, m *app) *app {
+			m.goHome()
+			for _, r := range m.inboxRows() {
+				if r.thread != nil {
+					m.inbox.cursor = r.id
+					return m
+				}
+			}
+			t.Fatal("Home's list has no thread")
+			return m
+		},
+		"activity": func(_ *testing.T, m *app) *app { return press(sampleActivity(m), "l") },
+		"detail":   func(_ *testing.T, m *app) *app { return press(m, "enter") },
+		"delete":   func(_ *testing.T, m *app) *app { return press(m, "d") },
+		"help":     func(_ *testing.T, m *app) *app { return press(m, "?") },
+		"new":      func(_ *testing.T, m *app) *app { return press(m, "n") },
+		"envs":     func(_ *testing.T, m *app) *app { return press(m, "e") },
 	}
 	sizes := [][2]int{}
 	for _, w := range []int{0, 1, 2, 3, 5, 8, 12, 20, 33, 40, 60, 79, 80, 99, 100, 101, 120, 140} {

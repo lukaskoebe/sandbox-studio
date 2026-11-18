@@ -76,32 +76,45 @@ func TestGoldenHelp(t *testing.T) {
 	golden(t, "help", press(sampleApp(), "?"))
 }
 
-func TestGoldenApprovals(t *testing.T) {
+func TestGoldenInbox(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	golden(t, "approvals", press(m, "a"))
+	golden(t, "inbox", onCard(m, 0))
 }
 
-func TestGoldenApprovalsGroup(t *testing.T) {
+func TestGoldenInboxGroup(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	golden(t, "approvals_group", press(m, "a", "j"))
+	golden(t, "inbox_group", onCard(m, 1))
 }
 
-func TestGoldenApprovalsNone(t *testing.T) {
+func TestGoldenInboxEmpty(t *testing.T) {
 	m := sampleApp()
 	m.approvals = nil
-	golden(t, "approvals_none", press(m, "a"))
+	m.goHome()
+	golden(t, "inbox_empty", m)
 }
 
-func TestGoldenApprovalNetwork(t *testing.T) {
+func TestGoldenInboxNetwork(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	golden(t, "approvals_network", press(m, "a", "j", "j"))
+	golden(t, "inbox_network", onCard(m, 2))
 }
 
-func TestGoldenApprovalsHelp(t *testing.T) {
+func TestGoldenInboxPermission(t *testing.T) {
+	m := sampleApp()
+	m.approvals = kindApprovals(m.now)
+	golden(t, "inbox_permission", onCard(m, 4))
+}
+
+func TestGoldenInboxPushAsks(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	golden(t, "approvals_help", press(m, "a", "?"))
+	golden(t, "inbox_push_asks", press(onCard(m, 0), "y"))
+}
+
+func TestGoldenInboxHelp(t *testing.T) {
+	m := sampleApp()
+	sampleApprovals(m)
+	golden(t, "inbox_help", press(onCard(m, 0), "?"))
 }

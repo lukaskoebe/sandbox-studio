@@ -34,8 +34,8 @@ URL.
   web's renderer does.
 - **`studio tui`, not `studio`.** Plain `studio` stays the server even in an interactive
   terminal with a server already running, so scripts and autostart never get a UI.
-- **One screen at a time**, with a header and a key bar and no panes, so it works at 80×24
-  and over slow links.
+- **One screen at a time** below 100 columns, with a header and a key bar, so it works at 80×24
+  and over slow links. Wider, Home is the sidebar beside its list.
 
 ## Starting it
 
@@ -55,22 +55,22 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | [the sidebar](#the-sidebar): Home's row with what waits for you, TEAMMATES with their [threads](#threads), YOUR COMPUTERS, and ENVIRONMENT. From 100 columns, the sidebar beside [the pane](#the-pane) | `↑/↓` `j/k` move over the rows · `1`–`9` go into that thread or terminal · `enter` go into the thread or terminal, open the computer or the place · `alt+z` the pane in full screen · on Home's row, [its cards](#homes-row): `y` `a` `n` decide, `tab` the next card, `u` undo · `y` `o` `n` decide the [banner](#the-approval-banner)'s network request, `a` reviews it on its card, `←/→` and `space` press its buttons · `tab` the next thread that waits, then Home's cards · `n` new computer · on a teammate, `c` a new thread, `T` its agent, `t` a shell, `+` another computer, `f` fork, `→`/`←` show or hide its older threads · on a computer, `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest thread · `C` a new thread · `a` requests · `l` Activity · `,` Settings · `g` Git · `e` environment · `/` filter by name, teammate or template · `esc` back to Home's row · `?` help · `q` quit |
-| **Computers** (from `enter` on ENVIRONMENT › Computers) | every computer of the environment, the teammates' and then yours, one row each with its owner, template, requests and status. From 100 columns, the dashboard of the one under the cursor beside the list | `↑/↓` move · `enter` the computer · `t` terminal · `s` `z` `f` `h` `d` as on Home · `+` a new computer · `a` requests · `esc` back to Home, the cursor where it was |
-| **Computer** (from `enter`) | status, teammate, template, resources, uptime, requests, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` thread · `C` new thread · `l` its Activity · `a` requests · `g` Git · `esc` back to Home or Computers |
+| **Home** | [Home's list](#home): what waits for you, what works and what is quiet, with a reading pane for the row under the cursor. From 100 columns, [the sidebar](#the-sidebar) beside it | `↑/↓` `j/k` move over the rows · `tab` the next request · the row's own answers, such as `y` `n` `o` on a network request · `enter` open the row · `pgup/pgdn` scroll the reading pane · `u` undo · `\` give the sidebar the keys · `n` new computer · `l` Activity · `,` Settings · `g` Git · `e` environment · `?` help · `q` quit |
+| **The sidebar** (from `\` on Home's list) | Home's row, TEAMMATES with their [threads](#threads), YOUR COMPUTERS, and ENVIRONMENT. Below 100 columns it takes the screen. From 100 columns, the sidebar beside [the pane](#the-pane) | `↑/↓` `j/k` move over the rows · `1`–`9` go into that thread or terminal · `enter` go into the thread or terminal, open the computer or the place, or on Home's row give Home's list the keys · `alt+z` the pane in full screen · `y` `o` `n` decide the [banner](#the-approval-banner)'s network request, `a` goes to its row on Home's list, `←/→` and `space` press its buttons · `tab` the next thread that waits, then Home's list · `n` new computer · on a teammate, `c` a new thread, `T` its agent, `t` a shell, `+` another computer, `f` fork, `→`/`←` show or hide its older threads · on a computer, `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest thread · `C` a new thread · `l` Activity · `,` Settings · `g` Git · `e` environment · `/` filter by name, teammate or template · `\` or `esc` back to Home's list · `?` help · `q` quit |
+| **Computers** (from `enter` on ENVIRONMENT › Computers) | every computer of the environment, the teammates' and then yours, one row each with its owner, template, requests and status. From 100 columns, the dashboard of the one under the cursor beside the list | `↑/↓` move · `enter` the computer · `t` terminal · `s` `z` `f` `h` `d` as on Home · `+` a new computer · `esc` back to Home, the cursor where it was |
+| **Computer** (from `enter`) | status, teammate, template, resources, uptime, requests, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` thread · `C` new thread · `l` its Activity · `g` Git · `esc` back to where it was opened: Home's list, the sidebar or Computers |
 | **Checkpoints** (from `h`) | the computer's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
 | **New computer** (from `n`, `+` or `+ New computer`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
 | **Thread** (from a thread's row, `c` or `C`) | the transcript, streaming | see below |
-| **Requests** (from `a` anywhere) | every pending request of every environment, grouped like the web stack | see below |
-| **Git** (from `g`) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their computer and outcome | `↑/↓` move · `enter` the review · `a` requests · `l` Activity · `esc` back |
-| **Git review** (from `enter` on a git card or a push on the Git screen) | the push's facts, commits and diff, or the pull request | see below |
+| **Git** (from `g`) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their computer and outcome | `↑/↓` move · `enter` the review · `l` Activity · `esc` back |
+| **Git review** (from `enter` on a push's row on Home or a push on the Git screen) | the push's facts, commits and diff, or the pull request | see below |
 | **Activity** (from `l`, its tab, or ENVIRONMENT › Activity; Network opens it on network) | connections of the environment's computers and every decision, newest first | `←/→` the kind: all, network, git, agents, memory · `enter` the entry and its rule · `/` filter by computer · `r` print the URL of Settings → Network · `esc` back |
 | **Settings** (from `,`, or its tab) | the web's Settings sections in their three groups, each with what it is set to | `↑/↓` move · `enter` Activity opens here, the others print their address in the browser · `l` Activity · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
 
 The header always shows what waits for you across all environments, `▲ n waiting for you`,
-after the environment's working threads and agents; n counts Home's cards, so requests that
-arrived together count once. The visual look's header has the tabs Home, Activity and Settings. When a new request arrives, the terminal rings
+after the environment's working threads and agents; n counts the requests of Home's list, so
+requests that arrived together count once. The visual look's header has the tabs Home, Activity and Settings. When a new request arrives, the terminal rings
 its bell once.
 
 A confirmation (delete a computer, restore a checkpoint) shows its choices in the notice line,
@@ -78,11 +78,12 @@ A confirmation (delete a computer, restore a checkpoint) shows its choices in th
 
 ### The sidebar
 
-Home's list has the rows of the web's sidebar, in its sections, and the cursor starts on its
-first row:
+The sidebar has the rows of the web's sidebar, in its sections. From 100 columns it is on the
+left of every Home screen; narrower, `\` on Home's list shows it as the whole screen. Home's list
+has the keys at first: `\` gives them to the sidebar, and `\`, `esc` or `enter` on Home's row
+gives them back.
 
-- **Home**: `▲ n waiting for you`, or `✓ all clear`. Its pane is [what waits for
-  you](#homes-row).
+- **Home**: `▲ n waiting for you`, or `✓ all clear`. Its pane is [Home's list](#home).
 - **TEAMMATES**: each teammate, its name and its role, a spinner while one of its threads
   works and `▲ n` for the requests that wait on it; under it, [its threads](#threads). Then
   `+ New teammate`, which prints the address of the web's teammates page: a teammate needs a
@@ -94,19 +95,48 @@ first row:
   on network; Secrets and Memory, which print their page's address; Activity; and Settings with
   the version.
 
-`esc` goes back to Home's row from anywhere in the list, after clearing a filter. A filter
+`esc` goes back to Home's list from anywhere in the sidebar, after clearing a filter. A filter
 leaves out Home's row, the places and the teammates with nothing that matches.
 
-### Home's row
+### Home
 
-On Home's row the pane, or the screen below 100 columns, shows what waits for you: the cards of
-[the requests](#requests) waiting in every environment, under `Waiting for you · n`. `tab` moves
-to the next card and the cursor's card answers the keys, as on the Approvals screen; on an
-agent's permission `y` allows once, `a` always and `n` denies, as well as the numbers. A git
-push's card opens [its review](#git-review) with `enter`. Below the cards, WORKING NOW lists
-the threads and agents working or waiting, with their teammate and computer, and EARLIER TODAY what was
-decided today. Below 100 columns the cursor's card is drawn in full, the others one line each,
-and the teammates' list follows.
+Home is one list of everything, sorted by how much it needs you, and a reading pane for the
+row under the cursor. Its sections:
+
+- **WAITING FOR YOU · n**: [the requests](#requests) waiting in every environment, newest
+  first, grouped as on the web. A row has the request's kind (`±` a push, `⇅` the network, `?`
+  an agent's permission, `▣` the browser, `◈` memory), who asked, what for, where and how long
+  ago.
+- **WORKING**: the threads that work and wait on nothing.
+- **QUIET**: the threads done or ended in the last 24 hours (the five newest), each teammate's
+  next scheduled run, and your own computers.
+- **EARLIER TODAY**, under the list: what was decided today. It takes no cursor.
+
+With nothing at all it says `✓ Nothing waits for you.`
+
+The cursor starts on the top row, so the first request to arrive is under it. It stays on its
+row by the row's ID while the list changes, and when its row goes, as after a decision, it is
+on the row that took its place, the next request. `tab` moves to the next request, around the
+end. `↑/↓` and `j/k` move a row.
+
+The row's own keys answer it, as [its card's](#requests) do: `y` `n` `o` `O` `1` `i` `p` `s`
+`x` `w` on a network request, `A` `D` `r` `s` on a group, and on an agent's permission `y`
+allows once, `a` always and `n` denies, as well as the numbers. The key bar shows the row's
+keys first. A push can be read only in part in the reading pane, so `y` on it asks once more
+on the notice line, `Push 2 commits to fix-login without opening the diff?  y Push  [n Keep]`:
+a second `y` approves it, and any other key keeps it. A forced push takes `F`. `r` asks for
+changes, `n` rejects and `i` ignores it, without asking.
+
+`enter` opens the row: a push its [review](#git-review); an agent's permission its thread; a
+network request the latest thread on its computer, or else the computer; a thread the thread;
+a computer its detail, from which `esc` returns to Home's list; a scheduled run its teammate.
+The other kinds' `enter` is their card's.
+
+The reading pane shows the row in full: a push's review (its facts, commits and diff), a
+request's card with its choices as keycaps, a thread's transcript, a computer's dashboard, or
+a scheduled run's task with its next and last run. `pgup/pgdn` scroll it. Below 90 columns of
+Home it is under the list, at least six rows, and it is left out below 16 rows; from 90 columns
+it is beside the list, which takes 42% of the width, from 46 to 60 cells.
 
 A network decision that made a rule can be undone for a minute: the notice says `u undoes
 it`, and `u` deletes the rule (`DELETE .../rules/{id}`). The request stays decided; the next
@@ -219,9 +249,9 @@ no banner. The box carries its choices as buttons: `o Allow once`, `y Allow`, `n
 - **While the pane has the keys**, they go to the agent, so the box says `alt+a answers it`.
   `alt+a` moves the keys to the banner's buttons. After a decision, or `esc`, the keys go back
   to the agent, so answering takes `alt+a`, then `y`, and typing goes on.
-- **`a`** (More…, Review it) opens the approvals with the cursor on that card, where the
+- **`a`** (More…, Review it) goes to Home's list with the cursor on that request, where the
   pattern, the scope and the other choices are. Once it is decided there, the TUI goes back to
-  Home, with the pane's keys where they were. `esc` there stays on the approvals.
+  the session, with the pane's keys where they were. `esc` there goes back without deciding.
 
 A terminal attached full screen (below 100 columns, or `t`) can't draw a box over the
 sandbox's screen. Instead, while it is attached, the TUI checks the sandbox's pending
@@ -229,8 +259,8 @@ approvals every 2 seconds. A new one sets the terminal's title to `▲ api-refac
 proxy.golang.org:443 · Ctrl-] answers it` and rings the bell once. The title is written only
 after 150 ms without output, so it doesn't land inside an escape sequence the sandbox is
 writing, and the old title is pushed (`CSI 22;0 t`) and popped (`CSI 23;0 t`) around it, in
-terminals that keep a title stack. `Ctrl-]` then opens the approvals on that card instead of
-Home, and once it is decided, the terminal is attached again.
+terminals that keep a title stack. `Ctrl-]` then puts Home's cursor on that request, and once
+it is decided, the terminal is attached again.
 
 `studio shell` watches the same way, and having no TUI to return to, its `Ctrl-]` asks about
 the approval in place (`Shell`, `askApproval` in `internal/tui/shell.go`): it clears the screen
@@ -242,15 +272,16 @@ detaches as before.
 
 ### Requests
 
-Requests from one sandbox that arrive within three seconds of each other form one card, and
-a browser page's requests to one site form one card, as on the web. A card's choices start the
+Each request is a row of [Home's list](#home), and its card is in the reading pane. Requests
+from one computer that arrive within three seconds of each other form one row and one card,
+and a browser page's requests to one site form one, as on the web. A card's choices start the
 way the web card starts them: the pattern level and the scope its teammate last chose.
 
 | Card | Keys |
 |---|---|
 | Network request | `y` allow · `n` deny (each makes a rule) · `o` allow once · `O` deny once (no rule) · `1` allow for 1 hour · `i` ignore · `p` cycle the host pattern, then a browser request's method and path · `s` scope: environment, the teammate's sandboxes or this sandbox; for a browser request, who: its browser, all browsers, or browsers and sandboxes · `x` any port instead of the default ports · `w` allow the navigation's site for this browser session |
 | Group | `A` allow all · `D` deny all · `r` review one by one · `s` scope, or who for a browser page's requests |
-| Git push or pull request | `enter` opens the git review; it is decided there, after the diff |
+| Git push or pull request | `enter` opens the git review · `y` asks once more, then approves · `F` force-pushes · `r` requests changes · `n` reject · `i` ignore |
 | Browser action | `y` allow · `n` deny · `i` ignore · `r` toggles whether the decision holds for every such action on the origin (the web's "always") |
 | Browser credential | `y` fill · `n` deny · `i` ignore |
 | Memory share | `y` share with every teammate · `n` decline · `i` ignore |
@@ -276,7 +307,7 @@ facts, so it stays in the browser.
 
 ### Git review
 
-`enter` on a git card opens the review the web's git sheet and page show (`web/src/components/git-review.tsx`),
+`enter` on a push's row opens the review the web's git sheet and page show (`web/src/components/git-review.tsx`),
 from the approval's `git` detail: the repository, sandbox and teammate, the branch (and whether
 it is new), the change with its file count and line totals, the commits, and the unified diff,
 colored as on the web (`+` green, `-` red, hunks in the accent). A pull request shows its
@@ -331,8 +362,8 @@ The transcript:
   transcript follows the end; `↓` past the last fold returns there.
 - Plans, permission requests and questions show as one line each. The first one that waits
   is answered in place, with its choices listed under it:
-  - a permission request: `1`–`9` pick an option, `i` ignores it. It is decided as its card
-    on the approvals screen is. `←/→` move over its choices as buttons, and `space` or `enter`
+  - a permission request: `1`–`9` pick an option, `i` ignores it. It is decided as its row
+    on Home is. `←/→` move over its choices as buttons, and `space` or `enter`
     presses one.
   - a question: `i` skips it (`decline`). One with no field takes `1` for OK; a choice, or yes
     or no, takes `1`–`9`; text or a number takes `r`, which opens a line for the answer in the
@@ -342,8 +373,8 @@ The transcript:
 - `pgup/pgdn` (or `b`/`space`) scroll a page, `g`/`G` jump to the start or the end.
 
 An approval waiting in the chat's sandbox, such as a network request of a tool the agent
-runs, is a [banner](#the-approval-banner) under the title. `alt+a` opens the approvals on its
-card and comes back to the chat once it is decided.
+runs, is a [banner](#the-approval-banner) under the title. `alt+a` puts Home's cursor on its
+row and comes back to the chat once it is decided.
 
 The composer is a box at the bottom of the chat, in the chat's color, with the teammate's name
 in its frame and its keys on the right; it grows with the prompt to six lines. While no prompt
@@ -514,15 +545,16 @@ and [design/tui-visual.md](design/tui-visual.md)):
   waiting color, and the clock. Below 100 columns the tabs shorten to their initials. At 80 columns the header
   is the plain one. The key bar groups keys with a dim `│` between the groups and calls `?`
   "more". When the separators don't fit, it drops them.
-- **Cards.** Approvals are rounded cards with their area's rule, a kind chip, and the
-  choices as keycaps on the card under the cursor. `←/→` move over the card's toggles (pattern,
+- **Cards.** In Home's reading pane a request is a rounded card with its area's rule, a kind
+  chip, and the choices as keycaps. `←/→` move over the card's toggles (pattern,
   scope, ports) and then its choices; the one focused is reversed, and `space` or `enter`
   steps a toggle or presses a choice. Nothing is focused until an arrow is pressed. In the
   plain look the focused one is in brackets.
 - **Chat.** Prompts have a green rule and tool calls a glyph for their kind. A running call or
   turn spins. Code blocks have a dim rule and their language, and a plan is a checklist.
-- **Wide layouts.** From 100 columns, Home is the sidebar and [the pane](#the-pane), in both
-  looks. A sandbox's dashboard in the pane has the history line from its lineage and its
+- **Wide layouts.** From 100 columns, Home is the sidebar and Home's list or [the
+  pane](#the-pane), in both looks. From 90 columns of its own, Home's list has its reading pane
+  beside it. A sandbox's dashboard in the pane has the history line from its lineage and its
   network: its connections newest first, with their verdict's dot, age, host and verdict,
   read from `GET .../sandboxes/{id}/connections` every 2 seconds while it shows (`dash.go`).
   From 120 columns the git review gains a file list with +/− bars, where `[` and `]` jump
@@ -549,8 +581,8 @@ and [design/tui-visual.md](design/tui-visual.md)):
 - **Motion.** The result of an action (a start, a stop, a decision, a detach) and the errors
   of background loads show as a toast at the top right for 3 seconds, in the running or the
   failed color, and clear the notice line's "Stopping…". The plain look keeps them on the
-  notice line. A new approval's card slides in from the top over about 150 ms while the
-  approvals show. Nothing else moves but the spinner and the booting shimmer.
+  notice line. A new request's card slides in from the top of the reading pane over about
+  150 ms. Nothing else moves but the spinner and the booting shimmer.
 
 No key changed between the looks. Only `[`, `]` and `v` in the git review are new.
 
@@ -570,12 +602,14 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   decision choices of `web/src/components/approval-decision.tsx`. `kinds.go` decides the other
   kinds (browser, memory, agent permissions) and reads a question's schema into the one field
   the TUI answers. `pager.go` is the git review, and `git.go` the Git screen.
+- `inbox.go` is Home's list: its rows and sections, the cursor kept by the row's ID, the keys
+  of a row (a push's second `y` among them), what `enter` opens, and the layout of the list and
+  the reading pane. `reading.go` is the reading pane.
 - `chat.go` is the chat screen: the stream, the transcript's layout and folds. `composer.go`
   is the composer's box.
 - `tree.go` is Home's list: its sections and rows, the cursor on them, and the Home, teammate,
   computer, place and action rows. `places.go` is what an ENVIRONMENT row opens, `computers.go`
-  the Computers screen, `needs.go` Home's row in the pane (the cards, working now, earlier
-  today) and the undo, `mate.go` a teammate's row and its keys, and `settings.go` the Settings
+  the Computers screen, `needs.go` the undo and EARLIER TODAY, `mate.go` a teammate's row and its keys, and `settings.go` the Settings
   screen.
 - `sessions.go` is Home's threads and terminals: the environment's two reads, `threadsOf` (the
   web's listing rule), `threadWaiting` (the requests a thread waits on), states, rows, numbers
@@ -593,7 +627,7 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `style.go` holds the styles: the look, the palette of each color profile, and the fitting of
   styled text. `draw.go` has the visual look's pieces: dots, keycaps, card frames,
   sparklines, bars, the spinner, the tab header and the grouped key bar. `cards.go` is the
-  approvals' cards, `live.go` the usage, lineage and spinner reads, `motion.go` the
+  requests' cards, `live.go` the usage, lineage and spinner reads, `motion.go` the
   toasts and the cards' slide-in, `dash.go` the network column, and `picture.go` the browser's
   page and its picture in half blocks. `mouse.go` maps
   clicks and the wheel to what each row and key of the frame leads to. Each body records
@@ -620,12 +654,14 @@ Tests:
   connected, a runtime that restores), a server that records the calls checks the paths and
   bodies the keys send.
 - A pseudo-terminal test runs the TUI as a child process: it shows Home, opens Activity, goes
-  back, opens the approvals, allows a waiting host with `y` (the server then has its rule) and
-  quits. A second one runs at 140×40, where Home splits into the list and what needs you,
+  back, allows the waiting host with `y` on Home's list (the server then has its rule) and
+  quits. A second one runs at 140×40, where Home splits into the sidebar and Home's list,
   and opens Activity by clicking its tab. A third runs the attachment on a real terminal and checks that unbuffered input
   reaches the sandbox and that Ctrl-] detaches. They are skipped on Windows.
 - Model tests run the pane against a fake attachment: its screen, the keys it sends, Ctrl-],
   alt+digits and full screen, and the banner's keys.
 - Model tests press the arrows over a card's toggles, the banner, a chat's picks and a
   confirmation, answer the banner with `alt+a` and check the keys go back, and check that a
-  decision on the approvals returns to the pane or attaches the terminal again.
+  decision on Home's list returns to the pane or attaches the terminal again. Others check
+  that `y` on a push asks once more, that the cursor goes to the next request after a decision
+  and keeps its request through a refresh, and that `tab` wraps.

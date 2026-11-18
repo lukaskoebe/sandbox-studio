@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The terminal UI's Home is one list of everything, sorted by how much it needs you: WAITING
+  FOR YOU with every request of every environment, WORKING with the threads at work, and QUIET
+  with the threads that ended in the last day, each teammate's next scheduled run and your computers.
+  A reading pane shows the row under the cursor in full: a request's card, a push's commits
+  and diff, a thread, a computer's dashboard. The row's keys answer it, `tab` goes to the next
+  request, and after a decision the cursor is on the next one. `y` on a push asks once more,
+  as its diff wasn't read. The Approvals screen and its `a` key are gone; the banner's More…
+  and `alt+a` take you to the request on Home, and `\` gives the keys to the sidebar.
 - The terminal UI's list reads as the browser's sidebar: TEAMMATES with their threads under
   them, wherever the thread runs, as the browser lists them (every live one, the two latest of
   the day, `+ n older` or `→` for the rest), YOUR COMPUTERS with their terminals, and

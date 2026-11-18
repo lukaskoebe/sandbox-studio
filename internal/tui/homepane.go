@@ -58,16 +58,22 @@ func sidebarWidth(int) int {
 	return 30
 }
 
-// paneX is the column Home's pane starts at, and paneW its width.
-func (m *app) paneX() int {
+// paneRect is where Home's pane is on screen: the whole body in full screen, the reading pane
+// while Home's list shows, and beside the sidebar otherwise.
+func (m *app) paneRect() rect {
 	if m.pane.zoom {
-		return 0
+		return rect{0, bodyTop, m.width, m.bodyRows()}
 	}
-	return sidebarWidth(m.width) + 2
+	if rc, ok := m.readingRect(); ok {
+		return rc
+	}
+	x := sidebarWidth(m.width) + 2
+	return rect{x, bodyTop, max(m.width-x, 1), m.bodyRows()}
 }
 
+// paneW is the width of Home's pane.
 func (m *app) paneW() int {
-	return max(m.width-m.paneX(), 1)
+	return max(m.paneRect().w, 1)
 }
 
 // bodyRows is how many rows the body gets.
@@ -75,9 +81,9 @@ func (m *app) bodyRows() int {
 	return max(m.height-5, 1)
 }
 
-// termRows is how many rows a terminal gets in the pane: the body less the pane's title and rule.
+// termRows is how many rows a terminal gets in the pane: the pane less its title and rule.
 func (m *app) termRows() int {
-	return max(m.bodyRows()-2, 1)
+	return max(m.paneRect().h-2, 1)
 }
 
 // paneShows reports whether Home's pane is on screen.
@@ -85,8 +91,28 @@ func (m *app) paneShows() bool {
 	return m.screen == screenHome && m.homeSplit(m.width)
 }
 
-// paneTarget is the session the pane shows: an agent, a terminal or a chat under the cursor.
+// paneOn reports whether a pane that shows a session is on screen: beside the sidebar, or the
+// reading pane of Home's list.
+func (m *app) paneOn() bool {
+	if m.paneShows() {
+		return true
+	}
+	_, ok := m.readingRect()
+	return ok
+}
+
+// paneTarget is the session the pane shows: an agent, a terminal or a chat under the cursor, the
+// sidebar's or Home's list's.
 func (m *app) paneTarget() (session, bool) {
+	if m.inboxShows() {
+		if _, ok := m.readingRect(); !ok {
+			return session{}, false
+		}
+		if r, ok := m.inboxRow(); ok && r.thread != nil {
+			return *r.thread, true
+		}
+		return session{}, false
+	}
 	if !m.paneShows() {
 		return session{}, false
 	}
@@ -99,6 +125,9 @@ func (m *app) paneTarget() (session, bool) {
 
 // dashShows reports whether the pane shows the dashboard of the sandbox under the cursor.
 func (m *app) dashShows() bool {
+	if m.inboxShows() {
+		return m.dashSandbox() != nil
+	}
 	if m.screen == screenComputers {
 		return m.computersSplit(m.width) && m.selected() != nil
 	}
@@ -109,9 +138,36 @@ func (m *app) dashShows() bool {
 	return !ok
 }
 
+// dashSandbox is the computer whose dashboard or detail is on show: the reading pane's, while
+// Home's list shows one, or the one under the sidebar's cursor.
+func (m *app) dashSandbox() *sandboxes.View {
+	if !m.inboxShows() {
+		return m.selected()
+	}
+	if _, shown := m.readingRect(); !shown {
+		return nil
+	}
+	if r, ok := m.inboxRow(); ok && r.sb != "" {
+		for i := range m.sandboxes {
+			if m.sandboxes[i].ID == r.sb {
+				return &m.sandboxes[i]
+			}
+		}
+	}
+	return nil
+}
+
+// dashID is the ID of dashSandbox, or "".
+func (m *app) dashID() string {
+	if sb := m.dashSandbox(); sb != nil {
+		return sb.ID
+	}
+	return ""
+}
+
 // onShow reports whether the pane shows the session with the id.
 func (m *app) onShow(id string) bool {
-	return m.paneShows() && m.pane.key == id
+	return m.paneOn() && m.pane.key == id
 }
 
 // zoomed reports whether the pane is in full screen.
@@ -121,7 +177,7 @@ func (m *app) zoomed() bool {
 
 // paneFocused reports whether the pane has the keys.
 func (m *app) paneFocused() bool {
-	return m.pane.focus && m.pane.key != "" && m.paneShows()
+	return m.pane.focus && m.pane.key != "" && m.paneOn()
 }
 
 // watchPane follows the cursor: when it moves to another session, the pane lets the last one go
@@ -170,15 +226,15 @@ func (m *app) openPane() tea.Cmd {
 	if !ok || x.id() != p.key || p.term != nil || p.dialing || (m.chats.inPane && x.kind == sessionChat) {
 		return nil
 	}
-	sb := m.selected()
-	if m.client == nil {
+	sb, found := m.sandboxByID(x.sandbox)
+	if m.client == nil || !found {
 		return nil // a test's model, which has no Studio to ask
 	}
 	if x.kind == sessionChat {
-		m.chats = chatState{sandbox: *sb, back: screenHome, fold: -1, inPane: true, gen: m.chats.gen}
+		m.chats = chatState{sandbox: sb, back: screenHome, fold: -1, inPane: true, gen: m.chats.gen}
 		return m.openChat(x.chat.ID)
 	}
-	if phaseOf(*sb) != phaseReady {
+	if phaseOf(sb) != phaseReady {
 		return nil
 	}
 	p.dialing = true
@@ -268,6 +324,11 @@ func (m *app) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		for _, r := range m.homeRows() {
 			if r.num == n {
 				m.setCursor(r)
+				m.inbox.sidebar = true
+				if !m.homeSplit(m.width) {
+					p.focus = false
+					return m, m.enterSession()
+				}
 				return m, m.focusPane()
 			}
 		}
@@ -286,7 +347,7 @@ func (m *app) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if !c.composing && key.Matches(msg, keyNewChat) {
-			return m, m.newChat(m.selected())
+			return m, m.newChat(&c.sandbox)
 		}
 		if c.composing && key.Matches(msg, keyEsc) {
 			c.composing = false
@@ -320,7 +381,11 @@ func (m *app) paneBindings() []key.Binding {
 func (m *app) paneBody(w, h int) []string {
 	switch m.at {
 	case atHome:
-		return m.needsPane(w, h, false)
+		if x, ok := m.paneTarget(); ok && m.zoomed() {
+			sb, _ := m.sandboxByID(x.sandbox)
+			return m.sessionPane(x, sb, w, h)
+		}
+		return m.inboxBody(w, h, m.width-w)
 	case atMate:
 		return m.matePane(w, h)
 	case atPlace, atAction:
@@ -338,27 +403,35 @@ func (m *app) paneBody(w, h int) []string {
 		return m.reviewPane(x.review, *sb, w)
 	case x.kind == sessionOlder:
 		return []string{"", styleDim.Render(clip(fmt.Sprintf("%d older threads. Enter lists them.", x.older), w))}
-	case x.kind == sessionChat:
-		if !m.chats.inPane {
-			return []string{m.paneTitle(x, *sb, w), styleDim.Render("Loading…")}
+	}
+	return m.sessionPane(x, *sb, w, h)
+}
+
+// sessionPane is a thread or a terminal in the pane, in w cells and h rows: the chat as it
+// streams, or the terminal's screen under its title, an approval of its sandbox over its top.
+func (m *app) sessionPane(x session, sb sandboxes.View, w, h int) []string {
+	if x.kind == sessionChat {
+		if !m.chats.inPane || m.pane.key != x.id() {
+			return []string{m.paneTitle(x, sb, w), styleDim.Render("Loading…")}
 		}
+		rc := m.paneRect()
 		first := len(m.mouse.rows)
 		lines := m.chatBody(w, h)
 		for i := first; i < len(m.mouse.rows); i++ {
-			m.mouse.rows[i].x0 += m.paneX()
-			m.mouse.rows[i].x1 += m.paneX()
+			r := &m.mouse.rows[i]
+			r.x0, r.x1, r.y = r.x0+rc.x, r.x1+rc.x, r.y+rc.y-bodyTop
 		}
 		return lines
 	}
-	lines := []string{m.paneTitle(x, *sb, w), m.paneRule(w)}
+	lines := []string{m.paneTitle(x, sb, w), m.paneRule(w)}
 	p := &m.pane
 	var screen []string
 	switch {
-	case phaseOf(*sb) != phaseReady:
+	case phaseOf(sb) != phaseReady:
 		screen = []string{styleDim.Render("Start " + sb.Name + " first, with s.")}
 	case p.err != nil:
 		screen = []string{styleFailed.Render(clip("Could not open the terminal: "+p.err.Error(), w)), styleDim.Render("Enter tries again.")}
-	case p.term == nil:
+	case p.term == nil || p.key != x.id():
 		screen = []string{styleDim.Render("Connecting…")}
 	default:
 		screen = p.term.lines(w, h-2)
@@ -418,8 +491,8 @@ func bannerOwner(c card) string {
 	return "banner:" + c.first().ID
 }
 
-// bannerCaps are a banner's choices: allow once, allow and deny for a network request, and the
-// approvals screen, on the card, for more or for any other kind.
+// bannerCaps are a banner's choices: allow once, allow and deny for a network request, and
+// Home's list, on the request, for more or for any other kind.
 func bannerCaps(c card) []choiceCap {
 	if !bannerKeys(c) {
 		return []choiceCap{{"a", "Review it"}}
@@ -432,7 +505,7 @@ func bannerCaps(c card) []choiceCap {
 // the session, and the banner says how to answer instead.
 func (m *app) paneBanner(x session, w int) []string {
 	c, ok := m.paneCard(x)
-	if !ok || w < 24 {
+	if !ok || w < 24 || m.inboxShows() { // Home's list shows the request itself
 		return nil
 	}
 	return m.banner(c, x.sandbox, m.paneFocused(), w)
@@ -486,8 +559,14 @@ func (m *app) answerBanner() bool {
 	}
 	c, waiting := m.paneCard(x)
 	if !waiting {
-		m.setNotice("Nothing waits in "+m.selected().Name+".", false)
+		m.setNotice("Nothing waits in "+m.sandboxName(x.sandbox)+".", false)
 		return false
+	}
+	if m.inboxShows() { // the request is a row of Home's list
+		id := c.first().ID
+		m.pane.focus = false
+		m.goWaiting(id, &resumeState{approval: id, back: screenHome, pane: true})
+		return true
 	}
 	m.pane.focus, m.pane.answer = false, true
 	m.focusButton(bannerOwner(c), 0)
@@ -495,7 +574,7 @@ func (m *app) answerBanner() bool {
 }
 
 // bannerKey answers the banner over the session under the cursor, from the sidebar: y, o and n
-// decide a network request, a reviews it on the approvals screen, and the arrows, space and
+// decide a network request, a reviews it on Home's list, and the arrows, space and
 // enter press its choices. esc lets go of them, back to the pane when it gave the keys. ok is
 // false when no banner shows, or the key isn't one of its.
 func (m *app) bannerKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
@@ -527,11 +606,11 @@ func (m *app) bannerKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	case key.Matches(msg, keyEsc) && (m.buttonAt(owner) >= 0 || p.answer):
 		back()
 		return nil, true
-	case key.Matches(msg, keyApprovals):
+	case key.Matches(msg, keyMore):
 		r := &resumeState{approval: a.ID, back: screenHome, pane: p.answer}
 		m.blurButtons()
 		p.answer = false
-		m.openApprovalsOn(a.ID, r)
+		m.goWaiting(a.ID, r)
 		return nil, true
 	case !bannerKeys(c):
 		return nil, false
@@ -574,7 +653,8 @@ func (m *app) paneCursor() *tea.Cursor {
 	if !shown || x >= m.paneW() || y >= m.termRows() {
 		return nil
 	}
-	return tea.NewCursor(m.paneX()+x, bodyTop+2+y)
+	rc := m.paneRect()
+	return tea.NewCursor(rc.x+x, rc.y+2+y)
 }
 
 // splitBody is Home's wide layout: the sidebar, a line, and the pane; the line is the accent's

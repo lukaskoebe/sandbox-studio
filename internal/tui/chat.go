@@ -522,12 +522,10 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.stopTurn()
 	case key.Matches(msg, keyNewChat):
 		return m, m.openChat("")
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	case key.Matches(msg, keyAnswerIt) && m.screen == screenChat:
 		if card, ok := m.sandboxCard(c.sandbox.ID); ok {
 			id := card.first().ID
-			m.openApprovalsOn(id, &resumeState{approval: id, back: screenChat})
+			m.goWaiting(id, &resumeState{approval: id, back: screenChat})
 		}
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
@@ -694,7 +692,11 @@ func (m *app) scrollTranscript(dir int) {
 // transcriptRows is how many rows the transcript gets: the body less the chat's title line and
 // the composer.
 func (m *app) transcriptRows() int {
-	return max(m.bodyRows()-1-m.composerRows(), 1)
+	rows := m.bodyRows()
+	if m.chats.inPane {
+		rows = m.paneRect().h
+	}
+	return max(rows-1-m.composerRows(), 1)
 }
 
 // chatShows reports whether the chat is on show: on its screen, or in Home's pane.
@@ -1151,7 +1153,7 @@ func (m *app) questionLines(it chat.Item, keys bool, w int) []string {
 }
 
 // permissionLine is a tool call the agent asks to run. The number keys under it decide the first
-// one waiting, here or on the approvals screen.
+// one waiting, here or on Home's list.
 func permissionLine(it chat.Item, w int) string {
 	title := "a tool"
 	if it.Permission != nil && it.Permission.ToolCall.Title != "" {
@@ -1305,7 +1307,7 @@ func (m *app) chatBody(w, h int) []string {
 // transcript instead.
 func (m *app) withBanner(lines []string, w int) []string {
 	c, ok := m.sandboxCard(m.chats.sandbox.ID)
-	if !ok || w < 24 {
+	if !ok || w < 24 || m.chats.inPane && m.inboxShows() { // Home's list shows the request itself
 		return lines
 	}
 	typing := m.screen == screenChat || m.paneFocused()

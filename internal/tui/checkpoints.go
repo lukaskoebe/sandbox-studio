@@ -120,8 +120,6 @@ func (m *app) checkpointsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.askCheckpointName()
 	case key.Matches(msg, keyRestore):
 		m.askRestore()
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}

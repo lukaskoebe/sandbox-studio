@@ -19,7 +19,7 @@
                               [2m│[m [38;5;74m┃[m [1;38;5;74m⇅ NETWORK[m   A computer wants [1m[m                                                                           [2m[m [2m│[m
                               [2m│[m [38;5;74m┃[m [2mpattern [m[2m ‹p›[m   [2mscope [menvironment[2m ‹s›[m   [2mports [mdefault[2m ‹x›[m                                                 [2m│[m
                               [2m│[m [2m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m
-                              [2m│[m   [2ma requests[m
+                              [2m│[m   [2mHome answers it[m
                               [2m│[m 
                               [2m│[m [2mTERMINALS  [mmain · claude[2m · 2[m
                               [2m│[m [2mPORTS      [m:3000 · :8080

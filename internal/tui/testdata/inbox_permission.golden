@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                     ▲ 6 waiting for you
+────────────────────────────────────────────────────────────────────────────────
+ WAITING FOR YOU · 6
+ ▣ Iris  click “Buy now” on https://shop.example                      blub   1m 
+ ▣ Iris  Fill SHOP_PASSWORD on https://shop.example                   blub   2m 
+ ◈ Iris  Iris wants to share a fact with every teammate               Iris   3m 
+ ◈ Iris  Two memory facts contradict each other                              4m 
+▸? Iris  Asks: npm test                                 Fix the login form   5m 
+ ▣ Iris  Iris asks for the browser back: Check the order status       blub   6m 
+
+ QUIET
+ ◐ demo  your computer · booting                                      base      
+────────────────────────────────────────────────────────────────────────────────
+  Agent permission  blub · Default · 5m ago                                     
+    npm test                                                                    
+    In Iris's thread “Fix the login form”                                       
+    1 Allow once  2 Always allow  3 Reject  i ignore
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+y allow once  a always  n deny  enter thread  tab next  ? help  q quit  \ list  

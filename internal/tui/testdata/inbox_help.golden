@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                     ▲ 3 waiting for you
+────────────────────────────────────────────────────────────────────────────────
+Home
+  ↑/↓, j/k   move between the rows; tab: the next request, around the end
+  enter      review a push; open a thread, a computer, or a request's source
+  y / n / i  allow, deny or ignore; a network rule takes the pattern and scope
+  o / O / 1  allow or deny once, with no rule; 1 allows for an hour
+  p / s / x  cycle the host pattern; the scope; any port, not the default ones
+  w          allow a navigation's site for this browser session
+  A / D / r  a group: allow or deny every host; r reviews them one by one
+  y / a / n  an agent's permission: allow once, always or deny; 1-9 its choices
+  y / F      a push: y asks once more, then pushes; F force-pushes a rewrite
+  r / n / i  a push: ask for changes in a note; reject it; ignore it
+  u          undo the last network decision, for a minute after it
+  ←/→ space  move over the request's choices; space or enter presses one
+  pgup/pgdn  scroll the reading pane
+  \          the sidebar: teammates, their threads and computers; \ comes back
+  1-9        go into the sidebar's numbered thread or terminal
+  + / e / /  new computer; switch environment; filter the sidebar
+  l / , / g  Activity; Settings; the Git screen
+  ? / q      this help; quit
+────────────────────────────────────────────────────────────────────────────────
+esc/q back

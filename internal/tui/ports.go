@@ -46,7 +46,7 @@ func (m *app) portsWanted() string {
 	if m.screen != screenDetail && !m.dashShows() {
 		return ""
 	}
-	sb := m.selected()
+	sb := m.dashSandbox()
 	if sb == nil || phaseOf(*sb) != phaseReady {
 		return ""
 	}

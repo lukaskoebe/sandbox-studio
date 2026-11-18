@@ -20,4 +20,4 @@
   , Settings                                                                                 dev
 
 ────────────────────────────────────────────────────────────────────────────────────────────────
-enter open  n new  s start/stop │ a requests  t terminal  c thread │ ? more  q quit
+enter open  n new  s start/stop │ \ list  t terminal  c thread │ ? more  q quit

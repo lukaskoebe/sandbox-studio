@@ -157,7 +157,7 @@ func (m *app) setCursor(r homeRow) {
 func (m *app) goHome() {
 	m.screen = screenHome
 	m.at, m.mate, m.sub = atHome, "", -1
-	m.pane.focus = false
+	m.pane.focus, m.inbox.sidebar = false, false
 	m.filter = ""
 }
 

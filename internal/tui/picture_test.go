@@ -53,7 +53,7 @@ func TestPictureReadsTheSelectedTeammatesBrowser(t *testing.T) {
 	if got := m.pictureWanted(); got != "t2" {
 		t.Fatalf("the Computers screen reads the selected computer's teammate's browser: %q", got)
 	}
-	if press(visualApp(140, 40), "a").pictureWanted() != "" || visualApp(80, 24).pictureWanted() != "" {
+	if press(visualApp(140, 40), "l").pictureWanted() != "" || visualApp(80, 24).pictureWanted() != "" {
 		t.Error("the browser is read off Home, or without the detail pane")
 	}
 	if cmd := m.watchPicture(); cmd != nil || m.picture.teammate != "t2" || !m.picture.busy {

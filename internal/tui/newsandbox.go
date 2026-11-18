@@ -233,8 +233,6 @@ func (m *app) progressKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, keyDelete) && found && phaseOf(sb) == phaseFailed:
 		m.askDelete(&sb)
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	}
 	return m, nil
 }

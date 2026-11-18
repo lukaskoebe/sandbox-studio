@@ -19,7 +19,7 @@ YOUR COMPUTERS                │    │                                        
                               │ ┃ ⇅ NETWORK   A computer wants                                                                             │
                               │ ┃ pattern  ‹p›   scope environment ‹s›   ports default ‹x›                                                 │
                               │ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-                              │   a requests
+                              │   Home answers it
                               │ 
                               │ TERMINALS  main · claude · 2
                               │ PORTS      :3000 · :8080

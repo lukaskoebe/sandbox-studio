@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,16 +98,15 @@ func TestGoldenVisualHome(t *testing.T) {
 	goldenVisual(t, "visual_home", visualApp(80, 24), true)
 }
 
-func TestGoldenVisualApprovals(t *testing.T) {
-	m := visualApp(80, 24)
-	sampleApprovals(m)
-	goldenVisual(t, "visual_approvals", press(m, "a", "j", "j"), true)
+func TestGoldenVisualInbox(t *testing.T) {
+	m := sampleMorning(visualApp(80, 24))
+	goldenVisual(t, "visual_inbox", onCard(m, 2), true)
 }
 
-func TestGoldenVisualApprovalsKinds(t *testing.T) {
+func TestGoldenVisualInboxKinds(t *testing.T) {
 	m := visualApp(80, 24)
 	m.approvals = kindApprovals(m.now)
-	goldenVisual(t, "visual_approvals_kinds", press(m, "a"), true)
+	goldenVisual(t, "visual_inbox_kinds", onCard(m, 0), true)
 }
 
 func TestGoldenVisualChat(t *testing.T) {
@@ -124,7 +124,7 @@ func TestGoldenVisualDetail(t *testing.T) {
 func TestGoldenVisualPager(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
-	goldenVisual(t, "visual_pager", press(m, "a", "enter"), true)
+	goldenVisual(t, "visual_pager", press(onCard(m, 0), "enter"), true)
 }
 
 func TestGoldenWideHeaderShort(t *testing.T) {
@@ -148,21 +148,22 @@ func TestGoldenWideHome180(t *testing.T) {
 func TestGoldenWidePager(t *testing.T) {
 	m := visualApp(140, 40)
 	samplePush(m)
-	goldenVisual(t, "wide_pager_140x40", press(m, "a", "enter"), false)
+	goldenVisual(t, "wide_pager_140x40", press(onCard(m, 0), "enter"), false)
 }
 
 func TestGoldenWidePagerSideBySide(t *testing.T) {
 	m := visualApp(180, 50)
 	samplePush(m)
-	goldenVisual(t, "wide_pager_180x50", press(m, "a", "enter"), false)
+	goldenVisual(t, "wide_pager_180x50", press(onCard(m, 0), "enter"), false)
 }
 
-func TestGoldenWideApprovals(t *testing.T) {
-	m := visualApp(140, 40)
-	m.approvals = kindApprovals(m.now)
-	sampleApprovals(m)
-	m.approvals = append(m.approvals, kindApprovals(m.now)...)
-	goldenVisual(t, "wide_approvals_140x40", press(m, "a"), false)
+func TestGoldenWideInbox(t *testing.T) {
+	for _, size := range [][2]int{{140, 40}, {180, 50}, {100, 30}} {
+		m := visualApp(size[0], size[1])
+		sampleApprovals(m)
+		m.approvals = append(m.approvals, kindApprovals(m.now)...)
+		goldenVisual(t, fmt.Sprintf("wide_inbox_%dx%d", size[0], size[1]), onCard(m, 0), false)
+	}
 }
 
 func TestGoldenWideChatRunning(t *testing.T) {
@@ -247,7 +248,7 @@ func TestSparklineAndBar(t *testing.T) {
 func TestGroupedKeyBar(t *testing.T) {
 	m := visualApp(100, 24)
 	got := ansi.Strip(m.keyBar(100, 0))
-	if got != "enter open  n new  s start/stop │ a requests  t terminal  c thread │ ? more  q quit" {
+	if got != "enter open  n new  s start/stop │ \\ list  t terminal  c thread │ ? more  q quit" {
 		t.Errorf("key bar: %q", got)
 	}
 	if got := ansi.Strip(m.keyBar(40, 0)); !strings.HasSuffix(got, " …") || len([]rune(got)) > 40 {
@@ -289,7 +290,7 @@ func TestMouseWheelMovesTheList(t *testing.T) {
 func TestMouseWheelScrollsThePager(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
-	m = press(m, "a", "enter")
+	m = press(onCard(m, 0), "enter")
 	next, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	if got := next.(*app).pager.scroll; got != wheelLines {
 		t.Errorf("the wheel scrolls the review: %d", got)
@@ -326,7 +327,7 @@ func TestClickingATabActsAsItsKey(t *testing.T) {
 func TestBracketsJumpBetweenFiles(t *testing.T) {
 	m := visualApp(140, 40)
 	samplePush(m)
-	m = press(m, "a", "enter")
+	m = press(onCard(m, 0), "enter")
 	files := m.pagerFiles()
 	if len(files) != 2 || files[0].path != "src/login.tsx" || files[0].adds != 1 || files[0].dels != 1 || files[1].adds != 6 {
 		t.Fatalf("files: %+v", files)
@@ -348,7 +349,7 @@ func TestBracketsJumpBetweenFiles(t *testing.T) {
 func TestVTogglesSideBySide(t *testing.T) {
 	m := visualApp(180, 50)
 	samplePush(m)
-	m = press(m, "a", "enter")
+	m = press(onCard(m, 0), "enter")
 	if !m.sideBySide() {
 		t.Fatal("180 columns: not side by side")
 	}
@@ -364,9 +365,9 @@ func TestUsageIsReadOnlyWhileHomeShows(t *testing.T) {
 	if got := m.usageWanted(); len(got) != 2 || got[0] != "sb1" || got[1] != "sb2" {
 		t.Errorf("Home reads the running sandboxes: %v", got)
 	}
-	m = press(m, "a")
+	m = press(m, "l")
 	if got := m.usageWanted(); len(got) != 0 {
-		t.Errorf("the approvals read usage: %v", got)
+		t.Errorf("Activity reads usage: %v", got)
 	}
 	m = sampleApp()
 	if got := m.usageWanted(); len(got) != 0 {
@@ -378,11 +379,11 @@ func TestUsageIsReadOnlyWhileHomeShows(t *testing.T) {
 	}
 }
 
-// TestClickingACardSelectsIt selects the card a click lands on, on any of its lines.
+// TestClickingACardSelectsIt selects the request whose row a click lands on.
 func TestClickingACardSelectsIt(t *testing.T) {
 	m := visualApp(80, 24)
 	sampleApprovals(m)
-	m = press(m, "a")
+	m = onCard(m, 0)
 	view := ansi.Strip(m.View().Content)
 	y := -1
 	for i, l := range strings.Split(view, "\n") {
@@ -395,21 +396,21 @@ func TestClickingACardSelectsIt(t *testing.T) {
 		t.Fatalf("no card of registry.npmjs.org:\n%s", view)
 	}
 	next, _ := m.Update(tea.MouseClickMsg{X: 20, Y: y, Button: tea.MouseLeft})
-	if got := next.(*app).approvalCursor; got != 2 {
-		t.Errorf("the click selected card %d, want 2", got)
+	if got, want := next.(*app).inbox.cursor, "card/"+m.cards()[2].first().ID; got != want {
+		t.Errorf("the click selected %q, want %q", got, want)
 	}
 }
 
 func TestGoldenVisualPagerWords(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
-	goldenVisual(t, "visual_pager_words", press(m, "a", "enter", "G"), true)
+	goldenVisual(t, "visual_pager_words", press(onCard(m, 0), "enter", "G"), true)
 }
 
 func TestClickingAKeycapPressesIt(t *testing.T) {
 	m := visualApp(120, 30)
 	sampleApprovals(m)
-	m = press(m, "a")
+	m = onCard(m, 0)
 	// at finds the key's place on the screen, and checks the screen shows the key there.
 	at := func(k, label string) keyHit {
 		t.Helper()
@@ -425,7 +426,7 @@ func TestClickingAKeycapPressesIt(t *testing.T) {
 		t.Fatalf("no key %s among %+v", k, m.mouse.keys)
 		return keyHit{}
 	}
-	h := at("enter", "Review the diff")
+	h := at("enter", "review")
 	next, _ := m.Update(tea.MouseClickMsg{X: h.x0 + 1, Y: h.y, Button: tea.MouseLeft})
 	m = next.(*app)
 	if m.screen != screenPager {
@@ -436,7 +437,7 @@ func TestClickingAKeycapPressesIt(t *testing.T) {
 		t.Errorf("the key bar's esc is on row %d, want 28", h.y)
 	}
 	next, _ = m.Update(tea.MouseClickMsg{X: h.x1 - 1, Y: h.y, Button: tea.MouseLeft})
-	if m = next.(*app); m.screen != screenApprovals {
+	if m = next.(*app); m.screen != screenHome {
 		t.Errorf("the key bar's esc goes back: screen %v", m.screen)
 	}
 }
@@ -446,7 +447,7 @@ func TestNetworkColumnReadsTheSelectedSandbox(t *testing.T) {
 	if got := m.netWanted(); got != "sb2" {
 		t.Fatalf("the Computers screen's dashboard reads the selected computer's connections: %q", got)
 	}
-	if visualApp(99, 50).netWanted() != "" || press(visualApp(180, 50), "a").netWanted() != "" {
+	if visualApp(99, 50).netWanted() != "" || press(visualApp(180, 50), "l").netWanted() != "" {
 		t.Error("the network is read without the pane, or off Home")
 	}
 	if cmd := m.watchNet(); cmd != nil || m.net.sandbox != "sb2" || !m.net.busy {

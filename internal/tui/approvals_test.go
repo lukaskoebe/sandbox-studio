@@ -24,15 +24,22 @@ func netApproval(id, host string, at time.Time, patterns ...string) api.Approval
 	}
 }
 
-// sampleApprovals sets three cards on the approvals screen, newest first: a git push, three
+// sampleApprovals sets three requests on Home's list, newest first: a git push, three
 // hosts one sandbox asked for close together, and one network request that came alone.
 func sampleApprovals(m *app) {
 	t := m.now
 	git := api.ApprovalView{
 		Approval: store.Approval{ID: "g1", EnvironmentID: "env1", SandboxID: "sb2", Kind: "git.push", Status: "pending", CreatedAt: t.Add(-30 * time.Second)},
 		Git: &gitreview.GitDetail{
-			Push:   store.GitPush{ForgeName: "GitHub", Owner: "acme", Repo: "web", Ref: "refs/heads/feature"},
-			Review: &gitreview.PushReview{Sandbox: "api-refactor", Branch: "feature/login", Commits: make([]gitreview.Commit, 2)},
+			Push: store.GitPush{ForgeName: "GitHub", Owner: "acme", Repo: "web", Ref: "refs/heads/feature"},
+			Review: &gitreview.PushReview{
+				Sandbox: "api-refactor", Branch: "feature/login", New: "a4c2f0d9e1",
+				Commits: []gitreview.Commit{
+					{SHA: "a4c2f0d9e1", Author: "Finn", When: t.Add(-2 * time.Minute), Subject: "Test that enter submits the login form"},
+					{SHA: "77d0b2c4aa", Author: "Finn", When: t.Add(-5 * time.Minute), Subject: "Submit the login form on enter"},
+				},
+				Files: 2, Additions: 7, Deletions: 1, Diff: sampleDiff,
+			},
 		},
 	}
 	group1 := netApproval("n2", "pypi.org", t.Add(-2*time.Minute+2*time.Second), "pypi.org", "*.pypi.org")
@@ -67,9 +74,7 @@ func TestCardsGroupCloseRequestsOfOneSandbox(t *testing.T) {
 func TestReviewOneByOneSplitsTheGroup(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	m.approvalCursor = 1
-	m.screen = screenApprovals
-	m = press(m, "r")
+	m = press(onCard(m, 1), "r")
 	if got := len(m.cards()); got != 5 {
 		t.Fatalf("after review one by one: %d cards, want every approval on its own", got)
 	}
@@ -197,7 +202,7 @@ func TestScopeKeyCyclesABrowserRequestsReach(t *testing.T) {
 	a := browserApproval("b", "cdn.example.com", m.now)
 	a.Teammate = &api.ApprovalTeammate{ID: "t1", Name: "Iris", ApprovalScope: "teammate"}
 	m.approvals = []api.ApprovalView{a}
-	m.screen = screenApprovals
+	m = onCard(m, 0)
 	var seen []string
 	for range 3 {
 		seen = append(seen, stripANSI(strings.Join(m.cardLines(m.cards()[0], true, 120), "\n")))
@@ -216,29 +221,31 @@ func TestScopeKeyCyclesABrowserRequestsReach(t *testing.T) {
 func TestNetworkKeysMakeTheirDecision(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	m.screen = screenApprovals
-	m.approvalCursor = 2 // the single request
+	m = onCard(m, 2) // the single request
 	m.client = nil
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
-	if next.(*app).screen != screenApprovals || cmd == nil {
+	if !next.(*app).inboxShows() || cmd == nil {
 		t.Fatal("allow on a network card did not start a decision")
-	}
-	m.approvalCursor = 0
-	if _, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"}); cmd != nil {
-		t.Fatal("allow on a git card decided it in the terminal")
-	}
-	if got := m.notice.text; got != "Review it first: enter opens the diff." {
-		t.Fatalf("git card hint: %q", got)
 	}
 }
 
-func TestApprovalsOpenFromAnywhereAndGoBack(t *testing.T) {
-	m := press(sampleApp(), "j", "a")
-	if m.screen != screenApprovals || m.back != screenHome {
-		t.Fatalf("a: screen %v, back %v", m.screen, m.back)
+// \ gives the keys to the sidebar and back to Home's list.
+func TestBackslashMovesBetweenTheListAndTheSidebar(t *testing.T) {
+	m := sampleApp()
+	sampleApprovals(m)
+	m = press(m, "\\")
+	if !m.inboxKeys() || m.at != atHome {
+		t.Fatalf("\\ from a computer's row: at %v, the list has the keys %v", m.at, m.inboxKeys())
 	}
-	if got := press(m, "esc").screen; got != screenHome {
-		t.Fatalf("esc from approvals: %v", got)
+	m = press(m, "\\")
+	if m.inboxKeys() || m.at != atHome {
+		t.Fatalf("\\ from the list: at %v, the list has the keys %v", m.at, m.inboxKeys())
+	}
+	if m = press(m, "j"); m.at == atHome {
+		t.Fatal("j after \\ moved the list's cursor, not the sidebar's")
+	}
+	if m = press(m, "esc"); !m.inboxKeys() {
+		t.Fatal("esc in the sidebar did not give the list the keys")
 	}
 }
 
@@ -290,7 +297,7 @@ func TestDecisionsCreateRulesOnTheServer(t *testing.T) {
 	}
 }
 
-// The approvals screen decides through the server: an allow on a card creates its rule and the
+// Home's list decides through the server: an allow on a card creates its rule and the
 // card goes; allow all on a group creates a rule per host.
 func TestApprovalsScreenDecidesThroughTheServer(t *testing.T) {
 	ctx := context.Background()
@@ -307,8 +314,9 @@ func TestApprovalsScreenDecidesThroughTheServer(t *testing.T) {
 	request("pypi.python.org")
 
 	m := newApp(ctx, connect(t, s), s.Addr)
+	m.env, m.loaded = s.Env, true
 	m = run(m, m.loadApprovals())
-	m = press(m, "a")
+	m = onCard(m, 0)
 	if cards := m.cards(); len(cards) != 1 || !cards[0].group {
 		t.Fatalf("three close requests: %d cards", len(cards))
 	}
@@ -345,8 +353,9 @@ func TestBrowserPageGroupAllowsTheBrowserOnly(t *testing.T) {
 	request("fonts.example.com")
 
 	m := newApp(ctx, connect(t, s), s.Addr)
+	m.env, m.loaded = s.Env, true
 	m = run(m, m.loadApprovals())
-	m = press(m, "a")
+	m = onCard(m, 0)
 	if cards := m.cards(); len(cards) != 1 || !cards[0].group {
 		t.Fatalf("one page's requests: %d cards", len(cards))
 	}

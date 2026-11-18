@@ -20,4 +20,4 @@ Sandbox Studio · Default                                     ▲ 2 waiting for 
   + New computer                                                                
 
 ────────────────────────────────────────────────────────────────────────────────
-enter open  n new  s start/stop  a requests  t terminal  c thread  ? help …
+enter open  n new  s start/stop  \ list  t terminal  c thread  ? help  q quit

@@ -117,6 +117,7 @@ type resumeState struct {
 	back     screen        // the screen to return to
 	pane     bool          // Home's pane had the keys
 	attach   *attachTarget // the terminal to attach again
+	home     *homeCursor   // Home's cursor as it was, when back is Home
 }
 
 // attachTarget is a terminal to attach: its sandbox, by ID and name, and its own name.
@@ -143,33 +144,14 @@ func (m *app) resume() tea.Cmd {
 		}
 	default:
 		m.screen = r.back
+		if r.home != nil {
+			m.restoreCursor(*r.home)
+		}
 		if _, ok := m.paneTarget(); ok && r.pane {
 			m.pane.focus = true
 		}
 	}
 	return nil
-}
-
-// cardIndex is the index of the card that holds the approval, or -1.
-func (m *app) cardIndex(id string) int {
-	for i, c := range m.cards() {
-		for _, a := range c.approvals {
-			if a.ID == id {
-				return i
-			}
-		}
-	}
-	return -1
-}
-
-// openApprovalsOn shows the approvals with the cursor on the card of the approval, and returns
-// to r once it is decided.
-func (m *app) openApprovalsOn(id string, r *resumeState) {
-	m.openApprovals()
-	if i := m.cardIndex(id); i >= 0 {
-		m.approvalCursor = i
-	}
-	m.resuming = r
 }
 
 // A confirmation's choices: y does it, n keeps things as they are. The arrows start on keep, so

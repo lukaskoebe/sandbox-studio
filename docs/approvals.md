@@ -126,10 +126,11 @@ change it.
   (3 at most) has Allow all, which makes a rule for that sandbox and for those hosts only: nobody
   saw Options, and what arrives after it asks as usual. The browser's Notification API has no
   buttons without a service worker, so there a click only brings the window to the front.
-- The terminal UI ([terminal UI](tui.md)) lists the same approvals and decides network approvals
-  through the same endpoint, with the same choices. It reviews git pushes and pull requests in
-  its pager, with their commits and diff, and decides them there. Browser, memory and chat
-  approvals open in the browser.
+- The terminal UI ([terminal UI](tui.md)) lists the same approvals on its Home, one row each,
+  and decides them through the same endpoint, with the same choices; keeping both facts of a
+  memory conflict, or editing one, opens in the browser. It reviews git pushes and pull
+  requests in its pager, with their commits and diff, and decides them there or from their
+  row, where `y` asks once more because the diff wasn't read.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
   side by side, chat permission options. Every card names its kind in a chip and marks the

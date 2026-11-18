@@ -3,7 +3,7 @@
 // the TUI's Home as its golden test draws it, beside a key to its marks and keys.
 import { Code } from '@astrojs/starlight/components'
 import TerminalScreen from './TerminalScreen.astro'
-import home from '../../../internal/tui/testdata/visual_home.golden?raw'
+import home from '../../../internal/tui/testdata/visual_inbox.golden?raw'
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
 
@@ -44,24 +44,24 @@ k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s`),
 </div>
 
 <div class="tui not-content">
-  <TerminalScreen ansi={home} label="The TUI's Home: two teammates, one with a request waiting, your computer, and the environment" />
+  <TerminalScreen ansi={home} label="The TUI's Home: four requests waiting, a push, a group of hosts, an agent's permission and a host, then the quiet threads, a scheduled run and your computer, with the permission under the cursor read in full" />
   <div class="tui-copy">
     <p class="landing-eyebrow">Terminal UI</p>
     <p>
       <code>studio tui</code> drives the same teammates, computers, requests and git reviews from the
       keyboard, on the Studio machine or over SSH.
     </p>
-    <ul class="tui-legend" aria-label="Computer states">
-      <li><span class="ok">●</span> running</li>
-      <li><span class="warn">▲</span> waiting for you</li>
-      <li><span class="off">○</span> stopped</li>
-      <li><span class="acc">◐</span> booting</li>
+    <ul class="tui-legend" aria-label="Home's marks">
+      <li><span class="git">±</span> push</li>
+      <li><span class="acc">⇅</span> network</li>
+      <li><span class="chat">?</span> permission</li>
+      <li><span class="off">◷</span> scheduled</li>
     </ul>
     <p class="tui-keys">
+      <span><kbd>tab</kbd> next</span>
+      <span><kbd>y</kbd> allow</span>
       <span><kbd>enter</kbd> open</span>
-      <span><kbd>a</kbd> requests</span>
-      <span><kbd>t</kbd> terminal</span>
-      <span><kbd>c</kbd> thread</span>
+      <span><kbd>\</kbd> sidebar</span>
     </p>
     <a class="tui-link" href={`${base}tui/`}>The terminal UI <span aria-hidden="true">→</span></a>
   </div>
@@ -129,18 +129,17 @@ k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s`),
     color: var(--t-fg);
     font: 0.8rem / 1.4 var(--ss-font-mono);
   }
-  .ok {
-    color: var(--t-ok);
-  }
-  .warn {
-    color: var(--t-warn);
-    font-weight: 700;
-  }
   .off {
     color: var(--t-dim);
   }
   .acc {
     color: var(--t-acc);
+  }
+  .git {
+    color: var(--t-violet);
+  }
+  .chat {
+    color: var(--t-chat);
   }
   .tui-keys {
     display: flex;

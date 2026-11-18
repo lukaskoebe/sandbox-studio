@@ -482,7 +482,7 @@ func (m *app) moveRow(dir int) {
 	i := min(max(m.cursorRow(rows)+dir, 0), len(rows)-1)
 	m.setCursor(rows[i])
 	m.blurButtons()
-	m.pane.answer = false
+	m.pane.answer, m.inbox.sidebar = false, true
 }
 
 // numbered enters the session with the number n: Home's pane takes the keys for it, or, on a
@@ -515,9 +515,9 @@ func (m *app) nextWaiting() {
 			}
 		}
 	}
-	if m.at != atHome && len(m.cards()) > 0 {
-		m.goHome() // what else waits is on Home's cards
-		m.approvalCursor = 0
+	if len(m.cards()) > 0 {
+		m.goHome() // what else waits is on Home's list, first
+		m.inbox.cursor, m.inbox.at = "", 0
 		return
 	}
 	m.setNotice("Nothing waits for you.", false)
@@ -527,8 +527,19 @@ func (m *app) nextWaiting() {
 // idle one with the composer ready), and the older row shows the older threads.
 func (m *app) enterSession() tea.Cmd {
 	x, ok := m.selectedSession()
-	sb := m.selected()
-	if !ok || sb == nil {
+	if !ok || m.selected() == nil {
+		return nil
+	}
+	return m.enterOf(x)
+}
+
+// enterOf enters the session x, from the screen on show.
+func (m *app) enterOf(x session) tea.Cmd {
+	sb, ok := m.sandboxByID(x.sandbox)
+	if x.kind == sessionChat {
+		sb, ok = m.sandboxByID(x.chat.SandboxID)
+	}
+	if !ok && x.kind != sessionOlder {
 		return nil
 	}
 	// What it does from now on is seen: only a change after the user left it is news.
@@ -543,17 +554,14 @@ func (m *app) enterSession() tea.Cmd {
 		m.pager.back = screenHome
 		return nil
 	case sessionChat:
-		if c, ok := m.sandboxByID(x.chat.SandboxID); ok {
-			sb = &c
-		}
-		m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, gen: m.chats.gen}
+		m.chats = chatState{sandbox: sb, back: m.screen, fold: -1, gen: m.chats.gen}
 		cmd := m.openChat(x.chat.ID)
 		if x.chat.State == store.ChatIdle && m.stateOf(x) != stateBlocked {
 			m.chats.composing = true
 		}
 		return cmd
 	}
-	return m.attachTo(sb, x.term.Name)
+	return m.attachTo(&sb, x.term.Name)
 }
 
 // showOlder shows or hides a teammate's older threads.

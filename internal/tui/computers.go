@@ -17,14 +17,7 @@ import (
 // it was.
 type computersState struct {
 	cursor int
-	saved  struct {
-		at        rowKind
-		mate      string
-		cursor    int
-		sub       int
-		rowPlace  envPlace
-		rowAction rowAction
-	}
+	saved  homeCursor
 }
 
 var keyNewComputer = key.NewBinding(key.WithKeys("+"), key.WithHelp("+", "new computer"))
@@ -47,8 +40,7 @@ func (m *app) computerRows() (rows []int, yours int) {
 // openComputers shows the Computers screen, its cursor on the computer under Home's.
 func (m *app) openComputers() {
 	c := &m.computers
-	c.saved.at, c.saved.mate, c.saved.cursor, c.saved.sub = m.at, m.mate, m.cursor, m.sub
-	c.saved.rowPlace, c.saved.rowAction = m.rowPlace, m.rowAction
+	c.saved = m.saveCursor()
 	m.filter = ""
 	rows, _ := m.computerRows()
 	c.cursor = 0
@@ -91,8 +83,7 @@ func (m *app) computersFollow() {
 // closeComputers goes back to Home, with Home's cursor where it was.
 func (m *app) closeComputers() {
 	c := &m.computers
-	m.at, m.mate, m.cursor, m.sub = c.saved.at, c.saved.mate, c.saved.cursor, c.saved.sub
-	m.rowPlace, m.rowAction = c.saved.rowPlace, c.saved.rowAction
+	m.restoreCursor(c.saved)
 	m.screen = screenHome
 }
 
@@ -108,7 +99,7 @@ func (m *app) computersKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.computersMove(1)
 	case key.Matches(msg, keyOpen):
 		if sb != nil {
-			m.screen, m.detailBack = screenDetail, screenComputers
+			m.screen, m.detailBack, m.detailHome = screenDetail, screenComputers, nil
 		}
 	case key.Matches(msg, keyNewComputer):
 		if m.env.ID != "" {
@@ -126,8 +117,6 @@ func (m *app) computersKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openCheckpoints(sb)
 	case key.Matches(msg, keyDelete):
 		m.askDelete(sb)
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}

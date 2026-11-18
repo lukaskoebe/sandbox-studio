@@ -113,10 +113,10 @@ func kindApprovals(now time.Time) []api.ApprovalView {
 	}
 }
 
-func TestGoldenApprovalsKinds(t *testing.T) {
+func TestGoldenInboxKinds(t *testing.T) {
 	m := sampleApp()
 	m.approvals = kindApprovals(m.now)
-	golden(t, "approvals_kinds", press(m, "a"))
+	golden(t, "inbox_kinds", onCard(m, 0))
 }
 
 // Each kind's decision has the body its web card sends.
@@ -213,8 +213,7 @@ func TestKindKeysDecideOnTheirCards(t *testing.T) {
 			m := sampleApp()
 			m.client = client
 			m.approvals = kindApprovals(m.now)
-			m = press(m, "a")
-			m.approvalCursor = c.cursor
+			m = onCard(m, c.cursor)
 			m = press(m, c.keys[:len(c.keys)-1]...)
 			m = pressRun(t, m, c.keys[len(c.keys)-1])
 			got := rec.last(t)
@@ -233,17 +232,16 @@ func TestKindKeysDecideOnTheirCards(t *testing.T) {
 func TestKindCardsLeaveTheRestToTheBrowser(t *testing.T) {
 	m := sampleApp()
 	m.approvals = kindApprovals(m.now)
-	m = press(m, "a")
-	m.approvalCursor = 3
+	m = onCard(m, 3)
 	m = press(m, "enter")
 	if want := "open in browser: http://127.0.0.1:7878/e/env1/settings/memory"; m.notice.text != want {
 		t.Fatalf("enter on a conflict: %q", m.notice.text)
 	}
-	m.approvalCursor = 4
+	m = onCard(m, 4)
 	if _, cmd := pressCmd(m, "7"); cmd != nil {
 		t.Fatal("a number past the options decided")
 	}
-	m.approvalCursor = 1
+	m = onCard(m, 1)
 	if _, cmd := pressCmd(m, "r"); cmd != nil {
 		t.Fatal("r decided a credential")
 	}
@@ -349,17 +347,16 @@ func TestQuestionFormReadsTheSchema(t *testing.T) {
 	}
 }
 
-// The approvals screen's key bar follows the card's kind.
+// Home's key bar follows the kind of the request under the cursor.
 func TestKindBindingsFollowTheCard(t *testing.T) {
 	m := sampleApp()
 	m.approvals = kindApprovals(m.now)
-	m = press(m, "a")
 	var bars []string
 	for i := range m.approvals {
-		m.approvalCursor = i
+		m = onCard(m, i)
 		bars = append(bars, stripANSI(m.keyBar(m.width, 0)))
 	}
-	for i, want := range []string{"r always", "y fill", "y share", "1 keep A", "1-3 choose"} {
+	for i, want := range []string{"r always", "y fill", "y share", "1 keep A", "y allow once"} {
 		if !strings.Contains(bars[i], want) {
 			t.Errorf("card %d: %q, want %q", i, bars[i], want)
 		}

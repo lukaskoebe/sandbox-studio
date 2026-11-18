@@ -64,7 +64,7 @@ const sideWidth = 160
 
 // openPager shows the review of a git approval.
 func (m *app) openPager(a api.ApprovalView) {
-	m.pager = pagerState{approval: a, back: screenApprovals, openPR: defaultOpenPR(a)}
+	m.pager = pagerState{approval: a, back: m.screen, openPR: defaultOpenPR(a)}
 	m.screen = screenPager
 }
 
@@ -134,7 +134,12 @@ func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []dif
 	if !m.look.plain {
 		title = m.pal.hue(areaGit).Bold(true).Render(kindChip(a))
 	}
-	lines := []string{title + "  " + styleBold.Render(gitSummary(a)), ""}
+	lines := []string{title + "  " + styleBold.Render(clip(gitSummary(a), max(w-lipgloss.Width(title)-2, 8))), ""}
+	prose := func(text string) { // a sentence, wrapped to the review's measure
+		for _, l := range wrapText(text, min(w, 76)) {
+			lines = append(lines, styleDim.Render(l))
+		}
+	}
 	rv, pr := git.Review, git.PullRequest
 	if rv != nil && !m.look.plain {
 		lines[1] = m.changeStrip(rv.Files, rv.Additions, rv.Deletions)
@@ -169,12 +174,13 @@ func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []dif
 	}
 	switch {
 	case pr != nil:
-		lines = append(lines, "", styleDim.Render("The push was approved and is on the forge. Approving opens this pull request."))
+		lines = append(lines, "")
+		prose("The push is already on the forge. Approving opens this pull request.")
 	default:
-		lines = append(lines, "", styleDim.Render("Nothing reaches the forge until you approve; the agent sees a rejection on"),
-			styleDim.Render("its next fetch."))
+		lines = append(lines, "")
+		prose("Nothing reaches the forge until you approve; the agent sees a rejection on its next fetch.")
 		if rv != nil && rv.Upstream != "" {
-			lines = append(lines, styleDim.Render("Approving pushes it "+rv.Upstream+"."))
+			prose("Approving pushes it " + rv.Upstream + ".")
 		}
 	}
 	if rv != nil {
@@ -503,20 +509,9 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.setNotice("The push rewrites "+gitBranch(a)+": F force-pushes it.", false)
 	case key.Matches(msg, keyPush, keyForcePush) && (forced(a) == key.Matches(msg, keyForcePush)):
 		m.screen = p.back
-		if a.Git.PullRequest != nil {
-			return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Opening", "the pull request")
-		}
-		d := Decision{Action: "allow", Scope: "sandbox", Force: forced(a)}
-		what := "the push of " + gitBranch(a)
-		if a.Git.Review != nil && a.Git.Review.PullRequest != nil {
-			d.PullRequest = &PullRequestChoice{Open: p.openPR}
-			if p.openPR {
-				what += " with its pull request"
-			}
-		}
-		return m, m.decide(card{approvals: []api.ApprovalView{a}}, d, "Approved", what)
+		return m, m.approvePush(a, p.openPR)
 	case key.Matches(msg, keyChanges) && a.Git.PullRequest == nil:
-		m.askChanges(a)
+		m.askChanges(a, p.back)
 	case key.Matches(msg, keyReject):
 		m.screen = p.back
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
@@ -528,10 +523,27 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// approvePush approves a push, with its pull request when openPR says so, or opens a pull
+// request.
+func (m *app) approvePush(a api.ApprovalView, openPR bool) tea.Cmd {
+	if a.Git.PullRequest != nil {
+		return m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Opening", "the pull request")
+	}
+	d := Decision{Action: "allow", Scope: "sandbox", Force: forced(a)}
+	what := "the push of " + gitBranch(a)
+	if a.Git.Review != nil && a.Git.Review.PullRequest != nil {
+		d.PullRequest = &PullRequestChoice{Open: openPR}
+		if openPR {
+			what += " with its pull request"
+		}
+	}
+	return m.decide(card{approvals: []api.ApprovalView{a}}, d, "Approved", what)
+}
+
 // askChanges asks what the agent should change, and then rejects the push with it as the note.
 // For a teammate's sandbox the note also goes to a new chat there, as the web's review does by
 // default, so the agent picks it up and pushes again.
-func (m *app) askChanges(a api.ApprovalView) {
+func (m *app) askChanges(a api.ApprovalView, back screen) {
 	who := firstNonEmpty(a.Git.Push.TeammateName, "the agent")
 	m.ask(&linePrompt{
 		label: "What should " + who + " change? ",
@@ -541,7 +553,7 @@ func (m *app) askChanges(a api.ApprovalView) {
 			if note == "" {
 				return "say what to change", nil
 			}
-			m.screen = m.pager.back
+			m.screen = back
 			return "", m.requestChanges(a, note)
 		},
 	})

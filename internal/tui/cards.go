@@ -42,7 +42,7 @@ func kindChip(a api.ApprovalView) string {
 	return firstNonEmpty(glyph, "•") + " " + strings.ToUpper(name)
 }
 
-// visualCard is one card of the approvals screen in the visual look, w cells wide, and where its
+// visualCard is one request's card in Home's reading pane in the visual look, w cells wide, and where its
 // keycaps sit in it.
 func (m *app) visualCard(c card, selected bool, w int) ([]string, []keyHit) {
 	a := c.first()

@@ -51,24 +51,19 @@ func TestANewCardSlidesIn(t *testing.T) {
 	for _, a := range m.approvals {
 		m.known[a.ID] = true
 	}
-	m = press(m, "a")
+	m = onCard(m, 0)
 	full := len(strings.Split(m.View().Content, "\n"))
 	if full != 30 {
 		t.Fatalf("frame of %d lines", full)
 	}
-	card := func() int {
-		n := 0
-		for _, l := range strings.Split(ansi.Strip(m.View().Content), "\n") {
-			if strings.Contains(l, "example.org") || (n > 0 && !strings.Contains(l, "╰")) {
-				n++
-			} else if n > 0 {
-				return n + 1
-			}
-		}
-		return n
+	card := func() int { // the lines of the reading pane's card
+		r, _ := m.inboxRow()
+		rc, _ := m.readingRect()
+		return len(m.reading(r, rc))
 	}
 	arrived := netApproval("n9", "example.org", m.now, "example.org")
 	m.Update(approvalsLoaded{list: append([]api.ApprovalView{arrived}, m.approvals...)})
+	m.inbox.cursor = "card/n9"
 	if len(m.slide.ids) != 1 {
 		t.Fatalf("no slide for the new card: %+v", m.slide)
 	}

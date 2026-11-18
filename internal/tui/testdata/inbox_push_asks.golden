@@ -1,0 +1,24 @@
+Sandbox Studio · Default                                     ▲ 3 waiting for you
+────────────────────────────────────────────────────────────────────────────────
+ WAITING FOR YOU · 3
+▸± Finn  Push 2 commits to feature/login on GitHub/acme/web   api-refactor  30s 
+ ⇅ Finn  api-refactor wants 3 hosts                            pypi.org +2   1m 
+ ⇅ Iris  blub wants registry.npmjs.org:443                     *.npmjs.org  10m 
+
+ QUIET
+ ◐ demo  your computer · booting                                      base      
+────────────────────────────────────────────────────────────────────────────────
+Git push  Push 2 commits to feature/login on GitHub/acme/web
+
+  Repository GitHub/acme/web
+  Computer   api-refactor
+  Branch     feature/login · new branch
+  Change     ∅ → a4c2f0d · 2 files +7 −1
+
+Nothing reaches the forge until you approve; the agent sees a rejection on
+its next fetch.
+
+Commits (2)
+────────────────────────────────────────────────────────────────────────────────
+y push  n keep
+Push 2 commits to feature/login without opening the diff?  y Push  [n Keep]

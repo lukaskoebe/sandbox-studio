@@ -1,0 +1,29 @@
+ ◆ Studio  Default ▾   Home 9   Activity   Settings                     ▲ 9 waiting for you · 12:00 
+───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────
+▌ Home                    ▲ 9 │  WAITING FOR YOU · 9
+                              │ ▌± Finn  Push 2 commits to feature/login on Git…  api-refactor  30s 
+ TEAMMATES                    │  ⇅ Finn  api-refactor wants 3 hosts                pypi.org +2   1m 
+  Iris frontend           ▲ 7 │  ⇅ Iris  blub wants registry.npmjs.org:443         *.npmjs.org  10m 
+  Finn backend            ▲ 2 │  ▣ Iris  click “Buy now” on https://shop.example          blub   1m 
+  + New teammate              │  ▣ Iris  Fill SHOP_PASSWORD on https://shop.example       blub   2m 
+                              │  ◈ Iris  Iris wants to share a fact with every teammate   Iris   3m 
+ YOUR COMPUTERS               │  ◈ Iris  Two memory facts contradict each other                  4m 
+  ◐ demo              booting │  ? Iris  Asks: npm test                     Fix the login form   5m 
+  + New computer              │  ▣ Iris  Iris asks for the browser back: Check the orde…  blub   6m 
+                              │ 
+ ENVIRONMENT                  │  QUIET
+  Computers                 4 │  ◐ demo  your computer · booting                          base      
+  Network                 ▲ 2 │ ────────────────────────────────────────────────────────────────────
+  Secrets                     │ ± GIT PUSH  Push 2 commits to feature/login on GitHub/acme/web
+  Memory                      │ 2 files  +7 −1  █████████████▒▒
+  Activity                    │ 
+  , Settings              dev │   Repository GitHub/acme/web
+                              │   Computer   api-refactor
+                              │   Branch     feature/login · new branch
+                              │   Change     ∅ → a4c2f0d · 2 files +7 −1
+                              │ 
+                              │ Nothing reaches the forge until you approve; the agent sees a
+                              │ rejection on its next fetch.
+                              │ 
+──────────────────────────────┴─────────────────────────────────────────────────────────────────────
+y approve and push  r request changes  n reject  enter review  tab next  + new computer …

@@ -1,35 +1,35 @@
  ◆ Studio  Default ▾   Home 3   Activity   Settings                                                             ▲ 3 waiting for you · 12:00 
 ───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 3 │ Iris · frontend                                                                            ▲ waiting for you
-                              │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────
- TEAMMATES                    │ COMPUTERS  ● blub · node-22+python-3.13@2 · 2 CPUs · 2 GiB · up 2h
-▌ Iris frontend           ▲ 1 │            ○ docs-site · node@3 · stopped
-  1 ▲ claude                  │ 
-  2 ▲ Fix the login form      │ THREADS    1 ▲ claude  agent
-  3 ◷ Update the deploy notes │            2 ▲ Fix the login form  thread
-      + 4 older               │            3 ◷ Update the deploy notes  sched
-  4   main                    │            4   main  term
-  Finn                    ▲ 2 │ 
-  5 ▲ codex                   │ TASKS      none
-  6 ▲ Port the parser to go   │ 
-  7   main                    │ KNOWS      nothing yet
-  + New teammate              │ NETWORK    Default, the environment's · new rules apply to Iris's computers
-                              │ 
- YOUR COMPUTERS               │ c new thread · T agent in a terminal · t shell · + another computer · f fork
-  ◐ demo              booting │ 
-  + New computer              │ 
-                              │ 
- ENVIRONMENT                  │ 
-  Computers                 4 │ 
-  Network                 ▲ 2 │ 
-  Secrets                     │ 
-  Memory                      │ 
-  Activity                    │ 
-  , Settings              dev │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-c new thread  T agent  t shell  + add computer  →/← older threads  f fork  s start/stop  1-9 jump in  tab next waiting │ ? more  q quit
+▌ Home                    ▲ 3 │  WAITING FOR YOU · 3                          │ ╭──────────────────────────────────────────────────────────╮
+                              │  ± Finn  Push 2 commits t…  api-refactor  30s │ ┃ ⇅ NETWORK   api-refactor wants 3 hosts  Default · 1m ago │
+ TEAMMATES                    │ ▌⇅ Finn  api-refactor want…  pypi.org +2   1m │ ┃ pypi.org:443  files.pythonhosted.org:443  pypi.python.o… │
+  Iris frontend           ▲ 1 │  ⇅ Iris  blub wants regist…  *.npmjs.org  10m │ ┃ scope environment ‹s›                                    │
+  1 ▲ claude                  │                                               │ ┃  A  Allow all   D  Deny all   r  One by one              │
+  2 ▲ Fix the login form      │  QUIET                                        │ ╰──────────────────────────────────────────────────────────╯
+  3 ◷ Update the deploy notes │  ◷ Iris  Update the deploy n…  docs-site   5h │ 
+      + 4 older               │  ◐ demo  your computer · booting    base      │ 
+  4   main                    │                                               │ 
+  Finn                    ▲ 2 │  EARLIER TODAY                                │ 
+  5 ▲ codex                   │  Nothing decided yet today.                   │ 
+  6 ▲ Port the parser to go   │                                               │ 
+  7   main                    │                                               │ 
+  + New teammate              │                                               │ 
+                              │                                               │ 
+ YOUR COMPUTERS               │                                               │ 
+  ◐ demo              booting │                                               │ 
+  + New computer              │                                               │ 
+                              │                                               │ 
+ ENVIRONMENT                  │                                               │ 
+  Computers                 4 │                                               │ 
+  Network                 ▲ 2 │                                               │ 
+  Secrets                     │                                               │ 
+  Memory                      │                                               │ 
+  Activity                    │                                               │ 
+  , Settings              dev │                                               │ 
+                              │                                               │ 
+                              │                                               │ 
+                              │                                               │ 
+                              │                                               │ 
+                              │                                               │ 
+──────────────────────────────┴───────────────────────────────────────────────┴─────────────────────────────────────────────────────────────
+A allow all  D deny all  r review one by one  s scope  tab next  enter open  + new computer  , settings  \ list  l activity  e env  ? more …

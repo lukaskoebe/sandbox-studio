@@ -14,9 +14,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 )
 
-// Home's own row shows what needs you: the approvals that wait, as cards that are decided on the
-// spot, the sessions working now and what was decided earlier today, as the web's Home does. tab
-// moves to the next card; a decision that made a rule can be undone with u for a while.
+// Home's own row reads what was decided today, for EARLIER TODAY under Home's list (inbox.go),
+// and keeps the last decision that made a rule, which u undoes for a while.
 
 // undoFor is how long u undoes the last decision.
 const undoFor = time.Minute
@@ -51,10 +50,9 @@ type (
 )
 
 var (
-	keyUndo     = key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "undo"))
-	keyNextCard = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next card"))
-	keyAlways   = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "always"))
-	keyOnceY    = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow once"))
+	keyUndo   = key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "undo"))
+	keyAlways = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "always"))
+	keyOnceY  = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow once"))
 )
 
 // homeShows reports whether Home's row is on show, beside the list or instead of it.
@@ -153,137 +151,6 @@ func digitCard(a api.ApprovalView) bool {
 	return a.MemoryConflict != nil || a.ChatPermission != nil
 }
 
-// needsKey answers the card in focus on Home's row: tab moves to the next card, and the keys of
-// the card decide it as on the approvals screen. The keys that move about Studio keep doing so.
-// ok is false when the key isn't the card's.
-func (m *app) needsKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
-	cards := m.cards()
-	if m.at != atHome || len(cards) == 0 {
-		return nil, false
-	}
-	m.approvalCursor = min(m.approvalCursor, len(cards)-1)
-	c := cards[m.approvalCursor]
-	a := c.first()
-	switch {
-	case key.Matches(msg, keyNextCard):
-		m.approvalCursor = (m.approvalCursor + 1) % len(cards)
-		m.blurButtons()
-		return nil, true
-	case key.Matches(msg, keyUp, keyDown, keyBack, keyHelp, keyActivity, keySettings, keyEnv, keyFilter, keyGit, keyUndo):
-		return nil, false
-	}
-	if a.ChatPermission != nil && !c.group {
-		if n := permissionAlias(msg, permissionPicks(a.ChatPermission.Options)); n > 0 {
-			msg = pressOf(fmt.Sprint(n))
-		}
-	} else if key.Matches(msg, keyApprovals) {
-		return nil, false
-	}
-	if digit(msg) > 0 && (!digitCard(a) || c.group) {
-		return nil, false // a session's number
-	}
-	_, cmd = m.approvalsKey(msg)
-	if m.screen == screenPager {
-		m.pager.back = screenHome
-	}
-	return cmd, true
-}
-
-// needsPane is Home's row in w cells and h rows: the cards that wait, the one in focus with its
-// keys, and then the sessions working now and today's decisions. The narrow layout shows the
-// cards not in focus on a line each, and the teammates under them instead.
-func (m *app) needsPane(w, h int, narrow bool) []string {
-	cards := m.cards()
-	m.approvalCursor = min(m.approvalCursor, max(len(cards)-1, 0))
-	x := m.paneX()
-	if narrow {
-		x = 0
-	}
-	head := styleBold.Render("Waiting for you")
-	if n := len(cards); n > 0 {
-		head += m.waitingMark(fmt.Sprintf(" · %d", n))
-	}
-	hint := ""
-	if len(cards) > 1 {
-		hint = styleDim.Render("tab next card")
-	}
-	lines := []string{spread(head, hint, w), styleDim.Render(strings.Repeat("─", w))}
-	if len(cards) == 0 {
-		mark := styleDim.Render("✓")
-		if !m.look.plain {
-			mark = m.pal.running.Render("✓")
-		}
-		lines = append(lines, mark+" "+styleDim.Render(clip("Nothing waits for you. New requests show up here, and as a count in the list.", w-2)))
-	}
-	// The cards, the one in focus kept in view.
-	var block []string
-	var keys []keyHit
-	focusAt, focusLen := 0, 0
-	for i, c := range cards {
-		focused := i == m.approvalCursor
-		var lines []string
-		switch {
-		case narrow && !focused:
-			lines = []string{m.waitingMark("▲") + " " + clip(cardLine(c), w-2)}
-		case m.look.plain:
-			lines = m.cardLines(c, focused, w)
-		default:
-			var caps []keyHit
-			lines, caps = m.visualCard(c, focused, w)
-			for _, k := range caps {
-				k.y += len(block)
-				keys = append(keys, k)
-			}
-		}
-		if focused {
-			focusAt, focusLen = len(block), len(lines)
-		}
-		block = append(block, lines...)
-	}
-	room := h - len(lines)
-	offset := 0
-	if focusAt+focusLen > room {
-		offset = min(focusAt+focusLen-room, focusAt)
-	}
-	top := len(lines)
-	for i := offset; i < len(block) && len(lines) < h; i++ {
-		lines = append(lines, block[i])
-	}
-	for _, k := range keys {
-		if y := top + k.y - offset; y >= top && y < len(lines) {
-			m.hitKeys(bodyTop+y, x+k.x0, []keySpan{{x1: k.x1 - k.x0, key: k.key}})
-		}
-	}
-	if len(lines) < h {
-		lines = append(lines, "")
-	}
-	if narrow {
-		if len(lines)+1 < h {
-			rows := m.homeRows()
-			if len(rows) > 0 && rows[0].kind == atHome {
-				rows = rows[1:]
-			}
-			lines = append(lines, m.treeLines(rows, w, h-len(lines))...)
-		}
-		return lines
-	}
-	if working := m.workingNow(w); len(working) > 0 && len(lines)+2 < h {
-		lines = append(lines, styleDim.Render("WORKING NOW"))
-		lines = append(lines, working...)
-		lines = append(lines, "")
-	}
-	if len(lines)+2 < h {
-		lines = append(lines, styleDim.Render("EARLIER TODAY"))
-		lines = append(lines, m.earlier(w, h-len(lines))...)
-	}
-	return lines
-}
-
-// narrowHome is Home's row on a narrow terminal, which has no room for the list beside it.
-func (m *app) narrowHome(w, h int) []string {
-	return m.needsPane(w, h, true)
-}
-
 // cardLine is a card on one line: its kind's glyph and what it asks.
 func cardLine(c card) string {
 	a := c.first()
@@ -298,23 +165,6 @@ func cardLine(c card) string {
 		return glyph + " " + gitSummary(a)
 	}
 	return glyph + " " + oneLine(summary(a))
-}
-
-// workingNow are the rows of the sessions that work or wait on you, in w cells.
-func (m *app) workingNow(w int) []string {
-	var out []string
-	for _, sb := range m.sandboxes {
-		for _, x := range m.sessionsOf(sb) {
-			st := m.stateOf(x)
-			if x.kind == sessionReview || (st != stateWorking && st != stateBlocked) {
-				continue
-			}
-			who := firstNonEmpty(m.teammates[sb.TeammateID], sb.Name)
-			right := styleDim.Render(sb.Name + " · " + m.sessionWords(x, st))
-			out = append(out, spread(m.stateMark(st)+" "+styleBold.Render(fit(who, 8))+clip(x.title(), w/2), right, w))
-		}
-	}
-	return out
 }
 
 // earlier are today's decisions in the environment, newest first, at most h of them.
@@ -399,38 +249,4 @@ func (m *app) reviewPane(a api.ApprovalView, sb sandboxes.View, w int) []string 
 		}
 	}
 	return append(lines, "", styleDim.Render(clip("enter reviews the diff: y approves and pushes, r asks for changes, n rejects.", w)))
-}
-
-// needsBindings are the keys the key bar shows on Home's row: the card in focus's, then the ways
-// about Studio.
-func (m *app) needsBindings() []key.Binding {
-	cards := m.cards()
-	var bindings []key.Binding
-	if len(cards) > 1 {
-		bindings = append(bindings, keyNextCard)
-	}
-	if len(cards) > 0 {
-		c := cards[min(m.approvalCursor, len(cards)-1)]
-		a := c.first()
-		switch {
-		case c.group:
-			bindings = append(bindings, keyAllowAll, keyDenyAll, keySplit, keyScope)
-		case isNetwork(a):
-			bindings = append(bindings, keyAllow, keyDeny, keyOnce, keyPattern, keyScope)
-		case isGit(a):
-			bindings = append(bindings, keyReview)
-		case a.ChatPermission != nil:
-			bindings = append(bindings, keyOnceY, keyAlways, keyDeny)
-		default:
-			for _, k := range kindBindings(a) {
-				if k.Help().Desc != "back" {
-					bindings = append(bindings, k)
-				}
-			}
-		}
-	}
-	if m.undoable() != nil {
-		bindings = append(bindings, keyUndo)
-	}
-	return append(bindings, keyDown, keyNumber, keyActivity, keySettings, keyHelp, keyQuit, keyNew)
 }

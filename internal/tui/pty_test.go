@@ -41,9 +41,8 @@ func TestTerminalSmoke(t *testing.T) {
 	tui.waitFor("Activity", "Activity")
 	tui.write("q")
 
-	// a opens the approvals; y allows the host, which the server keeps as a rule.
-	tui.write("a")
-	tui.waitFor("the approval", "registry.npmjs.org")
+	// Home's list starts on the request; y allows the host, which the server keeps as a rule.
+	tui.waitFor("the request", "registry.npmjs.org")
 	tui.write("y")
 	deadline := time.Now().Add(15 * time.Second)
 	for {
@@ -70,7 +69,7 @@ func TestTerminalSmokeWide(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
 	tui := startTUI(t, s, 140, 40)
-	tui.waitFor("the wide Home", "◆", "Studio", "YOUR COMPUTERS", "blub", "stopped", "Waiting for you", "EARLIER TODAY")
+	tui.waitFor("the wide Home", "◆", "Studio", "YOUR COMPUTERS", "blub", "stopped", "Nothing waits for you", "EARLIER TODAY")
 
 	// A click on the tab, in SGR mouse coordinates that count from 1, acts as l.
 	x := len([]rune(" ◆ Studio  Default ▾   Home   "))

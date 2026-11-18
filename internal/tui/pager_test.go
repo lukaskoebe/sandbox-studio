@@ -39,8 +39,8 @@ new file mode 100644
 +})
 `
 
-// samplePush puts a pending push of api-refactor with two commits and a diff on the
-// approvals screen.
+// samplePush puts a pending push of api-refactor with two commits and a diff on Home's
+// list.
 func samplePush(m *app) api.ApprovalView {
 	a := api.ApprovalView{
 		Approval: store.Approval{ID: "g1", EnvironmentID: "env1", SandboxID: "sb2", Kind: "git.push", Status: "pending", CreatedAt: m.now.Add(-30 * time.Second)},
@@ -64,21 +64,25 @@ func samplePush(m *app) api.ApprovalView {
 func TestGoldenGitPager(t *testing.T) {
 	m := sampleApp()
 	samplePush(m)
-	golden(t, "git_pager", press(m, "a", "enter"))
+	golden(t, "git_pager", press(onCard(m, 0), "enter"))
 }
 
 func TestGoldenGitPagerScrolled(t *testing.T) {
 	m := sampleApp()
 	samplePush(m)
-	golden(t, "git_pager_end", press(m, "a", "enter", "G"))
+	golden(t, "git_pager_end", press(onCard(m, 0), "enter", "G"))
 }
 
 func TestGitCardOpensThePager(t *testing.T) {
 	m := sampleApp()
 	samplePush(m)
-	m = press(m, "a", "y")
-	if m.screen != screenApprovals || !strings.Contains(m.notice.text, "enter opens the diff") {
-		t.Fatalf("y on the card: screen %v, notice %q", m.screen, m.notice.text)
+	m = press(onCard(m, 0), "y")
+	if m.screen != screenHome || m.inbox.pushing != "g1" || !strings.Contains(shown(m), "without opening the diff?") {
+		t.Fatalf("y on the push's row: screen %v, asking %q\n%s", m.screen, m.inbox.pushing, shown(m))
+	}
+	m = press(m, "n")
+	if m.inbox.pushing != "" || !strings.HasPrefix(m.notice.text, "Kept ") {
+		t.Fatalf("n after y: asking %q, notice %q", m.inbox.pushing, m.notice.text)
 	}
 	m = press(m, "enter")
 	if m.screen != screenPager || m.pager.approval.ID != "g1" {
@@ -100,7 +104,7 @@ func TestGitCardOpensThePager(t *testing.T) {
 	if m.pager.scroll != 0 {
 		t.Fatalf("g: %d", m.pager.scroll)
 	}
-	if m = press(m, "esc"); m.screen != screenApprovals {
+	if m = press(m, "esc"); m.screen != screenHome {
 		t.Fatalf("esc returns to %v", m.screen)
 	}
 }
@@ -109,10 +113,10 @@ func TestPagerDecides(t *testing.T) {
 	for _, k := range []string{"y", "n", "i"} {
 		m := sampleApp()
 		samplePush(m)
-		m = press(m, "a", "enter")
+		m = press(onCard(m, 0), "enter")
 		next, cmd := m.Update(tea.KeyPressMsg{Code: rune(k[0]), Text: k})
 		m = next.(*app)
-		if cmd == nil || m.screen != screenApprovals {
+		if cmd == nil || m.screen != screenHome {
 			t.Fatalf("%s: cmd %v, screen %v", k, cmd != nil, m.screen)
 		}
 	}
@@ -125,7 +129,7 @@ func TestPagerForcePushesARewrite(t *testing.T) {
 	rv.Old, rv.Forced, rv.Base, rv.BaseBranch = "e4f5a6b7c8", true, "7f3e2101aa", "main"
 	rv.Dropped = []gitreview.Commit{{SHA: "e4f5a6b7c8", Author: "Finn", When: m.now.Add(-time.Hour), Subject: "Submit the login form on enter", ReplacedBy: "77d0b2c4aa"}}
 	rv.TipFiles = []string{"src/login.tsx"}
-	m = press(m, "a", "enter")
+	m = press(onCard(m, 0), "enter")
 	view := ansi.Strip(m.View().Content)
 	for _, want := range []string{"Rewrites history · drops 1 commit", "→ 77d0b2c", "The tips differ in src/login.tsx.", "on main's tip 7f3e210", "F force-push"} {
 		if !strings.Contains(view, want) {
@@ -137,7 +141,7 @@ func TestPagerForcePushesARewrite(t *testing.T) {
 		t.Fatalf("y on a rewrite: screen %v, notice %q", m.screen, m.notice.text)
 	}
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'F', Text: "F"})
-	if m = next.(*app); cmd == nil || m.screen != screenApprovals {
+	if m = next.(*app); cmd == nil || m.screen != screenHome {
 		t.Fatalf("F: cmd %v, screen %v", cmd != nil, m.screen)
 	}
 }
@@ -149,7 +153,7 @@ func TestPagerNamesThePullRequest(t *testing.T) {
 	a.Git.Review = nil
 	a.Git.PullRequest = &gitreview.PullRequest{Head: "fix-login", Base: "main", Title: "Submit the login form on enter", Body: "Fixes the sign-in button."}
 	m.approvals = []api.ApprovalView{a}
-	m = press(m, "a", "enter")
+	m = press(onCard(m, 0), "enter")
 	body := strings.Join(m.pagerLines(80), "\n")
 	for _, want := range []string{"fix-login → main", "Approving opens this pull request", "Fixes the sign-in button."} {
 		if !strings.Contains(body, want) {
@@ -166,7 +170,7 @@ func TestPagerTogglesThePullRequest(t *testing.T) {
 	a := samplePush(m)
 	a.Git.Review.PullRequest = &gitreview.PullRequest{Head: "fix-login", Base: "main", Title: "Submit the login form on enter"}
 	m.approvals = []api.ApprovalView{a}
-	m = press(m, "a", "enter")
+	m = press(onCard(m, 0), "enter")
 	if body := strings.Join(m.pagerLines(80), "\n"); !strings.Contains(body, "[x] into main: Submit the login form on enter") {
 		t.Fatalf("a new branch's review doesn't open its pull request:\n%s", body)
 	}
@@ -194,7 +198,7 @@ func TestPagerOpensAPullRequestLater(t *testing.T) {
 		t.Errorf("key bar: %s", bar)
 	}
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'o', Text: "o"})
-	if m = next.(*app); cmd == nil || m.screen != screenApprovals {
+	if m = next.(*app); cmd == nil || m.screen != screenHome {
 		t.Fatalf("o: cmd %v, screen %v", cmd != nil, m.screen)
 	}
 }
@@ -205,7 +209,7 @@ func TestRequestChangesRejectsAndSendsTheNote(t *testing.T) {
 	client, rec := recordingClient(t)
 	m.client = client
 	samplePush(m)
-	m = press(m, "a", "enter", "r")
+	m = press(onCard(m, 0), "enter", "r")
 	if m.typing == nil || !strings.Contains(m.typing.label, "What should Finn change?") {
 		t.Fatalf("r asks for the note: %+v", m.typing)
 	}

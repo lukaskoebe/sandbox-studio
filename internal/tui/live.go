@@ -152,7 +152,7 @@ func (m *app) lineageWanted() string {
 		return ""
 	}
 	if m.screen == screenDetail || m.dashShows() {
-		return m.selectedID()
+		return m.dashID()
 	}
 	return ""
 }

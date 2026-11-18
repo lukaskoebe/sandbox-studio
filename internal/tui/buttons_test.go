@@ -26,8 +26,8 @@ func blockedAgent(t *testing.T) *app {
 func TestArrowsMoveOverACardsTogglesAndChoices(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	m = press(m, "a", "j", "j") // the network request
-	c := m.cards()[m.approvalCursor]
+	m = onCard(m, 2) // the network request
+	c := cursorCard(t, m)
 	owner := cardOwner(c)
 	if !isNetwork(c.first()) || m.buttonAt(owner) >= 0 {
 		t.Fatalf("on %+v, focus %+v", c.first().Kind, m.buttons)
@@ -47,7 +47,7 @@ func TestArrowsMoveOverACardsTogglesAndChoices(t *testing.T) {
 	if m.choiceOf(c).pattern == before {
 		t.Error("space on the pattern does not step it")
 	}
-	if m.screen != screenApprovals {
+	if !m.inboxShows() {
 		t.Fatalf("pressing a toggle left the card: %v", m.screen)
 	}
 	if out := ansi.Strip(press(m, "?").View().Content); !strings.Contains(out, "←/→ space") {
@@ -99,16 +99,16 @@ func TestBannerMoreReviewsTheCardAndReturnsToTheAgent(t *testing.T) {
 	m := blockedAgent(t)
 	m.pane.focus = true
 	m = press(m, "alt+a", "a")
-	if m.screen != screenApprovals || m.resuming == nil || !m.resuming.pane {
+	if !m.inboxShows() || m.resuming == nil || !m.resuming.pane {
 		t.Fatalf("a from the banner opens %v, resuming %+v", m.screen, m.resuming)
 	}
-	if got := m.cards()[m.approvalCursor].first().ID; got != m.approvals[0].ID {
+	if got := cursorCard(t, m).first().ID; got != m.approvals[0].ID {
 		t.Errorf("the cursor is on %s", got)
 	}
 	// While it waits the screen stays; once decided, Home's pane has the keys again.
 	m = run(m, func() tea.Msg { return approvalsLoaded{list: m.approvals} })
-	if m.screen != screenApprovals {
-		t.Fatalf("the approvals left before the decision: %v", m.screen)
+	if !m.inboxShows() {
+		t.Fatalf("Home's list left before the decision: %v", m.screen)
 	}
 	m = run(m, func() tea.Msg { return approvalsLoaded{list: m.approvals[1:]} })
 	if m.screen != screenHome || !m.paneFocused() || m.resuming != nil {
@@ -133,7 +133,7 @@ func TestAttachedTerminalAnswersAndAttachesAgain(t *testing.T) {
 	sb := m.selected()
 	id := m.approvals[0].ID
 	m = run(m, func() tea.Msg { return attachDone{id: sb.ID, sandbox: sb.Name, name: "codex", waiting: id} })
-	if m.screen != screenApprovals || m.resuming == nil || m.resuming.attach == nil {
+	if !m.inboxShows() || m.resuming == nil || m.resuming.attach == nil {
 		t.Fatalf("Ctrl-] on a waiting approval opens %v, resuming %+v", m.screen, m.resuming)
 	}
 	if !strings.Contains(m.notice.text, "you're back in codex") {
