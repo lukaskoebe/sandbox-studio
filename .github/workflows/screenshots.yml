@@ -4,8 +4,10 @@ name: screenshots
 # and opens a pull request with the ones whose pixels changed (site/scripts). It runs after
 # each release, against that release's Linux binary, and by hand for any release. Opening the
 # pull request needs "Allow GitHub Actions to create and approve pull requests" in the
-# repository's Actions settings, and the pull request's checks start once someone pushes to it. The script
-# comes from main, so its steps follow main's UI; right after a release the two agree.
+# repository's Actions settings; without it the run warns and the screenshots wait on their
+# branch, screenshots/<tag>. The pull request's checks start once someone pushes to it. After a
+# release the script comes from main, so its steps follow main's UI; right after a release the
+# two agree. Run by hand, it comes from the branch the run is started on.
 
 on:
   # release.yml publishes with the workflow's token, whose events start no workflows; the
@@ -41,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || 'main' }}
           persist-credentials: false
       - name: Give the runner user access to /dev/kvm
         run: |
@@ -123,7 +125,8 @@ jobs:
             body="$body Some screenshots failed; the run's log names them, and they are not in this pull request."
           fi
           if ! gh pr view "$branch" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --title "Docs screenshots of $TAG" --body "$body"
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --title "Docs screenshots of $TAG" --body "$body" ||
+              echo "::warning::No pull request: the repository's Actions settings don't allow GitHub Actions to create one. The screenshots are on the $branch branch."
           fi
       - name: Logs
         if: failure()

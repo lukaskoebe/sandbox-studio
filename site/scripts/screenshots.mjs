@@ -6,7 +6,9 @@
 // real one: it seeds demo data with fake keys, creates two sandboxes and leaves them for
 // you to delete. It uses an installed Chromium (CHROMIUM, default /snap/bin/chromium) and
 // never downloads a browser. No harness session is started, so no model API is called.
-// STUDIO_DATA_DIR, the scratch Studio's data directory, is shown as the default one. It exits
+// STUDIO_DATA_DIR, the scratch Studio's data directory, is shown as the default one.
+// SCREENSHOTS_E2E=1 walks the steps against bin/studio-e2e, whose fake computers have no
+// network: its fake guest stands in for the request the approval step makes. It exits
 // 1 if a screenshot failed, after taking the others (.github/workflows/screenshots.yml).
 // Names after the link capture only those screenshots; the login link works once, so later
 // runs pass the session cookie Studio's first run saved instead (see `session` below).
@@ -22,7 +24,10 @@ if (!link?.includes("#studio-login=") && link !== "again") {
 }
 const only = new Set(process.argv.slice(3))
 const wanted = (name) => only.size === 0 || only.has(name)
-const out = fileURLToPath(new URL("../src/assets/screenshots/", import.meta.url))
+// SCREENSHOTS_OUT writes them elsewhere, to look at before they replace the docs' own.
+const out = process.env.SCREENSHOTS_OUT
+  ? `${process.env.SCREENSHOTS_OUT.replace(/\/$/, "")}/`
+  : fileURLToPath(new URL("../src/assets/screenshots/", import.meta.url))
 const session = fileURLToPath(new URL("../.screenshots-session.json", import.meta.url))
 await mkdir(out, { recursive: true })
 
@@ -46,7 +51,8 @@ if (!saved) {
   await page.goto(link)
   await page.getByRole("button", { name: /Host check/ }).waitFor()
   await page.waitForTimeout(1500)
-  if (wanted("setup")) await page.screenshot({ path: `${out}setup.jpg`, type: "jpeg", quality: 82 })
+  // shot() is hoisted; it shows the default data directory instead of the run's own.
+  if (wanted("setup")) await shot("setup")
   await writeFile(session, JSON.stringify({ base, state: await context.storageState() }))
 }
 
@@ -72,8 +78,11 @@ async function ensure(path, match, body) {
 const FAKE_KEY = "sk-demo-not-a-real-key"
 const envs = await list("/api/environments")
 const env = envs[0].id
-// The guided setup out of the way.
+// The guided setup, the Get to know Studio card, first-time tips and the previews notice out
+// of the way.
 await api("PUT", `/api/setup?env=${env}`, { steps: {}, dismissed: true })
+await api("PUT", `/api/onboarding?env=${env}`, { seen: [], dismissed: true, tipsOff: true })
+await api("PUT", "/api/system/previews", { enabled: true })
 await ensure("/api/environments", (e) => e.name === "Private", { name: "Private" })
 const E = `/api/environments/${env}`
 
@@ -93,7 +102,7 @@ const ada = await ensure(`${E}/teammates`, (t) => t.name === "Ada", {
   soul: "You are careful and test-driven. Prefer small, reviewable commits and explain trade-offs briefly.",
   harness: "claude",
   providerId: anthropic.id,
-  model: "claude-sonnet-4-5",
+  model: "claude-sonnet-5-5",
 })
 const linus = await ensure(`${E}/teammates`, (t) => t.name === "Linus", {
   name: "Linus",
@@ -130,6 +139,8 @@ await ensure(`${E}/forges`, (f) => f.name === "gh", {
   kind: "github",
   baseUrl: "https://github.com",
   token: "github_pat_demo_not_a_real_token",
+  // GitHub would refuse the demo token.
+  skipCheck: true,
 })
 // Facts without entities or attributes never pair up, so consolidation has nothing to judge.
 const facts = await list(`${E}/memory/facts?scope=shared`)
@@ -141,7 +152,7 @@ for (const text of [
   if (!facts.some?.((f) => f.text === text))
     await api("POST", `${E}/memory/facts`, { kind: "fact", text, scope: "shared" })
 }
-await ensure(`${E}/memory/pages`, (p) => p.slug === "project/webshop", {
+const webshopPage = await ensure(`${E}/memory/pages`, (p) => p.slug === "project/webshop", {
   title: "Webshop",
   slug: "project/webshop",
   kind: "project",
@@ -276,6 +287,8 @@ await step("approval", async () => {
   await page.locator(".xterm").first().click()
   await page.keyboard.type("clear\n")
   await page.keyboard.type("curl -sI https://example.com | head -1\n", { delay: 15 })
+  if (process.env.SCREENSHOTS_E2E)
+    await api("POST", `/api/e2e/sandboxes/${webshop.id}/connect`, { host: "example.com", port: 443 })
   // Her page lists it under Waiting for you; Answer opens its card in place.
   const row = page.getByTestId("waiting-row").filter({ hasText: "example.com" })
   await row.waitFor({ timeout: 30000 })
@@ -283,7 +296,89 @@ await step("approval", async () => {
   await page.getByTestId("approval-card").first().waitFor()
   await page.waitForTimeout(1500)
   await shot("approval")
-  await page.getByTestId("approval-card").first().getByRole("button", { name: "Deny", exact: true }).click()
+})
+// Home, while the request still waits: what needs you, and each computer's line of sessions.
+await step("home", async () => {
+  await go("")
+  await page.getByText("Needs you", { exact: true }).first().waitFor()
+  // The run's sessions are minutes old: the shortest span spreads them out.
+  await button("30m").click()
+  await page.waitForTimeout(1500)
+  await shot("home")
+  await clearApprovals()
+})
+// ⌘K, finding anything by name.
+await step("search", async () => {
+  await go("")
+  await page.keyboard.press("ControlOrMeta+K")
+  await page.getByPlaceholder(/^Search teammates/).fill("ada")
+  await page.waitForTimeout(800)
+  await shot("search")
+  await closeDialog()
+})
+
+// A repository in the computer's /workspace with a commit and changes since, for Changes and
+// Files. It is typed into the terminal, as a teammate's work would be.
+const SHOP = String.raw`cd /workspace && rm -rf .git health.go && git init -q -b main && printf 'package main
+
+import (
+	"log"
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/", home)
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+' > main.go && printf '# Webshop
+
+A Go API with a React storefront.
+' > README.md && git add -A && git -c user.name=Ada -c user.email=ada@agents.invalid commit -qm 'Start the webshop' && printf 'package main
+
+import (
+	"log"
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/", home)
+	http.HandleFunc("/healthz", health)
+	log.Printf("listening on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+' > main.go && printf 'package main
+
+import "net/http"
+
+// health answers the load balancer.
+func health(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+' > health.go; clear`
+const screenOf = (sb) => page.getByRole("region", { name: `${sb.name}'s screen` })
+await step("changes", async () => {
+  await clearApprovals()
+  await running(webshop)
+  await go(`/sandboxes/${webshop.id}`)
+  // bin/studio-e2e's fake computer has a repository of its own.
+  if (!process.env.SCREENSHOTS_E2E) {
+    await page.locator(".xterm").first().click()
+    await page.keyboard.type(SHOP + "\n", { delay: 5 })
+    await page.waitForTimeout(3000)
+  }
+  const screen = screenOf(webshop)
+  await screen.getByRole("tab", { name: /^Changes/ }).click()
+  await screen.getByRole("button", { name: /main\.go/ }).first().click()
+  await screen.getByRole("region", { name: /^The change to .*main\.go$/ }).waitFor()
+  await page.waitForTimeout(1000)
+  await shot("changes")
+})
+await step("files", async () => {
+  await running(webshop)
+  await go(`/sandboxes/${webshop.id}?tab=files&file=main.go`)
+  await screenOf(webshop).getByRole("tree", { name: "Workspace" }).waitFor()
+  await page.waitForTimeout(1000)
+  await shot("files")
 })
 
 await step("checkpoints", async () => {
@@ -293,10 +388,10 @@ await step("checkpoints", async () => {
   const checkpoints = await list(`${E}/sandboxes/${storefront.id}/checkpoints`)
   if (!checkpoints.some?.((c) => c.name === "before-upgrade"))
     await api("POST", `${E}/sandboxes/${storefront.id}/checkpoints`, { name: "before-upgrade" })
-  // A computer's checkpoints are in the sheet its screen's ⋯ menu opens.
+  // A computer's checkpoints are in its Details tab, all of them in the sheet it opens.
   await go(`/sandboxes/${storefront.id}`)
-  await page.getByRole("button", { name: `More for ${storefront.name}` }).click()
-  await page.getByRole("menuitem", { name: /^Checkpoints/ }).click()
+  await page.getByRole("tab", { name: "Details" }).click()
+  await button("All checkpoints and history…").click()
   await page.getByRole("region", { name: "Checkpoints" }).waitFor()
   await shot("checkpoints")
 })
@@ -321,13 +416,18 @@ await step("teammates", async () => {
   await go("/teammates")
   await shot("teammates")
 })
+await step("teammate-settings", async () => {
+  await go(`/teammates/${ada.id}?profile=settings`)
+  await page.waitForTimeout(800)
+  await shot("teammate-settings")
+})
 await step("git", async () => {
   await go("?settings=git")
   await shot("git")
 })
 await step("memory", async () => {
-  await go("/memory")
-  await page.getByRole("tab", { name: "Facts" }).click()
+  // The index beside the reader, which shows the project page.
+  await go(`/memory?open=page:${webshopPage.id}`)
   await shot("memory")
 })
 await step("build-dialog", async () => {
@@ -348,7 +448,8 @@ await step("browser", async () => {
     await ensure(`${E}/rules`, (r) => r.host === host, { host, action: "allow", ports: [443], teammateId: ada.id })
   await go(`/teammates/${ada.id}?tab=browser`)
   // A sleeping browser has one field to open a page; a running one has the address bar.
-  const address = page.getByLabel("Open a page").or(page.getByLabel("Browser address"))
+  // Asleep or awake, the browser's bar takes an address.
+  const address = page.getByLabel("Browser address").first()
   await address.fill("en.wikipedia.org/wiki/Sandbox_(computer_security)")
   await address.press("Enter")
   await page.getByLabel("Live view of the browser").waitFor({ timeout: 180000 })
@@ -359,6 +460,19 @@ await step("browser", async () => {
   await page.getByRole("tab", { name: "Sites" }).click()
   await shot("browser")
   await button(/Hand back/).click().catch(() => {})
+})
+// Chrome's DevTools for her page, docked under it; it needs the browser step's page.
+await step("devtools", async () => {
+  await go(`/teammates/${ada.id}?tab=browser`)
+  await page.getByLabel("Live view of the browser").waitFor({ timeout: 60000 })
+  await button("Browser options").click()
+  await page.getByRole("menuitemcheckbox", { name: "DevTools" }).click()
+  const panel = page.getByRole("region", { name: "DevTools" })
+  await panel.locator("iframe").waitFor()
+  // The frontend loads its panels after the frame.
+  await page.waitForTimeout(8000)
+  await shot("devtools")
+  await page.getByRole("button", { name: "Close DevTools" }).click()
 })
 
 await browser.close()
