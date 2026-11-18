@@ -75,9 +75,20 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   const large = page.getByRole("dialog", {
     name: "The checkout page after the change",
   })
-  await expect(
-    large.getByRole("img", { name: "The checkout page after the change" })
-  ).toBeVisible()
+  const larger = large.getByRole("img", {
+    name: "The checkout page after the change",
+  })
+  await expect(larger).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(large).toHaveCount(0)
+
+  // On a phone it is as large as the picture too, not squeezed into half the screen.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await shot.click()
+  await expect(larger).toBeVisible()
+  await expect
+    .poll(async () => Math.round((await larger.boundingBox())!.width))
+    .toBe(240)
   await page.keyboard.press("Escape")
   await expect(large).toHaveCount(0)
 
@@ -359,6 +370,35 @@ test("a message on the teammate's home starts a thread and opens it", async ({
   await expect(main).toContainText(greeting)
   await page.waitForTimeout(1500)
   await expect(page).toHaveURL(/[?&]thread=/)
+})
+
+test.describe("a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test("a thread of a teammate with a long name keeps its title and options in view", async ({
+    page,
+    api,
+    env,
+  }) => {
+    const name = `Reviewer Maximiliane-Theodora ${Math.random().toString(36).slice(2, 6)}`
+    const teammate = await addTeammate(api, env, name)
+    const id = await api.createSandbox(sandboxName("long-name"), teammate)
+    await api.guestReady(id)
+    const chat = (await api.json<{ id: string }>(
+      "POST",
+      `/api/environments/${env}/sandboxes/${id}/chats`
+    ))!
+    await page.goto(`/e/${env}/chats/${chat.id}`)
+    const main = page.getByRole("main")
+    const options = main.getByRole("button", { name: "Thread options" })
+    await expect(options).toBeVisible()
+    // The name shrinks instead of pushing the title out and the options past the screen.
+    const box = (await options.boundingBox())!
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+    const title = (await main.getByRole("heading", { level: 1 }).boundingBox())!
+    expect(title.width).toBeGreaterThan(40)
+    await expect(main.getByTitle(`Back to ${name} (Esc)`)).toBeVisible()
+  })
 })
 
 // A chat whose sandbox is down says so above the composer, and its button brings it back; the

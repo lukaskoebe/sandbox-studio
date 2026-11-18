@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 
 /** The API queries each change topic makes stale. */
 const stale: Record<string, string[]> = {
@@ -59,6 +59,34 @@ const stale: Record<string, string[]> = {
 const maxBackoff = 30_000
 
 /**
+ * Reads each query that is still on its first read again once that read lands. Invalidating
+ * leaves a first read under way to finish rather than start it over (React Query restarts only
+ * a query with data), and its answer may be from before the stream opened. Returns what stops
+ * the waiting.
+ */
+function rereadFirstReads(queryClient: QueryClient): () => void {
+  const cache = queryClient.getQueryCache()
+  const waiting = new Set(
+    cache
+      .findAll({ fetchStatus: "fetching" })
+      .filter((query) => query.state.data === undefined)
+  )
+  if (waiting.size === 0) return () => {}
+  const stop = cache.subscribe(({ type, query }) => {
+    if (!waiting.has(query)) return
+    if (type !== "removed" && query.state.fetchStatus !== "idle") return
+    waiting.delete(query)
+    if (type !== "removed")
+      void queryClient.invalidateQueries({
+        queryKey: query.queryKey,
+        exact: true,
+      })
+    if (waiting.size === 0) stop()
+  })
+  return stop
+}
+
+/**
  * Keeps the API queries current from the server's change stream. Events say what changed,
  * so the affected queries refetch.
  *
@@ -73,6 +101,7 @@ export function useEvents() {
     let retry: ReturnType<typeof setTimeout> | undefined
     let backoff = 1000
     let closed = false
+    let stopRereads = () => {}
 
     const connect = () => {
       clearTimeout(retry)
@@ -84,7 +113,9 @@ export function useEvents() {
         // Studio listens for this stream's changes from here on. What was read before, or is
         // still being read, may have missed one in between: at the start a page's first
         // queries race the stream, and a later open follows an error. Those read again.
-        queryClient.invalidateQueries()
+        void queryClient.invalidateQueries()
+        stopRereads()
+        stopRereads = rereadFirstReads(queryClient)
       }
       source.onmessage = (msg: MessageEvent<string>) => {
         const change = JSON.parse(msg.data) as { topic: string }
@@ -112,6 +143,7 @@ export function useEvents() {
     return () => {
       closed = true
       clearTimeout(retry)
+      stopRereads()
       source?.close()
       window.removeEventListener("online", wake)
       document.removeEventListener("visibilitychange", wake)

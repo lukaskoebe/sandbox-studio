@@ -72,10 +72,11 @@ export function TeammateThread({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 px-3 md:px-4">
+        {/* A long name shrinks, so the thread's title, state and options stay on a phone. */}
         <Button
           variant="outline"
           size="sm"
-          className="shrink-0 gap-1.5 pr-2.5 pl-1.5"
+          className="max-w-[45%] min-w-0 shrink gap-1.5 pr-2.5 pl-1.5"
           onClick={onBack}
           title={`Back to ${teammate.name} (Esc)`}
         >
@@ -83,9 +84,9 @@ export function TeammateThread({
           <TeammateAvatar
             name={teammate.name}
             avatar={teammate.avatar}
-            className="size-4 text-[0.5rem]"
+            className="size-4 shrink-0 text-[0.5rem]"
           />
-          {teammate.name}
+          <span className="truncate">{teammate.name}</span>
         </Button>
         {chat && (
           <>

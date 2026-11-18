@@ -143,6 +143,32 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
 })
 
 // A host that keeps answering 401 to a secret's value raises a card; Update secret opens it.
+test.describe("a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test("a teammate's secrets fit the screen, their table scrolling in its own box", async ({
+    page,
+    api,
+    env,
+  }) => {
+    const teammate = await addTeammate(
+      api,
+      env,
+      `Narrow ${Math.random().toString(36).slice(2, 6)}`
+    )
+    await page.goto(
+      `/e/${env}/teammates/${teammate}?profile=settings&open=secrets`
+    )
+    const secrets = page.getByRole("region", { name: "Secrets" })
+    await expect(secrets).toContainText("All secrets are on the Secrets page.")
+    await expect(secrets.getByRole("row").nth(1)).toBeVisible()
+    await secrets.scrollIntoViewIfNeeded()
+    const box = (await secrets.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+  })
+})
+
 test("a secret a host keeps refusing asks to be updated", async ({
   page,
   api,

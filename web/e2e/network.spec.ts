@@ -42,6 +42,62 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
   ).toBeVisible()
 })
 
+// The race a page opening as a request is held can lose: its first read of the approvals
+// answers from before the approval, the approval's event goes out before the page's stream
+// opens, and that read is still under way when the stream opens and has everything read again.
+test("a page opened as a connection is held shows its approval at once", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("race"))
+  await api.guestReady(id)
+  const host = freshHost("race")
+
+  let answered!: () => void
+  const firstRead = new Promise<void>((resolve) => (answered = resolve))
+  let land!: () => void
+  const landed = new Promise<void>((resolve) => (land = resolve))
+  let held = false
+  await page.route("**/api/approvals?status=pending", async (route) => {
+    if (held) return route.continue()
+    held = true
+    const response = await route.fetch()
+    answered()
+    await landed
+    await route.fulfill({ response })
+  })
+  let open!: () => void
+  const opened = new Promise<void>((resolve) => (open = resolve))
+  await page.route("**/api/events", async (route) => {
+    await opened
+    await route.continue()
+  })
+
+  await page.goto(`/e/${env}/secrets`)
+  await firstRead
+  await api.connect(id, host)
+  await expect
+    .poll(async () =>
+      JSON.stringify(await api.json("GET", "/api/approvals?status=pending"))
+    )
+    .toContain(host)
+  // The stream opens and the page reads again what it has read, its environments among them.
+  const reread = page.waitForRequest((r) =>
+    r.url().endsWith("/api/environments")
+  )
+  open()
+  await reread
+  land()
+
+  // Sooner than the approvals' own refresh every 15 seconds.
+  await expect(
+    approvals(page).getByTestId("approval-card").filter({ hasText: host })
+  ).toBeVisible({ timeout: 5000 })
+  await api.dismissApprovals()
+})
+
 /** A host no rule covers yet, unique to this run, so tests don't see each other's rules. */
 function freshHost(label: string) {
   return `${label}-${Math.random().toString(36).slice(2, 8)}.example.org`

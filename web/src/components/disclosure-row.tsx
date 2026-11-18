@@ -72,7 +72,9 @@ export function DisclosureRow({
       <div
         id={`${id}-panel`}
         hidden={!open}
-        className="mt-1 mb-3 ml-[1.1rem] grid gap-4 border-l py-2 pr-1 pl-5"
+        // One column as wide as the row, so a wide table scrolls in its own box instead of
+        // widening the page on a phone.
+        className="mt-1 mb-3 ml-[1.1rem] grid grid-cols-1 gap-4 border-l py-2 pr-1 pl-5"
       >
         <InDisclosure.Provider value={true}>{children}</InDisclosure.Provider>
       </div>

@@ -14,6 +14,15 @@
   **Check-in** in All chats and in Home's Earlier list too, where it was **Heartbeat**, and
   the Network page says a teammate's own level can be stricter or looser than the
   environment's.
+- On a phone, a thread of a teammate with a long name keeps its title, its state and its
+  options in view: the name in the back button shortens, where it pushed the options past the
+  screen's edge, out of reach.
+- On a phone, a teammate's settings no longer slide sideways: the table of Secrets, and
+  anything else wide in an opened row, scrolls in its own box.
+- A page opened just as something changes shows the change at once. If a connection was
+  held while the page was still loading, its approval could stay out of sight for up to 15
+  seconds, and other changes until their next refresh: the page's first read answered from
+  before the change, and its live updates started listening only after it.
 - DevTools for the teammate's browser now open in the desktop app on macOS and Linux and in
   Safari, docked under the page as in Chrome, where they used to show only their address to
   copy into Chrome. Studio gives Chrome's DevTools the one thing they need that those
