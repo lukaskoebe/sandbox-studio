@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.26.0 — 2026-11-18
 
 - `studio approve`, `studio deny` and the terminal UI decide a computer's write to a host of
   the curated list as the browser's card does. They took it for a browser's request, because it
