@@ -45,9 +45,13 @@ export function useRailFolds(sandboxId: string) {
       }),
     [sandboxId]
   )
+  const setSection = useCallback(
+    (id: string, open: boolean) => set(`section:${id}`, open),
+    [set]
+  )
   return {
     section: (id: string) => folds[`section:${id}`] ?? true,
-    setSection: (id: string, open: boolean) => set(`section:${id}`, open),
+    setSection,
     repo: (path: string, index: number) => folds[`repo:${path}`] ?? index === 0,
     setRepo: (path: string, open: boolean) => set(`repo:${path}`, open),
   }
@@ -59,22 +63,16 @@ export function RailSection({
   count,
   open,
   onOpenChange,
-  marked,
   children,
 }: {
   label: string
   count?: ReactNode
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** The section a review link opened. */
-  marked?: boolean
   children: ReactNode
 }) {
   return (
-    <section
-      aria-label={label}
-      className={cn("min-w-0 border-b", marked && "bg-muted/40")}
-    >
+    <section aria-label={label} className="min-w-0 border-b">
       <h3>
         <button
           type="button"

@@ -1064,7 +1064,7 @@ test("a push's commits open to their own changes", async ({
 })
 
 // Changes holds its parts in sections that fold, per computer. A review link opens its section
-// and folds the others for that visit only; an allowed push moves to Pushed for a day.
+// where it was folded and leaves the others; an allowed push moves to Pushed for a day.
 test("a review link opens Changes on its section, and the allowed push moves to Pushed", async ({
   page,
   api,
@@ -1089,25 +1089,37 @@ test("a review link opens Changes on its section, and the allowed push moves to 
     (a) => a.sandboxId === id && a.kind === "git.push"
   )!
 
-  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&review=${review.id}`)
-  const rail = page
-    .getByRole("region", { name: `${name}'s screen` })
-    .getByLabel("Changes", { exact: true })
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  const rail = screen.getByLabel("Changes", { exact: true })
   const header = (label: string) =>
     rail
       .getByRole("region", { name: label, exact: true })
       .getByRole("button", { name: new RegExp(`^${label}`) })
-  await expect(rail.getByRole("status")).toContainText(
-    "Opened from a review link"
+  // Folded before the link, its section opens; the others stay as they were.
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)
+  await header("Waiting for you").click()
+  await expect(header("Waiting for you")).toHaveAttribute(
+    "aria-expanded",
+    "false"
   )
+  await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&review=${review.id}`)
+  await expect(header("Waiting for you")).toHaveAttribute(
+    "aria-expanded",
+    "true"
+  )
+  await expect(header("Repositories")).toHaveAttribute("aria-expanded", "true")
+  await expect(rail.getByRole("status")).toHaveCount(0)
+  // Away to Details and back, the folds are the user's.
+  await header("Repositories").click()
+  await screen.getByRole("tab", { name: "Details" }).click()
+  await screen.getByRole("tab", { name: /^Changes/ }).click()
   await expect(header("Waiting for you")).toHaveAttribute(
     "aria-expanded",
     "true"
   )
   await expect(header("Repositories")).toHaveAttribute("aria-expanded", "false")
-  await rail.getByRole("button", { name: "Show all" }).click()
-  await expect(rail.getByRole("status")).toBeHidden()
-  await expect(header("Repositories")).toHaveAttribute("aria-expanded", "true")
+  await header("Repositories").click()
+  await header("Repositories").blur()
 
   // [ and ] move between the sections' headers.
   await page.locator("body").press("]")
@@ -1126,7 +1138,7 @@ test("a review link opens Changes on its section, and the allowed push moves to 
     "Push to main"
   )
 
-  // A fold is kept for the computer, and a visit's folds are not.
+  // A fold is kept for the computer.
   await header("Repositories").click()
   await expect(header("Repositories")).toHaveAttribute("aria-expanded", "false")
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)

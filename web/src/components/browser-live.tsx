@@ -27,6 +27,9 @@ function splitKeyboardText(text: string) {
   return Array.from(text)
 }
 
+/** Matches a phone or a tablet, which shows the keys under the frame without the toggle. */
+export const touchDevice = "(pointer: coarse) and (hover: none)"
+
 const mobileKeys = [
   { label: "Esc", key: "Escape", code: "Escape", vk: 27 },
   { label: "Tab", key: "Tab", code: "Tab", vk: 9 },
@@ -136,7 +139,8 @@ export function BrowserLive({
   canvasRef?: RefObject<HTMLCanvasElement | null>
   /**
    * Shows the keys the page can't get from a keyboard under the frame, on a computer: a phone
-   * or a touch screen always has them. Their toggle is the window's.
+   * or a tablet, whose touch screen is its pointer, always has them. Their toggle is the
+   * window's.
    */
   controlsOpen?: boolean
   /** Closes them when the wheel goes or the view disconnects. */
@@ -354,7 +358,9 @@ export function BrowserLive({
   }, [pageURL])
 
   useEffect(() => {
-    const query = window.matchMedia("(max-width: 767px), (any-pointer: coarse)")
+    // A phone or a tablet: its touch screen is its pointer, and nothing hovers. A narrow window
+    // or a laptop with a touch screen has a keyboard, so the keys stay behind the toggle there.
+    const query = window.matchMedia(touchDevice)
     const update = () => setAutomaticKeyboardControls(query.matches)
     update()
     query.addEventListener("change", update)

@@ -9,10 +9,15 @@ import {
   SpinnerIcon,
 } from "@phosphor-icons/react"
 
+import { useThemeMode } from "@/lib/theme"
+
 const Toaster = ({ ...props }: ToasterProps) => {
+  // Sonner colours a toast's text by its own theme: "system" follows the OS, so dark picked in
+  // Studio on a light OS put light-theme grey on the dark popover.
+  const theme = useThemeMode()
   return (
     <Sonner
-      theme="system"
+      theme={theme}
       className="toaster group"
       icons={{
         success: <CheckCircleIcon className="size-4" />,
@@ -36,6 +41,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          description: "text-muted-foreground!",
           closeButton: "rounded-full!",
         },
       }}

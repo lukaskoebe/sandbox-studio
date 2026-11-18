@@ -4,12 +4,10 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   ArrowLeftIcon,
-  BellIcon,
   CaretRightIcon,
   ChatCircleIcon,
   CheckCircleIcon,
@@ -318,7 +316,7 @@ export function ChangesView({
       variant="ghost"
       size="sm"
       className="m-2 mb-0 justify-self-start text-muted-foreground @2xl:hidden"
-      onClick={() => pick({})}
+      onClick={() => onPick({})}
     >
       <ArrowLeftIcon />
       Changes
@@ -375,43 +373,21 @@ export function ChangesView({
     )
 
   const folds = useRailFolds(sb.id)
-  // A review link, as from a notification, opens its section and folds the others until the
-  // user asks for all of them or leaves the tab. A pick in the rail is not a link.
-  const pickedHere = useRef<string | undefined>(undefined)
-  type Visit = { opened: Set<SectionId>; closed: Set<SectionId> }
-  const visitFor = (id?: string): Visit | undefined =>
-    id ? { opened: new Set(), closed: new Set() } : undefined
-  // The link's section: a push still waiting, or one already decided.
-  const mark: SectionId =
-    approval && approval.status !== "pending" ? "pushed" : "waiting"
-  const [visit, setVisit] = useState(() => visitFor(review))
-  const [lastReview, setLastReview] = useState(review)
-  if (review !== lastReview) {
-    setLastReview(review)
-    if (review && review !== pickedHere.current) setVisit(visitFor(review))
-  }
-  const pick = (p: ChangesPick) => {
-    pickedHere.current = p.review
-    onPick(p)
-  }
+  // A review, from a link such as a notification's or picked in the rail, opens its section
+  // where it was folded: a push still waiting, or one already decided. The others stay as they
+  // are, so coming back to the tab with a review in its address folds nothing.
+  const { setSection } = folds
+  const mark: SectionId | undefined = approval
+    ? approval.status === "pending"
+      ? "waiting"
+      : "pushed"
+    : undefined
+  useEffect(() => {
+    if (mark) setSection(mark, true)
+  }, [review, mark, setSection])
   const fold = (id: SectionId) => ({
-    open: visit
-      ? !visit.closed.has(id) && (id === mark || visit.opened.has(id))
-      : folds.section(id),
-    onOpenChange: (open: boolean) => {
-      if (!visit) return folds.setSection(id, open)
-      const opened = new Set(visit.opened)
-      const closed = new Set(visit.closed)
-      if (open) {
-        opened.add(id)
-        closed.delete(id)
-      } else {
-        opened.delete(id)
-        closed.add(id)
-      }
-      setVisit({ opened, closed })
-    },
-    marked: !!visit && id === mark,
+    open: folds.section(id),
+    onOpenChange: (open: boolean) => folds.setSection(id, open),
   })
   const railRef = useRef<HTMLDivElement>(null)
   useSectionKeys(railRef)
@@ -442,25 +418,6 @@ export function ChangesView({
           style={{ "--rail": `${railWidth}px` } as CSSProperties}
         >
           <div ref={railRef} className="grid min-w-0 text-xs">
-            {visit && (
-              <div
-                role="status"
-                className="flex items-start gap-2 border-b bg-muted/40 px-3 py-2 text-muted-foreground"
-              >
-                <BellIcon className="mt-px size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  Opened from a review link. The other sections are folded for
-                  this visit.
-                </span>
-                <button
-                  type="button"
-                  className="shrink-0 text-foreground underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring/30"
-                  onClick={() => setVisit(undefined)}
-                >
-                  Show all
-                </button>
-              </div>
-            )}
             {reviews.length > 0 && (
               <RailSection
                 label="Waiting for you"
@@ -475,7 +432,7 @@ export function ChangesView({
                         <RailRow
                           current={shown === `review:${a.id}`}
                           aria-label={label}
-                          onClick={() => pick({ review: a.id })}
+                          onClick={() => onPick({ review: a.id })}
                         >
                           <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
                           <span className="min-w-0 flex-1 truncate">
@@ -504,7 +461,7 @@ export function ChangesView({
                         env={env}
                         approval={a}
                         current={shown === `review:${a.id}`}
-                        onClick={() => pick({ review: a.id })}
+                        onClick={() => onPick({ review: a.id })}
                       />
                     </li>
                   ))}
@@ -520,7 +477,7 @@ export function ChangesView({
                 status={git}
                 open={shown}
                 idle={!picked}
-                onOpen={(key) => pick({ change: key })}
+                onOpen={(key) => onPick({ change: key })}
                 repoOpen={folds.repo}
                 onRepoOpenChange={folds.setRepo}
               />
@@ -534,7 +491,7 @@ export function ChangesView({
                 <RailRow
                   current={shown === "thread"}
                   idle={!picked}
-                  onClick={() => pick({ change: "thread" })}
+                  onClick={() => onPick({ change: "thread" })}
                 >
                   <ChatCircleIcon className="size-3.5 shrink-0 text-(--acc-chat)" />
                   <span className="min-w-0 flex-1 truncate">

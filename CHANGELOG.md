@@ -12,6 +12,16 @@
   browser's words (computer, thread, requests, "waiting for you"), reads the environment's
   threads and terminals in two calls instead of two a computer, and the sidebar is 30 columns
   wide. No key changed what it does.
+- The address bar of a sleeping browser takes an address: enter wakes the browser on that
+  page. The asleep card's button lines up with its address field, and eases to its new width
+  when its words change ("Wake up", "Open") instead of jumping.
+- A review link, as from a notification, no longer folds the Changes tab's other sections and
+  says so in a notice: it opens the review's section and leaves the others as they were.
+- Toasts follow the theme picked in Studio instead of the system's, so "v0.24.0 is the newest
+  release." and other toasts' descriptions are readable in dark mode on a light system.
+- The teammate's browser shows its Esc, Tab, Ctrl, arrow and keyboard keys under the page by
+  itself only on a phone or a tablet. A narrow window or a laptop with a touch screen has the
+  toolbar's keyboard button for them.
 
 ## v0.25.0 — 2026-11-17
 

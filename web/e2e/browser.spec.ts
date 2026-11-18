@@ -249,6 +249,17 @@ test("the sleeping browser lists its last pages and wakes on one", async ({
     .poll(async () => (await api.json<Status>("GET", base))!.url)
     .toBe("https://example.com/a")
   await expect(card).toBeHidden()
+
+  // Asleep, the address bar still takes an address, and wakes the browser on it.
+  await api.json("POST", `${base}/stop`)
+  await expect(card).toBeVisible()
+  await expect(address).toHaveAttribute("placeholder", "Asleep")
+  await address.fill("example.com/c")
+  await address.press("Enter")
+  await expect
+    .poll(async () => (await api.json<Status>("GET", base))!.url)
+    .toBe("https://example.com/c")
+  await expect(card).toBeHidden()
 })
 
 // A page whose host a deny rule refuses says so over the live view, and links to the rule,

@@ -1,10 +1,12 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
   type ReactNode,
+  type RefObject,
 } from "react"
 import { Link } from "@tanstack/react-router"
 import { FeatureTip } from "@/components/feature-tip"
@@ -419,11 +421,14 @@ export function BrowserWindow({
   // Why the last wake failed, on the sleeping browser's card until the next try: a toast
   // that fades left the card as it was, as if waking had done nothing.
   const [wakeError, setWakeError] = useState("")
+  // The page a wake goes to, from the card or the address bar, for the card while it wakes.
+  const [wakeTarget, setWakeTarget] = useState("")
   useEffect(() => {
     if (running) setWakeError("")
   }, [running])
   const wake = async (raw: string) => {
     setWakeError("")
+    setWakeTarget(raw)
     let next: BrowserStatus
     try {
       next = await control.mutateAsync({
@@ -582,13 +587,26 @@ export function BrowserWindow({
             onSites={onSites}
           />
         ) : (
-          <span className="mx-1 flex h-7 min-w-0 flex-1 items-center rounded-full bg-muted px-3 text-xs text-muted-foreground">
-            <span className="truncate">{vmWords(st?.vm)}</span>
-          </span>
+          <SleepingAddress
+            words={vmWords(st?.vm)}
+            disabled={!st || transitioning(st.vm) || control.isPending}
+            onOpen={(raw) => {
+              const normalized = normalizeBrowserAddress(raw)
+              if (!normalized.value) {
+                setAddressError(
+                  normalized.error ?? "Enter a valid website address."
+                )
+                return false
+              }
+              setAddressError("")
+              void wake(raw)
+              return true
+            }}
+          />
         )}
         {running && <Driver w={w} />}
         {liveView && driving && !noting && (
-          // A phone or a touch screen always has the keys (BrowserLive).
+          // A phone or a tablet always has the keys (BrowserLive's touchDevice).
           <Button
             variant="ghost"
             size="icon-sm"
@@ -596,7 +614,7 @@ export function BrowserWindow({
             aria-expanded={keys}
             title="Keys the page can't get from your keyboard: Ctrl, Esc, Tab, arrows"
             className={cn(
-              "max-md:hidden any-pointer-coarse:hidden",
+              "[@media(pointer:coarse)_and_(hover:none)]:hidden",
               keys && "bg-muted"
             )}
             onClick={() => setKeys(!keys)}
@@ -838,6 +856,7 @@ export function BrowserWindow({
           <Asleep
             w={w}
             waking={control.isPending}
+            target={wakeTarget}
             error={wakeError}
             onWake={wake}
           />
@@ -1728,24 +1747,108 @@ function pathOf(url: string) {
 }
 
 /**
+ * The address bar of a browser that isn't running: it says how the browser is, and an address
+ * typed into it wakes the browser on that page. `onOpen` says whether it took the address.
+ */
+function SleepingAddress({
+  words,
+  disabled,
+  onOpen,
+}: {
+  words: string
+  disabled: boolean
+  onOpen: (address: string) => boolean
+}) {
+  const [draft, setDraft] = useState("")
+  const [focused, setFocused] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  const typed = draft.trim()
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (disabled || !typed || !onOpen(typed)) return
+        setDraft("")
+        input.current?.blur()
+      }}
+      className="relative mx-1 flex h-7 min-w-0 flex-1 items-center rounded-full border border-transparent bg-muted pr-1 pl-3 focus-within:border-ring focus-within:bg-background focus-within:ring-2 focus-within:ring-ring/30"
+    >
+      <input
+        ref={input}
+        aria-label="Browser address"
+        autoComplete="url"
+        inputMode="url"
+        placeholder={focused ? "Enter an address to wake it" : words}
+        value={draft}
+        disabled={disabled}
+        spellCheck={false}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => setDraft(e.target.value)}
+        className="h-full min-w-0 flex-1 bg-transparent font-mono text-xs text-ellipsis outline-none placeholder:font-sans placeholder:text-muted-foreground"
+      />
+      {focused && typed && (
+        <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta whitespace-nowrap text-muted-foreground max-sm:hidden">
+          ↵ wakes the browser
+        </span>
+      )}
+    </form>
+  )
+}
+
+/**
+ * Eases an element from its last width to its new one when `key` changes, instead of jumping;
+ * a ResizeObserver keeps the last width, which it reports only after the change is laid out.
+ */
+function useEasedWidth(ref: RefObject<HTMLElement | null>, key: unknown) {
+  const last = useRef(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const watch = new ResizeObserver(() => {
+      last.current = el.getBoundingClientRect().width
+    })
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [ref])
+  useLayoutEffect(() => {
+    const el = ref.current
+    const from = last.current
+    if (!el || !from) return
+    for (const a of el.getAnimations()) a.cancel()
+    const to = el.getBoundingClientRect().width
+    if (
+      Math.abs(from - to) < 1 ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return
+    el.animate([{ width: `${from}px` }, { width: `${to}px` }], {
+      duration: 150,
+      easing: "cubic-bezier(0.2, 0, 0, 1)",
+    })
+  }, [key, ref])
+}
+
+/**
  * The sleeping browser: its last page faded behind a card that picks up where it left off,
  * with the pages it had open, the logins it keeps, and a way to open any page.
  */
 function Asleep({
   w,
   waking,
+  target,
   error,
   onWake,
 }: {
   w: Win
   waking: boolean
+  /** The page the wake goes to, if one was picked or typed. */
+  target: string
   /** Why the last wake failed. */
   error: string
   onWake: (url: string) => Promise<void>
 }) {
   const [url, setUrl] = useState("")
-  // The page a wake goes to, for the card while it wakes.
-  const [target, setTarget] = useState("")
   const actions = $api.useQuery("get", `${statusPath}/actions`, {
     params: {
       path: { env: w.env, teammate: w.teammate },
@@ -1769,12 +1872,22 @@ function Asleep({
   const starting = waking || vm === "starting"
   const crashed = vm === "crashed"
   const absent = vm === "absent"
-  const wakeOn = (to: string) => {
-    setTarget(to)
-    void onWake(to)
-  }
+  const wakeOn = (to: string) => void onWake(to)
   const typed = url.trim()
   const resume = pages[0]?.url ?? ""
+  const label = typed
+    ? "Open"
+    : crashed
+      ? "Start it again"
+      : error
+        ? "Try again"
+        : resume
+          ? `Wake on ${hostOf(resume)}`
+          : absent
+            ? "Start it"
+            : "Wake up"
+  const submit = useRef<HTMLButtonElement>(null)
+  useEasedWidth(submit, label)
   return (
     <div className="relative flex min-h-80 flex-1 items-center justify-center overflow-hidden">
       {shot && !absent && (
@@ -1874,23 +1987,18 @@ function Asleep({
             }}
           >
             <Button
-              size="sm"
+              ref={submit}
+              size="lg"
               type="submit"
               variant={crashed ? "outline" : "default"}
-              className="max-w-1/2 shrink-0 rounded-full"
+              className="max-w-1/2 shrink-0 overflow-hidden rounded-full px-3"
             >
-              <span className="truncate">
-                {typed
-                  ? "Open"
-                  : crashed
-                    ? "Start it again"
-                    : error
-                      ? "Try again"
-                      : resume
-                        ? `Wake on ${hostOf(resume)}`
-                        : absent
-                          ? "Start it"
-                          : "Wake up"}
+              {/* A new label fades in as the button eases to its width (useEasedWidth). */}
+              <span
+                key={label}
+                className="animate-in truncate duration-150 fade-in-0 motion-reduce:animate-none"
+              >
+                {label}
               </span>
             </Button>
             <input

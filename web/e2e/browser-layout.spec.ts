@@ -93,6 +93,8 @@ const windows = [
   { width: 1600, height: 1000 },
   { width: 1100, height: 640 },
   { width: 900, height: 1000 },
+  // Narrower than a tablet, but with a keyboard and a mouse: the keys stay behind the toggle.
+  { width: 700, height: 900 },
 ]
 
 for (const size of windows) {
@@ -112,7 +114,11 @@ for (const size of windows) {
 }
 
 test.describe("a phone", () => {
-  test.use({ viewport: { width: 390, height: 844 } })
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  })
 
   test("the screen's browser view never scrolls", async ({
     page,
