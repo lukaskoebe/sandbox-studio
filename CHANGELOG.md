@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Home's lines cross less. A session that opened and closed while another was still open now
+  branches nearer the sandbox's line than it, so the two no longer cross, and terminals,
+  browser sessions and previews share lanes. Flags' words no longer cover another flag's tick
+  or words, go left of the tick when they don't fit to its right, and words drawn across a
+  line keep a margin around their letters. The outermost terminal's program names no longer
+  touch the next sandbox.
 - Home no longer shows a terminal twice. Studio named a terminal on Home by when it was
   created, moved into its own clock, and that shift came out a second apart now and then, and
   far apart after the computer slept: the name changed, and the terminal was two lanes, each

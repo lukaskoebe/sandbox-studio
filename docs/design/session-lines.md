@@ -25,6 +25,13 @@ preview on its port (`?tab=preview&port=`) and a group of previews on the newest
 open. While previews are off the Preview tab still opens from there, saying so, listing the
 ports and offering to turn previews on.
 
+Each side's branches share its lanes, whatever their kind (`packLanes`). The latest to open
+takes the lane nearest the line that nothing of its own time holds, then the next latest, and so
+on back. So a branch whose whole time falls within another's goes nearer the line than it, and
+the two never cross; two branches cross only when each is open at one end of the other, once,
+as they would in any order. Packed the other way round, oldest first, a terminal left open all
+afternoon took the inner lane and every later terminal crossed it twice.
+
 ## Pulse: how busy, and what is worth a word
 
 A branch widens either side of its lane with how busy its session was (mock L4, "Pulse"):
@@ -42,9 +49,11 @@ square root of its share of the window's busiest minute of that kind, so a littl
 shows; each stretch's tooltip says what it counted. A folded sandbox draws its branches' widths
 on its single line.
 
-Flags mark what the user would want to know, each with a tick and its words where they fit
-beside the labels (on the lane's label row, or the row above), the rest in its tooltip
-(`SessionFlags`):
+Flags mark what the user would want to know, each with a tick and its words where they cover no
+branch's label, no other flag's words and no tick: right of the tick on the lane's label row or
+the row above, else left of it, else as much as fits, the rest in its tooltip (`SessionFlags`).
+Words drawn across a line keep a margin of the card around their letters, so the line stops
+short of them:
 
 - **✗ failed**: a command a chat ran (`execute` tool call) failed, on the chat's branch;
 - **⏸ asked you**: an approval of the sandbox, on its chat's branch when it is a chat's

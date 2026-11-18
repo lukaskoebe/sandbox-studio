@@ -961,22 +961,66 @@ function branchLabel(b: Branch) {
   }
 }
 
-/** The lanes of a side: terminals, then browser sessions, then previews outermost. */
+/** The lanes of a side: its kinds' branches, packed together. */
 function lanesOf(
   branches: Branch[],
   kinds: BranchKind[],
   x: (t: number) => number,
   right: number
 ) {
-  return kinds.flatMap((k) =>
-    packLanes(
-      branches.filter((b) => b.kind === k),
-      x,
-      right,
-      CURVE * 3
-    )
+  return packLanes(
+    branches.filter((b) => kinds.includes(b.kind)),
+    x,
+    right,
+    CURVE * 3
   )
 }
+
+/** Where something sits that words shouldn't cover: left, top, right, bottom. */
+type Box = [number, number, number, number]
+
+/** The box of a row of words with its baseline at y, from x0 to x1. */
+const wordsBox = (x0: number, x1: number, y: number): Box => [
+  x0,
+  y - 9,
+  x1,
+  y + 2,
+]
+
+const overlaps = (a: Box, b: Box) =>
+  a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+
+/** How far words may run from x along the row at y, to the right or the left, before
+ * whatever is there already, or the edge. */
+function reach(
+  taken: Box[],
+  x: number,
+  y: number,
+  side: "right" | "left",
+  edge: number
+) {
+  const row = wordsBox(
+    side === "right" ? x : edge,
+    side === "right" ? edge : x,
+    y
+  )
+  let far = edge
+  for (const b of taken) {
+    if (!overlaps(b, row)) continue
+    if (side === "right" ? b[0] <= x : b[2] >= x) return 0
+    far = side === "right" ? Math.min(far, b[0] - 6) : Math.max(far, b[2] + 6)
+  }
+  return Math.max(0, Math.abs(far - x))
+}
+
+/** Text drawn over a line keeps a margin of the card around it, so the line stops short of
+ * it instead of running through its letters. */
+const halo = {
+  paintOrder: "stroke",
+  stroke: "var(--card)",
+  strokeWidth: 3,
+  strokeLinejoin: "round",
+} as const
 
 /** Where a branch's label goes and how much of it fits. */
 type Label = { x: number; shown: string }
@@ -1012,8 +1056,9 @@ function labelOf(
 
 /**
  * The flags of a sandbox: each on its chat's branch, or on the sandbox's line, with a tick and
- * its words where they fit beside the labels already there. A question also draws its wait,
- * dashed, until it was answered.
+ * its words where they cover no label, no other flag's words and no tick: right of the tick in
+ * the lane's row of labels, or the row above, or left of it in either when they don't fit, and
+ * else as much as fits. A question also draws its wait, dashed, until it was answered.
  */
 function Flags({
   flags,
@@ -1031,68 +1076,90 @@ function Flags({
   right: number
   /** The y of the lane a flag goes on, and of its words' baseline. */
   place: (f: Flag) => { y: number; row: number }
-  /** What each row of words already holds, by baseline. */
-  taken: Map<number, [number, number][]>
+  /** What the track already holds that words shouldn't cover; the flags add theirs. */
+  taken: Box[]
 }) {
   const look = useLook()
-  const out = []
-  for (const [i, f] of flags.entries()) {
+  const spots = flags.flatMap((f, i) => {
     const end = f.kind === "asked" ? (f.until ?? now) : f.at
-    if (end < since) continue
-    const { y, row } = place(f)
-    const fx = x(f.at)
+    return end < since ? [] : [{ f, i, end, fx: x(f.at), ...place(f) }]
+  })
+  // Every tick first, up to its row of words, so that no flag's words cover another's tick.
+  for (const s of spots) taken.push([s.fx - 2, s.row - 10, s.fx + 2, s.y])
+  const out = []
+  for (const { f, i, end, fx, y, row } of spots) {
     const color = flagColor(f)
-    // The words run from the tick to whatever holds the row next: the lane's label row, or
-    // the row above it when they don't fit there.
-    const start = fx + 3
-    const room = (r: number) => {
-      const held = taken.get(r) ?? []
-      if (held.some(([a, b]) => start >= a - 2 && start < b + 4)) return 0
-      const next = Math.min(
-        right,
-        ...held.filter(([a]) => a > start).map(([a]) => a - 6)
-      )
-      return Math.max(0, Math.floor((next - start) / look.char))
-    }
-    let at = row
-    let max = room(row)
-    if (max < Math.min(f.text.length, 12) && room(row - 12) > max) {
-      at = row - 12
-      max = room(at)
-    }
+    let best = { at: row, side: "right" as "right" | "left", max: -1 }
+    for (const side of ["right", "left"] as const)
+      for (const at of [row, row - 12]) {
+        // A tick that reaches the row above passes the lane's row, which must be clear there.
+        if (
+          at !== row &&
+          (at < 10 ||
+            taken.some((b) => overlaps(b, [fx - 2, at - 10, fx + 2, row - 10])))
+        )
+          continue
+        const max = Math.floor(
+          reach(
+            taken,
+            side === "right" ? fx + 3 : fx - 3,
+            at,
+            side,
+            side === "right" ? right : 0
+          ) / look.char
+        )
+        if (max >= f.text.length && best.max < f.text.length)
+          best = { at, side, max }
+        else if (best.max < Math.min(max, f.text.length - 1))
+          best = { at, side, max }
+      }
+    const { at, side, max } = best
     const shown =
       f.text.length <= max
         ? f.text
         : max >= 8
           ? f.text.slice(0, max - 1) + "…"
           : ""
+    const width = shown.length * look.char
+    const from = side === "right" ? fx + 3 : fx - 3 - width
     if (shown) {
-      const held = taken.get(at) ?? []
-      held.push([start, start + shown.length * look.char])
-      taken.set(at, held)
+      taken.push(wordsBox(from, from + width, at))
+      if (at !== row) taken.push([fx - 2, at - 10, fx + 2, row - 10])
     }
+    const top = shown ? at : row
     out.push(
       <g key={i}>
         <title>{`${clock(f.at)} · ${f.detail}`}</title>
         {f.kind === "asked" && <Wait x0={fx} x1={x(end)} y={y} />}
-        <Tick x={fx} y={y} row={at} color={color} />
+        <Tick x={fx} y={y} row={top} color={color} />
         {shown && (
           <text
-            x={start}
+            x={side === "right" ? fx + 3 : fx - 3}
             y={at}
+            textAnchor={side === "right" ? "start" : "end"}
             className="lines-font text-meta"
-            style={{ fill: color }}
+            style={{ fill: color, ...halo }}
           >
             {shown}
           </text>
         )}
+        {/* Something to point at: the tick, and the words, not the labels between them. */}
         <rect
           x={fx - 3}
-          y={at - 10}
-          width={Math.max(6, shown.length * look.char + 6)}
-          height={y - at + 12}
+          y={top - 10}
+          width={6}
+          height={y - top + 12}
           fill="transparent"
         />
+        {shown && (
+          <rect
+            x={from - 1}
+            y={at - 10}
+            width={width + 2}
+            height={13}
+            fill="transparent"
+          />
+        )}
       </g>
     )
   }
@@ -1161,11 +1228,14 @@ function Track({
     right
   )
   const main = TOP + up.length * LANE + (up.length ? 6 : 0)
-  const height = main + down.length * LANE + BOTTOM + (down.length ? 0 : 6)
+  // The outermost lane's programs write their names below it.
+  const named = down.at(-1)?.some((b) => b.blocks.some((k) => k.label))
+  const height =
+    main + down.length * LANE + BOTTOM + (down.length ? 0 : 6) + (named ? 6 : 0)
   const lane = (side: "up" | "down", i: number) =>
     side === "up" ? main - (i + 1) * LANE + 4 : main + (i + 1) * LANE - 4
   // Each lane's labels, so that flags' words go where they don't cover one.
-  const taken = new Map<number, [number, number][]>()
+  const taken: Box[] = []
   const placed: { b: Branch; y: number }[] = []
   const draw = (lanes: Lane[], side: "up" | "down") =>
     lanes.flatMap((l, i) =>
@@ -1180,11 +1250,14 @@ function Track({
           l[j + 1] ? x(l[j + 1].start) : right,
           look.char
         )
-        if (label.shown) {
-          const held = taken.get(y - LABEL) ?? []
-          held.push([label.x, label.x + label.shown.length * look.char])
-          taken.set(y - LABEL, held)
-        }
+        if (label.shown)
+          taken.push(
+            wordsBox(
+              label.x,
+              label.x + label.shown.length * look.char,
+              y - LABEL
+            )
+          )
         placed.push({ b, y })
         return (
           <BranchPath
@@ -1407,6 +1480,7 @@ function BranchPath({
         <text
           x={label.x}
           y={y - LABEL}
+          style={halo}
           className={cn(
             "lines-font text-meta",
             b.yours ? "fill-(--line-you)" : "fill-foreground",

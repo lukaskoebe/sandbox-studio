@@ -504,8 +504,12 @@ export function buildMarks(
 export type Lane = Branch[]
 
 /**
- * Packs branches into lanes, first fit: a branch takes the first lane whose last branch ended
- * at least gap before it opens, where x places a time. Open branches run to the right edge.
+ * Packs branches into lanes, innermost first, where x places a time and open branches run to
+ * the right edge. The latest to open goes first (of two that open together, the first to
+ * close), each into the innermost lane where no branch comes nearer than gap. So a branch whose
+ * time falls within another's goes inside it, and the two never cross; two cross only when
+ * each is open at one end of the other, and then once, wherever they go. A lane's branches are
+ * in the order they opened.
  */
 export function packLanes(
   branches: Branch[],
@@ -513,17 +517,27 @@ export function packLanes(
   right: number,
   gap: number
 ): Lane[] {
-  const lanes: { end: number; branches: Branch[] }[] = []
-  for (const b of branches) {
+  const lanes: { spans: [number, number][]; branches: Branch[] }[] = []
+  const latest = [...branches].sort(
+    (a, b) =>
+      b.start - a.start ||
+      (a.end ?? Infinity) - (b.end ?? Infinity) ||
+      a.id.localeCompare(b.id)
+  )
+  for (const b of latest) {
     const from = x(b.start)
     const to = b.end === undefined ? right : x(b.end)
-    const lane = lanes.find((l) => l.end + gap <= from)
+    const lane = lanes.find((l) =>
+      l.spans.every(([a, z]) => z + gap <= from || to + gap <= a)
+    )
     if (lane) {
+      lane.spans.push([from, to])
       lane.branches.push(b)
-      lane.end = to
-    } else lanes.push({ end: to, branches: [b] })
+    } else lanes.push({ spans: [[from, to]], branches: [b] })
   }
-  return lanes.map((l) => l.branches)
+  return lanes.map((l) =>
+    l.branches.sort((a, b) => a.start - b.start || a.id.localeCompare(b.id))
+  )
 }
 
 /** Something on a sandbox's line worth a word: a question for the user, a blocked request, a
