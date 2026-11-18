@@ -692,7 +692,12 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   types (`sandboxes.View`, `api.ApprovalView`, `store.Chat`, `chat.Log`, `gateway.Conn`,
   `store.Rule`, `browser.BrowserStatus`, `events.Event`). Changes arrive on `/api/events`; a
   burst of them refetches once, after 300 ms. `ChatStream` reads a chat's SSE stream into
-  `ChatEvent`s.
+  `ChatEvent`s. Every answer and chat event is cleaned as it is decoded (`sanitize.go`): a
+  computer writes much of what the TUI draws (file names, diffs, an agent's answers, its tools'
+  output), and none of it may talk to the terminal. Escape sequences are removed, a carriage
+  return becomes a new line, other control characters show as their pictures (`␇`, `␡`), and
+  invalid UTF-8 as `�`. Bytes, such as raw JSON, stay as they are; a question's choices are
+  cleaned where they are drawn.
 - `app.go`, `keys.go` and `view.go` are the Bubble Tea v2 model: state, messages, the key
   routing of the full screens, help, and the frame of each screen. The key bar is Bubbles'
   `help`, and the bindings are Bubbles' `key`, so the bar and the handlers come from one list.

@@ -306,7 +306,7 @@ func questionForm(schema json.RawMessage) (f questionField, ok bool) {
 		case p.Enum != nil:
 			f.kind = "one"
 			for _, v := range p.Enum {
-				f.picks = append(f.picks, pick{label: fmt.Sprint(v), action: "accept", value: v})
+				f.picks = append(f.picks, pick{label: cleanText(fmt.Sprint(v)), action: "accept", value: v})
 			}
 		case t == "array":
 			return questionField{}, false

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The terminal UI no longer passes a computer's escape sequences to your terminal. A file name,
+  a line of a diff, an agent's answer or its tool's output could carry one, which could set
+  your terminal's title or clipboard; they are removed now, and other control characters show
+  as symbols, such as `␇`.
 - The terminal UI's computer has the browser's Changes tab, between Terminal and Details. On
   the left it lists the computer's pushes and pull requests that wait for you, the ones that
   went out in the last day with their pull request's number, each repository under `/workspace`

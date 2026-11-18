@@ -544,6 +544,7 @@ func decodeChatEvent(name string, rev int64, data string) (ChatEvent, bool) {
 	default:
 		return ev, false
 	}
+	scrub(&ev)
 	return ev, err == nil
 }
 
@@ -598,6 +599,7 @@ func (c *Client) sendUpTo(ctx context.Context, limit int64, method, path string,
 		if err := json.Unmarshal(data, out); err != nil {
 			return resp, fmt.Errorf("Studio answered with invalid JSON: %w", err)
 		}
+		scrub(out) // a computer's text never reaches the terminal as it is
 	}
 	return resp, nil
 }
@@ -617,9 +619,9 @@ func apiError(status int, body []byte) *APIError {
 		Detail string `json:"detail"`
 	}
 	if json.Unmarshal(body, &problem) == nil && problem.Detail != "" {
-		e.Detail = problem.Detail
+		e.Detail = cleanText(problem.Detail)
 	} else if text := strings.TrimSpace(string(body)); text != "" && !strings.HasPrefix(text, "{") {
-		e.Detail = text
+		e.Detail = cleanText(text)
 	}
 	return e
 }
