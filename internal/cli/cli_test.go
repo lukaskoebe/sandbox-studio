@@ -37,6 +37,9 @@ type fakeStudio struct {
 var (
 	policyRequest  = policy.NetworkRequest{}
 	browserRequest = policy.NetworkRequest{Host: "cdn.example.com", Port: 443, HTTPRequest: policy.HTTPRequest{Method: "GET", Path: "/app.js", Site: "example.com"}}
+	// A sandbox's write to a host of the curated list, which allows only its reads.
+	writeRequest = policy.NetworkRequest{Host: "api.github.com", Port: 443, HTTPRequest: policy.HTTPRequest{Method: "POST", Path: "/repos/a/b/pulls"},
+		PathPattern: "/repos/*", Write: true}
 )
 
 const (
@@ -99,11 +102,17 @@ func (f *fakeStudio) handler(t *testing.T) http.Handler {
 				Approval: store.Approval{ID: "ap2", EnvironmentID: envID, SandboxID: sbID, Kind: "network.request", Subject: "cdn.example.com:443 example.com", Status: "pending", CreatedAt: time.Now()},
 				Network:  &browserRequest,
 				Teammate: &api.ApprovalTeammate{ID: "tm1", Name: "Finn", ApprovalScope: "teammate"},
+			}, {
+				Approval: store.Approval{ID: "ap3", EnvironmentID: envID, SandboxID: sbID, Kind: "network.request", Subject: "api.github.com:443", Status: "pending", CreatedAt: time.Now()},
+				Network:  &writeRequest,
+				Teammate: &api.ApprovalTeammate{ID: "tm1", Name: "Finn", ApprovalScope: "teammate"},
 			}})
 		case "POST /api/environments/env1/approvals/ap1/decide":
 			reply(w, api.ApprovalView{Approval: store.Approval{ID: "ap1", Status: "approved", Subject: "registry.npmjs.org:443"}})
 		case "POST /api/environments/env1/approvals/ap2/decide":
 			reply(w, api.ApprovalView{Approval: store.Approval{ID: "ap2", Status: "approved", Subject: "cdn.example.com:443 example.com"}})
+		case "POST /api/environments/env1/approvals/ap3/decide":
+			reply(w, api.ApprovalView{Approval: store.Approval{ID: "ap3", Status: "approved", Subject: "api.github.com:443"}})
 		case "POST /api/environments/env1/sandboxes/sb1/chats":
 			w.WriteHeader(http.StatusCreated)
 			reply(w, store.Chat{ID: "ch1", EnvironmentID: envID, SandboxID: sbID, State: store.ChatRunning})
@@ -302,6 +311,31 @@ func TestApproveBrowserRequestCoversTheBrowsers(t *testing.T) {
 	}
 	if status, _, errOut := f.run(t, "", false, "approve", "--sandboxes", "ap1"); status != ExitUsage || !strings.Contains(errOut, "--sandboxes") {
 		t.Fatalf("approve --sandboxes of a sandbox's request: %d %s", status, errOut)
+	}
+}
+
+// A sandbox's write to a host of the curated list names its method, as a browser's request does,
+// but is decided like a connection: its rule covers the sandboxes, with the teammate's scope, and
+// writes like it, as the web card starts.
+func TestApproveWriteIsNotABrowserRequest(t *testing.T) {
+	f := &fakeStudio{}
+	const decide = "POST /api/environments/env1/approvals/ap3/decide"
+	if status, out, errOut := f.run(t, "", false, "approve", "ap3"); status != ExitOK || !strings.Contains(out, "approved") {
+		t.Fatalf("approve: %d %s %s", status, out, errOut)
+	}
+	if got := f.bodies[decide]; !jsonEqual(got, map[string]any{"action": "allow", "scope": "teammate", "method": "POST", "pathPrefix": "/repos/*"}) {
+		t.Fatalf("decide body %v", got)
+	}
+	f.run(t, "", false, "deny", "--scope", "environment", "ap3")
+	if got := f.bodies[decide]; !jsonEqual(got, map[string]any{"action": "deny", "scope": "environment", "method": "POST", "pathPrefix": "/repos/*"}) {
+		t.Fatalf("deny --scope body %v", got)
+	}
+	f.run(t, "", false, "approve", "--once", "ap3")
+	if got := f.bodies[decide]; !jsonEqual(got, map[string]any{"action": "allow_once"}) {
+		t.Fatalf("approve --once body %v", got)
+	}
+	if status, _, errOut := f.run(t, "", false, "approve", "--sandboxes", "ap3"); status != ExitUsage || !strings.Contains(errOut, "--sandboxes") {
+		t.Fatalf("approve --sandboxes of a write: %d %s", status, errOut)
 	}
 }
 

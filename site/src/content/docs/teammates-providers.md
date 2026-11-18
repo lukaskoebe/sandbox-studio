@@ -93,7 +93,7 @@ Studio sets up the harness inside the computer. The teammate's name, role, and s
 
 The teammate's tasks, under **Tasks** in its settings (or ⌘K, *Iris's tasks*), list the work it should do. A task has a title, optional details in Markdown, and an optional due day. You add, edit, and mark tasks done; the teammate can add tasks to its own list while it works.
 
-Check-ins are off until you turn them on in the teammate's settings. With check-ins on, Studio gives the teammate a chat turn every few hours, during the hours you pick, whenever it has open tasks. The turn runs on the teammate's most recent computer, and its thread is marked **Check-in** on the teammate's home and **Heartbeat** in **All chats**. If that computer is stopped, Studio starts it for the check-in, and it keeps running afterwards.
+Check-ins are off until you turn them on in the teammate's settings. With check-ins on, Studio gives the teammate a chat turn every few hours, during the hours you pick, whenever it has open tasks. The turn runs on the teammate's most recent computer, and its thread is marked **Check-in**. If that computer is stopped, Studio starts it for the check-in, and it keeps running afterwards.
 
 A check-in that can't run is listed under **Activity** in the teammate's tasks with the reason: the teammate has no computer, its provider has no key, approvals are waiting on its computer, or its computer isn't ready.
 

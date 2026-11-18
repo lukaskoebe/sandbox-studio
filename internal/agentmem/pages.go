@@ -126,9 +126,9 @@ func (s *Service) toolPage(ctx context.Context, c caller, params json.RawMessage
 			s.Notify(c.env)
 		}
 		s.log(ctx, c, se.id, entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "proposed page " + slug})
-		note := "The user decides in Studio's inbox; the page is written when approved."
+		note := "The user decides on Studio's Home; the page is written when approved."
 		if scope != memory.SharedScope {
-			note = "The user wrote this page, so they decide on your new compiled truth in Studio's inbox."
+			note = "The user wrote this page, so they decide on your new compiled truth on Studio's Home."
 			if prop.Timeline != "" {
 				note += " The timeline entry waits with it."
 			}

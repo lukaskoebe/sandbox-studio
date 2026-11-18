@@ -415,7 +415,7 @@ func (s *Service) requestShare(ctx context.Context, c caller, se session, r shar
 		return nil, err
 	}
 	return map[string]any{"approvalId": a.ID, "status": a.Status,
-		"note": "The user decides in Studio's inbox; the fact joins shared memory when approved."}, nil
+		"note": "The user decides on Studio's Home; the fact joins shared memory when approved."}, nil
 }
 
 func (s *Service) proposeShare(ctx context.Context, c caller, se session, r shareRequest) (store.Approval, error) {

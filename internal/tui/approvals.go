@@ -39,8 +39,10 @@ type choice struct {
 }
 
 // isBrowserRequest reports whether an approval is a browser's request, which names its method.
+// The one other request that names it is a sandbox's write to a host of the curated list, which
+// is decided like a connection, as on the web card.
 func isBrowserRequest(a api.ApprovalView) bool {
-	return a.Network != nil && a.Network.Method != ""
+	return a.Network != nil && a.Network.Method != "" && !a.Network.Write
 }
 
 // reaches are who a browser request's rule covers: the teammate's browser (the sandbox's,
@@ -70,7 +72,8 @@ func scopeOf(a api.ApprovalView, c choice) string {
 	return "sandbox"
 }
 
-// requestAvailable reports whether a browser request names a method and path a rule could cover.
+// requestAvailable reports whether a request names a method and path a rule could cover: a
+// browser's request, or a sandbox's write to a host of the curated list.
 func requestAvailable(a api.ApprovalView) bool {
 	return a.Network != nil && a.Network.Method != "" && a.Network.PathPattern != ""
 }
@@ -188,6 +191,8 @@ func patternLevel(pattern string) string {
 // its teammate sets (a browser request's reach from it), and the default ports.
 func defaultChoice(a api.ApprovalView) choice {
 	c := choice{scope: "environment", reach: defaultReach(a)}
+	// A write starts as an allow of writes like it, not of every write to the host.
+	c.request = a.Network != nil && a.Network.Write && requestAvailable(a)
 	if a.Teammate != nil && a.Teammate.ApprovalScope != "" {
 		c.scope = a.Teammate.ApprovalScope
 	}

@@ -1047,7 +1047,7 @@ function NeedsYou({ ctx }: { ctx: PanelContext }) {
         sg.kind === "promote"
           ? toast.success("Proposed for shared memory", {
               description:
-                "Approve it in the inbox to share it with every teammate.",
+                "It waits for you on Home: approve it to share it with every teammate.",
             })
           : toast.success("Core page set", {
               description: "Its page loads into every session of this scope.",
@@ -1399,7 +1399,7 @@ function FactMenu({ ctx, fact: f }: { ctx: PanelContext; fact: MemoryFact }) {
       onSuccess: () =>
         toast.success("Proposed for shared memory", {
           description:
-            "Approve it in the inbox to share it with every teammate.",
+            "It waits for you on Home: approve it to share it with every teammate.",
         }),
       onSettled: () =>
         queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] }),

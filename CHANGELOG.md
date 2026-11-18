@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- `studio approve`, `studio deny` and the terminal UI decide a computer's write to a host of
+  the curated list as the browser's card does. They took it for a browser's request, because it
+  names its method too, so the rule they made covered only the browsers and the computer's
+  next push asked again. Its rule now covers the computers, with the teammate's usual scope,
+  and writes like it, such as `POST /repos/*` on `api.github.com`; in the terminal UI, `p`
+  steps back to every write to the host.
+- Studio's pages name the places as they are now: the Network and Secrets pages under
+  Environment instead of Settings, Settings → Git forges, and Home instead of the inbox, also
+  in what teammates are told when they propose a memory. A check-in's thread is called
+  **Check-in** in All chats and in Home's Earlier list too, where it was **Heartbeat**, and the Network page
+  says a teammate's own level can be stricter or looser than the environment's.
+
 - DevTools for the teammate's browser now open in the desktop app on macOS and Linux and in
   Safari, docked under the page as in Chrome, where they used to show only their address to
   copy into Chrome. Studio gives Chrome's DevTools the one thing they need that those

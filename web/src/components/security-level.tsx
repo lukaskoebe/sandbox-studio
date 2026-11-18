@@ -234,7 +234,7 @@ export function SecurityLevelPicker({
             }
           >
             <p className="text-muted-foreground @xl:col-span-2">
-              Follows the environment's level, set in Settings → Network.
+              Follows the environment's level, set on the Network page.
             </p>
           </LevelRow>
         )}
@@ -265,7 +265,7 @@ export function SecurityLevelPicker({
   )
 }
 
-/** Settings → Network's security level: what happens to a host no rule covers. */
+/** The Network page's security level: what happens to a host no rule covers. */
 export function LevelSection({ env }: { env: string }) {
   const { level, saving, setLevel } = useEnvironmentLevel(env)
   return (

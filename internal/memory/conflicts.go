@@ -19,7 +19,7 @@ type Conflict struct {
 	Status     string     `json:"status" enum:"open,resolved"`
 	Resolution string     `json:"resolution,omitempty" enum:"keep_a,keep_b,keep_both,edit"`
 	Note       string     `json:"note,omitempty"`
-	ApprovalID string     `json:"approvalId,omitempty" doc:"The memory.conflict approval in the inbox"`
+	ApprovalID string     `json:"approvalId,omitempty" doc:"The memory.conflict approval waiting on Home"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
 }

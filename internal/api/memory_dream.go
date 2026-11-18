@@ -117,7 +117,7 @@ func (s *Server) registerMemoryDream(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "acceptMemorySuggestion", Method: http.MethodPost, Path: base + "/suggestions/{id}/accept", Tags: tags,
-		Description: "Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides in the inbox; a core page becomes a core page if the scope's core budget has room.",
+		Description: "Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides on Home; a core page becomes a core page if the scope's core budget has room.",
 	}, decide(true))
 	huma.Register(api, huma.Operation{
 		OperationID: "dismissMemorySuggestion", Method: http.MethodPost, Path: base + "/suggestions/{id}/dismiss", Tags: tags,

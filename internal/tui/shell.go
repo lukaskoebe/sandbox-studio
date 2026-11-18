@@ -60,14 +60,11 @@ func askApproval(ctx context.Context, c *Client, id string, in io.Reader, out io
 	ch := defaultChoice(*a)
 	if network {
 		fmt.Fprintf(out, "▲ %s wants %s\r\n\r\n", firstNonEmpty(approvalSource(*a), "The sandbox"), hostOf(*a))
-		allow := hostOf(*a)
-		if pats := patterns(*a); ch.pattern < len(pats) {
-			allow = pats[ch.pattern]
-		}
+		allow := firstNonEmpty(patternText(*a, ch), hostOf(*a))
 		fmt.Fprintf(out, "  o  allow once\r\n  y  allow %s (%s)\r\n  n  deny\r\n", allow, scopeLabel(*a, scopeOf(*a, ch)))
 	} else {
 		fmt.Fprintf(out, "▲ %s waits\r\n\r\n", kindTitle(a.Kind))
-		fmt.Fprint(out, "  Answer it in studio tui, on its card with a, or in the browser.\r\n")
+		fmt.Fprint(out, "  Answer it on Home in studio tui, or in the browser.\r\n")
 	}
 	fmt.Fprint(out, "\r\n  enter  back to the terminal\r\n  q      detach\r\n")
 

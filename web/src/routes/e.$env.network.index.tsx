@@ -93,8 +93,8 @@ function NetworkSettings() {
       intro={
         <>
           Sandboxes reach the internet only through Studio, and connections that
-          no rule allows wait for your approval. A teammate can tighten the
-          level in its own settings.{" "}
+          no rule allows wait for your approval. A teammate can have a level of
+          its own in its settings.{" "}
           <a
             href="https://lukaskoebe.github.io/sandbox-studio/network/"
             target="_blank"

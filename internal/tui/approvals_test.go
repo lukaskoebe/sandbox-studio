@@ -196,6 +196,40 @@ func TestBrowserRequestDecisionBodies(t *testing.T) {
 	}
 }
 
+// A sandbox's write to a host of the curated list names its method, as a browser's request does,
+// but is decided like a connection: its rule has the card's scope and covers the sandboxes, and
+// it starts as an allow of writes like it, as the web card does.
+func TestWriteDecidesLikeAConnection(t *testing.T) {
+	a := netApproval("w", "api.github.com", time.Now(), "api.github.com", "*.github.com")
+	a.Kind = "network.request"
+	a.Network.Method, a.Network.Path, a.Network.PathPattern, a.Network.Write = "POST", "/repos/a/b/pulls", "/repos/*", true
+	a.Teammate = &api.ApprovalTeammate{ID: "t1", Name: "Iris", ApprovalScope: "teammate"}
+	if isBrowserRequest(a) {
+		t.Fatal("a write is a browser request")
+	}
+	c := defaultChoice(a)
+	if !c.request {
+		t.Fatal("a write's choice doesn't start with writes like it")
+	}
+	if got := patternText(a, c); got != "POST /repos/*" {
+		t.Errorf("pattern text %q", got)
+	}
+	data, err := json.Marshal(decisionFor(a, c, "allow"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != `{"action":"allow","host":"api.github.com","scope":"teammate","method":"POST","pathPrefix":"/repos/*"}` {
+		t.Errorf("allow: %s", got)
+	}
+	c.nextPattern(a) // back to the host patterns: every write to the host
+	if data, _ = json.Marshal(decisionFor(a, c, "deny")); string(data) != `{"action":"deny","host":"api.github.com","scope":"teammate"}` {
+		t.Errorf("deny of the host: %s", data)
+	}
+	if !strings.Contains(whoText(a, c), "scope") {
+		t.Errorf("who text %q: a write's card shows its scope, not a browser's reach", whoText(a, c))
+	}
+}
+
 // The scope key cycles a browser request's reach, and the card says who its rule covers.
 func TestScopeKeyCyclesABrowserRequestsReach(t *testing.T) {
 	m := sampleApp()

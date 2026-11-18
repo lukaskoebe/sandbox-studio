@@ -73,15 +73,15 @@ export function TeammateSecrets({
       <p className="text-xs/relaxed text-muted-foreground">
         What {teammate.name}'s sandboxes see. Its own secrets replace the
         environment's of the same name, and a sandbox's replace both. All
-        secrets are in{" "}
+        secrets are on the{" "}
         <Link
           to="/e/$env/secrets"
           params={{ env }}
           className="underline underline-offset-4"
         >
-          Settings → Secrets
-        </Link>
-        .
+          Secrets
+        </Link>{" "}
+        page.
       </p>
       {!secrets.data ? null : rows.length ? (
         <div className="rounded-lg ring-1 ring-foreground/10">

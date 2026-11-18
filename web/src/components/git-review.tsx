@@ -586,7 +586,7 @@ function PushReview({ approval }: { approval: Approval }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-muted-foreground">
               The commit is still staged. Once the cause is fixed, for example
-              the forge&rsquo;s token in Settings → Git, push it again.
+              the forge&rsquo;s token in Settings → Git forges, push it again.
             </span>
             <Button
               variant="outline"

@@ -73,7 +73,7 @@ export function ChatTable({
                 </Link>
                 {c.heartbeat && (
                   <Badge variant="secondary" className="shrink-0">
-                    Heartbeat
+                    Check-in
                   </Badge>
                 )}
                 {c.taskId && (

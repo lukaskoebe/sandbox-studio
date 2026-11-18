@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Approvals of every environment, newest first. Pending ones feed the approval inbox. */
+        /** @description Approvals of every environment, newest first. Pending ones wait for the user on Home. */
         get: operations["listApprovals"];
         put?: never;
         post?: never;
@@ -1178,7 +1178,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides in the inbox; a core page becomes a core page if the scope's core budget has room. */
+        /** @description Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides on Home; a core page becomes a core page if the scope's core budget has room. */
         post: operations["acceptMemorySuggestion"];
         delete?: never;
         options?: never;
@@ -3935,7 +3935,7 @@ export interface components {
             files: number;
         };
         Conflict: {
-            /** @description The memory.conflict approval in the inbox */
+            /** @description The memory.conflict approval waiting on Home */
             approvalId?: string;
             /** Format: date-time */
             createdAt: string;
@@ -3958,7 +3958,7 @@ export interface components {
             verdict: "contradiction" | "temporal_supersession" | "context_dependent" | "duplicate";
         };
         ConflictDetail: {
-            /** @description The memory.conflict approval in the inbox */
+            /** @description The memory.conflict approval waiting on Home */
             approvalId?: string;
             /** Format: date-time */
             createdAt: string;

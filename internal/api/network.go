@@ -478,7 +478,7 @@ func (s *Server) registerNetwork(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "listApprovals", Method: http.MethodGet, Path: "/api/approvals", Tags: []string{"approvals"},
-		Description: "Approvals of every environment, newest first. Pending ones feed the approval inbox.",
+		Description: "Approvals of every environment, newest first. Pending ones wait for the user on Home.",
 	}, func(ctx context.Context, in *listIn) (*struct{ Body []ApprovalView }, error) {
 		list, err := s.approvalViews(ctx, "", in.Status)
 		return &struct{ Body []ApprovalView }{list}, apiError(err)

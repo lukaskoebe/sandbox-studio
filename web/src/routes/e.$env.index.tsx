@@ -516,7 +516,7 @@ function Earlier({ env }: { env: string }) {
         >
           <span className="text-muted-foreground">
             {c.heartbeat
-              ? "Heartbeat"
+              ? "Check-in"
               : c.taskId
                 ? "Scheduled run"
                 : "Started chat"}

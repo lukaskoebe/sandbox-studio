@@ -531,7 +531,9 @@ func decide(action string) func(*call, []string) error {
 		}
 		body := map[string]any{"action": action}
 		network := found.Network != nil
-		browser := network && found.Network.Method != ""
+		// A sandbox's write to a host of the curated list names its method too, but is decided
+		// like a connection, as on the web card.
+		browser := network && found.Network.Method != "" && !found.Network.Write
 		switch {
 		case o.once && !network:
 			return usagef("--once is for network requests")
@@ -549,6 +551,11 @@ func decide(action string) func(*call, []string) error {
 				body["scope"] = o.scope
 			} else if found.Teammate != nil && found.Teammate.ApprovalScope != "" {
 				body["scope"] = found.Teammate.ApprovalScope
+			}
+			// A write's rule covers writes like it, not every write to the host, as the web
+			// card starts.
+			if n := found.Network; n.Write && n.PathPattern != "" {
+				body["method"], body["pathPrefix"] = n.Method, n.PathPattern
 			}
 		}
 		var out api.ApprovalView

@@ -207,7 +207,7 @@ func (s *Service) call(ctx context.Context, sb store.Sandbox, params json.RawMes
 	}
 	i := slices.IndexFunc(visible, func(sec store.Secret) bool { return sec.Name == in.Secret })
 	if i < 0 {
-		return nil, integrations.ToolError("this sandbox sees no secret %s with a kind; the user adds one in Settings → Secrets", in.Secret)
+		return nil, integrations.ToolError("this sandbox sees no secret %s with a kind; the user adds one on Studio's Secrets page", in.Secret)
 	}
 	sec := visible[i]
 	r := Recipes[sec.Kind]
