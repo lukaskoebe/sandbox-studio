@@ -55,7 +55,7 @@ func (m *app) openSettings() tea.Cmd {
 	if m.screen != screenSettings {
 		s.back = m.screen
 		if s.back == screenHelp {
-			s.back = screenHome
+			s.back = screenMain
 		}
 	}
 	s.gen++

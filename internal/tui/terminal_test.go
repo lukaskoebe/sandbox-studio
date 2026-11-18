@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
-	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 )
 
 // syncBuffer is a buffer the attachment and the test write and read from different goroutines.
@@ -197,24 +195,6 @@ func TestAttachRefusesASandboxThatIsNotRunning(t *testing.T) {
 	err := a.Run()
 	if err == nil || !strings.Contains(err.Error(), "not running or still booting") {
 		t.Fatalf("refusal: %v", err)
-	}
-}
-
-func TestAttachOnlyStartsForARunningSandbox(t *testing.T) {
-	m := sampleApp()
-	m.cursor = 2 // docs-site, stopped
-	if cmd := m.attachTo(m.selected(), terminalName); cmd != nil || m.notice.text != "Start docs-site first, with s." {
-		t.Fatalf("stopped sandbox: command %v, notice %q", cmd != nil, m.notice.text)
-	}
-	m.cursor = 0 // blub, running with an agent
-	if cmd := m.attachTo(m.selected(), terminalName); cmd == nil {
-		t.Fatal("running sandbox did not start a terminal")
-	}
-	m.sandboxes[0].Status = runtime.Status("running")
-	m.sandboxes[0].Agent = nil
-	m.cursor = 0
-	if cmd := m.attachTo(m.selected(), terminalName); cmd != nil || m.notice.text != "blub is still starting." {
-		t.Fatalf("starting sandbox: command %v, notice %q", cmd != nil, m.notice.text)
 	}
 }
 

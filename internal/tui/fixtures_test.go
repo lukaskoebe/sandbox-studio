@@ -1,9 +1,14 @@
 package tui
 
 import (
+	"context"
+	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
@@ -11,8 +16,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// onSession puts Home's cursor on the row of a thread or terminal: the session with the title, in
-// the computer with the ID.
+// onSession puts the sidebar's cursor on the row of a thread, the sidebar with the keys: the
+// session with the title, in the computer with the ID.
 func onSession(t testing.TB, m *app, sandbox, title string) *app {
 	t.Helper()
 	visible := m.visible()
@@ -21,13 +26,20 @@ func onSession(t testing.TB, m *app, sandbox, title string) *app {
 			continue
 		}
 		if x, ok := m.rowSession(r, visible); ok && x.sandbox == sandbox && x.title() == title {
+			toSidebar(m) // before the cursor moves: the drawer opens on the row of the place on show
 			m.setCursor(r)
-			m.inbox.sidebar = true
 			return settle(m)
 		}
 	}
-	t.Fatalf("Home's list has no row of %q in %s", title, sandbox)
+	t.Fatalf("the sidebar has no row of %q in %s", title, sandbox)
 	return m
+}
+
+// toSidebar gives the sidebar the keys, as \ does: a drawer below paneWidth.
+func toSidebar(m *app) {
+	if !m.sidebarKeys() {
+		m.toggleSidebar()
+	}
 }
 
 // onCard puts m on Home's list, its cursor on the i-th request.
@@ -49,24 +61,57 @@ func cursorCard(t testing.TB, m *app) card {
 	return *r.card
 }
 
+// openSession opens the thread of a session of the computer with the ID: a chat by its title, or
+// an agent's terminal by its name.
+func openSession(t testing.TB, m *app, sandbox, title string) *app {
+	t.Helper()
+	sb, ok := m.sandboxByID(sandbox)
+	if !ok {
+		t.Fatalf("no computer %s", sandbox)
+	}
+	for _, x := range m.sessionsOf(sb) {
+		if x.title() == title {
+			x.mate = sb.TeammateID
+			m.open(placeOf(x))
+			return settle(m)
+		}
+	}
+	for _, c := range m.sess.chats[sandbox] {
+		if chatTitle(c) == title {
+			m.open(place{kind: placeThread, mate: c.TeammateID, chat: c.ID, sandbox: sandbox})
+			return settle(m)
+		}
+	}
+	t.Fatalf("%s has no session %q", sandbox, title)
+	return m
+}
+
+// openComputer opens a computer on its own, on the tab.
+func openComputer(m *app, id string, tab computerTab) *app {
+	m.open(place{kind: placeComputer, sandbox: id})
+	m.comp.tab = tab
+	return settle(m)
+}
+
 // settle runs what Update runs after every message, as a key that moved the cursor would.
 func settle(m *app) *app {
 	next, _ := m.Update(struct{}{})
 	return next.(*app)
 }
 
-// onComputer puts Home's cursor on the row of a computer of yours.
+// onComputer puts the sidebar's cursor on the row of a computer of yours, the sidebar with the
+// keys.
 func onComputer(t testing.TB, m *app, id string) *app {
 	t.Helper()
 	visible := m.visible()
 	for _, r := range m.homeRows() {
 		if r.kind == atSandbox && r.sub < 0 && visible[r.sb].ID == id {
+			toSidebar(m) // before the cursor moves: the drawer opens on the row of the place on show
 			m.setCursor(r)
-			m.inbox.sidebar = true
 			return settle(m)
 		}
 	}
-	t.Fatalf("Home's list has no row of %s", id)
+	t.Fatalf("the sidebar has no row of %s", id)
 	return m
 }
 
@@ -125,4 +170,39 @@ func onComputersScreen(t testing.TB, m *app, id string) *app {
 // the next key, so that the command a key returns is the key's own.
 func quietHome(m *app) {
 	m.inbox.busy, m.home.busy, m.sess.busy = true, true, true
+}
+
+// threadWithCard is Iris's Fix the login form on the morning of the mocks, loaded: blub waits
+// to reach a host, so the thread shows the request as its card.
+func threadWithCard(m *app) *app {
+	return settle(sampleChat(sampleMorning(m)))
+}
+
+// detailDataOf gives computer id the ports and history withDetailData gives sb2.
+func detailDataOf(m *app, id string) {
+	withDetailData(m)
+	m.ports.sandbox, m.lineage.sandbox, m.lineage.data.SandboxID = id, id, id
+}
+
+// liveTerminal opens computer id on its own on the Terminal tab, on terminal term, attached to
+// a fake terminal whose screen says the agent is ready.
+func liveTerminal(t *testing.T, m *app, id, term string) *app {
+	t.Helper()
+	m.client = fakeTerminal(t, func(ctx context.Context, c *websocket.Conn, _ *http.Request) {
+		_ = c.Write(ctx, websocket.MessageBinary, []byte("codex is ready\r\n> "))
+		for {
+			if _, _, err := c.Read(ctx); err != nil {
+				return
+			}
+		}
+	})
+	m.open(place{kind: placeComputer, sandbox: id})
+	m.comp.tab, m.comp.term = tabTerminal, term
+	m = settle(m)
+	m = run(m, m.openPane())
+	if m.pane.term == nil {
+		t.Fatalf("the terminal is not connected: %v", m.pane.err)
+	}
+	waitFor(t, "the agent's screen", func() bool { return strings.Contains(strings.Join(m.pane.term.lines(80, 10), ""), "codex is ready") })
+	return m
 }

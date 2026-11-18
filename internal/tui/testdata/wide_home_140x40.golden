@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 3   Activity   Settings                                                             ▲ 3 waiting for you · 12:00 
-───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 3 │ Finn · backend                                                                                        ○ idle
-                              │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────
- TEAMMATES                    │ COMPUTER   ● api-refactor · go@2 · 2 CPUs · 2 GiB · up 12m
-  Iris frontend           ▲ 1 │ 
-▌ Finn backend            ▲ 2 │ THREADS    none yet; c starts one
-  + New teammate              │ 
-                              │ TASKS      …
- YOUR COMPUTERS               │ 
-  ◐ demo              booting │ NETWORK    Default, the environment's · new rules apply to Finn's computers
-  + New computer              │ 
-                              │ c new thread · T agent in a terminal · t shell · + another computer · f fork
- ENVIRONMENT                  │ 
-  Computers                 4 │ 
-  Network                 ▲ 2 │ 
-  Secrets                     │ 
-  Memory                      │ 
-  Activity                    │ 
-  , Settings              dev │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-c new thread  T agent  t shell  + add computer  →/← older threads  f fork  s start/stop  1-9 jump in  tab next waiting │ ? more  q quit
+ ◆ Studio          Default ▾  │ Home                                                                            ▲ 3 waiting for you · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 3 │  WAITING FOR YOU · 3                          │ demo                                               ◐ Booting
+                              │  ± Finn  Push 2 commits t…  api-refactor  30s │ ────────────────────────────────────────────────────────────
+ TEAMMATES                    │  ⇅ Finn  api-refactor want…  pypi.org +2   1m │ no teammate · base · 0 CPUs · 0 MiB                         
+▌ Iris frontend           ▲ 1 │  ⇅ Iris  blub wants regist…  *.npmjs.org  10m │                                                             
+  Finn backend            ▲ 2 │                                               │ CPU  ▓▒░░░░░░░░░░░░░░░░░░░░░░                               
+  + New teammate              │  QUIET                                        │                                                             
+                              │ ▌◐ demo  your computer · booting    base      │ HISTORY    …                                                
+ YOUR COMPUTERS               │                                               │ ID         sb4                                              
+  ◐ demo              booting │  EARLIER TODAY                                │                                                             
+  + New computer              │  Loading…                                     │                                                             
+                              │                                               │                                                             
+ ENVIRONMENT                  │                                               │                                                             
+  Computers                 4 │                                               │                                                             
+  Network                 ▲ 2 │                                               │                                                             
+  Secrets                     │                                               │                                                             
+  Memory                      │                                               │                                                             
+  Activity                    │                                               │                                                             
+  , Settings              dev │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+──────────────────────────────┴───────────────────────────────────────────────┴─────────────────────────────────────────────────────────────
+enter open  tab next  + new computer │ l activity  , settings  e env  \ sidebar │ ? more  q quit

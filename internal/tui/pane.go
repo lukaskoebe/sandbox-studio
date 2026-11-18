@@ -16,10 +16,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// A live terminal is a sandbox's terminal drawn inside Home's pane: its output is written into a
+// A live terminal is a computer's terminal drawn inside the frame: its output is written into a
 // terminal emulator, the emulator's screen is drawn into the pane's rows on every frame, and the
-// keys go to it while the pane has them. Its connection is the attach websocket the full-screen
-// attach uses, so tmux sizes the session to the pane while it shows.
+// keys go to it while the pane has them. Its connection is the attach websocket studio shell
+// uses, so tmux sizes the session to the pane while it shows.
 
 // paneFrame is the shortest time between two redraws a terminal's output asks for: a program that
 // prints without pause redraws the TUI 60 times a second, not once per write.

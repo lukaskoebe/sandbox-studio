@@ -43,7 +43,7 @@ type (
 // portsWanted is the sandbox whose ports the screen on show lists, while it runs: the detail's,
 // or the one in the detail pane of Home's wide layout.
 func (m *app) portsWanted() string {
-	if m.screen != screenDetail && !m.dashShows() {
+	if !m.dashShows() {
 		return ""
 	}
 	sb := m.dashSandbox()

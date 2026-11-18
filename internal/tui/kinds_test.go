@@ -263,7 +263,8 @@ func pendingAsks(m *app, schema string) *app {
 	q.Status = chat.StatusPending
 	q.Question = &chat.QuestionBody{Message: "Which port should the dev server use?", Schema: json.RawMessage(schema)}
 	m.chats.items[perm.ID], m.chats.items[q.ID] = perm, q
-	m.chats.sorted = nil // sorted again, as the stream would
+	m.chats.sorted = nil      // sorted again, as the stream would
+	m.chats.composing = false // a thread that waits opens without its composer
 	return m
 }
 
@@ -276,6 +277,7 @@ func TestChatAnswersItsAsksInPlace(t *testing.T) {
 	client, rec := recordingClient(t)
 	m := pendingAsks(sampleChat(sampleApp()), `{"type":"object","properties":{"port":{"type":"integer","enum":[3000,8080]}}}`)
 	m.client = client
+	quietHome(m)
 	m = pressRun(t, m, "1")
 	if got := rec.last(t); got.path != "/api/environments/env1/approvals/ap1/decide" || got.body != `{"action":"allow","scope":"environment"}` {
 		t.Fatalf("permission: %+v", got)

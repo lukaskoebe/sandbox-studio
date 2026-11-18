@@ -130,7 +130,9 @@ change it.
   and decides them through the same endpoint, with the same choices; keeping both facts of a
   memory conflict, or editing one, opens in the browser. It reviews git pushes and pull
   requests in its pager, with their commits and diff, and decides them there or from their
-  row, where `y` asks once more because the diff wasn't read.
+  row, where `y` asks once more because the diff wasn't read. A request a thread waits on is
+  also a card in the thread, above its composer, and the computer's Terminal tab shows one as a
+  banner over the terminal.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
   side by side, chat permission options. Every card names its kind in a chip and marks the

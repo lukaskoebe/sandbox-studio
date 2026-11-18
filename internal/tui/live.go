@@ -60,23 +60,18 @@ type (
 	spinTick struct{}
 )
 
-// usageWanted is the running sandboxes whose usage the screen on show draws: Home's visible
-// ones, or the detail's.
+// usageWanted is the running computers whose usage the frame or the Computers screen draws.
 func (m *app) usageWanted() []string {
 	if m.look.plain || m.usage.unsupported || m.env.ID == "" {
 		return nil
 	}
 	var ids []string
 	switch m.screen {
-	case screenHome:
+	case screenMain, screenComputers:
 		for _, sb := range m.visible() {
 			if phaseOf(sb) == phaseReady {
 				ids = append(ids, sb.ID)
 			}
-		}
-	case screenDetail:
-		if sb := m.selected(); sb != nil && phaseOf(*sb) == phaseReady {
-			ids = append(ids, sb.ID)
 		}
 	}
 	return ids
@@ -151,7 +146,7 @@ func (m *app) lineageWanted() string {
 	if m.look.plain || m.env.ID == "" {
 		return ""
 	}
-	if m.screen == screenDetail || m.dashShows() {
+	if m.dashShows() {
 		return m.dashID()
 	}
 	return ""
@@ -189,10 +184,8 @@ func (m *app) spinWanted() bool {
 		return p == phaseBooting || p == phaseCreating
 	}
 	switch m.screen {
-	case screenChat:
-		return m.chats.running()
-	case screenHome:
-		if m.chats.inPane && m.chats.running() {
+	case screenMain, screenComputers:
+		if m.chats.on && m.chats.running() {
 			return true
 		}
 		if working, _ := m.sessionCounts(); working > 0 {
@@ -203,9 +196,6 @@ func (m *app) spinWanted() bool {
 				return true
 			}
 		}
-	case screenDetail:
-		sb := m.selected()
-		return sb != nil && booting(*sb)
 	}
 	return false
 }

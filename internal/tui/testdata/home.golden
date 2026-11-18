@@ -1,23 +1,23 @@
-Sandbox Studio · Default                                     ▲ 1 waiting for you
+ ≡  Home                                                    ▲ 1 waiting for you 
 ────────────────────────────────────────────────────────────────────────────────
-  Home                                                       ▲ 1 waiting for you
-
- TEAMMATES
-▸ Iris frontend                                                                 
-  Finn backend                                                               ▲ 1
-  + New teammate                                                                
-
- YOUR COMPUTERS
-  ◐ demo  base                                                           booting
-  + New computer                                                                
-
- ENVIRONMENT
-  Computers                                                                    4
-  Network                                                                    ▲ 1
-  Secrets                                                                       
-  Memory                                                                        
-  Activity                                                                      
-  , Settings                                                                 dev
-
+ WAITING FOR YOU · 1                                                            
+▸⇅ Finn  A computer wants pypi.org:443                                       1m 
+                                                                                
+ QUIET                                                                          
+ ◐ demo  your computer · booting                                      base      
 ────────────────────────────────────────────────────────────────────────────────
-enter open  n new  s start/stop  \ list  t terminal  c thread  ? help  q quit
+  Network access  1m ago                                                        
+    pypi.org:443                                                                
+    pattern    scope environment   ports default                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+y allow  n deny  o allow once  p pattern  s scope  tab next  enter open  ? help 

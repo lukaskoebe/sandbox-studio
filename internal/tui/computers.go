@@ -6,18 +6,19 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 )
 
 // The Computers screen lists every computer of the environment, the teammates' first and then
-// yours, one row each, and takes the keys of a computer: its detail, its terminal, start and
-// stop, suspend, fork, checkpoints and delete. It moves Home's cursor while it shows, so every
-// screen it opens works on the row's computer, and puts it back on esc.
+// yours, one row each, and takes the keys of a computer: open it, its terminal, start and stop,
+// suspend, fork, checkpoints and delete. Its cursor is its own, by the computer's ID, so a
+// refresh keeps it on the computer and the sidebar's stays where it was.
 
-// computersState is the Computers screen: its cursor, among computerRows, and Home's cursor as
-// it was.
+// computersState is the Computers screen's cursor, among computerRows, and its computer.
 type computersState struct {
 	cursor int
-	saved  homeCursor
+	id     string
 }
 
 var keyNewComputer = key.NewBinding(key.WithKeys("+"), key.WithHelp("+", "new computer"))
@@ -37,42 +38,52 @@ func (m *app) computerRows() (rows []int, yours int) {
 	return append(rows, m.yourComputers()...), yours
 }
 
-// openComputers shows the Computers screen, its cursor on the computer under Home's.
+// openComputers shows the Computers screen, its cursor on the computer on show.
 func (m *app) openComputers() {
-	c := &m.computers
-	c.saved = m.saveCursor()
-	m.filter = ""
-	rows, _ := m.computerRows()
-	c.cursor = 0
-	for i, sb := range rows {
-		if sb == m.cursor && m.at != atHome && m.at != atPlace && m.at != atAction {
-			c.cursor = i
-		}
+	id := ""
+	if sb := m.computerOn(); sb != nil {
+		id = sb.ID
 	}
-	m.screen = screenComputers
-	m.computersMove(0)
+	m.openComputersAt(id)
 }
 
-// computersMove moves the screen's cursor by dir rows, and Home's cursor to its computer.
+// openComputersAt shows the Computers screen, its cursor on the computer id, or the first.
+func (m *app) openComputersAt(id string) {
+	m.filter = ""
+	m.computers.id, m.computers.cursor = id, 0
+	m.screen = screenComputers
+	m.computersFollow()
+}
+
+// computerAt is the computer under the Computers screen's cursor.
+func (m *app) computerAt() *sandboxes.View {
+	rows, _ := m.computerRows()
+	c := &m.computers
+	if c.cursor < 0 || c.cursor >= len(rows) {
+		return nil
+	}
+	return &m.visible()[rows[c.cursor]]
+}
+
+// computersMove moves the screen's cursor by dir rows.
 func (m *app) computersMove(dir int) {
 	c := &m.computers
 	rows, _ := m.computerRows()
 	if len(rows) == 0 {
-		c.cursor = 0
-		m.at, m.sub = atSandbox, -1
-		m.cursor = -1
+		c.cursor, c.id = 0, ""
 		return
 	}
 	c.cursor = min(max(c.cursor+dir, 0), len(rows)-1)
-	m.at, m.mate, m.sub, m.cursor = atSandbox, "", -1, rows[c.cursor]
+	c.id = m.visible()[rows[c.cursor]].ID
 }
 
-// computersFollow keeps the screen's cursor on Home's cursor's computer after the list changed,
-// or on a row near it when the computer went.
+// computersFollow keeps the screen's cursor on its computer after the list changed, or on a row
+// near it when the computer went.
 func (m *app) computersFollow() {
 	rows, _ := m.computerRows()
+	visible := m.visible()
 	for k, i := range rows {
-		if i == m.cursor && m.at == atSandbox {
+		if visible[i].ID == m.computers.id {
 			m.computers.cursor = k
 			return
 		}
@@ -80,33 +91,29 @@ func (m *app) computersFollow() {
 	m.computersMove(0)
 }
 
-// closeComputers goes back to Home, with Home's cursor where it was.
-func (m *app) closeComputers() {
-	c := &m.computers
-	m.restoreCursor(c.saved)
-	m.screen = screenHome
-}
-
 // computersKey answers the keys of the Computers screen.
 func (m *app) computersKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	sb := m.selected()
+	sb := m.computerAt()
 	switch {
 	case key.Matches(msg, keyBack):
-		m.closeComputers()
+		m.screen = screenMain
 	case key.Matches(msg, keyUp):
 		m.computersMove(-1)
 	case key.Matches(msg, keyDown):
 		m.computersMove(1)
 	case key.Matches(msg, keyOpen):
 		if sb != nil {
-			m.screen, m.detailBack, m.detailHome = screenDetail, screenComputers, nil
+			return m, m.open(place{kind: placeComputer, sandbox: sb.ID})
 		}
 	case key.Matches(msg, keyNewComputer):
 		if m.env.ID != "" {
 			return m, m.openNew()
 		}
-	case key.Matches(msg, keyTerminal):
-		return m, m.attachTo(sb, terminalName)
+	case key.Matches(msg, keyShellTab):
+		if sb != nil {
+			cmd := m.open(place{kind: placeComputer, sandbox: sb.ID})
+			return m, tea.Batch(cmd, m.shellTab())
+		}
 	case key.Matches(msg, keyLifecycle):
 		return m, m.toggle(sb)
 	case key.Matches(msg, keySuspend):
@@ -125,7 +132,7 @@ func (m *app) computersKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // computersBindings are the keys the key bar shows on the Computers screen.
 func (m *app) computersBindings() []key.Binding {
-	return []key.Binding{keyOpen, keyTerminal, keyLifecycle, keyNewComputer, keyBack, keyHelp, keyDelete, keySuspend, keyFork, keyCheckpoints}
+	return []key.Binding{keyOpen, keyShellTab, keyLifecycle, keyNewComputer, keyBack, keyHelp, keyDelete, keySuspend, keyFork, keyCheckpoints}
 }
 
 // computersBody is the Computers screen in w cells and h rows, the cursor's row in view. From
@@ -138,7 +145,7 @@ func (m *app) computersBody(w, h int) []string {
 	}
 	listW := sidebarWidth(w)
 	left := pad(m.computersList(listW-1, h), h)
-	right := pad(m.dashboard(m.visible()[rows[m.computers.cursor]], w-listW-2, h), h)
+	right := pad(m.dashboard(m.visible()[rows[min(m.computers.cursor, len(rows)-1)]], w-listW-2, h), h)
 	out := make([]string, h)
 	for i := range out {
 		out[i] = fitStyled(left[i], listW) + styleDim.Render("│") + " " + right[i]

@@ -63,7 +63,10 @@ function apply(style: Style, params: number[]): Style {
   return s
 }
 
-const lines: Run[][] = ansi.replace(/\n$/, '').split('\n').map((line) => {
+// Links (OSC 8) keep their text and lose the address around it.
+const text = ansi.replace(/\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+
+const lines: Run[][] = text.replace(/\n$/, '').split('\n').map((line) => {
   const runs: Run[] = []
   let style: Style = {}
   for (const part of line.split(/(\x1b\[[0-9;]*m)/)) {

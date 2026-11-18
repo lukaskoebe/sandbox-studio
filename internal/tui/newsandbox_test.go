@@ -21,7 +21,7 @@ import (
 func sampleNew() *app {
 	m := sampleApp()
 	m.team = []store.Teammate{{ID: "t1", Name: "Iris"}, {ID: "t2", Name: "Finn"}}
-	m = press(m, "n")
+	m = press(m, "+")
 	m.newSb.loaded = true
 	m.newSb.templates = []api.TemplateView{
 		{ID: "tp1", Name: "node-22+python-3.13@2", Resources: resources.Resources{CPUs: 2, MemoryMiB: 4096}},
@@ -85,7 +85,7 @@ func TestNewSandboxChoosesTeammateAndTemplate(t *testing.T) {
 	if m.newTeammate().ID != "" || m.newSb.step != stepTemplate {
 		t.Fatalf("the last row is no teammate: %q, step %d", m.newTeammate().ID, m.newSb.step)
 	}
-	if m = press(m, "esc", "esc"); m.screen != screenHome {
+	if m = press(m, "esc", "esc"); m.screen != screenMain {
 		t.Fatalf("esc from the first step returns to %v", m.screen)
 	}
 }
@@ -133,8 +133,8 @@ func TestProgressOpensTheSandboxOnceReady(t *testing.T) {
 	sb.Status, sb.Progress, sb.Agent, sb.StartedAt = "running", nil, &sandboxes.AgentInfo{}, &started
 	next, _ = m.Update(sandboxesLoaded{env: "env1", list: append(list, sb)})
 	m = next.(*app)
-	if m.screen != screenDetail || m.selected().ID != "sb9" {
-		t.Fatalf("ready: screen %v, selected %+v", m.screen, m.selected())
+	if m.screen != screenMain || m.here.kind != placeComputer || m.here.sandbox != "sb9" || m.comp.tab != tabDetails {
+		t.Fatalf("ready: screen %v, here %+v, tab %v", m.screen, m.here, m.comp.tab)
 	}
 }
 
@@ -151,7 +151,7 @@ func TestProgressReturnsHomeWhenTheSandboxIsDeleted(t *testing.T) {
 	}
 	m.confirm = nil
 	next, _ = m.Update(sandboxesLoaded{env: "env1", list: list})
-	if m = next.(*app); m.screen != screenHome {
+	if m = next.(*app); m.screen != screenMain {
 		t.Fatalf("deleted: screen %v", m.screen)
 	}
 }
@@ -171,7 +171,7 @@ func TestNewSandboxCreatesOnTheServer(t *testing.T) {
 	m := newApp(ctx, connect(t, s), s.Addr)
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	next, cmd := m.Update(keyMsg("+"))
 	m = run(next.(*app), cmd)
 	if m.screen != screenNew || !m.newSb.loaded || m.newSb.step != stepTemplate {
 		t.Fatalf("form: screen %v, loaded %v, step %d (no teammates skip to the template)", m.screen, m.newSb.loaded, m.newSb.step)
@@ -202,7 +202,7 @@ func TestNewSandboxCreatesOnTheServer(t *testing.T) {
 	next, cmd = m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	m = run(next.(*app), cmd)
 	m = run(m, m.loadSandboxes())
-	if m.screen != screenHome || len(m.sandboxes) != 0 {
+	if m.screen != screenMain || len(m.sandboxes) != 0 {
 		t.Fatalf("deleted: screen %v, %d sandboxes, notice %q", m.screen, len(m.sandboxes), m.notice.text)
 	}
 }
@@ -212,7 +212,7 @@ func TestNewSandboxCreatesOnTheServer(t *testing.T) {
 func TestForkAsksForANameAndFollowsTheFork(t *testing.T) {
 	client, rec := recordingClient(t)
 	rec.answers["POST /api/environments/env1/sandboxes/sb1/fork"] = `{"id":"sb9","name":"blub-fork","status":"creating"}`
-	m := sampleApp()
+	m := openComputer(sampleApp(), "sb1", tabDetails)
 	m.client = client
 	m = press(m, "f")
 	if m.typing == nil || m.typing.text.value() != "blub-fork" {
@@ -243,13 +243,12 @@ func TestForkNameStaysAName(t *testing.T) {
 		t.Fatalf("long: %q", got)
 	}
 	m := sampleApp()
-	m.cursor = 3 // demo, which is still being created
-	m.sandboxes[3].Status = "creating"
-	if m = press(m, "f"); m.typing != nil || !m.notice.failed {
+	m.sandboxes[3].Status = "creating" // demo, which is still being created
+	if m = press(openComputer(m, "sb4", tabDetails), "f"); m.typing != nil || !m.notice.failed {
 		t.Fatalf("forked while creating: %+v", m.notice)
 	}
-	m = press(sampleApp(), "f", "esc")
-	if m.typing != nil || m.screen != screenHome {
+	m = press(openComputer(sampleApp(), "sb1", tabDetails), "f", "esc")
+	if m.typing != nil || m.screen != screenMain || m.here.kind != placeComputer {
 		t.Fatalf("esc: typing %v, screen %v", m.typing != nil, m.screen)
 	}
 }
@@ -260,10 +259,9 @@ func TestForkGoesThroughTheServer(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
 	m := newApp(ctx, connect(t, s), s.Addr)
-	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
-	m = press(m, "f")
+	m = press(openComputer(m, m.visible()[0].ID, tabDetails), "f")
 	m = pressRun(t, m, "enter")
 	if !m.notice.failed || !strings.Contains(m.notice.text, "fork blub: this runtime cannot copy workspaces") {
 		t.Fatalf("fork: %+v", m.notice)

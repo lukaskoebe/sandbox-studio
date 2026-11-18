@@ -1,0 +1,23 @@
+ ≡  Iris › Fix the login form                                    ● blub ▾ · ▲ 4 
+────────────────────────────────────────────────────────────────────────────────
+                                                                                
+  ▸ Thought it through                                                          
+  ▸ Read src/login.tsx                                                      done
+  ▸ Edit src/login.tsx                                                      done
+                                                                                
+Fixed                                                                           
+                                                                                
+The form used a `div` as its button, so enter did nothing. It is a real submit  
+button now:                                                                     
+                                                                                
+    <button type="submit">Sign in</button>                                      
+                                                                                
+• Enter submits the form.                                                       
+• The button is focusable.                                                      
+▸ Network access  blub · Default · 10m ago                                      
+    registry.npmjs.org:443                                                      
+    pattern *.npmjs.org   scope Iris's computers   ports default                
+                                                                                
+ › Write to Iris…                                                   enter write 
+────────────────────────────────────────────────────────────────────────────────
+y allow  n deny  o allow once  enter write  ↑/↓ tools  pgup scroll  + new thread

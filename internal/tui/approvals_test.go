@@ -233,19 +233,27 @@ func TestNetworkKeysMakeTheirDecision(t *testing.T) {
 func TestBackslashMovesBetweenTheListAndTheSidebar(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
-	m = press(m, "\\")
-	if !m.inboxKeys() || m.at != atHome {
-		t.Fatalf("\\ from a computer's row: at %v, the list has the keys %v", m.at, m.inboxKeys())
+	if !m.inboxKeys() {
+		t.Fatal("Home's list starts without the keys")
 	}
 	m = press(m, "\\")
-	if m.inboxKeys() || m.at != atHome {
-		t.Fatalf("\\ from the list: at %v, the list has the keys %v", m.at, m.inboxKeys())
+	if m.inboxKeys() || !m.sidebarKeys() || !m.drawer || m.at != atHome {
+		t.Fatalf("\\ from the list: at %v, drawer %v, the list has the keys %v", m.at, m.drawer, m.inboxKeys())
 	}
 	if m = press(m, "j"); m.at == atHome {
 		t.Fatal("j after \\ moved the list's cursor, not the sidebar's")
 	}
-	if m = press(m, "esc"); !m.inboxKeys() {
-		t.Fatal("esc in the sidebar did not give the list the keys")
+	if m = press(m, "esc"); !m.inboxKeys() || m.drawer {
+		t.Fatal("esc in the drawer did not give the list the keys")
+	}
+	m = press(m, "\\", "\\")
+	if !m.inboxKeys() || m.drawer {
+		t.Fatalf("\\ twice: drawer %v, the list has the keys %v", m.drawer, m.inboxKeys())
+	}
+	m.width = 140 // a sidebar beside the list
+	m = press(m, "\\")
+	if !m.sidebarKeys() || m.drawer {
+		t.Fatalf("\\ at 140 columns: drawer %v, the sidebar has the keys %v", m.drawer, m.sidebarKeys())
 	}
 }
 

@@ -13,9 +13,9 @@ import (
 )
 
 // Shell shows a sandbox's terminal in this one, as `studio shell` does, until the user detaches
-// with Ctrl-] or the sandbox ends the terminal. As in the TUI, an approval of the sandbox that
-// comes in meanwhile names itself in the title and rings the bell; Ctrl-] then asks about it
-// here instead of detaching, and the terminal is attached again once it is answered.
+// with Ctrl-] or the sandbox ends the terminal. An approval of the sandbox that comes in
+// meanwhile names itself in the title and rings the bell; Ctrl-] then asks about it here instead
+// of detaching, and the terminal is attached again once it is answered.
 func Shell(ctx context.Context, c *Client, env, sandbox, name string, in io.Reader, out io.Writer) error {
 	for {
 		at := &attachment{ctx: ctx, client: c, env: env, sandbox: sandbox, name: name, in: in, out: out, watch: true}

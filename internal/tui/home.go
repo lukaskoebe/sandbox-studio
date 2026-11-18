@@ -73,11 +73,11 @@ const colStatus = 11
 // header has room for it.
 const colSpark = 8
 
-// cursorMark is the mark of the cursor's row: ▸ in the plain look, the accent's rule ▌ in the
-// visual one. While Home's pane has the keys, the sidebar's cursor is dim.
+// cursorMark is the mark of the sidebar's cursor row: ▸ in the plain look, the accent's rule ▌
+// in the visual one, dim while the sidebar hasn't the cursor.
 func (m *app) cursorMark(selected bool) string {
 	style := styleAccent
-	if m.paneFocused() {
+	if !m.sidebarKeys() && m.screen != screenComputers {
 		style = styleDim
 	}
 	switch {
@@ -160,32 +160,19 @@ func shortUptime(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 }
 
-// homeBody is Home: the list of the environment's teammates, threads, computers and places, with
-// the pane beside it on a wide terminal.
+// homeBody is Home in its column of w cells and h rows: what waits for you, what works and what
+// is quiet, with the reading pane.
 func (m *app) homeBody(w, h int) []string {
 	switch {
 	case m.env.ID == "":
 		return []string{styleDim.Render("No environment yet. Start Studio once, then run studio tui again.")}
 	case !m.loaded:
 		return []string{styleDim.Render("Loading…")}
-	case m.filter != "" && len(m.homeRows()) == 0:
-		return []string{styleDim.Render("Nothing matches “" + m.filter + "”.")}
 	}
-	if m.homeSplit(w) {
-		return m.splitBody(w, h)
-	}
-	if m.inboxShows() {
-		return m.paneBody(w, h) // Home's list, or the session it shows in full screen
-	}
-	return m.sidebar(w, h)
+	return m.inboxBody(w, h)
 }
 
-// sidebar is the rows of Home's list in w cells and h lines, the cursor's row in view.
-func (m *app) sidebar(w, h int) []string {
-	return m.treeLines(m.homeRows(), w, h)
-}
-
-// treeLines draws rows of Home's list in w cells and h lines, the cursor's row in view: a blank
+// treeLines draws rows of the sidebar in w cells and h lines, the cursor's row in view: a blank
 // line before each section, and its label.
 func (m *app) treeLines(rows []homeRow, w, h int) []string {
 	all := m.homeRows()

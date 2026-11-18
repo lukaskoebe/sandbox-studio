@@ -1,7 +1,10 @@
 # Sessions on Home (design)
 
-Status: built (2026-10-18); [tui.md](../tui.md#threads) describes it as it is. Where the
-build differs from the text:
+Replaced (2026-11-18) by [tui-frame.md](tui-frame.md): the sidebar, a thread and its computer.
+What follows is the design as it was.
+
+Status: built (2026-10-18), and replaced on 2026-11-18; [tui.md](../tui.md#threads) describes
+the threads as they are now. Where the build differed from the text:
 
 - A click selects a session's row and a double click enters it, as on every other row, so a
   click can still show a sandbox's detail pane without taking over the screen.

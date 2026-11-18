@@ -112,8 +112,8 @@ func TestEnterOnAComputerRowOpensIt(t *testing.T) {
 	m.approvals = nil
 	m.goHome()
 	m = press(m, "enter")
-	if m.screen != screenDetail || m.selectedID() != "sb4" {
-		t.Fatalf("enter on demo's row: screen %v, %s", m.screen, m.selectedID())
+	if m.here.kind != placeComputer || m.here.sandbox != "sb4" {
+		t.Fatalf("enter on demo's row: screen %v, here %+v", m.screen, m.here)
 	}
 	if m = press(m, "esc"); !m.inboxKeys() {
 		t.Errorf("esc from the computer: screen %v, the list has the keys %v", m.screen, m.inboxKeys())

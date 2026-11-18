@@ -1,23 +1,23 @@
-Sandbox Studio · Default                                     ▲ 1 waiting for you
+ ≡  Keys                                                                    ▲ 1 
 ────────────────────────────────────────────────────────────────────────────────
-Keys
-  1-9        go into that thread or terminal; Ctrl-] returns to the list
-  enter      go into the thread or terminal under the cursor, or open the row
-  alt+1-9    from a thread or terminal, go into another; alt+z: full screen
-  tab        the next thread that waits for you, then Home's requests
-  \          Home's list of requests and threads; esc too
-  u          undo the last network decision, for a minute after it
-  y / o / n  an agent's banner: allow, allow once or deny what blocks it
-  t / T      the computer's main terminal; T starts its teammate's agent
-  c / C      the newest thread with the computer's teammate; C a new one
-  + / → ←    on a teammate: another computer for it; show or hide older threads
-  s / z / d  start, stop or resume; z suspends; d deletes, after asking
-  f / h      fork the computer; its checkpoints, to save or restore one
-  n          new computer: a teammate, a template and a name
-  e / /      switch environment; filter by name, teammate or template
-  l / ,      Activity; Settings
-  ↑/↓, j/k   move the cursor
-  esc / q    Home; esc clears the filter first, q quits from the list
-  ?          this help
+Home                                                                            
+  ↑/↓, j/k   move between the rows; tab: the next request, around the end       
+  enter      review a push; open a thread, a computer, or a request's source    
+  y / n / i  allow, deny or ignore; a network rule takes the pattern and scope  
+  o / O / 1  allow or deny once, with no rule; 1 allows for an hour             
+  p / s / x  cycle the host pattern; the scope; any port, not the default ones  
+  w          allow a navigation's site for this browser session                 
+  A / D / r  a group: allow or deny every host; r reviews them one by one       
+  y / a / n  an agent's permission: allow once, always or deny; 1-9 its choices 
+  y / F      a push: y asks once more, then pushes; F force-pushes a rewrite    
+  r / n / i  a push: ask for changes in a note; reject it; ignore it            
+  u          undo the last network decision, for a minute after it              
+  ←/→ space  move over the request's choices; space or enter presses one        
+  pgup/pgdn  scroll the reading pane                                            
+  \          the sidebar: teammates, their threads and computers; \ comes back  
+  + / e / /  new computer; switch environment; filter the sidebar               
+  l / , / g  Activity; Settings; the pushes and pull requests                   
+  ? / q      this help; quit                                                    
+                                                                                
 ────────────────────────────────────────────────────────────────────────────────
 esc/q back

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The terminal UI is laid out as the browser is. The top row says where you are (`Iris › Fix
+  the login form`) with the computer on show and what waits for you. From 100 columns the
+  sidebar is always on the left, and narrower `\` slides it in. A thread has its computer
+  beside it from 120 columns, and `tab` shows it in the thread's place below. A computer has
+  the browser's tabs, Terminal and Details: Terminal shows every terminal of the computer as a
+  row of chips over the one on show, live at every width, with `+` for a new shell, `alt+1`–`9`
+  for another, and `ctrl+]` to give the keys back; Details holds the facts, the dashboard, the
+  ports and the keys that start, suspend, fork, checkpoint and delete it. A teammate's row opens
+  its home, with its computers, tasks and what it knows over a box whose first prompt starts a
+  thread. A request a thread waits on, such as its tool's host or its push, is a card above the
+  composer. `alt+z` gives the whole screen to what has the keys, `esc` goes back through the
+  places you opened, and `?` lists the keys of the place you're in. `n` no longer means new
+  anywhere, `+` does: a new thread, a new shell, a new computer. The sidebar's numbers, `c`,
+  `C` and the lifecycle keys on Home's list are gone; those keys are on Details and the
+  Computers list.
 - The terminal UI's Home is one list of everything, sorted by how much it needs you: WAITING
   FOR YOU with every request of every environment, WORKING with the threads at work, and QUIET
   with the threads that ended in the last day, each teammate's next scheduled run and your computers.

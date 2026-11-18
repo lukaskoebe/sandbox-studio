@@ -7,14 +7,10 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 )
 
-// detailBody is the sandbox on the cursor, with the facts the list does not have room for and
-// the ports it listens on.
-func (m *app) detailBody(w, h int) []string {
-	sb := m.selected()
-	if sb == nil {
-		return []string{styleDim.Render("No computer is selected.")}
-	}
-	ph := phaseOf(*sb)
+// detailBody is a computer's facts in w cells, the ones the lists have no room for, and the
+// ports it listens on.
+func (m *app) detailBody(sb sandboxes.View, w int) []string {
+	ph := phaseOf(sb)
 	teammate := m.teammates[sb.TeammateID]
 	if teammate == "" {
 		teammate = "none"
@@ -39,7 +35,7 @@ func (m *app) detailBody(w, h int) []string {
 		fact("Uptime", running),
 	}
 	if !m.look.plain {
-		for i, l := range m.usageLines(*sb, w-13) {
+		for i, l := range m.usageLines(sb, w-13) {
 			label := ""
 			if i == 0 {
 				label = "Usage"
@@ -49,7 +45,7 @@ func (m *app) detailBody(w, h int) []string {
 	}
 	lines = append(lines, fact("Requests", approvals), fact("ID", sb.ID))
 	if !m.look.plain {
-		for i, l := range m.historyLine(*sb, w-13) {
+		for i, l := range m.historyLine(sb, w-13) {
 			label := ""
 			if i == 0 {
 				label = "History"

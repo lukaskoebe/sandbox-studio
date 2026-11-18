@@ -13,9 +13,7 @@ import (
 // sampleCheckpoints opens the checkpoints of docs-site, the stopped sandbox of the sample app,
 // with one checkpoint the schedule took and one saved by hand.
 func sampleCheckpoints() *app {
-	m := sampleApp()
-	m.cursor = 2
-	m = press(m, "h")
+	m := press(openComputer(sampleApp(), "sb3", tabDetails), "h")
 	m.checkpoints.loaded = true
 	m.checkpoints.list = []store.Checkpoint{
 		{ID: "cp2", Name: "before the upgrade", State: "ready", CreatedAt: m.now.Add(-20 * time.Minute)},
@@ -28,17 +26,17 @@ func TestGoldenCheckpoints(t *testing.T) {
 	golden(t, "checkpoints", sampleCheckpoints())
 }
 
-func TestCheckpointsOpenFromHomeAndDetail(t *testing.T) {
-	m := press(sampleApp(), "h")
-	if m.screen != screenCheckpoints || m.checkpoints.sandbox != "sb1" || m.checkpoints.back != screenHome {
-		t.Fatalf("h on home: screen %v, %+v", m.screen, m.checkpoints)
+func TestCheckpointsOpenFromDetailsAndComputers(t *testing.T) {
+	m := press(openComputer(sampleApp(), "sb1", tabDetails), "h")
+	if m.screen != screenCheckpoints || m.checkpoints.sandbox != "sb1" || m.checkpoints.back != screenMain {
+		t.Fatalf("h on the Details tab: screen %v, %+v", m.screen, m.checkpoints)
 	}
-	m = press(m, "esc", "enter", "h")
-	if m.screen != screenCheckpoints || m.checkpoints.back != screenDetail {
-		t.Fatalf("h on detail: screen %v, back %v", m.screen, m.checkpoints.back)
+	if m = press(m, "esc"); m.screen != screenMain || m.here.kind != placeComputer {
+		t.Fatalf("esc went to %v, here %+v", m.screen, m.here)
 	}
-	if m = press(m, "esc"); m.screen != screenDetail {
-		t.Fatalf("esc went to %v", m.screen)
+	m = press(onComputersScreen(t, sampleApp(), "sb1"), "h")
+	if m.screen != screenCheckpoints || m.checkpoints.back != screenComputers {
+		t.Fatalf("h on Computers: screen %v, back %v", m.screen, m.checkpoints.back)
 	}
 }
 
@@ -49,9 +47,9 @@ func TestSaveCheckpointThroughTheServer(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusRunning)
 	m := newApp(ctx, connect(t, s), s.Addr)
-	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
+	m = openComputer(m, m.visible()[0].ID, tabDetails)
 	m, cmd := pressCmd(m, "h")
 	m = run(m, cmd)
 	if m.screen != screenCheckpoints || !m.checkpoints.loaded || len(m.checkpoints.list) != 0 {

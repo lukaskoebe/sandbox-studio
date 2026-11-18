@@ -11,12 +11,12 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 )
 
-// blockedAgent is Home on api-refactor's codex, blocked on a network request.
+// blockedAgent is the thread of api-refactor's codex, blocked on a network request.
 func blockedAgent(t *testing.T) *app {
 	t.Helper()
 	m := paneApp()
 	m.approvals[0].Network = &policy.NetworkRequest{Host: "proxy.golang.org", Port: 443, SandboxName: "api-refactor"}
-	m = onSession(t, m, "sb2", "codex")
+	m = openSession(t, m, "sb2", "codex")
 	if x, _ := m.paneTarget(); x.term.Name != "codex" {
 		t.Fatalf("on %+v", x)
 	}
@@ -111,43 +111,45 @@ func TestBannerMoreReviewsTheCardAndReturnsToTheAgent(t *testing.T) {
 		t.Fatalf("Home's list left before the decision: %v", m.screen)
 	}
 	m = run(m, func() tea.Msg { return approvalsLoaded{list: m.approvals[1:]} })
-	if m.screen != screenHome || !m.paneFocused() || m.resuming != nil {
+	if m.screen != screenMain || !m.paneFocused() || m.resuming != nil {
 		t.Errorf("after the decision: screen %v focus %v", m.screen, m.pane.focus)
 	}
 }
 
 func TestBannerShowsOnEverySessionOfTheSandbox(t *testing.T) {
 	m := blockedAgent(t)
-	m = press(m, "j") // api-refactor's next session, which isn't blocked
-	if x := must(m.paneTarget()); x.sandbox != m.approvals[0].SandboxID || x.term.Name == "codex" || m.paneBanner(x, 90) == nil {
+	m = openComputer(m, "sb2", tabTerminal)
+	m.comp.term = "main" // api-refactor's main shell, which isn't blocked
+	if x := must(m.paneTarget()); x.sandbox != m.approvals[0].SandboxID || x.term.Name != "main" || m.paneBanner(x, 90) == nil {
 		t.Errorf("no banner over %+v", x)
 	}
-	m = press(m, "k", "k", "k") // Iris's main terminal, in blub
+	m = openComputer(m, "sb1", tabTerminal) // Iris's main terminal, in blub
 	if x, ok := m.paneTarget(); ok && x.sandbox != m.approvals[0].SandboxID && m.paneBanner(x, 90) != nil {
 		t.Error("another sandbox shows the banner")
 	}
 }
 
-func TestAttachedTerminalAnswersAndAttachesAgain(t *testing.T) {
+// a on the banner of a terminal with the keys goes to the request on Home; once it is decided,
+// the thread is back and its terminal has the keys again.
+func TestBannerReviewReturnsToTheTerminal(t *testing.T) {
 	m := blockedAgent(t)
-	sb := m.selected()
-	id := m.approvals[0].ID
-	m = run(m, func() tea.Msg { return attachDone{id: sb.ID, sandbox: sb.Name, name: "codex", waiting: id} })
-	if !m.inboxShows() || m.resuming == nil || m.resuming.attach == nil {
-		t.Fatalf("Ctrl-] on a waiting approval opens %v, resuming %+v", m.screen, m.resuming)
+	m.pane.focus = true
+	if m = press(m, "alt+a"); !m.pane.answer || m.pane.focus {
+		t.Fatalf("alt+a gives the banner the keys: answer %v, focus %v", m.pane.answer, m.pane.focus)
 	}
-	if !strings.Contains(m.notice.text, "you're back in codex") {
-		t.Errorf("the notice: %q", m.notice.text)
+	m = press(m, "a")
+	if !m.inboxShows() || m.resuming == nil || !m.resuming.pane || m.resuming.place.term != "codex" {
+		t.Fatalf("a on the banner opens %v, here %+v, resuming %+v", m.screen, m.here, m.resuming)
 	}
-	next, cmd := m.Update(approvalsLoaded{list: []api.ApprovalView{}})
-	if m = next.(*app); m.resuming != nil || cmd == nil {
-		t.Errorf("after the decision the terminal is not attached again: resuming %+v", m.resuming)
+	next, _ := m.Update(approvalsLoaded{list: []api.ApprovalView{}})
+	if m = next.(*app); m.resuming != nil || m.here.term != "codex" || !m.pane.focus {
+		t.Errorf("after the decision: here %+v, resuming %+v, focus %v", m.here, m.resuming, m.pane.focus)
 	}
 }
 
 func TestConfirmationKeepsOnEnterAndArrowsChoose(t *testing.T) {
-	m := press(sampleApp(), "d")
-	sb := m.selected()
+	m := press(openComputer(sampleApp(), "sb1", tabDetails), "d")
+	sb := m.computerOn()
 	if !strings.Contains(ansi.Strip(m.View().Content), "[n Keep]") {
 		t.Fatalf("keep is not focused:\n%s", ansi.Strip(m.View().Content))
 	}

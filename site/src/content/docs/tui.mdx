@@ -1,20 +1,22 @@
 ---
 title: Terminal UI
-description: Work with your teammates' threads, create, fork and check computers, save checkpoints, answer requests, review git pushes and open a computer's terminal, from the terminal on the Studio machine or over SSH.
+description: Work with your teammates in their threads beside their computers, answer requests, review git pushes, type into a computer's terminals, and create, fork and check computers, from the terminal on the Studio machine or over SSH.
 ---
 
 import TerminalScreen from '../../components/TerminalScreen.astro'
-// The TUI's own golden test draws this screen, so it shows the TUI as it is.
+// The TUI's own golden tests draw these screens, so they show the TUI as it is.
 import home from '../../../../internal/tui/testdata/visual_inbox.golden?raw'
+import thread from '../../../../internal/tui/testdata/visual_thread.golden?raw'
+import computer from '../../../../internal/tui/testdata/visual_computer.golden?raw'
 
-`studio tui` is a keyboard client of the Studio that is already running on this machine. Its
-Home is one list of what waits for you, what works and what is quiet, and each request is
-answered with a key from its row. Beside it, its sidebar is the browser's: your teammates with
-their threads, your computers, and the environment's places. It creates, forks and suspends
-computers, and saves and restores their checkpoints. It reviews git pushes, works in a thread
-with a teammate, follows the network Activity, and shows a computer's terminals and agents
-live, beside the list, or in full screen. Everything else stays in the browser, and the TUI
-prints the address of the page where you need it.
+`studio tui` is a keyboard client of the Studio that is already running on this machine. It is
+laid out as the browser is: a sidebar with your teammates, their threads and your computers,
+and a thread beside its computer, with the computer's tabs. Its Home is one list of what waits
+for you, what works and what is quiet, and each request is answered with a key from its row. It
+reviews git pushes, works in a thread with a teammate, types into any of a computer's
+terminals, creates, forks and suspends computers, saves and restores their checkpoints, and
+follows the network Activity. Everything else stays in the browser, and the TUI prints the
+address of the page where you need it.
 
 <TerminalScreen ansi={home} label="The TUI's Home: four requests waiting, a push, a group of hosts, an agent's permission and a host, then the quiet threads, a scheduled run and your computer, with the permission under the cursor read in full" />
 
@@ -31,10 +33,41 @@ interactive terminal, and it signs in as you without asking for anything: only y
 read the data that makes this possible, so run it on the machine Studio runs on. Over SSH, run
 it there.
 
+## The screen
+
+The top row says where you are, as the browser's breadcrumb does: `Home`, `Iris`, `Iris › Fix
+the login form`, or a computer's name. On its right are the computer on show, such as `● blub
+▾` (`▾` when the teammate has more than one), and how many things wait for you.
+
+What fits next to what depends on the width of your terminal:
+
+- **Below 100 columns**, one thing at a time. `\` slides [the sidebar](#the-sidebar) in over
+  the left, and `\` or `esc` closes it again. In a thread, `tab` shows its computer instead,
+  and back.
+- **From 100 columns**, the sidebar is always on the left.
+- **From 120 columns**, a thread or a teammate's home has its computer beside it. At 140
+  columns that's 30 columns of sidebar, 45 of thread and 63 of computer.
+- **`alt+z`** gives the whole screen to what has the keys, and back.
+
+Who has your keys is always in view:
+
+- **A terminal**: its tab and the bottom line turn into a heavy line in the accent color. Every
+  key goes to the terminal, `q` and `ctrl+c` too, except `ctrl+]`, which gives the keys back,
+  `alt+1` to `alt+9`, which switch to another of the computer's terminals, `alt+z`, and `alt+a`,
+  which [answers a request](#answer-from-a-terminal).
+- **The composer** of a thread: `enter` sends, `ctrl+j` starts a new line, `esc` puts the draft
+  aside.
+- **Studio**: the sidebar, the thread or the computer beside it, marked by a bright line on its
+  left. `\` moves to the sidebar and back, and `tab` between a thread and its computer.
+
+`esc` goes back to the place you were before, and last to Home. `q` does too, except on Home
+and in the sidebar, where it quits.
+
 ## Keys
 
-The keys are the same on every screen, and they can't be changed. The key bar at the bottom
-shows the ones that apply where you are, and `?` lists them all.
+The keys are the same everywhere, and they can't be changed. The key bar at the bottom shows
+the ones that apply where you are, and `?` lists them all. `n` never means new: it says no to
+a request, and `+` makes something new.
 
 | Key | On Home |
 |---|---|
@@ -44,51 +77,47 @@ shows the ones that apply where you are, and `?` lists them all.
 | `enter` | open the row: a push's review, a thread, a computer |
 | `pgup` `pgdn` | scroll the reading pane |
 | `u` | undo the network decision you just made, for a minute |
-| `\` | give the keys to [the sidebar](#the-sidebar) |
-| `n` | create a new computer |
+| `+` | create a new computer |
 | `l` `,` `g` `e` | Activity, Settings, Git, switch environment |
+| `\` | give the keys to [the sidebar](#the-sidebar) |
 | `?` | help |
 | `q` | quit |
 
 | Key | In the sidebar |
 |---|---|
-| `↑` `↓` or `j` `k` | move the cursor, over Home, teammates and their threads, your computers and the places |
-| `1` to `9` | go into that thread or terminal |
-| `enter` | go into the thread or terminal under the cursor; on a computer, open it: its facts, its open ports, and the same keys; on a place, open it; on Home, back to Home's list |
-| `tab` | the next thread that waits for you, then Home |
+| `↑` `↓` or `j` `k` | move over Home, the teammates and their threads, your computers and the places |
+| `enter` | open the row: a thread, a teammate's home, a computer, a place |
+| `+` | on a teammate or its thread, a new thread with it; elsewhere a new computer |
 | `→` `←` | on a teammate: show or hide its older threads |
-| `+` | on a teammate: another computer for it |
-| `alt+z` | the pane in full screen, and back (from 100 columns) |
-| `y` `o` `n` | allow, allow once or deny the network request in the pane's [banner](#answer-from-a-thread-or-terminal) |
-| `←` `→` then `space` | move over the banner's buttons and press one |
-| `n` | create a new computer |
-| `t` | open the computer's main terminal (it must be running) |
-| `T` | start the teammate's agent in a new terminal and open it |
-| `c` `t` | on a teammate: a new thread, or a shell, on its computer |
-| `s` | start, stop or resume the computer |
-| `z` | suspend the computer; `s` resumes it |
-| `f` | fork the computer |
-| `h` | the computer's checkpoints |
-| `d` | delete the computer; the TUI asks first |
-| `c` | the newest thread with the computer's teammate, or a new one |
-| `C` | a new thread |
-| `l` | Activity: connections and every decision |
-| `,` | Settings: what each section is set to |
-| `g` | Git: the pushes and pull requests waiting for your review, then the decided ones |
-| `e` | switch environment |
+| `tab` | the next thread that waits for you, then the next one that's done |
 | `/` | filter by name, teammate or template |
-| `\` or `esc` | back to Home's list |
-| `?` | help |
-| `q` | quit |
+| `l` `,` `e` | Activity, Settings, switch environment |
+| `\` or `esc` | back to the place on show |
 
-On a thread's row, the keys for a computer work on the thread's computer.
+| Key | In a thread |
+|---|---|
+| `p` or `enter` | write a prompt |
+| `↑` `↓` | move over the tool calls; `enter` opens one |
+| `x` | stop the turn that runs |
+| `y` `a` `n` | answer its permission: allow once, always, or no |
+| `+` | a new thread with the teammate |
+| `t` | its computer's terminal, with the keys |
+| `m` | the teammate's next computer |
+| `tab` | its computer, and back |
 
-`esc` or `q` goes back from every other screen. The header counts what waits for you in every
-environment, and the terminal rings its bell once when a new request arrives.
+| Key | On a computer |
+|---|---|
+| `1` `5` | the Terminal tab, the Details tab |
+| `enter` | on Terminal: type into the terminal |
+| `+` | on Terminal: a new shell |
+| `T` | start the teammate's agent in a new terminal |
+| `s` `z` `f` `h` `d` | on Details: start or stop, suspend, fork, checkpoints, delete |
+| `l` | on Details: the computer's Activity |
+| `m` | the teammate's next computer |
 
-When the TUI asks before it deletes a computer or restores a checkpoint, its choices are in the
-line at the bottom, `y Delete  [n Keep]`. Keep is chosen, so `enter` keeps; press `y`, or `←`
-and then `enter`, to go ahead.
+When the TUI asks before it deletes a computer, restores a checkpoint or pushes, its choices are
+in the line at the bottom, `y Delete  [n Keep]`. Keep is chosen, so `enter` keeps; press `y`, or
+`←` and then `enter`, to go ahead. The terminal rings its bell once when a new request arrives.
 
 ## Home
 
@@ -107,9 +136,9 @@ The cursor starts on the top row, so the first request to arrive is under it, an
 answer one it is on the next. `tab` goes to the next request. The keys on the row answer it,
 as [its card](#requests) does: `y` allows, `n` denies, and on an agent's permission `a` allows
 always. The key bar shows them. A push asks once more when you press `y`, because you haven't
-read its diff: `y` again pushes it, any other key keeps it. `enter` opens the row: a push's
-review, a permission's thread, a computer. A network decision that made a rule can be taken
-back with `u` for a minute afterwards.
+read its whole diff: `y` again pushes it, any other key keeps it. `enter` opens the row: a
+push's review, a permission's thread, a computer. A network decision that made a rule can be
+taken back with `u` for a minute afterwards.
 
 The reading pane shows the row under the cursor in full: a request's card with its choices, a
 push's commits and diff, a thread's transcript or a computer's dashboard. It is under the list
@@ -117,67 +146,50 @@ in a narrow terminal and beside it in a wide one; `pgup` and `pgdn` scroll it.
 
 ## The sidebar
 
-The sidebar has the sections of the browser's sidebar. From 100 columns it is beside Home; in a
-narrower terminal `\` shows it instead of Home, and `\` or `esc` goes back. It starts on
-**Home**, which says how many things wait for you, or that all is clear. Then come:
+The sidebar has the sections of the browser's sidebar. It starts with **Home**, which counts
+what waits for you. Then come:
 
-- **Teammates**, each with its role, a spinner while it works and a count of what waits on
-  it, with [its threads](#threads) under it. **+ New teammate** prints the address of the
-  teammates page: making a teammate happens in the browser.
-- **Your computers**, the ones without a teammate, each with its terminals, and **+ New
-  computer**.
+- **Teammates**, each with its role and a count of what waits on it, with its threads under it.
+  **+ New teammate** prints the address of the teammates page: making a teammate happens in the
+  browser.
+- **Your computers**, the ones without a teammate, and **+ New computer**.
 - **Environment**: **Computers**, every computer of the environment, your teammates' too;
   **Network**, the network log, with the requests waiting; **Secrets** and **Memory**, which
   print their page's address; **Activity**; and **Settings**, with Studio's version.
 
-On **Computers**, `enter` lists every computer with its owner, template, requests and status,
-and the keys of a computer work on the one under the cursor. From 100 columns its dashboard is
-beside the list. `esc` goes back to Home.
-
-### A teammate
-
-On a teammate's row, the pane shows the teammate: its computers, its threads, its tasks, what
-it knows and its network level. `c` starts a thread with it, `T` its agent in a terminal, `t`
-a shell, `f` forks its computer and `+` gives it another.
-
-## Threads
-
-Under each teammate, the list shows what you can go into, as the browser's sidebar does: its
-agents running in a terminal, its threads, and its computers' other terminals. The threads are
-every one that runs, waits for you or continues in a terminal, the two latest others of the
-last day, and the one you have open; `+ n older` (or `→` on the teammate) shows the rest, and
-`←` hides them again. A thread a teammate started on someone else's computer is listed under
-the teammate too.
-
-The first nine rows of the sidebar are numbered. Press a number and you're in: a terminal opens, and a thread
-opens ready for your prompt. `Ctrl-]` leaves a terminal, and `esc` a thread, back to the list
-with the cursor where you were. To switch to another, press `Ctrl-]` and its number. In a
-narrow terminal, the sidebar looks like this:
+Under each teammate are its threads, as in the browser: its agents running in a terminal, and
+its threads that run, wait for you or continue in a terminal, plus the two latest others of
+the last day. `+ n older` (or `→` on the teammate) shows the rest, and `←` hides them again. A
+thread a teammate started on someone else's computer is listed under the teammate too. In a
+narrow terminal, the sidebar slides in like this:
 
 ```
-Sandbox Studio · Default                                     ▲ 4 waiting for you
-────────────────────────────────────────────────────────────────────────────────
-  Home                                                       ▲ 4 waiting for you
-
- TEAMMATES
-  Iris frontend                                                              ▲ 2
-▸ 1 ▲ Fix the login form                                        thread · waiting
-  2 ○ Rename the guides                                           thread · ended
-  3 ◷ Update the deploy notes                                scheduled · 20h ago
-  Finn backend                                                               ▲ 2
-  4 ▲ Port the parser to go                                     thread · waiting
-  + New teammate
-
- YOUR COMPUTERS
-  ◐ demo  base                                                           booting
-  + New computer
-
- ENVIRONMENT
-  Computers                                                                    4
-  Network                                                                    ▲ 2
+ ◆ Studio          Default ▾  │                             ▲ 4 waiting for you
+ / Filter                     │─────────────────────────────────────────────────
+  Home                    ▲ 4 │
+                              │ure/login on GitHub/acme/web   api-refactor  30s
+ TEAMMATES                    │osts                            pypi.org +2   1m
+  Iris frontend           ▲ 2 │                         Fix the login form   3m
+▸   ▲ Fix the login form      │mjs.org:443                     *.npmjs.org  10m
+    ○ Rename the guides       │
+    ◷ Update the deploy notes │
+  Finn backend            ▲ 2 │                                      ended   1h
+    ▲ Port the parser to go   │s                                 docs-site  20h
+  + New teammate              │g                                      base
+                              │─────────────────────────────────────────────────
+ YOUR COMPUTERS               │ture/login on GitHub/acme/web
+  ◐ demo              booting │
+  + New computer              │
+                              │mmate Finn
+ ENVIRONMENT                  │w branch
+  Computers                 4 │les +7 −1
+  Network                 ▲ 2 │
+  Secrets                     │ you approve; the agent sees a rejection on
+──────────────────────────────┘─────────────────────────────────────────────────
+enter open  ↑/k up  + new thread  →/← older threads  tab next waiting  \ sidebar
 ```
 
-Each thread and agent shows what it's doing:
+Each thread shows what it's doing:
 
 - `●` working: a thread's turn runs, or the agent works in its terminal;
 - `▲` waiting: it waits for you. For a thread, that's a permission, or another request of its
@@ -187,62 +199,108 @@ Each thread and agent shows what it's doing:
 - `○` idle or ended, `◷` a scheduled task's run or a check-in, and `·` when the computer
   doesn't say (it started before this version of Studio).
 
-`tab` jumps to the next waiting one, then to the next done one. The header counts the working
-ones.
+**Computers** lists every computer with its owner, template, requests and status. `enter`
+opens the one under the cursor, `t` its terminal, and `s` `z` `f` `h` `d` work on it as on its
+Details tab. From 100 columns its dashboard is beside the list.
 
-## The pane
+## A teammate's home
 
-In a terminal 100 columns wide or more, the sidebar is beside Home. While the sidebar has the
-keys, the pane beside it shows what its cursor is on, live:
+A teammate's row opens its home, as its page in the browser does: its role and how it's doing,
+its computers (`◂` marks the one shown beside it), its open tasks, what it knows and its network
+level. Under them is a box, `› Write to Iris…`: `enter` opens it, and your first prompt starts a
+thread on the computer shown. `+` gives the teammate another computer, `t` opens its computer's
+terminal and `m` shows its next computer.
 
-- on an agent or a terminal, its screen, as it runs;
-- on a thread, its transcript;
-- on a computer, its dashboard: CPU over the last two minutes as a chart, memory as a gauge
-  with its history, the request waiting, its terminals, ports and history, its network as it
-  happens and its teammate's browser.
+## Thread
 
-`enter`, the row's number or a click hands your keys to the pane, and the line between the
-two turns bright. Everything you type goes to the agent, `q` and `ctrl+c` too, except:
+A thread opens from its row in the sidebar, from a request on Home, or with `+`. From 120
+columns its computer is beside it; in a narrower terminal `tab` shows the computer instead.
 
-| Key | In the pane |
-|---|---|
-| `Ctrl-]` | give the keys back to the sidebar |
-| `alt+1` to `alt+9` | switch to that thread or terminal |
-| `alt+z` | full screen, and back |
+<TerminalScreen ansi={thread} label="Iris's thread Fix the login form: the agent's tool calls folded to a line each, its answer with a code block, a network request it waits on as a card, and the box to write to Iris" />
 
-Alt keys need a terminal that sends them; on macOS, set Option to act as Meta.
+The transcript streams as the agent works. Thoughts and tool calls are folded to one line:
+`↑` and `↓` move between them, and `enter` expands one to show its files, its diff or its
+output. `p` writes a prompt in the box at the bottom, framed in the thread's color: `enter`
+sends it, `ctrl+j` starts a new line, and `esc` puts it aside. `x` stops the turn that runs.
+Headings are bold, code is set off with a rule, and lists and tables are drawn as text.
 
-A terminal open in the browser too takes the size of whichever window was resized last.
+When the agent asks for a permission or asks a question, you answer it in the thread. The
+choices are listed under it.
 
-### Answer from a thread or terminal
+- A permission: `y` allows it once, `a` always, `n` rejects it; the numbers pick one of the
+  agent's options, and `i` ignores it. `←`, `→` and `space` work too.
+- A question: press the number of a choice, or `r` to type an answer and `enter` to send it.
+  `i` skips the question. A question with several fields is answered in the browser; its keys
+  print the thread's address.
 
-When a request waits on a computer, each of its threads and terminals in the pane shows a box over its
-top rows that says what waits, such as `api-refactor wants proxy.golang.org:443`, with its
-choices as buttons: **Allow once**, **Allow**, **Deny** and **More…** for a network request,
-**Review it** for anything else.
+Any other request the thread waits on, such as a host one of the agent's tools wants or the push
+it made, is a card above the box, and the card's keys answer it. `y` on a push asks once more,
+and `enter` opens its review.
 
-- In the sidebar, press `o`, `y` or `n`, or move over the buttons with `←` and `→` and press
-  one with `space`.
-- While you type in the pane, your keys go to the agent, so the box says `alt+a answers it`.
-  `alt+a` puts you on its buttons; once you've answered, or pressed `esc`, your keys go back
-  to the agent.
+A thread that is an agent in a terminal, such as `claude`, is that terminal, with the
+computer's Details beside it.
+
+## The computer
+
+A computer has the browser's tabs: **Terminal** and **Details** for now. `1` picks Terminal and
+`5` Details; the numbers in between are kept for the Files, Changes and Browser tabs.
+
+### Terminal
+
+The tab shows the computer's terminals as a row, `main  claude ▲  2  + new shell`, and under it
+the one you picked, live. `enter`, or a click on it, gives it your keys, and `ctrl+]` gives them
+back. `alt+1` to `alt+9` switch to another of the computer's terminals, `+` opens a new shell,
+and `T` starts the teammate's agent in a new terminal.
+
+Resizing your window resizes the computer's terminal. A terminal open in the browser too takes
+the size of whichever window was resized last. Alt keys need a terminal that sends them; on
+macOS, set Option to act as Meta.
+
+### Details
+
+<TerminalScreen ansi={computer} label="The Details tab of Finn's computer api-refactor: its teammate, template, resources and uptime, CPU and memory, a request waiting, its history and its two open ports with their preview addresses" />
+
+Details says what the computer is and does: its teammate, template, resources and uptime, its
+requests and its open ports. On a taller terminal it is a dashboard: CPU over the last two
+minutes as a chart, memory as a gauge with its history, the request waiting, the computer's
+history, its network as it happens, and its teammate's browser.
+
+Its keys work on the computer: `s` starts, stops or resumes it, `z` suspends it, `f` forks it,
+`h` opens its checkpoints, `d` deletes it after asking, and `l` shows its Activity.
+
+Each open port shows its preview address. In a terminal that shows links you can open it from
+there. A preview needs a login the first time: open it once from the Ports section of the
+computer's page in the browser, and after that the address from the TUI opens in that browser
+for eight hours.
+
+## Answer from a terminal
+
+When a request waits on a computer, its Terminal tab shows a box over the terminal's top rows
+that says what waits, such as `api-refactor wants proxy.golang.org:443`, with its choices as
+buttons: **Allow once**, **Allow**, **Deny** and **More…** for a network request, **Review it**
+for anything else.
+
+- While Studio has the keys, press `o`, `y` or `n`, or move over the buttons with `←` and `→`
+  and press one with `space`.
+- While you type in the terminal, your keys go to the agent, so the box says `alt+a answers it`.
+  `alt+a` puts you on its buttons; once you've answered, or pressed `esc`, your keys go back to
+  the agent.
 - `a` (**More…**) takes you to the request on Home, where you choose the host pattern and the
-  scope. Once you've decided, you're back where you were.
-
-A terminal in full screen has no room for a box. When a request arrives while you're in one,
-the terminal's title says what waits and the bell rings. `Ctrl-]` then takes you straight to
-the request, and once you've answered it you're back in the terminal.
+  scope. Once you've decided, you're back in the terminal.
 
 ## New computer
 
-`n` asks whose computer it is (a teammate, or none), what it starts from (the base image or one
-of the environment's templates), and its name, which is also its hostname: lowercase letters,
-digits and dashes. `enter` goes on and `esc` goes back a step. Studio then creates the computer,
-and the TUI shows the steps as they happen, the image pull with its progress, as the browser
-does. Once the computer is ready it opens. If the create fails, you see the step and the reason,
-and `d` deletes the computer so you can try again. `esc` leaves the create to finish on its own.
+`+` on Home, or **+ New computer**, asks whose computer it is (a teammate, or none), what it
+starts from (the base image or one of the environment's templates), and its name, which is also
+its hostname: lowercase letters, digits and dashes. `enter` goes on and `esc` goes back a step.
+Studio then creates the computer, and the TUI shows the steps as they happen, the image pull
+with its progress, as the browser does. Once the computer is ready it opens. If the create
+fails, you see the step and the reason, and `d` deletes the computer so you can try again. `esc`
+leaves the create to finish on its own.
 
 ## Fork, suspend and checkpoints
+
+These keys work on a computer's Details tab and on a row of the Computers list.
 
 `f` forks the computer: a new computer with a copy of its disks. The TUI asks for the name at the
 bottom, and suggests one that ends in `-fork`. `enter` forks, `esc` cancels. The fork's
@@ -261,26 +319,18 @@ programs.
 
 Deleting and renaming checkpoints, and their schedule, are in the browser.
 
-## Ports
-
-A running computer's page lists its open ports, with each one's preview address. In a terminal
-that shows links, you can open the address from there. The list refreshes every three seconds.
-
-A preview needs a login the first time. Open it once from the Ports section of the computer's
-page in the browser. After that, the address from the TUI opens in that browser for eight
-hours.
-
 ## Requests
 
 Each request is a row on Home, and its card is in the reading pane. Requests from one computer
-that come in close together are one row and one card, as they are on the web. A card lets you:
+that come in close together are one row and one card, as they are in the browser. A card lets
+you:
 
 - **Allow or deny** a network request. `y` and `n` make a rule for the host pattern and the
   scope you chose; `o` and `O` answer only this connection, with no rule; `1` allows it for
   an hour; `i` ignores it. When the browser opens a new site, `w` allows the site for the
   rest of that browser session, with no rule.
 - **Choose what the rule covers:** `p` changes the host pattern (for a browser request, also
-  its method and path), `s` the scope (the environment, your teammate's computers, or this
+  its method and path), `s` the scope (the environment, your teammate's computers, or only this
   computer), and `x` any port instead of the default ports. For a browser request, `s` picks
   who the rule covers: its browser, all browsers, or the browsers and the computers.
 - **Decide a group:** `A` allows every host, `D` denies every host, and `r` reviews them one by
@@ -290,10 +340,11 @@ that come in close together are one row and one card, as they are on the web. A 
 - **Review a git push:** `enter` opens the push in a pager: the repository, branch and change,
   the commits, and the diff with added lines in green and removed ones in red. Scroll with the
   arrows, `pgup`/`pgdn` (or `b`/`space`), `g` and `G`. Then `y` approves and pushes it, `n`
-  rejects it, and `i` ignores it. From its row on Home, `y` asks once more before it pushes. A push that rewrites its branch lists the commits it drops,
-  and only `F` force-pushes it. A pull request shows its title and description, and `y`
-  opens it. `g` lists every push and pull request, the ones waiting for you first and then the
-  decided ones with what came of them; `enter` opens one.
+  rejects it, and `i` ignores it. From its row on Home, `y` asks once more before it pushes. A
+  push that rewrites its branch lists the commits it drops, and only `F` force-pushes it. A pull
+  request shows its title and description, and `y` opens it. `g` on Home lists every push and
+  pull request, the ones waiting for you first and then the decided ones with what came of
+  them; `enter` opens one.
 
 The other cards are decided with their own keys:
 
@@ -304,83 +355,28 @@ The other cards are decided with their own keys:
 - **Memory share:** `y` shares the fact with every teammate, `n` declines, `i` ignores it.
 - **Memory conflict:** `1` keeps fact A and `2` keeps fact B; the other one is retracted. `i`
   leaves it for later. To keep both or edit one, `enter` prints the address of the memory page.
-- **Agent permission:** the agent's options are numbered. Press the number of the one you
-  want, or `i` to ignore the request.
-
-## Thread
-
-A thread's number or `enter` opens it; `c` opens the computer's newest thread, and `C` or `n`
-(in a thread) starts a new one. A computer needs a teammate to work in a thread with.
-
-```
-Sandbox Studio · Default                                     ▲ 1 waiting for you
-────────────────────────────────────────────────────────────────────────────────
-Fix the login form · blub                                                  Ready
-› The login form doesn't submit on enter. Can you fix it?
-
-  ▸ Thought it through
-  ▸ Read src/login.tsx                                                      done
-  ▸ Edit src/login.tsx                                                      done
-
-Fixed
-
-The form used a `div` as its button, so enter did nothing. It is a real submit
-button now:
-
-    <button type="submit">Sign in</button>
-
-- Enter submits the form.
-- The button is focusable.
-
-
- › Write to Iris…                                                       p write
-────────────────────────────────────────────────────────────────────────────────
-p prompt  ↑/↓ tools  pgup scroll  n new thread  esc/q back  ? help
-```
-
-The transcript streams as the agent works. Thoughts and tool calls are folded to one line:
-`↑` and `↓` move between them, and `enter` expands one to show its files, its diff or its
-output. `p` writes a prompt in the box at the bottom of the thread, framed in the thread's color:
-`enter` sends it, `ctrl+j` starts a new line, and `esc` puts it aside. `x` stops the turn that runs. Headings are bold and code is indented;
-there is no other formatting.
-
-When the agent asks for a permission or asks a question, you answer it in the thread. The
-choices are listed under it.
-
-- A permission: press the number of an option, or `i` to ignore it. `←`, `→` and `space`
-  work too.
-- A question: press the number of a choice, or `r` to type an answer and `enter` to send it.
-  `i` skips the question. A question with several fields is answered in the browser; its keys
-  print the thread's address.
-
-When a request waits on the thread's computer, such as a host one of the agent's tools wants,
-it shows as a box under the title. `alt+a` takes you to it on Home, and once you've answered
-you're back in the thread.
+- **Agent permission:** `y` allows it once, `a` always and `n` rejects it, or press the number
+  of one of the agent's options. `i` ignores it.
 
 ## Activity
 
 `l` shows the log of the environment, newest first: each connection a computer made, with its
 verdict, and each decision, with how it was made. `←` and `→` narrow it to one kind: network,
-git, agents or memory. On a computer, `l`
-shows only that computer; elsewhere `/` filters by computer name. `enter` opens an entry with the
-rule that decided it: its host pattern, action, ports, which computers it covers, where it came
-from, its hits and when it expires. Without a rule, it says what decided instead, such as the
-curated list or a once decision. The log refreshes every two seconds. Rules are edited in the
-browser; `r` prints the address.
+git, agents or memory. On a computer's Details tab, `l` shows only that computer; elsewhere `/`
+filters by computer name. `enter` opens an entry with the rule that decided it: its host
+pattern, action, ports, which computers it covers, where it came from, its hits and when it
+expires. Without a rule, it says what decided instead, such as the curated list or a once
+decision. The log refreshes every two seconds. Rules are edited in the browser; `r` prints the
+address.
 
-## Look, wide terminals and the mouse
+## Look and the mouse
 
-On a terminal with colors, the TUI uses the web's colors. Each area has its own hue: network,
-git, browser, memory and threads. Status dots are colored, and a request in the reading pane is a card. From 81
-columns, the header becomes tabs: Home, Activity and Settings.
+On a terminal with colors, the TUI uses the browser's colors. Each area has its own hue:
+network, git, browser, memory and threads. Status dots are colored, and a request is a card.
 
 Wider terminals use the extra room:
 
-- From 100 columns, the sidebar is beside Home, or beside [the pane](#the-pane) when it has
-  the keys; on a computer's row the pane is the dashboard, which charts its CPU and memory.
-  When Home has 90 columns or more to itself, its reading pane is beside the list instead of
-  under it. When the computer's teammate's browser runs, the dashboard ends
-  with the page it is on and a small picture of it, on terminals with 256 colors or more.
+- Home's reading pane is beside the list instead of under it.
 - From 120 columns, the git review lists the changed files, and `[` and `]` jump between them.
 - From 160 columns, the diff is side by side, and `v` toggles it.
 - The words a changed line changes are highlighted.
@@ -389,26 +385,29 @@ Wider terminals use the extra room:
 The mouse works too:
 
 - A click selects a row, and a double click opens it.
+- A click on a column gives it the cursor, and a click on a terminal gives it your keys.
+- A click on `≡` opens the sidebar, on the computer's chip shows the teammate's next computer,
+  and on what waits goes Home.
+- A click on a key, on a card or in the key bar, presses it.
 - The wheel scrolls.
-- A click on a tab opens it, and a click on a key, on a card or in the key bar, presses it.
 - Hold shift to select text as usual.
 
-`STUDIO_TUI=plain studio tui` gives the plain look shown above, with no mouse and no charts. So do
-`NO_COLOR` and terminals without colors. Every screen still fits 80×24.
+`STUDIO_TUI=plain studio tui` gives the plain look shown above, with no mouse and no charts. So
+do `NO_COLOR` and terminals without colors. Every screen still fits 80×24.
 
-## Terminal
+## studio shell
 
-`t` opens the computer's main terminal, the one the browser opens first, in full screen. A
-terminal's number opens that one, in the pane when there's room for it. From a shell, `studio shell <sandbox> [terminal]` does the same. The computer's
-screen takes over your terminal, and your keys go to it, as in any other terminal. Resizing
-your window resizes the computer's. Press `Ctrl-]` to go back to the TUI, or to the request
-that arrived meanwhile, as [above](#answer-from-a-thread-or-terminal). If the computer ends the
-terminal, you see that, and the next key returns you to the TUI.
+From a shell, `studio shell <sandbox> [terminal]`, with the computer's name, opens one of its
+terminals without the TUI around it: the computer's screen takes over your terminal, and your keys go to it.
+`Ctrl-]` leaves. When a request arrives while you're in it, the terminal's title says what waits
+and the bell rings; `Ctrl-]` then asks about the request in place, and once you've answered it
+you're back in the terminal.
 
 ## Stays in the browser
 
-Editing Settings, providers, teammates, templates, the rules, memory, the browser, secrets
-and the git forges happens in the browser; `,` lists the sections with what each is set to,
-and `enter` prints the address of one. So are a few answers: keeping both
-facts of a memory conflict, questions with several fields, and a preview's first login. The
-TUI prints their addresses where it has a key for them, and `?` shows where the browser is.
+Editing Settings, providers, teammates, templates, the rules, memory, secrets and the git forges
+happens in the browser; `,` lists the sections with what each is set to, and `enter` prints the
+address of one. So do a computer's files and its browser with its DevTools, comments on the
+lines of a diff, and a few answers: keeping both facts of a memory conflict, questions with
+several fields, and a preview's first login. The TUI prints their addresses where it has a key
+for them, and `?` shows where the browser is.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
@@ -26,8 +27,7 @@ func item(id string, seq int, kind string) chat.Item {
 // sampleChat opens a chat of blub with Iris on the sample app: a prompt, a thought, two tool
 // calls and an answer with a heading and a code block.
 func sampleChat(m *app) *app {
-	m.chats = chatState{sandbox: m.sandboxes[0], back: screenHome, fold: -1}
-	m.openChat("c1")
+	m.open(place{kind: placeThread, mate: "t1", chat: "c1", sandbox: "sb1"})
 	c := &m.chats
 	c.loaded = true
 	c.chat = store.Chat{ID: "c1", SandboxID: "sb1", TeammateID: "t1", Title: "Fix the login form", State: store.ChatIdle, UpdatedAt: m.now.Add(-3 * time.Minute)}
@@ -81,40 +81,31 @@ func TestGoldenChatRunning(t *testing.T) {
 	golden(t, "chat_running", m)
 }
 
+// A thread is with a teammate: + on a computer that has none says so.
 func TestChatNeedsATeammate(t *testing.T) {
 	m := sampleApp()
-	m.cursor = 3 // demo has no teammate
-	m = press(m, "c")
-	if m.screen != screenHome || !m.notice.failed || !strings.Contains(m.notice.text, "no teammate") {
-		t.Fatalf("chat of a sandbox without a teammate: screen %v, notice %+v", m.screen, m.notice)
+	m.open(place{kind: placeComputer, sandbox: "sb4"}) // demo has no teammate
+	if cmd := m.newThread(""); cmd != nil || !strings.Contains(m.notice.text, "with a teammate") {
+		t.Fatalf("a thread on a computer without a teammate: notice %+v", m.notice)
 	}
 }
 
-func TestChatOpensFromHomeAndDetail(t *testing.T) {
-	next, cmd := sampleApp().Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
-	m := next.(*app)
-	if m.screen != screenHome || m.chats.sandbox.ID != "sb1" || !m.chats.picking || cmd == nil {
-		t.Fatalf("c on Home: screen %v, sandbox %q, picking %v, cmd %v", m.screen, m.chats.sandbox.ID, m.chats.picking, cmd != nil)
+// enter on a thread's row of the sidebar opens the thread, its composer open while it is idle;
+// esc puts the composer aside and goes back to Home.
+func TestChatOpensFromTheSidebar(t *testing.T) {
+	m := onSession(t, withSessions(sampleApp()), "sb1", "Fix the login form")
+	m = press(m, "enter")
+	if m.screen != screenMain || m.here.kind != placeThread || m.here.chat != "c1" || !m.chats.on || m.chats.id != "c1" || m.focus != focusMain {
+		t.Fatalf("enter on the thread: here %+v, chat %q, focus %v", m.here, m.chats.id, m.focus)
 	}
-	newest := store.Chat{ID: "c1", SandboxID: "sb1", State: store.ChatIdle, UpdatedAt: time.Now()}
-	next, _ = m.Update(chatsListed{sandbox: "sb1", list: []store.Chat{{ID: "c0"}, newest}})
-	if m = next.(*app); m.screen != screenChat || m.chats.id != "c1" {
-		t.Fatalf("c opens the newest chat: screen %v, chat %q", m.screen, m.chats.id)
+	if !m.chats.composing {
+		t.Error("an idle thread opens with its composer")
 	}
-	if m = press(m, "esc"); m.screen != screenHome {
-		t.Fatalf("esc from the chat returns to %v", m.screen)
+	if m = press(m, "esc"); m.chats.composing || m.here.kind != placeThread {
+		t.Fatalf("esc puts the composer aside: composing %v, here %+v", m.chats.composing, m.here)
 	}
-
-	m = press(sampleApp(), "j", "enter", "c")
-	next, _ = m.Update(chatsListed{sandbox: "sb2"})
-	if m = next.(*app); m.screen != screenChat || m.chats.id != "" || !m.chats.composing {
-		t.Fatalf("c without chats opens a new one: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
-	}
-	if m = press(m, "esc"); m.screen != screenDetail {
-		t.Fatalf("esc from the new chat returns to %v", m.screen)
-	}
-	if m = press(sampleApp(), "C"); m.screen != screenChat || m.chats.id != "" || !m.chats.composing {
-		t.Fatalf("C: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
+	if m = press(m, "esc"); m.here.kind != placeHome || m.chats.on {
+		t.Fatalf("esc again goes Home: here %+v, chat on %v", m.here, m.chats.on)
 	}
 }
 
@@ -191,9 +182,9 @@ func TestComposerTakesPastesAndNewLines(t *testing.T) {
 }
 
 func TestNewChatStartsWithTheComposer(t *testing.T) {
-	m := press(sampleChat(sampleApp()), "n")
-	if m.screen != screenChat || m.chats.id != "" || !m.chats.composing {
-		t.Fatalf("n: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
+	m := press(sampleChat(sampleApp()), "+")
+	if m.here.kind != placeThread || m.here.chat != "" || m.chats.id != "" || !m.chats.composing {
+		t.Fatalf("+: here %+v, chat %q, composing %v", m.here, m.chats.id, m.chats.composing)
 	}
 	m = press(m, "h", "i")
 	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -203,12 +194,12 @@ func TestNewChatStartsWithTheComposer(t *testing.T) {
 	}
 	next, _ = m.Update(chatCreated{chat: store.Chat{ID: "c9", State: store.ChatRunning}})
 	m = next.(*app)
-	if m.screen != screenChat || m.chats.id != "c9" || m.chats.composing {
-		t.Fatalf("created: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
+	if m.here.chat != "c9" || m.chats.id != "c9" || m.chats.composing {
+		t.Fatalf("created: here %+v, chat %q, composing %v", m.here, m.chats.id, m.chats.composing)
 	}
-	m = press(sampleChat(sampleApp()), "n", "esc")
-	if m.screen != screenHome {
-		t.Fatalf("esc from a new chat returns to %v", m.screen)
+	m = press(sampleChat(sampleApp()), "+", "esc", "esc")
+	if m.here.kind != placeThread || m.here.chat != "c1" {
+		t.Fatalf("esc from a new thread returns to %+v", m.here)
 	}
 }
 
@@ -412,16 +403,15 @@ func TestChatScreensLoadFromTheServer(t *testing.T) {
 	sb := s.addSandbox(t, "blub", runtime.StatusRunning)
 	c := s.addChat(t, sb, "Greeting")
 	m := newApp(context.Background(), connect(t, s), s.Addr)
-	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
 	m.sandboxes[0].TeammateID = "t1" // the chat is with this teammate
 	m.teammates["t1"] = "Iris"
-	m = run(m, m.openChats(m.selected()))
-	if m.screen != screenChat || m.chats.id != c.ID {
-		t.Fatalf("c opens the newest chat: screen %v, chat %q", m.screen, m.chats.id)
+	cmd := m.open(place{kind: placeThread, mate: "t1", chat: c.ID, sandbox: sb.ID})
+	if m.here.kind != placeThread || m.chats.id != c.ID || cmd == nil {
+		t.Fatalf("the thread opens: here %+v, chat %q", m.here, m.chats.id)
 	}
-	next, cmd := m.Update(m.loadChat()())
+	next, cmd := m.Update(cmd())
 	m = next.(*app)
 	if !m.chats.loaded || len(m.chats.items) != 3 || cmd == nil {
 		t.Fatalf("chat: loaded %v, %d items, follow %v", m.chats.loaded, len(m.chats.items), cmd != nil)
@@ -469,7 +459,8 @@ func TestChatLoadsEarlierTurnsAtItsTop(t *testing.T) {
 	}
 	m := newApp(ctx, connect(t, s), s.Addr)
 	m.env, m.width, m.height = s.Env, 100, 30
-	m.chats = chatState{sandbox: sandboxes.View{Sandbox: sb}, back: screenHome, fold: -1}
+	m.here = place{kind: placeThread, mate: c.TeammateID, chat: c.ID, sandbox: sb.ID}
+	m.chats = chatState{sandbox: sandboxes.View{Sandbox: sb}, on: true, fold: -1}
 	m = run(m, m.openChat(c.ID))
 	shown := func() string { return stripANSI(strings.Join(m.transcript(m.chatWidth()).lines, "\n")) }
 	if got := shown(); !strings.Contains(got, "prompt 49") || strings.Contains(got, "prompt 9\n") ||
@@ -498,5 +489,52 @@ func TestChatLoadsEarlierTurnsAtItsTop(t *testing.T) {
 	}
 	if !strings.Contains(got, "answer 2, edited") {
 		t.Fatalf("the stream's newer answer lost to the page's older one:\n%s", got)
+	}
+}
+
+// A thread whose computer waits on a request shows its card above the composer; y answers it
+// there, and enter writes while the card takes p for its pattern.
+func TestTheThreadsCardAnswersY(t *testing.T) {
+	client, rec := recordingClient(t)
+	m := settle(sampleChat(sampleMorning(sampleApp())))
+	m.client = client
+	quietHome(m)
+	cd, ok := m.threadCard()
+	if !ok || !isNetwork(cd.first()) {
+		t.Fatalf("the thread's card: %+v, %v", cd, ok)
+	}
+	m.chats.composing = false
+	out := ansi.Strip(strings.Join(m.mainFrame(m.width, m.height), "\n"))
+	card, write := strings.Index(out, cd.first().Subject), strings.Index(out, "enter write")
+	if card < 0 || write < 0 || card > write {
+		t.Fatalf("the card is not above the composer:\n%s", out)
+	}
+	m = pressRun(t, m, "y")
+	if got := rec.last(t); got.path != "/api/environments/env1/approvals/"+cd.first().ID+"/decide" || !strings.Contains(got.body, `"action":"allow"`) {
+		t.Fatalf("y on the card: %+v", got)
+	}
+	if m = press(m, "enter"); !m.chats.composing {
+		t.Fatal("enter does not write beside a network card")
+	}
+}
+
+// A prompt from a teammate's home starts a thread on the computer the home shows.
+func TestAPromptFromATeammatesHomeStartsAThread(t *testing.T) {
+	client, rec := recordingClient(t)
+	m := withSessions(sampleApp())
+	m.client = client
+	m.open(place{kind: placeMate, mate: "t1"})
+	m = press(settle(m), "enter", "h", "i")
+	if !m.chats.composing || m.chats.draft.value() != "hi" {
+		t.Fatalf("the composer on Iris's home: composing %v, draft %q", m.chats.composing, m.chats.draft.value())
+	}
+	quietHome(m)
+	m = pressRun(t, m, "enter")
+	if got := rec.last(t); got.method != "POST" || got.path != "/api/environments/env1/sandboxes/sb1/chats" || got.body != `{"text":"hi"}` {
+		t.Fatalf("the first prompt: %+v", got)
+	}
+	next, _ := m.Update(chatCreated{chat: store.Chat{ID: "c9", SandboxID: "sb1", TeammateID: "t1", State: store.ChatRunning}})
+	if m = next.(*app); m.here.kind != placeThread || m.here.chat != "c9" || m.here.mate != "t1" {
+		t.Fatalf("the new thread: here %+v", m.here)
 	}
 }

@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
-	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 )
 
 // Home's own row reads what was decided today, for EARLIER TODAY under Home's list (inbox.go),
@@ -55,9 +53,9 @@ var (
 	keyOnceY  = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow once"))
 )
 
-// homeShows reports whether Home's row is on show, beside the list or instead of it.
+// homeShows reports whether Home is on show.
 func (m *app) homeShows() bool {
-	return m.screen == screenHome && m.at == atHome && m.env.ID != "" && m.loaded
+	return m.inboxShows()
 }
 
 // watchHome reads the environment's decisions while Home's row shows, again every homeEvery.
@@ -145,28 +143,6 @@ func permissionAlias(msg tea.KeyPressMsg, picks []pick) int {
 	return 0
 }
 
-// digitCard reports whether a card answers the digits, which on Home otherwise go into the
-// sessions: an agent's permission with more choices than y, a and n, and a memory conflict.
-func digitCard(a api.ApprovalView) bool {
-	return a.MemoryConflict != nil || a.ChatPermission != nil
-}
-
-// cardLine is a card on one line: its kind's glyph and what it asks.
-func cardLine(c card) string {
-	a := c.first()
-	glyph := strings.SplitN(kindChip(a), " ", 2)[0]
-	who := firstNonEmpty(approvalSource(a), "A computer")
-	switch {
-	case c.group:
-		return fmt.Sprintf("%s %s wants %d hosts", glyph, who, len(c.approvals))
-	case isNetwork(a):
-		return glyph + " " + who + " wants " + hostOf(a)
-	case isGit(a):
-		return glyph + " " + gitSummary(a)
-	}
-	return glyph + " " + oneLine(summary(a))
-}
-
 // earlier are today's decisions in the environment, newest first, at most h of them.
 func (m *app) earlier(w, h int) []string {
 	hs := &m.home
@@ -225,28 +201,4 @@ func decisionText(a api.ApprovalView) string {
 	}
 	word := map[string]string{"approved": "Allowed", "denied": "Denied", "dismissed": "Ignored"}[a.Status]
 	return firstNonEmpty(word, a.Status) + ": " + oneLine(summary(a))
-}
-
-// reviewPane is a review's row in the pane: what was pushed, and how to review it.
-func (m *app) reviewPane(a api.ApprovalView, sb sandboxes.View, w int) []string {
-	who := firstNonEmpty(m.teammates[sb.TeammateID], approvalSource(a))
-	lines := []string{
-		spread(styleBold.Render(clip(reviewTitle(a), w/2))+styleDim.Render(" · "+strings.Join(nonEmpty(who, sb.Name), " · ")),
-			m.waitingMark("▲ review"), w),
-		styleDim.Render(strings.Repeat("─", w)),
-		clip(gitSummary(a), w),
-	}
-	if r := a.Git.Review; r != nil {
-		lines = append(lines, "")
-		for i, c := range r.Commits {
-			if i == 6 {
-				break
-			}
-			lines = append(lines, styleAccent.Render(clip(c.SHA, 7))+" "+clip(oneLine(c.Subject), w-8))
-		}
-		if more := len(r.Commits) - 6 + r.MoreCommits; more > 0 {
-			lines = append(lines, styleDim.Render(fmt.Sprintf("+ %d more", more)))
-		}
-	}
-	return append(lines, "", styleDim.Render(clip("enter reviews the diff: y approves and pushes, r asks for changes, n rejects.", w)))
 }

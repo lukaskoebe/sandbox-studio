@@ -58,7 +58,13 @@ func (m *app) composer(w int) []string {
 		case c.draft.value() != "":
 			hint = clip(oneLine(c.draft.value()), max(w-24, 8)) + "  (a draft)"
 		}
-		line := spread(" › "+hint, "p write ", w)
+		write := "p write "
+		if cd, ok := m.threadCard(); ok && cardTakes(pressOf("p"), cd) {
+			write = "enter write " // p is the card's
+		} else if m.here.kind == placeMate {
+			write = "enter write "
+		}
+		line := spread(" › "+hint, write, w)
 		if m.pal.capBg && !m.look.plain {
 			return []string{m.pal.field.Faint(true).Render(line)}
 		}

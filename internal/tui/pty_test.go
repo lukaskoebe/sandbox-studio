@@ -23,8 +23,8 @@ import (
 )
 
 // TestTerminalSmoke runs the TUI in a pseudo-terminal, as a child process of this test binary,
-// against a test Studio. It shows Home with the sandboxes, l opens Activity, a opens the
-// approvals, where y allows the waiting host with a rule on the server, and q quits it.
+// against a test Studio. It shows Home with the computers and what waits, l opens Activity, y
+// on Home's request allows the waiting host with a rule on the server, and q quits it.
 func TestTerminalSmoke(t *testing.T) {
 	ctx := context.Background()
 	s := startStudio(t)
@@ -34,7 +34,7 @@ func TestTerminalSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	tui := startTUI(t, s, defaultWidth, defaultHeight)
-	tui.waitFor("Home", "Sandbox Studio", "blub")
+	tui.waitFor("Home", "Home", "WAITING FOR YOU", "blub")
 
 	// l opens Activity; q returns to Home.
 	tui.write("l")
@@ -63,17 +63,18 @@ func TestTerminalSmoke(t *testing.T) {
 	tui.quit()
 }
 
-// TestTerminalSmokeWide runs the visual look on a wide 256-color terminal: Home splits into the
-// list and Home's pane, and a click on the Activity tab opens the log.
+// TestTerminalSmokeWide runs the visual look on a wide 256-color terminal: the sidebar, Home's
+// list and its reading pane side by side, and a click on a key of the key bar presses it.
 func TestTerminalSmokeWide(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
 	tui := startTUI(t, s, 140, 40)
 	tui.waitFor("the wide Home", "◆", "Studio", "YOUR COMPUTERS", "blub", "stopped", "Nothing waits for you", "EARLIER TODAY")
 
-	// A click on the tab, in SGR mouse coordinates that count from 1, acts as l.
-	x := len([]rune(" ◆ Studio  Default ▾   Home   "))
-	tui.write(fmt.Sprintf("\x1b[<0;%d;1M\x1b[<0;%d;1m", x+2, x+2))
+	// A click on "l activity" in the key bar, the row above the notice line, in SGR mouse
+	// coordinates that count from 1, acts as l.
+	x := len([]rune("enter open  tab next  + new computer │ "))
+	tui.write(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x+1, 39, x+1, 39))
 	tui.waitFor("Activity", "connections and decisions")
 	tui.write("q")
 	tui.write("q")

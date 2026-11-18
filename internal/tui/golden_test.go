@@ -60,12 +60,43 @@ func TestGoldenFilter(t *testing.T) {
 	golden(t, "filter", m)
 }
 
-func TestGoldenDetail(t *testing.T) {
-	golden(t, "detail", press(sampleApp(), "j", "enter"))
+func TestGoldenComputerDetails(t *testing.T) {
+	golden(t, "computer_details", withDetailData(openComputer(sampleApp(), "sb2", tabDetails)))
 }
 
 func TestGoldenDeleteAsks(t *testing.T) {
-	golden(t, "delete_asks", press(sampleApp(), "d"))
+	golden(t, "delete_asks", press(openComputer(sampleApp(), "sb1", tabDetails), "d"))
+}
+
+// A thread at 80 columns with the request of its computer as a card above the composer (A2).
+func TestGoldenThread(t *testing.T) {
+	golden(t, "thread", threadWithCard(sampleApp()))
+}
+
+// The sidebar as a drawer over a thread at 80 columns, on the thread's row (A5).
+func TestGoldenDrawer(t *testing.T) {
+	m := sampleMorning(sampleApp())
+	golden(t, "drawer", onSession(t, m, "sb1", "Fix the login form"))
+}
+
+// A teammate's home: its computer, tasks, what it knows, and the composer of a new thread.
+func TestGoldenMate(t *testing.T) {
+	m := withSessions(sampleApp())
+	m.open(place{kind: placeMate, mate: "t1"})
+	m = settle(m)
+	m.mates = mateState{mate: "t1", loaded: true}
+	golden(t, "mate", m)
+}
+
+// A computer on its own on the Terminal tab, the fake terminal's screen in it (A3), and the
+// same terminal in full screen.
+func TestGoldenComputerTerminal(t *testing.T) {
+	m := withSessions(sampleApp())
+	m.approvals = nil // no banner over the screen
+	m = liveTerminal(t, m, "sb2", "codex")
+	golden(t, "computer_terminal", m)
+	m.pane.focus, m.zoom = true, true // full screen while the terminal has the keys
+	golden(t, "zoom_terminal", m)
 }
 
 func TestGoldenEnvironmentPicker(t *testing.T) {

@@ -40,8 +40,8 @@ func (m *app) openGit() tea.Cmd {
 	g := &m.git
 	if m.screen != screenGit && m.screen != screenPager {
 		g.back = m.screen
-		if g.back == screenChat || g.back == screenHelp {
-			g.back = screenHome
+		if g.back == screenHelp {
+			g.back = screenMain
 		}
 	}
 	g.gen++

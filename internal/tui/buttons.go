@@ -114,44 +114,39 @@ func (m *app) buttonsLine(caps []choiceCap, at int) (string, []keySpan) {
 // no longer pending, the TUI goes back there.
 type resumeState struct {
 	approval string
-	back     screen        // the screen to return to
-	pane     bool          // Home's pane had the keys
-	attach   *attachTarget // the terminal to attach again
-	home     *homeCursor   // Home's cursor as it was, when back is Home
+	place    place     // the place to return to
+	history  []place   // its way back
+	focus    focusArea // the part of the frame that had the keys
+	pane     bool      // its terminal had the keys
+	screen   screen    // the full screen over it, or screenMain
 }
 
-// attachTarget is a terminal to attach: its sandbox, by ID and name, and its own name.
-type attachTarget struct {
-	id, sandbox, name string
-}
-
-// resume goes back to what a decision interrupted, once its approval is decided: the pane gets
-// the keys again, or the terminal is attached again. A resume whose approval still waits stays.
+// resume returns to what the request under way interrupted, once it is decided: the place, the
+// screen over it and the terminal that had the keys.
 func (m *app) resume() tea.Cmd {
 	r := m.resuming
 	if r == nil || m.known[r.approval] {
 		return nil
 	}
 	m.resuming = nil
+	return m.returnTo(r)
+}
+
+// returnTo shows the place r saved again, with the part of the frame that had the keys.
+func (m *app) returnTo(r *resumeState) tea.Cmd {
 	m.blurButtons()
-	switch {
-	case r.attach != nil:
-		m.screen = screenHome
-		for i := range m.sandboxes {
-			if m.sandboxes[i].ID == r.attach.id {
-				return m.attachTo(&m.sandboxes[i], r.attach.name)
-			}
-		}
-	default:
-		m.screen = r.back
-		if r.home != nil {
-			m.restoreCursor(*r.home)
-		}
-		if _, ok := m.paneTarget(); ok && r.pane {
+	cmd := m.show(r.place)
+	m.history = r.history
+	m.focus = r.focus
+	if r.screen != screenMain {
+		m.screen = r.screen
+	}
+	if r.pane {
+		if _, ok := m.paneTarget(); ok {
 			m.pane.focus = true
 		}
 	}
-	return nil
+	return cmd
 }
 
 // A confirmation's choices: y does it, n keeps things as they are. The arrows start on keep, so

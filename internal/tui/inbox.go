@@ -53,13 +53,12 @@ type inboxRow struct {
 }
 
 // inboxState is Home's list: the cursor, by its row's id and index, the reading pane's scroll,
-// the push whose y waits for a second y, and whether the sidebar has the keys.
+// and the push whose y waits for a second y.
 type inboxState struct {
 	cursor  string // the row's id, so a refresh keeps the cursor on it
 	at      int    // the row's index, where the cursor goes when its row went: the next request
 	scroll  int    // the reading pane's, in lines
 	pushing string // the push whose y asked first
-	sidebar bool   // the list of teammates and computers has the keys
 	tasks   map[string][]store.Task
 	busy    bool // a read of the tasks, or the wait for the next one, is under way
 	gen     int
@@ -82,20 +81,18 @@ var (
 	keyNextRow  = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next"))
 	keyReadDn   = key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "scroll"))
 	keyReadUp   = key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "scroll"))
-	keyToList   = key.NewBinding(key.WithKeys("\\"), key.WithHelp("\\", "list"))
 	keyPushYes  = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "push"))
 	keyGoThread = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "thread"))
 )
 
-// inboxShows reports whether Home's list is on show: Home's row is under the cursor, and the
-// list has the screen, beside the sidebar or without it.
+// inboxShows reports whether Home's list is on show.
 func (m *app) inboxShows() bool {
-	return m.homeShows() && (m.homeSplit(m.width) || !m.inbox.sidebar)
+	return m.screen == screenMain && m.here.kind == placeHome && m.env.ID != "" && m.loaded
 }
 
 // inboxKeys reports whether Home's list takes the keys.
 func (m *app) inboxKeys() bool {
-	return m.inboxShows() && !m.inbox.sidebar && !m.paneFocused()
+	return m.inboxShows() && m.focus == focusMain && !m.drawer && !m.paneFocused()
 }
 
 // inboxThreads are the threads Home lists: the chats with each teammate, as threadsOf has them
@@ -361,13 +358,10 @@ func (m *app) inboxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.inboxMove(1)
 	case key.Matches(msg, keyNextRow):
 		m.inboxNext()
-	case key.Matches(msg, keyToList):
-		in.sidebar = true
-		m.blurButtons()
 	case key.Matches(msg, keyEsc):
 		m.blurButtons()
 		if m.resuming != nil {
-			m.leaveWaiting()
+			return m, m.leaveWaiting()
 		}
 	case key.Matches(msg, keyQuit):
 		return m, tea.Quit
@@ -379,41 +373,26 @@ func (m *app) inboxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openActivity("")
 	case key.Matches(msg, keyEnv):
 		m.openEnvs()
-	case key.Matches(msg, keyGit):
+	case key.Matches(msg, keyGit): // until the Changes tab takes the pushes
 		return m, m.openGit()
 	case key.Matches(msg, keyNewComputer):
 		if m.env.ID != "" {
 			return m, m.openNew()
 		}
 	case key.Matches(msg, keyFilter):
-		in.sidebar = true
+		m.toggleSidebar()
 		m.startFilter()
 	case key.Matches(msg, keyReadDn):
 		in.scroll += max(m.readingRows()-1, 1)
 	case key.Matches(msg, keyReadUp):
 		in.scroll = max(in.scroll-max(m.readingRows()-1, 1), 0)
-	case key.Matches(msg, keyNew) && r.card == nil && m.env.ID != "": // n, as in the sidebar, off a request
-		return m, m.openNew()
 	case i < 0:
-	case digit(msg) > 0 && !answersDigits(r):
-		return m, m.numbered(digit(msg)) // a session's number
 	case r.card != nil:
 		return m, m.inboxCardKey(msg, *r.card)
 	case key.Matches(msg, keyOpen):
 		return m, m.inboxOpen(r)
 	}
 	return m, nil
-}
-
-// answersDigits reports whether the row's request takes the digits, which otherwise go into the
-// sidebar's numbered sessions: a network request's 1 allows for an hour, and a permission's and a
-// memory conflict's pick a choice.
-func answersDigits(r inboxRow) bool {
-	if r.card == nil || r.card.group {
-		return false
-	}
-	a := r.card.first()
-	return digitCard(a) || isNetwork(a)
 }
 
 // readingRows is how many rows the reading pane has, for a page of it.
@@ -448,7 +427,7 @@ func (m *app) pushRowKey(msg tea.KeyPressMsg, a api.ApprovalView) tea.Cmd {
 	switch {
 	case key.Matches(msg, keyOpen):
 		m.openPager(a)
-		m.pager.back = screenHome
+		m.pager.back = screenMain
 	case key.Matches(msg, keyPush, keyForcePush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
 		m.setNotice(gitDecidedText(a), false)
 	case key.Matches(msg, keyPush) && forced(a):
@@ -458,7 +437,7 @@ func (m *app) pushRowKey(msg tea.KeyPressMsg, a api.ApprovalView) tea.Cmd {
 	case key.Matches(msg, keyForcePush) && forced(a):
 		return m.approvePush(a, defaultOpenPR(a))
 	case key.Matches(msg, keyChanges) && a.Git.PullRequest == nil:
-		m.askChanges(a, screenHome)
+		m.askChanges(a, screenMain)
 	case key.Matches(msg, keyReject):
 		return m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
 	case key.Matches(msg, keyIgnore):
@@ -526,7 +505,7 @@ func (m *app) openCard(c card) tea.Cmd {
 	case a.ChatPermission != nil:
 		for _, x := range m.inboxThreads() {
 			if x.kind == sessionChat && x.chat.ID == a.ChatPermission.ChatID {
-				return m.goSession(x)
+				return m.open(placeOf(x))
 			}
 		}
 	case isNetwork(a):
@@ -537,112 +516,48 @@ func (m *app) openCard(c card) tea.Cmd {
 			}
 		}
 		if latest != nil {
-			return m.goSession(*latest)
+			return m.open(placeOf(*latest))
 		}
 		if sb, ok := m.sandboxByID(a.SandboxID); ok {
-			m.openComputer(sb.ID)
+			return m.open(place{kind: placeComputer, sandbox: sb.ID})
 		}
 		return nil
 	}
 	return m.kindKey(enterKey, c)
 }
 
-// inboxOpen opens the row under the cursor: a thread, a computer's detail, or a run's teammate.
+// inboxOpen opens the row under the cursor: a thread, a computer, or a run's teammate.
 func (m *app) inboxOpen(r inboxRow) tea.Cmd {
 	switch {
 	case r.thread != nil:
-		return m.goSession(*r.thread)
+		return m.enterOf(*r.thread)
 	case r.sb != "":
-		m.openComputer(r.sb)
+		return m.open(place{kind: placeComputer, sandbox: r.sb})
 	case r.task != nil:
-		for _, hr := range m.homeRows() {
-			if hr.kind == atMate && hr.mate == r.task.TeammateID {
-				m.setCursor(hr)
-				m.inbox.sidebar = true
-			}
-		}
+		return m.open(place{kind: placeMate, mate: r.task.TeammateID})
 	}
 	return nil
 }
 
-// openComputer shows a computer's detail, the sidebar's cursor on its row, so esc returns to it.
-func (m *app) openComputer(id string) {
-	for i, sb := range m.visible() {
-		if sb.ID == id {
-			home := m.saveCursor()
-			m.at, m.mate, m.cursor, m.sub = atSandbox, "", i, -1
-			m.inbox.sidebar = true
-			m.screen, m.detailBack, m.detailHome = screenDetail, screenHome, &home
-			return
-		}
-	}
-}
-
-// leaveDetail goes back from the computer's detail to where it was opened: Home's list, the
-// sidebar's row or the Computers screen.
-func (m *app) leaveDetail() {
-	m.screen = m.detailBack
-	if h := m.detailHome; h != nil && m.screen == screenHome {
-		m.restoreCursor(*h)
-	}
-	m.detailHome = nil
-}
-
-// goSession goes into a thread from Home's list: the reading pane takes the keys when it shows
-// the thread, and the thread takes the screen otherwise.
-func (m *app) goSession(x session) tea.Cmd {
-	if t, ok := m.paneTarget(); ok && t.id() == x.id() {
-		return m.focusPane()
-	}
-	return m.enterOf(x)
-}
-
-// leaveWaiting goes back to what a request interrupted without deciding it. A terminal it came
-// from is not attached again: esc stays in Studio.
-func (m *app) leaveWaiting() {
+// leaveWaiting goes back to what a request interrupted without deciding it, the terminal it
+// came from without the keys: esc stays in Studio.
+func (m *app) leaveWaiting() tea.Cmd {
 	r := m.resuming
 	m.resuming = nil
-	if r == nil || r.attach != nil {
-		return
+	if r == nil {
+		return nil
 	}
-	m.screen = r.back
-	if r.home != nil {
-		m.restoreCursor(*r.home)
-	}
-	if r.pane && m.screen == screenHome {
-		m.pane.focus = true
-	}
-}
-
-// homeCursor is the sidebar's cursor, saved to put back.
-type homeCursor struct {
-	at        rowKind
-	mate      string
-	cursor    int
-	sub       int
-	rowPlace  envPlace
-	rowAction rowAction
-	sidebar   bool
-}
-
-// saveCursor is the sidebar's cursor as it is.
-func (m *app) saveCursor() homeCursor {
-	return homeCursor{m.at, m.mate, m.cursor, m.sub, m.rowPlace, m.rowAction, m.inbox.sidebar}
-}
-
-// restoreCursor puts the sidebar's cursor back as c saved it.
-func (m *app) restoreCursor(c homeCursor) {
-	m.at, m.mate, m.cursor, m.sub, m.rowPlace, m.rowAction, m.inbox.sidebar = c.at, c.mate, c.cursor, c.sub, c.rowPlace, c.rowAction, c.sidebar
+	r.pane = false
+	return m.returnTo(r)
 }
 
 // goWaiting shows Home with the cursor on the request's row, and returns to r once it is
-// decided: the screen, the sidebar's cursor and the pane or the terminal it came from.
+// decided: the place, the screen and the terminal it came from.
 func (m *app) goWaiting(id string, r *resumeState) {
-	if r != nil && r.back == screenHome && r.home == nil {
-		c := m.saveCursor()
-		r.home = &c
+	if r != nil {
+		r.place, r.history, r.focus, r.screen = m.here, slices.Clone(m.history), m.focus, m.screen
 	}
-	m.goHome()
+	m.open(place{})
 	m.inboxOn(id)
 	m.resuming = r
 }
@@ -665,7 +580,7 @@ func (m *app) inboxBindings() []key.Binding {
 	if ok && !slices.ContainsFunc(bindings, func(b key.Binding) bool { return b.Help().Key == "enter" }) {
 		bindings = append(bindings, keyOpen)
 	}
-	return append(bindings, keyHelp, keyQuit, keyToList, keyNewComputer, keyActivity, keySettings, keyEnv)
+	return append(bindings, keyHelp, keyQuit, keyNewComputer, keyActivity, keySettings, keyEnv)
 }
 
 // rowBindings are a row's own keys.
@@ -701,10 +616,10 @@ func (m *app) rowBindings(r inboxRow) []key.Binding {
 			}
 		}
 		return bindings
-	case r.thread != nil && m.homeSplit(m.width):
-		return []key.Binding{keyFocus}
 	case r.thread != nil:
-		return []key.Binding{keyEnter}
+		return []key.Binding{keyGoThread}
+	case r.sb != "", r.task != nil:
+		return []key.Binding{keyOpen}
 	}
 	return nil
 }
@@ -746,47 +661,39 @@ func (m *app) inboxLayout(rows []inboxRow, w, h, x0 int) inboxGeometry {
 	return g
 }
 
-// homeColumn is where Home's list goes on screen: beside the sidebar from paneWidth columns, the
-// whole width below.
-func (m *app) homeColumn() (x0, w int) {
-	if m.homeSplit(m.width) {
-		x0 = sidebarWidth(m.width) + 2
-	}
-	return x0, max(m.width-x0, 1)
-}
-
 // readingRect is where the reading pane is on screen, while Home's list shows one.
 func (m *app) readingRect() (rect, bool) {
-	if !m.inboxShows() {
+	if !m.inboxShows() || m.mainPane() != paneHomeList {
 		return rect{}, false
 	}
-	x0, w := m.homeColumn()
-	g := m.inboxLayout(m.inboxRows(), w, m.bodyRows(), x0)
+	main, _ := m.frameColumns()
+	g := m.inboxLayout(m.inboxRows(), main.w, main.h, 0)
+	g.pane.x += main.x
 	return g.pane, g.shown
 }
 
 // inboxColumn is the column of the line between Home's list and its reading pane, when they
 // are side by side.
 func (m *app) inboxColumn() (int, bool) {
-	if !m.inboxShows() {
+	if !m.inboxShows() || m.mainPane() != paneHomeList {
 		return 0, false
 	}
-	x0, w := m.homeColumn()
-	g := m.inboxLayout(m.inboxRows(), w, m.bodyRows(), x0)
-	return x0 + g.listW, g.side
+	main, _ := m.frameColumns()
+	g := m.inboxLayout(m.inboxRows(), main.w, main.h, 0)
+	return main.x + g.listW, g.side
 }
 
-// inboxBody is Home's list in w cells and h rows at column x0, with the reading pane beside it
+// inboxBody is Home's list in its column of w cells and h rows, with the reading pane beside it
 // or under it.
-func (m *app) inboxBody(w, h, x0 int) []string {
+func (m *app) inboxBody(w, h int) []string {
 	rows := m.inboxRows()
 	at := m.inboxCursor(rows)
-	g := m.inboxLayout(rows, w, h, x0)
+	g := m.inboxLayout(rows, w, h, 0)
 	if !g.shown {
-		return m.inboxList(rows, at, w, h, x0, true)
+		return m.inboxList(rows, at, w, h, 0, true)
 	}
 	if g.side {
-		left := pad(m.inboxList(rows, at, g.listW, h, x0, true), h)
+		left := pad(m.inboxList(rows, at, g.listW, h, 0, true), h)
 		right := pad(m.reading(rows[at], g.pane), h)
 		out := make([]string, h)
 		for i := range out {
@@ -794,7 +701,7 @@ func (m *app) inboxBody(w, h, x0 int) []string {
 		}
 		return out
 	}
-	lines := pad(m.inboxList(rows, at, w, g.listH, x0, false), g.listH)[:g.listH]
+	lines := pad(m.inboxList(rows, at, w, g.listH, 0, false), g.listH)[:g.listH]
 	lines = append(lines, styleDim.Render(strings.Repeat("─", w)))
 	return append(lines, m.reading(rows[at], g.pane)...)
 }

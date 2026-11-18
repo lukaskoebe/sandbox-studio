@@ -9,13 +9,12 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 )
 
-// The detail of a running sandbox reads its ports, lists them as links while previews are on and
-// as numbers while they are off, and stops reading once it is left.
+// The Details tab of a running computer reads its ports, lists them as links while previews are
+// on and as numbers while they are off, and stops reading once it is left.
 func TestDetailListsThePorts(t *testing.T) {
-	m := sampleApp()
-	m, cmd := pressCmd(m, "enter")
-	if cmd == nil || !m.ports.busy || m.ports.sandbox != "sb1" {
-		t.Fatalf("enter reads no ports: %+v", m.ports)
+	m := openComputer(sampleApp(), "sb1", tabDetails)
+	if !m.ports.busy || m.ports.sandbox != "sb1" {
+		t.Fatalf("the Details tab reads no ports: %+v", m.ports)
 	}
 	if again := m.watchPorts(); again != nil {
 		t.Fatal("a second read started while one was under way")
@@ -40,10 +39,10 @@ func TestDetailListsThePorts(t *testing.T) {
 	}
 
 	m = press(m, "esc")
-	next, cmd = m.Update(portsTick{sandbox: "sb1"})
+	next, cmd := m.Update(portsTick{sandbox: "sb1"})
 	m = next.(*app)
 	if cmd != nil || m.ports.busy {
-		t.Fatalf("reads go on off the detail: busy %v", m.ports.busy)
+		t.Fatalf("reads go on off the Details tab: busy %v", m.ports.busy)
 	}
 }
 

@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 1   Activity   Settings                                                             ▲ 1 waiting for you · 12:00 
-────────────────────────────────━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────
-Activity · connections and decisions, newest first                                                        all network git agents memory  ←/→
-  Busiest hosts                    10 min    
-  nope.invalid                     ▁▁▁▁▁▁█▁▁▁   ● failed            
-  proxy.golang.org:443             ▁▁▁▁▁▁▁▁▁█   ● allowed           
-  registry.npmjs.org:443           ▁▁▁▁▁▁▁▁▁█   ● allowed           *.npmjs.org
-  tracker.example.com:443          ▁▁▁▁▁▁▁▁▁█   ● denied            tracker.example.com
-
-▌ just now blub         registry.npmjs.org:443                                           ● allowed           *.npmjs.org                    
-  20s ago  api-refactor proxy.golang.org:443                                             ● allowed           —                              
-  21s ago  api-refactor proxy.golang.org:443                                             ● Allowed           curated list                   
-  40s ago  blub         tracker.example.com:443                                          ● denied            tracker.example.com            
-  1m ago   blub         registry.npmjs.org:443                                           ● Allowed           *.npmjs.org                    
-  2m ago   api-refactor api.github.com:443                                               ● Allowed once      no rule                        
-  3m ago   blub         nope.invalid                                                     ● failed            —                              
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ◆ Studio          Default ▾  │ Activity                                                                                        ▲ 1 · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 1 │ Activity · connections and decisions, newest first                        all network git agents memory  ←/→
+                              │   Busiest hosts                    10 min                                                                   
+ TEAMMATES                    │   nope.invalid                     ▁▁▁▁▁▁█▁▁▁   ● failed                                                    
+▌ Iris frontend               │   proxy.golang.org:443             ▁▁▁▁▁▁▁▁▁█   ● allowed                                                   
+  Finn backend            ▲ 1 │   registry.npmjs.org:443           ▁▁▁▁▁▁▁▁▁█   ● allowed           *.npmjs.org                             
+  + New teammate              │   tracker.example.com:443          ▁▁▁▁▁▁▁▁▁█   ● denied            tracker.example.com                     
+                              │                                                                                                             
+ YOUR COMPUTERS               │ ▌ just now blub         registry.npmjs.org:443                     ● allowed           *.npmjs.org          
+  ◐ demo              booting │   20s ago  api-refactor proxy.golang.org:443                       ● allowed           —                    
+  + New computer              │   21s ago  api-refactor proxy.golang.org:443                       ● Allowed           curated list         
+                              │   40s ago  blub         tracker.example.com:443                    ● denied            tracker.example.com  
+ ENVIRONMENT                  │   1m ago   blub         registry.npmjs.org:443                     ● Allowed           *.npmjs.org          
+  Computers                 4 │   2m ago   api-refactor api.github.com:443                         ● Allowed once      no rule              
+  Network                 ▲ 1 │   3m ago   blub         nope.invalid                               ● failed            —                    
+  Secrets                     │                                                                                                             
+  Memory                      │                                                                                                             
+  Activity                    │                                                                                                             
+  , Settings              dev │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+                              │                                                                                                             
+──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 enter rule  ↑/k up  ←/→ kind │ / computer  r rules (browser) │ esc/q back  ? more

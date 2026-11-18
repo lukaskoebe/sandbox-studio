@@ -81,8 +81,9 @@ func TestSessionsAreListedInOrder(t *testing.T) {
 	if got := titles(m.sessionsOf(m.sandboxes[0])); got != "claude,main" {
 		t.Fatalf("blub's terminals, the agent's first: %v", got)
 	}
-	// Iris's rows: her agent, her threads of the last day, a row for the older ones, her terminals.
-	if got := titles(m.threadsOf("t1")); got != "claude,Fix the login form,Update the deploy notes,+ 4 older,main" {
+	// Iris's rows: her agent, her threads of the last day and a row for the older ones; her
+	// computers' shells are on their Terminal tabs.
+	if got := titles(m.threadsOf("t1")); got != "claude,Fix the login form,Update the deploy notes,+ 4 older" {
 		t.Fatalf("Iris: %v", got)
 	}
 	// A chat continued in a terminal is listed once, as its terminal.
@@ -121,12 +122,11 @@ func TestThreadsFollowTheWebsSidebar(t *testing.T) {
 		Approval:       store.Approval{ID: "p", SandboxID: "sb1", Kind: "chat.permission", Status: "pending"},
 		ChatPermission: &chat.PermissionPayload{ChatID: "asks"},
 	}}
-	m.screen, m.chats.id = screenChat, "on-show"
+	m.chats.on, m.chats.id = true, "on-show"
 	want := "elsewhere,new,running,in-the-terminal,asks,on-show,+ 3 older" // the day's third and fourth, and old
 	if got := titles(m.threadsOf("t1")); got != want {
 		t.Fatalf("Iris's threads:\n%v\nwant\n%v", got, want)
 	}
-	m.screen = screenHome
 	m.showOlder("t1", true)
 	if got := titles(m.threadsOf("t1")); !strings.HasSuffix(got, "on-show,old") || strings.Contains(got, "older") {
 		t.Fatalf("with the older ones: %v", got)
@@ -185,7 +185,9 @@ func TestAReadMarksFinishedSessionsDone(t *testing.T) {
 }
 
 func TestCursorWalksTheRows(t *testing.T) {
-	m := press(withSessions(sampleApp()), "j")
+	m := withSessions(sampleApp())
+	toSidebar(m)
+	m = press(m, "j", "j")
 	if x, ok := m.selectedSession(); !ok || x.title() != "claude" || m.selected().ID != "sb1" {
 		t.Fatalf("j from Iris: %+v", x)
 	}
@@ -193,12 +195,12 @@ func TestCursorWalksTheRows(t *testing.T) {
 	if x, ok := m.selectedSession(); !ok || x.title() != "Update the deploy notes" || m.selected().ID != "sb3" {
 		t.Fatalf("a thread selects its own computer: %+v, %s", x, m.selectedID())
 	}
-	m = press(m, "j", "j", "j")
+	m = press(m, "j", "j")
 	if _, ok := m.selectedSession(); ok || m.at != atMate || m.selected().ID != "sb2" {
 		t.Fatalf("j past Iris's rows lands on Finn: %v %q", m.at, m.mate)
 	}
 	m = press(m, "k")
-	if x, _ := m.selectedSession(); x.title() != "main" || m.selected().ID != "sb1" {
+	if x, _ := m.selectedSession(); x.kind != sessionOlder {
 		t.Fatalf("k returns to Iris's last row: %+v", x)
 	}
 	// A computer that goes away puts the cursor on a computer's own row.
@@ -208,30 +210,20 @@ func TestCursorWalksTheRows(t *testing.T) {
 	}
 }
 
-func TestNumbersEnterSessions(t *testing.T) {
-	m := withSessions(sampleApp())
-	m, cmd := pressCmd(m, "2")
-	if m.screen != screenChat || m.chats.id != "c1" || !m.chats.composing || m.chats.back != screenHome {
-		t.Fatalf("2 opens the chat with the composer: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
+// Opening a thread sees it: an agent's done mark goes. A thread that waits opens without its
+// composer, so its permission takes the keys; an idle one opens with it.
+func TestOpeningAThreadSeesIt(t *testing.T) {
+	m := openSession(t, withSessions(sampleApp()), "sb1", "claude")
+	if m.here.kind != placeThread || m.here.term != "claude" || m.sess.done["term/sb1/claude"] {
+		t.Fatalf("claude's thread: here %+v, done %v", m.here, m.sess.done)
 	}
-	if cmd == nil {
-		t.Fatal("2 did not load the chat")
+	m = openSession(t, withSessions(sampleApp()), "sb2", "Port the parser to go")
+	if m.chats.id != "c2" || m.chats.composing {
+		t.Fatalf("a waiting thread: chat %q, composing %v", m.chats.id, m.chats.composing)
 	}
-	m = press(m, "esc", "esc")
-	if m.screen != screenHome {
-		t.Fatalf("esc esc returns to Home: %v", m.screen)
-	}
-	m, cmd = pressCmd(m, "1")
-	if cmd == nil || m.sess.done["term/sb1/claude"] {
-		t.Fatalf("1 attaches claude and clears its done: cmd %v, done %v", cmd != nil, m.sess.done)
-	}
-	if x, _ := m.selectedSession(); x.title() != "claude" {
-		t.Fatalf("the cursor is not on claude: %+v", x)
-	}
-	// A blocked chat opens without the composer, so its permission takes the keys.
-	m, _ = pressCmd(withSessions(sampleApp()), "6")
-	if m.screen != screenChat || m.chats.id != "c2" || m.chats.composing {
-		t.Fatalf("6: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
+	m = openSession(t, withSessions(sampleApp()), "sb1", "Fix the login form")
+	if m.chats.id != "c1" || !m.chats.composing {
+		t.Fatalf("an idle thread: chat %q, composing %v", m.chats.id, m.chats.composing)
 	}
 }
 
@@ -241,13 +233,15 @@ func TestOlderRowShowsTheOlderThreads(t *testing.T) {
 		t.Fatalf("the cursor is not on the older row: %+v", x)
 	}
 	m = press(m, "enter")
-	if got := len(m.threadsOf("t1")); got != 8 {
+	if got := len(m.threadsOf("t1")); got != 7 {
 		t.Fatalf("Iris lists %d rows after enter on the older row", got)
 	}
 }
 
 func TestTabFindsTheSessionsThatWait(t *testing.T) {
-	m := press(withSessions(sampleApp()), "tab")
+	m := withSessions(sampleApp())
+	toSidebar(m)
+	m = press(m, "tab")
 	if x, _ := m.selectedSession(); x.title() != "codex" {
 		t.Fatalf("tab goes to the first blocked session: %+v", x)
 	}
@@ -274,7 +268,7 @@ func TestStartAgentNeedsARunningSandboxWithATeammate(t *testing.T) {
 		t.Fatalf("demo: %q", m.notice.text)
 	}
 	m.cursor = 2
-	if cmd := m.startAgent(m.selected()); cmd != nil || m.notice.text != "Start docs-site first, with s." {
+	if cmd := m.startAgent(m.selected()); cmd != nil || m.notice.text != "Start docs-site first: Details, then s." {
 		t.Fatalf("docs-site: %q", m.notice.text)
 	}
 	m.cursor = 0

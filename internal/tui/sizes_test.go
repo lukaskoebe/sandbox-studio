@@ -32,26 +32,62 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 		waitFor(t, "the agent's screen", func() bool { return strings.Contains(strings.Join(m.pane.term.lines(80, 10), ""), "codex is ready") })
 		return m
 	}
+	terminal := func(t *testing.T, m *app) *app {
+		m.open(place{kind: placeComputer, sandbox: "sb2"})
+		m.comp.tab, m.comp.term = tabTerminal, "codex"
+		return live(t, settle(m))
+	}
+	agent := func(t *testing.T, m *app) *app { return live(t, openSession(t, m, "sb2", "codex")) }
 	states := map[string]func(t *testing.T, m *app) *app{
-		"home":      func(_ *testing.T, m *app) *app { return m },
-		"dashboard": func(_ *testing.T, m *app) *app { return press(m, "j", "j", "j", "j") },
-		"terminal":  func(t *testing.T, m *app) *app { return live(t, press(m, "j", "j", "j", "j", "j")) },
+		"home": func(_ *testing.T, m *app) *app { return m },
+		"reading computer": func(t *testing.T, m *app) *app {
+			m.goHome()
+			for _, r := range m.inboxRows() {
+				if r.sb != "" {
+					m.inbox.cursor = r.id
+					return m
+				}
+			}
+			t.Fatal("Home's list has no computer")
+			return m
+		},
+		"drawer": func(_ *testing.T, m *app) *app {
+			m.drawer, m.focus = true, focusSidebar
+			return m
+		},
+		"thread": func(_ *testing.T, m *app) *app { return press(sampleChat(m), "p", "h", "i") },
+		"thread+card": func(t *testing.T, m *app) *app {
+			sampleApprovals(m)
+			return openSession(t, m, "sb2", "Port the parser to go")
+		},
+		"terminal": terminal,
 		"typing": func(t *testing.T, m *app) *app {
-			m = live(t, press(m, "j", "j", "j", "j", "j"))
+			m = terminal(t, m)
 			m.pane.focus = true
 			return m
 		},
 		"zoomed": func(t *testing.T, m *app) *app {
-			m = live(t, press(m, "j", "j", "j", "j", "j"))
-			m.pane.focus, m.pane.zoom = true, true
+			m = terminal(t, m)
+			m.pane.focus, m.zoom = true, true
+			return m
+		},
+		"zoomed thread": func(t *testing.T, m *app) *app {
+			m = agent(t, m)
+			m.zoom = true
 			return m
 		},
 		"banner": func(t *testing.T, m *app) *app {
-			m = live(t, press(m, "j", "j", "j", "j", "j"))
+			m = agent(t, m)
 			m.pane.focus = true
 			return press(m, "alt+a")
 		},
-		"chat":      func(_ *testing.T, m *app) *app { return press(sampleChat(m), "p", "h", "i") },
+		"flipped": func(t *testing.T, m *app) *app {
+			m = agent(t, m)
+			m.flip = true
+			return m
+		},
+		"details":   func(_ *testing.T, m *app) *app { return openComputer(m, "sb2", tabDetails) },
+		"mate":      func(_ *testing.T, m *app) *app { m.open(place{kind: placeMate, mate: "t1"}); return m },
 		"asks":      func(_ *testing.T, m *app) *app { return pendingAsks(sampleChat(m), `{"type":"object"}`) },
 		"inbox":     func(_ *testing.T, m *app) *app { sampleApprovals(m); return press(onCard(m, 2), "right") },
 		"git":       func(_ *testing.T, m *app) *app { samplePush(m); return press(m, "g") },
@@ -68,15 +104,15 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 			t.Fatal("Home's list has no thread")
 			return m
 		},
-		"activity": func(_ *testing.T, m *app) *app { return press(sampleActivity(m), "l") },
-		"detail":   func(_ *testing.T, m *app) *app { return press(m, "enter") },
-		"delete":   func(_ *testing.T, m *app) *app { return press(m, "d") },
-		"help":     func(_ *testing.T, m *app) *app { return press(m, "?") },
-		"new":      func(_ *testing.T, m *app) *app { return press(m, "n") },
-		"envs":     func(_ *testing.T, m *app) *app { return press(m, "e") },
+		"activity":  func(_ *testing.T, m *app) *app { return press(sampleActivity(m), "l") },
+		"computers": func(_ *testing.T, m *app) *app { m.openComputers(); return m },
+		"delete":    func(_ *testing.T, m *app) *app { return press(openComputer(m, "sb2", tabDetails), "d") },
+		"help":      func(_ *testing.T, m *app) *app { return press(m, "?") },
+		"new":       func(_ *testing.T, m *app) *app { return press(m, "+") },
+		"envs":      func(_ *testing.T, m *app) *app { return press(m, "e") },
 	}
 	sizes := [][2]int{}
-	for _, w := range []int{0, 1, 2, 3, 5, 8, 12, 20, 33, 40, 60, 79, 80, 99, 100, 101, 120, 140} {
+	for _, w := range []int{0, 1, 2, 3, 5, 8, 12, 20, 33, 40, 60, 79, 80, 99, 100, 101, 119, 120, 121, 140} {
 		for _, h := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 24, 40} {
 			sizes = append(sizes, [2]int{w, h})
 		}

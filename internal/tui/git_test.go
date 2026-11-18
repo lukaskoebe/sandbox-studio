@@ -42,8 +42,8 @@ func TestGitScreenListsThePushesWaitingFirst(t *testing.T) {
 			t.Errorf("the Git screen lacks %q:\n%s", want, out)
 		}
 	}
-	if m.activeTab() != tabActivity {
-		t.Errorf("the header marks %v", m.activeTab())
+	if m.crumb() != "Git" {
+		t.Errorf("the crumb says %q", m.crumb())
 	}
 }
 
@@ -62,7 +62,7 @@ func TestGitScreenReviewsAndReturns(t *testing.T) {
 	if got := ansi.Strip(m.keyBar(80, 0)); strings.Contains(got, "reject") {
 		t.Errorf("the key bar offers a decision on a decided push: %q", got)
 	}
-	if m = press(m, "esc", "esc"); m.screen != screenHome {
+	if m = press(m, "esc", "esc"); m.screen != screenMain {
 		t.Errorf("esc from the Git screen returns to %v", m.screen)
 	}
 }

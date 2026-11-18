@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 9   Activity   Settings                                                             ▲ 9 waiting for you · 12:00 
-───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ◆ Studio          Default ▾  │ Home                                                                            ▲ 9 waiting for you · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ▌ Home                    ▲ 9 │  WAITING FOR YOU · 9                          │ ± GIT PUSH  Push 2 commits to feature/login on GitHub/acme/…
-                              │ ▌± Finn  Push 2 commits t…  api-refactor  30s │ 2 files  +7 −1  █████████████▒▒
- TEAMMATES                    │  ⇅ Finn  api-refactor want…  pypi.org +2   1m │ 
-  Iris frontend           ▲ 7 │  ⇅ Iris  blub wants regist…  *.npmjs.org  10m │   Repository GitHub/acme/web
-  Finn backend            ▲ 2 │  ▣ Iris  click “Buy now” on https…  blub   1m │   Computer   api-refactor
-  + New teammate              │  ▣ Iris  Fill SHOP_PASSWORD on ht…  blub   2m │   Branch     feature/login · new branch
-                              │  ◈ Iris  Iris wants to share a fa…  Iris   3m │   Change     ∅ → a4c2f0d · 2 files +7 −1
- YOUR COMPUTERS               │  ◈ Iris  Two memory facts contradict …     4m │ 
-  ◐ demo              booting │  ? Iris  Asks: npm test  Fix the login …   5m │ Nothing reaches the forge until you approve; the agent sees
-  + New computer              │  ▣ Iris  Iris asks for the browse…  blub   6m │ a rejection on its next fetch.
-                              │                                               │ 
- ENVIRONMENT                  │  QUIET                                        │ Commits (2)
+                              │ ▌± Finn  Push 2 commits t…  api-refactor  30s │ 2 files  +7 −1  █████████████▒▒                             
+ TEAMMATES                    │  ⇅ Finn  api-refactor want…  pypi.org +2   1m │                                                             
+  Iris frontend           ▲ 7 │  ⇅ Iris  blub wants regist…  *.npmjs.org  10m │   Repository GitHub/acme/web                                
+  Finn backend            ▲ 2 │  ▣ Iris  click “Buy now” on https…  blub   1m │   Computer   api-refactor                                   
+  + New teammate              │  ▣ Iris  Fill SHOP_PASSWORD on ht…  blub   2m │   Branch     feature/login · new branch                     
+                              │  ◈ Iris  Iris wants to share a fa…  Iris   3m │   Change     ∅ → a4c2f0d · 2 files +7 −1                    
+ YOUR COMPUTERS               │  ◈ Iris  Two memory facts contradict …     4m │                                                             
+  ◐ demo              booting │  ? Iris  Asks: npm test  Fix the login …   5m │ Nothing reaches the forge until you approve; the agent sees 
+  + New computer              │  ▣ Iris  Iris asks for the browse…  blub   6m │ a rejection on its next fetch.                              
+                              │                                               │                                                             
+ ENVIRONMENT                  │  QUIET                                        │ Commits (2)                                                 
   Computers                 4 │  ◐ demo  your computer · booting    base      │   a4c2f0d Test that enter submits the login f… Finn · 2m ago
   Network                 ▲ 2 │                                               │   77d0b2c Submit the login form on enter       Finn · 5m ago
-  Secrets                     │  EARLIER TODAY                                │ 
-  Memory                      │  Loading…                                     │ Diff
-  Activity                    │                                               │ diff --git a/src/login.tsx b/src/login.tsx
-  , Settings              dev │                                               │ index 3b18e51..a4c2f0d 100644
-                              │                                               │ --- a/src/login.tsx
-                              │                                               │ +++ b/src/login.tsx
-                              │                                               │ @@ -10,7 +10,7 @@ export function Login() {
-                              │                                               │    return (
-                              │                                               │      <form onSubmit={submit}>
-                              │                                               │        <input name="user" />
-                              │                                               │ -      <div onClick={submit}>Sign in</div>
-                              │                                               │ +      <button type="submit">Sign in</button>
-                              │                                               │      </form>
-                              │                                               │    )
-                              │                                               │  }
-                              │                                               │ diff --git a/src/login.test.tsx b/src/login.test.tsx
-                              │                                               │ new file mode 100644
-                              │                                               │ --- /dev/null
-                              │                                               │ +++ b/src/login.test.tsx
-                              │                                               │ @@ -0,0 +1,6 @@
-                              │                                               │ +import { render } from "@testing-library/react"
+  Secrets                     │  EARLIER TODAY                                │                                                             
+  Memory                      │  Loading…                                     │ Diff                                                        
+  Activity                    │                                               │ diff --git a/src/login.tsx b/src/login.tsx                  
+  , Settings              dev │                                               │ index 3b18e51..a4c2f0d 100644                               
+                              │                                               │ --- a/src/login.tsx                                         
+                              │                                               │ +++ b/src/login.tsx                                         
+                              │                                               │ @@ -10,7 +10,7 @@ export function Login() {                 
+                              │                                               │    return (                                                 
+                              │                                               │      <form onSubmit={submit}>                               
+                              │                                               │        <input name="user" />                                
+                              │                                               │ -      <div onClick={submit}>Sign in</div>                  
+                              │                                               │ +      <button type="submit">Sign in</button>               
+                              │                                               │      </form>                                                
+                              │                                               │    )                                                        
+                              │                                               │  }                                                          
+                              │                                               │ diff --git a/src/login.test.tsx b/src/login.test.tsx        
+                              │                                               │ new file mode 100644                                        
+                              │                                               │ --- /dev/null                                               
+                              │                                               │ +++ b/src/login.test.tsx                                    
+                              │                                               │ @@ -0,0 +1,6 @@                                             
+                              │                                               │ +import { render } from "@testing-library/react"            
 ──────────────────────────────┴───────────────────────────────────────────────┴─────────────────────────────────────────────────────────────
-y approve and push  r request changes  n reject  enter review  tab next  + new computer  , settings  \ list  l activity  e env  ? more …
+y approve and push  r request changes  n reject  enter review  tab next  + new computer  l activity  , settings  e env  \ sidebar  ? more …

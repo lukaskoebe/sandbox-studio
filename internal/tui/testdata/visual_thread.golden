@@ -1,0 +1,23 @@
+ ≡  [1mIris › Fix the login form[m                                    [36m●[m blub ▾[2m · [m[1;38;5;221m▲ 4[m 
+[2m────────────────────────────────────────────────────────────────────────────────[m
+  ▸ ≡ Read src/login.tsx                                                  [38;5;77m●[m done
+  ▸ ✎ Edit src/login.tsx                                                  [38;5;77m●[m done
+                                                                                
+[1mFixed[m                                                                           
+                                                                                
+The form used a [36mdiv[m as its button, so enter did nothing. It is a real submit    
+button now:                                                                     
+                                                                                
+[2m  │ tsx[m                                                                         
+[2m  │ [m<button type="submit">Sign in</button>                                      
+                                                                                
+[2m•[m Enter submits the form.                                                       
+[2m•[m The button is focusable.                                                      
+[36m╭──────────────────────────────────────────────────────────────────────────────╮[m
+[38;5;74m┃[m [1;38;5;74m⇅ NETWORK[m   blub wants [1mregistry.npmjs.org:443[m              [2mDefault · 10m ago[m [36m│[m
+[38;5;74m┃[m [2mpattern [m*.npmjs.org[2m ‹p›[m   [2mscope [mIris's computers[2m ‹s›[m   [2mports [mdefault[2m ‹x›[m     [36m│[m
+[38;5;74m┃[m [1;48;5;237m y [m Allow  [1;48;5;237m n [m Deny  [1;48;5;237m o [m Once  [1;48;5;237m O [m Deny once  [1;48;5;237m 1 [m 1 hour  [1;48;5;237m i [m Ignore         [36m│[m
+[36m╰──────────────────────────────────────────────────────────────────────────────╯[m
+[2;48;5;237m › Write to Iris…                                                   enter write [m
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1my[m [2mallow[m  [1mn[m [2mdeny[m  [1mo[m [2mallow once[m  [1menter[m [2mwrite[m  [1m↑/↓[m [2mtools[m  [1mpgup[m [2mscroll[m[2m …[m

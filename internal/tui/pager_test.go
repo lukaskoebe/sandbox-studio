@@ -77,7 +77,7 @@ func TestGitCardOpensThePager(t *testing.T) {
 	m := sampleApp()
 	samplePush(m)
 	m = press(onCard(m, 0), "y")
-	if m.screen != screenHome || m.inbox.pushing != "g1" || !strings.Contains(shown(m), "without opening the diff?") {
+	if m.screen != screenMain || m.inbox.pushing != "g1" || !strings.Contains(shown(m), "without opening the diff?") {
 		t.Fatalf("y on the push's row: screen %v, asking %q\n%s", m.screen, m.inbox.pushing, shown(m))
 	}
 	m = press(m, "n")
@@ -104,7 +104,7 @@ func TestGitCardOpensThePager(t *testing.T) {
 	if m.pager.scroll != 0 {
 		t.Fatalf("g: %d", m.pager.scroll)
 	}
-	if m = press(m, "esc"); m.screen != screenHome {
+	if m = press(m, "esc"); m.screen != screenMain {
 		t.Fatalf("esc returns to %v", m.screen)
 	}
 }
@@ -116,7 +116,7 @@ func TestPagerDecides(t *testing.T) {
 		m = press(onCard(m, 0), "enter")
 		next, cmd := m.Update(tea.KeyPressMsg{Code: rune(k[0]), Text: k})
 		m = next.(*app)
-		if cmd == nil || m.screen != screenHome {
+		if cmd == nil || m.screen != screenMain {
 			t.Fatalf("%s: cmd %v, screen %v", k, cmd != nil, m.screen)
 		}
 	}
@@ -141,7 +141,7 @@ func TestPagerForcePushesARewrite(t *testing.T) {
 		t.Fatalf("y on a rewrite: screen %v, notice %q", m.screen, m.notice.text)
 	}
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'F', Text: "F"})
-	if m = next.(*app); cmd == nil || m.screen != screenHome {
+	if m = next.(*app); cmd == nil || m.screen != screenMain {
 		t.Fatalf("F: cmd %v, screen %v", cmd != nil, m.screen)
 	}
 }
@@ -198,7 +198,7 @@ func TestPagerOpensAPullRequestLater(t *testing.T) {
 		t.Errorf("key bar: %s", bar)
 	}
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'o', Text: "o"})
-	if m = next.(*app); cmd == nil || m.screen != screenHome {
+	if m = next.(*app); cmd == nil || m.screen != screenMain {
 		t.Fatalf("o: cmd %v, screen %v", cmd != nil, m.screen)
 	}
 }

@@ -1,0 +1,23 @@
+ ≡  Finn › desk                                            ● api-refactor · ▲ 1 
+────────────────────────────────────────────────────────────────────────────────
+ Terminal   Details                                                   ● running 
+────────────━━━━━━━─────────────────────────────────────────────────────────────
+api-refactor                                                         ● Running  
+                                                                                
+  Teammate   Finn                                                               
+  Template   go@2                                                               
+  Resources  2 CPUs, 2048 MiB of memory                                         
+  Uptime     up 12m                                                             
+  Requests   1 request waiting                                                  
+  ID         sb2                                                                
+  Ports      :3000  http://3000-sb2.localhost:7878/                             
+             :8080  http://8080-sb2.localhost:7878/                             
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+s start/stop  z suspend  t terminal  d delete  l activity  f fork  h checkpoints

@@ -23,20 +23,13 @@ var (
 	keyHelp      = key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help"))
 	keyFilter    = key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter"))
 	keyEnv       = key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "env"))
-	keyNew       = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new"))
 	keyLifecycle = key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start/stop"))
 	keySuspend   = key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "suspend"))
 	keyDelete    = key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete"))
-	keyChat      = key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "thread"))
-	keyChatNew   = key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "new thread"))
-	keyAgent     = key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "new agent"))
-	keyNumber    = key.NewBinding(key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9"), key.WithHelp("1-9", "jump in"))
 	keyWaiting   = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next waiting"))
-	keyEnter     = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "go in"))
 	keyYes       = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "delete"))
 	keyNo        = key.NewBinding(key.WithKeys("n", "esc"), key.WithHelp("n", "keep"))
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
-	keyTerminal  = key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "terminal"))
 	keyActivity  = key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "activity"))
 	keyAllow     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow"))
 	keyDeny      = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "deny"))
@@ -53,8 +46,9 @@ var (
 	keySplit     = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "review one by one"))
 )
 
-// key routes a key press to the mode and screen the user is in. While Home's pane has the keys,
-// they go to it, ctrl+c too: it interrupts the agent there, not the TUI.
+// key routes a key press to the mode and screen the user is in: a prompt or a confirmation
+// first, then a shell with the keys (ctrl+c too: it interrupts the agent there, not the TUI),
+// the composer, the full screens, and in the frame the part of it that has the cursor.
 func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if !m.filtering && m.typing == nil && m.confirm == nil && m.paneFocused() {
 		return m.paneKey(msg)
@@ -73,14 +67,13 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.restoreKey(msg)
 	}
 	switch m.screen {
-	case screenHome:
-		return m.homeKey(msg)
-	case screenDetail:
-		return m.detailKey(msg)
+	case screenMain:
+		if m.composerKeys() {
+			return m.composeKey(msg)
+		}
+		return m.mainKey(msg)
 	case screenEnvs:
 		return m.envsKey(msg)
-	case screenChat:
-		return m.chatKey(msg)
 	case screenActivity:
 		return m.activityKey(msg)
 	case screenEntry:
@@ -105,143 +98,33 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.inboxKeys() {
-		return m.inboxKey(msg)
+// composerKeys reports whether the composer has the keys: it is open on the thread or the
+// teammate's home in the main column, which has the cursor.
+func (m *app) composerKeys() bool {
+	c := &m.chats
+	if !c.on || !c.composing || c.reading || m.sidebarKeys() || m.focus != focusMain {
+		return false
 	}
-	if cmd, ok := m.bannerKey(msg); ok {
-		return m, cmd
-	}
-	if key.Matches(msg, keyUndo) && m.undoable() != nil {
-		return m, m.undo()
-	}
-	if cmd, ok := m.mateKey(msg); ok {
-		return m, cmd
-	}
-	_, inPane := m.paneTarget()
-	switch {
-	case key.Matches(msg, keyQuit):
-		return m, tea.Quit
-	case key.Matches(msg, keySettings):
-		return m, m.openSettings()
-	case key.Matches(msg, keyUp):
-		m.moveRow(-1)
-	case key.Matches(msg, keyDown):
-		m.moveRow(1)
-	case key.Matches(msg, keyNumber):
-		return m, m.numbered(int(msg.String()[0] - '0'))
-	case key.Matches(msg, keyWaiting):
-		m.nextWaiting()
-	case key.Matches(msg, keyZoom) && inPane:
-		m.pane.zoom = !m.pane.zoom
-	case key.Matches(msg, keyToList):
-		m.goHome() // the list of Home's rows takes the keys
-	case key.Matches(msg, keyOpen) && m.at == atHome:
-		m.inbox.sidebar = false
-	case key.Matches(msg, keyOpen) && inPane:
-		return m, m.focusPane()
-	case key.Matches(msg, keyOpen) && m.at == atPlace:
-		return m, m.openPlace(m.rowPlace)
-	case key.Matches(msg, keyOpen) && m.at == atAction:
-		return m, m.rowActionDo(m.rowAction)
-	case key.Matches(msg, keyOpen):
-		if _, ok := m.selectedSession(); ok {
-			return m, m.enterSession()
-		}
-		if m.selected() != nil {
-			m.screen, m.detailBack, m.detailHome = screenDetail, screenHome, nil
-		}
-	case key.Matches(msg, keyNew):
-		if m.env.ID != "" {
-			return m, m.openNew()
-		}
-	case key.Matches(msg, keyLifecycle):
-		return m, m.toggle(m.selected())
-	case key.Matches(msg, keySuspend):
-		return m, m.suspend(m.selected())
-	case key.Matches(msg, keyFork):
-		m.askFork(m.selected())
-	case key.Matches(msg, keyCheckpoints):
-		return m, m.openCheckpoints(m.selected())
-	case key.Matches(msg, keyDelete):
-		m.askDelete(m.selected())
-	case key.Matches(msg, keyChat):
-		return m, m.openChats(m.selected())
-	case key.Matches(msg, keyChatNew):
-		return m, m.newChat(m.selected())
-	case key.Matches(msg, keyAgent):
-		return m, m.startAgent(m.selected())
-	case key.Matches(msg, keyEnv):
-		m.openEnvs()
-	case key.Matches(msg, keyFilter):
-		m.startFilter()
-	case key.Matches(msg, keyGit):
-		return m, m.openGit()
-	case key.Matches(msg, keyTerminal):
-		return m, m.attachTo(m.selected(), terminalName)
-	case key.Matches(msg, keyActivity):
-		return m, m.openActivity("")
-	case key.Matches(msg, keyEsc):
-		if m.filter != "" {
-			m.filter = ""
-			m.reselect(m.selectedID())
-			return m, nil
-		}
-		m.goHome()
-	case key.Matches(msg, keyHelp):
-		m.openHelp()
-	}
-	return m, nil
-}
-
-func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, keyBack):
-		m.leaveDetail()
-	case key.Matches(msg, keyLifecycle):
-		return m, m.toggle(m.selected())
-	case key.Matches(msg, keySuspend):
-		return m, m.suspend(m.selected())
-	case key.Matches(msg, keyFork):
-		m.askFork(m.selected())
-	case key.Matches(msg, keyCheckpoints):
-		return m, m.openCheckpoints(m.selected())
-	case key.Matches(msg, keyDelete):
-		m.askDelete(m.selected())
-	case key.Matches(msg, keyChat):
-		return m, m.openChats(m.selected())
-	case key.Matches(msg, keyChatNew):
-		return m, m.newChat(m.selected())
-	case key.Matches(msg, keyAgent):
-		return m, m.startAgent(m.selected())
-	case key.Matches(msg, keyActivity):
-		if sb := m.selected(); sb != nil {
-			return m, m.openActivity(sb.Name)
-		}
-	case key.Matches(msg, keyGit):
-		return m, m.openGit()
-	case key.Matches(msg, keyTerminal):
-		return m, m.attachTo(m.selected(), terminalName)
-	case key.Matches(msg, keyHelp):
-		m.openHelp()
-	}
-	return m, nil
+	k := m.mainPane()
+	return k == paneThread || k == paneMateHome
 }
 
 func (m *app) envsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keyCancel):
-		m.screen = screenHome
+		m.screen = screenMain
 	case key.Matches(msg, keyUp):
 		m.picker = max(m.picker-1, 0)
 	case key.Matches(msg, keyDown):
 		m.picker = min(m.picker+1, max(len(m.envs)-1, 0))
 	case key.Matches(msg, keyChoose):
-		m.screen = screenHome
+		m.screen = screenMain
 		if m.picker < len(m.envs) && m.envs[m.picker].ID != m.env.ID {
 			m.env = m.envs[m.picker]
 			m.sandboxes, m.loaded, m.cursor, m.sub, m.filter = nil, false, 0, -1, ""
 			m.at, m.mate = atHome, ""
+			m.stopChat()
+			m.goHome()
 			return m, m.loadSandboxes()
 		}
 	}
@@ -365,7 +248,19 @@ func (m *app) openEnvs() {
 
 // openHelp lists the keys of the screen on show. Any key returns to it.
 func (m *app) openHelp() {
-	m.helpBack, m.helpInbox = m.screen, m.inboxKeys()
+	m.helpBack, m.helpPart = m.screen, ""
+	if m.screen == screenMain && !m.sidebarKeys() {
+		switch {
+		case m.inboxKeys():
+			m.helpPart = "home"
+		case m.focus == focusSide, m.mainPane() == paneComputer, m.here.term != "":
+			m.helpPart = "computer"
+		case m.mainPane() == paneMateHome:
+			m.helpPart = "mate"
+		case m.mainPane() == paneThread:
+			m.helpPart = "thread"
+		}
+	}
 	m.screen = screenHelp
 }
 
@@ -394,14 +289,10 @@ func (m *app) bindings() []key.Binding {
 	switch m.screen {
 	case screenSettings:
 		return []key.Binding{keyUp, keyOpen, keyActivity, keyBack, keyHelp}
-	case screenDetail:
-		return m.detailBindings()
 	case screenEnvs:
 		return []key.Binding{keyUp, keyChoose, keyCancel}
 	case screenHelp:
 		return []key.Binding{keyBack}
-	case screenChat:
-		return m.chatBindings()
 	case screenActivity, screenEntry:
 		return m.activityBindings()
 	case screenPager:
@@ -418,42 +309,50 @@ func (m *app) bindings() []key.Binding {
 	if m.paneFocused() {
 		return m.paneBindings()
 	}
-	if m.inboxKeys() {
-		return m.inboxBindings()
+	if m.composerKeys() {
+		return m.chatBindings()
+	}
+	if m.sidebarKeys() {
+		return m.sidebarBindings()
 	}
 	if b := m.bannerBindings(); b != nil {
-		return b
+		return b // the banner has the keys: esc gives them back
 	}
-	if m.at == atHome {
-		return []key.Binding{keyOpen, keyUp, keyNumber, keyWaiting, keyToList, keyHelp, keyQuit, keySettings, keyActivity, keyEnv}
-	}
-	if m.at == atMate {
-		return m.mateBindings()
-	}
-	if m.at == atPlace || m.at == atAction {
-		return []key.Binding{keyOpen, keyUp, keyNumber, keyWaiting, keyHelp, keyQuit, keySettings, keyActivity, keyEnv}
-	}
-	if x, ok := m.paneTarget(); ok {
-		bindings := []key.Binding{keyFocus, keyNumber, keyWaiting}
-		if c, waiting := m.paneCard(x); waiting && bannerKeys(c) {
-			bindings = append(bindings, keyAllow, keyOnce, keyDeny, keyLeft)
-		} else if waiting {
-			bindings = append(bindings, keyReviewIt)
+	var bindings []key.Binding
+	switch {
+	case m.focus == focusSide && m.sidePane() == paneComputer, m.mainPane() == paneComputer:
+		bindings = m.computerBindings()
+		if !m.hasSide() || m.focus != focusSide && m.layoutFor(m.width).side > 0 {
+			bindings = append(bindings, keyBack)
 		}
-		return append(bindings, keyToList, keyHelp, keyQuit, keyZoom, keyAgent, keyChatNew)
+	case m.mainPane() == paneHomeList:
+		return append(m.inboxBindings(), keySidebarTo)
+	case m.mainPane() == paneMateHome:
+		bindings = m.mateBindings()
+	case m.here.term != "":
+		if sb, ok := m.sandboxByID(m.here.sandbox); ok {
+			bindings = m.terminalBindings(sb)
+		}
+		if m.hasSide() {
+			bindings = append(bindings, keyToSide)
+		}
+		bindings = append(bindings, keyBack)
+	default:
+		bindings = m.threadBindings()
 	}
-	if _, ok := m.selectedSession(); ok {
-		return []key.Binding{keyEnter, keyNumber, keyWaiting, keyToList, keyHelp, keyQuit, keyAgent, keyChatNew}
-	}
-	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyToList, keyTerminal, keyChat, keyHelp, keyQuit}
+	return append(bindings, keySidebarTo, keyHelp)
 }
 
-// detailBindings are the keys the key bar shows on a sandbox's detail: suspend only while it runs.
-// Back and help come before the keys that fit on a wider terminal only; help lists them all.
-func (m *app) detailBindings() []key.Binding {
-	bindings := []key.Binding{keyTerminal, keyLifecycle, keyDelete, keyChat, keyActivity, keyBack, keyHelp}
-	if sb := m.selected(); sb != nil && phaseOf(*sb) == phaseReady {
-		bindings = append(bindings, keySuspend)
+// sidebarBindings are the keys the key bar shows while the sidebar has the cursor.
+func (m *app) sidebarBindings() []key.Binding {
+	bindings := []key.Binding{keyOpen, keyUp}
+	if m.at == atMate || m.at == atThread {
+		bindings = append(bindings, keyNewThread, keyOlder)
+	} else {
+		bindings = append(bindings, keyNewComputer)
 	}
-	return append(bindings, keyCheckpoints, keyFork)
+	if m.undoable() != nil {
+		bindings = append(bindings, keyUndo)
+	}
+	return append(bindings, keyWaiting, keySidebarTo, keyHelp, keyQuit, keyFilter, keySettings, keyActivity, keyEnv)
 }

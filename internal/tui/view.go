@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -26,92 +25,34 @@ func (m *app) View() tea.View {
 	return v
 }
 
-// bodyTop is the row the body starts on: under the header and its rule.
+// bodyTop is the row the body starts on: under the crumb row and its rule.
 const bodyTop = 2
 
-// frame lays the screen out in the terminal's size: a header and a rule, the body, a rule, the
-// key bar and the notice line. The body gets the rows the others leave. Drawing it also records
-// where the rows lead, for the mouse.
+// frame lays the screen out in the terminal's size: the crumb row and a rule, the sidebar and
+// the body, a rule, the key bar and the notice line (frame.go). Drawing it also records where
+// the rows lead, for the mouse.
 func (m *app) frame() string {
 	w, h := m.size()
 	m.keys.SetWidth(w)
 	m.mouse.rows = m.mouse.rows[:0]
 	m.mouse.keys = m.mouse.keys[:0]
-	m.mouse.tabs = nil
-	rule := styleDim.Render(strings.Repeat("─", w))
-	head, top := m.header(w), rule
-	if !m.look.plain && w > defaultWidth {
-		head, m.mouse.tabs = m.tabHeader(w)
-		top = m.tabRule(w, m.mouse.tabs)
+	lines := m.mainFrame(w, h)
+	if !m.shellZoomed() {
+		lines = append(lines, m.keyBar(w, len(lines)), m.noticeLine(w))
 	}
-	bottom := rule
-	if cols := m.paneColumns(w); len(cols) > 0 {
-		cells := []rune(strings.Repeat("─", w))
-		for _, c := range cols {
-			if c > 0 && c < w {
-				cells[c] = '┴'
-			}
-		}
-		bottom = styleDim.Render(string(cells))
-	}
-	lines := []string{head, top}
-	lines = append(lines, pad(m.body(w, max(h-5, 1)), max(h-5, 1))...)
-	if box := m.toastBox(w); box != nil && len(box) <= max(h-5, 1) {
-		overlay(lines, box, bodyTop, w)
-	}
-	lines = append(lines, bottom)
-	lines = append(lines, m.keyBar(w, len(lines)), m.noticeLine(w))
 	for i, line := range lines {
 		lines[i] = lipgloss.NewStyle().MaxWidth(w).Render(line)
 	}
 	return strings.Join(lines, "\n")
 }
 
-// header is the product, the environment on show, and the approvals waiting in every
-// environment, which count from every screen. The visual look marks them in the waiting color;
-// on a terminal wider than 80 columns it draws the tab header instead.
-func (m *app) header(w int) string {
-	left := styleBold.Render("Sandbox Studio") + styleDim.Render(" · ") + m.env.Name
-	right := styleDim.Render("nothing waits for you")
-	if n := m.needCount(); n > 0 {
-		right = m.waitingMark(fmt.Sprintf("▲ %d waiting for you", n))
-	}
-	return spread(left, m.sessionsHeader()+right, w)
-}
-
-// paneColumns are the columns of the lines between the panes of the screen on show, none when it
-// has one pane: Home's sidebar and pane, and the git review's files and diff, on wide terminals.
-func (m *app) paneColumns(w int) []int {
-	switch {
-	case m.screen == screenHome && m.homeSplit(w) && !m.zoomed():
-		cols := []int{sidebarWidth(w)}
-		if x, ok := m.inboxColumn(); ok {
-			cols = append(cols, x)
-		}
-		return cols
-	case m.screen == screenHome && !m.zoomed():
-		if x, ok := m.inboxColumn(); ok {
-			return []int{x}
-		}
-	case m.screen == screenComputers && m.computersSplit(w):
-		return []int{sidebarWidth(w)}
-	case m.screen == screenPager && m.pagerSplit(w):
-		return []int{pagerListWidth(w)}
-	}
-	return nil
-}
-
 // body is the screen's lines, at most h of them.
 func (m *app) body(w, h int) []string {
 	switch m.screen {
-	case screenDetail:
-		return m.detailBody(w, h)
 	case screenEnvs:
 		return m.envsBody(w, h)
 	case screenHelp:
 		return m.helpBody()
-	case screenChat:
-		return m.chatBody(w, h)
 	case screenActivity:
 		return m.activityBody(w, h)
 	case screenEntry:
@@ -159,7 +100,7 @@ func (m *app) noticeLine(w int) string {
 	case m.checkpoints.restoring != nil && m.screen == screenCheckpoints:
 		return styleBold.Render("Restore "+m.checkpointSandbox().Name+" to "+m.checkpoints.restoring.Name+"?") +
 			styleDim.Render(" What changed since is lost.  ") + m.confirmRow("restore:"+m.checkpoints.restoring.ID, "Restore")
-	case m.inbox.pushing != "" && m.inboxShows():
+	case m.inbox.pushing != "":
 		a, _ := m.approvalByID(m.inbox.pushing)
 		verb := "Push"
 		if a.Git != nil && a.Git.PullRequest != nil {
@@ -171,10 +112,10 @@ func (m *app) noticeLine(w int) string {
 		return styleFailed.Render(m.notice.text)
 	case m.notice.text != "":
 		return m.notice.text
-	case m.paneFocused() && !m.chats.inPane:
+	case m.paneFocused():
 		x, _ := m.paneTarget()
-		return styleDim.Render(clip("Typing into "+x.title()+". Ctrl-] gives the keys back to the list.", w))
-	case m.filter != "" && m.screen == screenHome:
+		return styleDim.Render(clip("Typing into "+x.title()+". ctrl+] gives the keys back.", w))
+	case m.filter != "" && m.screen == screenMain:
 		return styleDim.Render("filtered by “" + m.filter + "”")
 	case m.offline:
 		return styleDim.Render("Connection to Studio lost. Reconnecting…")
@@ -186,24 +127,18 @@ func (m *app) noticeLine(w int) string {
 // Studio lives.
 func (m *app) helpBody() []string {
 	keys := [][2]string{
-		{"1-9", "go into that thread or terminal; Ctrl-] returns to the list"},
-		{"enter", "go into the thread or terminal under the cursor, or open the row"},
-		{"alt+1-9", "from a thread or terminal, go into another; alt+z: full screen"},
-		{"tab", "the next thread that waits for you, then Home's requests"},
-		{"\\", "Home's list of requests and threads; esc too"},
+		{"↑/↓, j/k", "move the cursor"},
+		{"enter", "open the row: Home, a teammate, a thread, a computer, a place"},
+		{"\\", "the sidebar and back; below 100 columns it slides over the body"},
+		{"tab", "a thread and its computer; on Home, the next request"},
+		{"alt+z", "the pane with the keys takes the whole screen, and back"},
+		{"+", "a new thread with the teammate under the cursor, or a computer"},
+		{"→ ←", "show or hide a teammate's older threads"},
 		{"u", "undo the last network decision, for a minute after it"},
-		{"y / o / n", "an agent's banner: allow, allow once or deny what blocks it"},
-		{"t / T", "the computer's main terminal; T starts its teammate's agent"},
-		{"c / C", "the newest thread with the computer's teammate; C a new one"},
-		{"+ / → ←", "on a teammate: another computer for it; show or hide older threads"},
-		{"s / z / d", "start, stop or resume; z suspends; d deletes, after asking"},
-		{"f / h", "fork the computer; its checkpoints, to save or restore one"},
-		{"n", "new computer: a teammate, a template and a name"},
 		{"e / /", "switch environment; filter by name, teammate or template"},
 		{"l / ,", "Activity; Settings"},
-		{"↑/↓, j/k", "move the cursor"},
-		{"esc / q", "Home; esc clears the filter first, q quits from the list"},
-		{"?", "this help"},
+		{"esc", "back a place, Home last; it clears the filter first"},
+		{"? / q", "this help; quit, from Home and the sidebar"},
 	}
 	title := "Keys"
 	footer := []string{
@@ -211,7 +146,7 @@ func (m *app) helpBody() []string {
 		"edited in the browser, at " + m.browserURL("/") + "; Settings (,) says where.",
 	}
 	switch {
-	case m.helpBack == screenHome && m.helpInbox:
+	case m.helpBack == screenMain && m.helpPart == "home":
 		title = "Home"
 		keys = [][2]string{
 			{"↑/↓, j/k", "move between the rows; tab: the next request, around the end"},
@@ -228,10 +163,54 @@ func (m *app) helpBody() []string {
 			{"←/→ space", "move over the request's choices; space or enter presses one"},
 			{"pgup/pgdn", "scroll the reading pane"},
 			{"\\", "the sidebar: teammates, their threads and computers; \\ comes back"},
-			{"1-9", "go into the sidebar's numbered thread or terminal"},
 			{"+ / e / /", "new computer; switch environment; filter the sidebar"},
-			{"l / , / g", "Activity; Settings; the Git screen"},
+			{"l / , / g", "Activity; Settings; the pushes and pull requests"},
 			{"? / q", "this help; quit"},
+		}
+	case m.helpBack == screenMain && m.helpPart == "thread":
+		title = "Thread"
+		keys = [][2]string{
+			{"p / enter", "write a prompt; enter sends it, ctrl+j starts a new line"},
+			{"esc", "put the prompt aside, or go back a place"},
+			{"↑/↓, j/k", "move between the tool calls and thoughts"},
+			{"enter", "expand or fold the one under the cursor"},
+			{"pgup/pgdn", "scroll a page; b and space too"},
+			{"g / G", "the start or the end of the thread"},
+			{"x", "stop the running turn"},
+			{"y / a / n", "the permission it waits on: allow once, always or reject"},
+			{"1-9", "answer the permission or question waiting: a numbered choice"},
+			{"i / r", "ignore the permission or skip the question; r types an answer"},
+			{"card", "a request above the composer takes its own keys, as on Home"},
+			{"+", "start a new thread with the teammate"},
+			{"t / m", "the computer's terminal with the keys; the teammate's next computer"},
+			{"tab", "the computer, beside the thread or in its place"},
+		}
+		footer = []string{
+			"A question that is a form of several fields is answered in the browser.",
+		}
+	case m.helpBack == screenMain && m.helpPart == "mate":
+		title = "Teammate"
+		keys = [][2]string{
+			{"enter", "write to the teammate; the first prompt starts a thread"},
+			{"+", "give the teammate another computer"},
+			{"t / m", "the computer's terminal with the keys; its next computer"},
+			{"tab", "the computer, beside the teammate or in its place"},
+			{"esc / q", "back a place"},
+		}
+	case m.helpBack == screenMain && m.helpPart == "computer":
+		title = "Computer"
+		keys = [][2]string{
+			{"1-5", "a tab: Terminal and Details today; Files, Changes, Browser come later"},
+			{"enter", "Terminal: type into the terminal; ctrl+] gives the keys back"},
+			{"alt+1-9", "Terminal: another of the computer's terminals"},
+			{"+ / T", "Terminal: a new shell; start the teammate's agent"},
+			{"y / o / n", "Terminal: the banner's allow, allow once or deny; a: on Home"},
+			{"alt+z", "the terminal, or the pane, in full screen"},
+			{"s / z / d", "Details: start, stop or resume; suspend; delete, after asking"},
+			{"f / h / l", "Details: fork; its checkpoints; its Activity"},
+			{"t", "Details: the Terminal tab, with the keys"},
+			{"m", "the teammate's next computer"},
+			{"tab / esc", "back to the thread; esc back a place"},
 		}
 	case m.helpBack == screenCheckpoints:
 		title = "Checkpoints"
@@ -249,12 +228,12 @@ func (m *app) helpBody() []string {
 		title = "Computers"
 		keys = [][2]string{
 			{"↑/↓, j/k", "move the cursor"},
-			{"enter", "the computer's detail"},
-			{"t", "its main terminal"},
+			{"enter", "open the computer: its Terminal and Details tabs"},
+			{"t", "its Terminal tab, with the keys"},
 			{"s / z / d", "start, stop or resume; z suspends; d deletes, after asking"},
 			{"f / h", "fork it; its checkpoints, to save or restore one"},
 			{"+", "a new computer: a teammate, a template and a name"},
-			{"esc / q", "back to Home"},
+			{"esc / q", "back"},
 		}
 		footer = []string{
 			"Every computer of the environment, the teammates' and yours. From 100",
@@ -283,24 +262,6 @@ func (m *app) helpBody() []string {
 			{"esc / q", "back"},
 		}
 		footer = []string{"The sections are the web's, and say what each is set to."}
-	case m.helpBack == screenChat:
-		title = "Thread"
-		keys = [][2]string{
-			{"p", "write a prompt; enter sends it, ctrl+j starts a new line"},
-			{"esc", "put the prompt aside, or go back"},
-			{"↑/↓, j/k", "move between the tool calls and thoughts"},
-			{"enter", "expand or fold the one under the cursor, or write"},
-			{"pgup/pgdn", "scroll a page; b and space too"},
-			{"g / G", "the start or the end of the thread"},
-			{"x", "stop the running turn"},
-			{"n", "start a new thread"},
-			{"1-9", "answer the permission or question waiting: a numbered choice"},
-			{"i / r", "ignore the permission or skip the question; r types an answer"},
-			{"esc / q", "back to the threads, then to the computer"},
-		}
-		footer = []string{
-			"A question that is a form of several fields is answered in the browser.",
-		}
 	case m.helpBack == screenPager:
 		title = "Git review"
 		keys = [][2]string{

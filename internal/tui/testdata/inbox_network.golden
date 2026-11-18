@@ -1,23 +1,23 @@
-Sandbox Studio · Default                                     ▲ 3 waiting for you
+ ≡  Home                                                    ▲ 3 waiting for you 
 ────────────────────────────────────────────────────────────────────────────────
- WAITING FOR YOU · 3
+ WAITING FOR YOU · 3                                                            
  ± Finn  Push 2 commits to feature/login on GitHub/acme/web   api-refactor  30s 
  ⇅ Finn  api-refactor wants 3 hosts                            pypi.org +2   1m 
 ▸⇅ Iris  blub wants registry.npmjs.org:443                     *.npmjs.org  10m 
-
- QUIET
+                                                                                
+ QUIET                                                                          
  ◐ demo  your computer · booting                                      base      
 ────────────────────────────────────────────────────────────────────────────────
   Network access  blub · Default · 10m ago                                      
-    registry.npmjs.org:443
-    pattern *.npmjs.org   scope Iris's computers   ports default
-
-
-
-
-
-
-
-
+    registry.npmjs.org:443                                                      
+    pattern *.npmjs.org   scope Iris's computers   ports default                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
 ────────────────────────────────────────────────────────────────────────────────
 y allow  n deny  o allow once  p pattern  s scope  tab next  enter open  ? help 

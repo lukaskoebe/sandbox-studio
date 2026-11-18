@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +20,8 @@ import (
 // sidebar has the keys, as after \.
 func teamApp() *app {
 	m := sampleApp()
-	m.at, m.mate, m.inbox.sidebar = atHome, "", true
+	m.at, m.mate = atHome, ""
+	toSidebar(m)
 	return m
 }
 
@@ -43,7 +43,7 @@ func TestTheTreeIsTeammateFirst(t *testing.T) {
 			got = append(got, label+"mate "+r.mate)
 		case atThread:
 			x, _ := m.rowSession(r, visible)
-			got = append(got, label+fmt.Sprintf("%d ", r.num)+x.title())
+			got = append(got, label+x.title())
 		case atSandbox:
 			if r.sub < 0 {
 				got = append(got, label+"computer "+visible[r.sb].Name)
@@ -57,16 +57,16 @@ func TestTheTreeIsTeammateFirst(t *testing.T) {
 	// A teammate's threads are right under it, and its computers have no row of their own:
 	// they are on the Computers screen.
 	want := []string{
-		"[TEAMMATES] mate t1", "1 claude", "2 Fix the login form", "3 Update the deploy notes", "0 + 4 older", "4 main",
-		"mate t2", "5 codex", "6 Port the parser to go", "7 main", "+ teammate",
+		"[TEAMMATES] mate t1", "claude", "Fix the login form", "Update the deploy notes", "+ 4 older",
+		"mate t2", "codex", "Port the parser to go", "+ teammate",
 		"[YOUR COMPUTERS] computer demo", "+ computer",
 		"[ENVIRONMENT] Computers", "Network", "Secrets", "Memory", "Activity", "Settings",
 	}
 	if strings.Join(got, ", ") != strings.Join(want, ", ") {
 		t.Errorf("the tree:\n%v\nwant\n%v", got, want)
 	}
-	out := ansi.Strip(strings.Join(m.sidebar(80, 40), "\n"))
-	for _, want := range []string{"Home", "waiting for you", "TEAMMATES", "Iris", "frontend", "YOUR COMPUTERS", "demo", "ENVIRONMENT", "+ New teammate", "+ New computer"} {
+	out := ansi.Strip(strings.Join(m.sidebarColumn(sidebarW, 40), "\n"))
+	for _, want := range []string{"Home", "▲ 1", "TEAMMATES", "Iris", "frontend", "YOUR COMPUTERS", "demo", "ENVIRONMENT", "+ New teammate", "+ New computer"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the list lacks %q:\n%s", want, out)
 		}
@@ -122,8 +122,8 @@ func TestHomeIsWhereTheListStarts(t *testing.T) {
 		t.Fatalf("Finn's row selects his one sandbox: at %v, mate %q, %q", m.at, m.mate, m.selectedID())
 	}
 	m = press(m, "esc")
-	if m.at != atHome {
-		t.Errorf("esc goes back to Home: %v", m.at)
+	if m.at != atHome || m.sidebarKeys() {
+		t.Errorf("esc gives Home the keys, the sidebar's cursor on its row: %v", m.at)
 	}
 }
 
@@ -154,15 +154,15 @@ func TestHomeListsWhatNeedsYou(t *testing.T) {
 
 func TestTheTeammatePane(t *testing.T) {
 	m := withSessions(teamApp())
-	m.at, m.mate = atMate, "t1"
+	m.here = place{kind: placeMate, mate: "t1"}
 	m.mates = mateState{mate: "t1", loaded: true, tasks: []store.Task{{Title: "Ship the login", Status: "in_progress"}, {Title: "Write docs", Status: "done"}}}
 	out := ansi.Strip(strings.Join(m.matePane(90, 40), "\n"))
-	for _, want := range []string{"Iris · frontend", "COMPUTERS", "blub", "docs-site", "THREADS", "Fix the login form", "TASKS", "◐ Ship the login", "KNOWS", "nothing yet", "NETWORK", "Default, the environment's"} {
+	for _, want := range []string{"Iris · frontend", "COMPUTERS", "blub", "docs-site", "TASKS", "◐ Ship the login", "KNOWS", "nothing yet", "NETWORK", "Default, the environment's"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the teammate's pane lacks %q:\n%s", want, out)
 		}
 	}
-	m.at, m.mate = atMate, "t2"
+	m.here = place{kind: placeMate, mate: "t2"}
 	if out := ansi.Strip(strings.Join(m.matePane(90, 40), "\n")); !strings.Contains(out, "COMPUTER") {
 		t.Errorf("one sandbox is the teammate's computer:\n%s", out)
 	}
@@ -170,7 +170,7 @@ func TestTheTeammatePane(t *testing.T) {
 
 func TestSettingsListsTheWebsSections(t *testing.T) {
 	m := press(teamApp(), ",")
-	if m.screen != screenSettings || m.activeTab() != tabSettings {
+	if m.screen != screenSettings || m.crumb() != "Settings" {
 		t.Fatalf(", opens %v", m.screen)
 	}
 	out := ansi.Strip(strings.Join(m.settingsBody(80, 30), "\n"))
@@ -187,7 +187,7 @@ func TestSettingsListsTheWebsSections(t *testing.T) {
 	if m.screen != screenActivity {
 		t.Errorf("enter on Activity opens %v", m.screen)
 	}
-	if m = press(m, "esc"); m.screen != screenHome {
+	if m = press(m, "esc"); m.screen != screenMain {
 		t.Errorf("esc from Activity returns to %v", m.screen)
 	}
 }
@@ -214,30 +214,6 @@ func TestActivityNarrowsToAKind(t *testing.T) {
 	if len(m.activityEntries()) != 0 {
 		t.Error("memory lists entries of other kinds")
 	}
-}
-
-// visualTeamApp is the visual look's sample with its teammates, on Home's row.
-func visualTeamApp(w, h int) *app {
-	m := withSessions(visualApp(w, h))
-	m.team = []store.Teammate{{ID: "t1", Name: "Iris", Role: "frontend"}, {ID: "t2", Name: "Finn"}}
-	m.at, m.mate = atHome, ""
-	sampleApprovals(m)
-	m.home.loaded = true
-	return m
-}
-
-func TestGoldenVisualHomeTeam(t *testing.T) {
-	golden(t, "visual_home_team", visualTeamApp(140, 36))
-}
-
-func TestGoldenVisualHomeNarrow(t *testing.T) {
-	golden(t, "visual_home_narrow", visualTeamApp(80, 24))
-}
-
-func TestGoldenVisualTeammate(t *testing.T) {
-	m := press(visualTeamApp(140, 36), "j")
-	m.mates = mateState{mate: "t1", loaded: true}
-	golden(t, "visual_teammate", m)
 }
 
 // y on Home's card allows the request with a rule, and u takes the rule back.
@@ -280,11 +256,6 @@ func TestGoldenWideComputers(t *testing.T) {
 	goldenVisual(t, "wide_computers_140x40", withDetailData(onComputersScreen(t, visualApp(140, 40), "sb2")), false)
 }
 
-func TestGoldenHomeThreads(t *testing.T) {
-	m := sampleMorning(sampleApp())
-	golden(t, "home_threads", onSession(t, m, "sb1", "Fix the login form"))
-}
-
 func TestGoldenWideHomeThreads(t *testing.T) {
 	m := sampleMorning(visualApp(140, 40))
 	goldenVisual(t, "wide_home_threads_140x40", onSession(t, m, "sb1", "Fix the login form"), false)
@@ -296,6 +267,7 @@ func TestPlacesOpenFromTheList(t *testing.T) {
 	on := func(p envPlace) *app {
 		for _, r := range m.homeRows() {
 			if r.kind == atPlace && r.place == p {
+				toSidebar(m)
 				m.setCursor(r)
 				return m
 			}
@@ -303,24 +275,24 @@ func TestPlacesOpenFromTheList(t *testing.T) {
 		t.Fatalf("no row of %v", p)
 		return m
 	}
-	m = press(on(placeComputers), "enter")
+	m = press(on(envComputers), "enter")
 	if m.screen != screenComputers {
 		t.Fatalf("enter on Computers opens %v", m.screen)
 	}
 	m = press(m, "j", "esc")
-	if m.screen != screenHome || m.at != atPlace || m.rowPlace != placeComputers {
+	if m.screen != screenMain || m.at != atPlace || m.rowPlace != envComputers {
 		t.Fatalf("esc from Computers: screen %v, at %v, place %v", m.screen, m.at, m.rowPlace)
 	}
-	m, _ = pressCmd(on(placeNetwork), "enter")
+	m, _ = pressCmd(on(envNetwork), "enter")
 	if m.screen != screenActivity || activityKinds[m.activity.kind] != "network" {
 		t.Fatalf("enter on Network opens %v, kind %d", m.screen, m.activity.kind)
 	}
 	m = press(m, "esc")
-	m = press(on(placeSecrets), "enter")
+	m = press(on(envSecrets), "enter")
 	if !strings.Contains(m.notice.text, "/e/env1/secrets") {
 		t.Fatalf("Secrets prints its address: %q", m.notice.text)
 	}
-	m, _ = pressCmd(on(placeSettings), "enter")
+	m, _ = pressCmd(on(envSettings), "enter")
 	if m.screen != screenSettings {
 		t.Fatalf("enter on Settings opens %v", m.screen)
 	}
@@ -330,23 +302,23 @@ func TestPlacesOpenFromTheList(t *testing.T) {
 // the screen.
 func TestComputersScreenTakesAComputersKeys(t *testing.T) {
 	m := onComputersScreen(t, sampleApp(), "sb3") // docs-site, stopped
-	if m.selectedID() != "sb3" {
-		t.Fatalf("the screen selects %q", m.selectedID())
+	if m.computers.id != "sb3" {
+		t.Fatalf("the screen selects %q", m.computers.id)
 	}
 	if _, cmd := pressCmd(m, "s"); cmd == nil {
 		t.Error("s on a stopped computer starts nothing")
 	}
 	m = press(m, "enter")
-	if m.screen != screenDetail || m.selectedID() != "sb3" {
-		t.Fatalf("enter: screen %v, %q", m.screen, m.selectedID())
+	if m.screen != screenMain || m.here.kind != placeComputer || m.here.sandbox != "sb3" {
+		t.Fatalf("enter: screen %v, here %+v", m.screen, m.here)
 	}
 	m = press(m, "esc")
-	if m.screen != screenComputers {
-		t.Fatalf("esc from the detail goes to %v", m.screen)
+	if m.screen != screenComputers || m.computers.id != "sb3" {
+		t.Fatalf("esc from the computer goes to %v, on %q", m.screen, m.computers.id)
 	}
 	m = press(m, "k", "k", "k", "k")
-	if m.selectedID() != "sb1" {
-		t.Fatalf("k stops on the first computer: %q", m.selectedID())
+	if m.computers.id != "sb1" {
+		t.Fatalf("k stops on the first computer: %q", m.computers.id)
 	}
 }
 
@@ -388,9 +360,13 @@ func TestATeammateWithoutAComputer(t *testing.T) {
 	if m.selected() != nil {
 		t.Fatalf("Ada's row selects %s", m.selectedID())
 	}
-	m, _ = pressCmd(m, "c")
+	m.open(place{kind: placeMate, mate: "t3"})
+	m, _ = pressCmd(m, "enter")
 	if !strings.Contains(m.notice.text, "Ada has no computer yet. + gives it one.") {
-		t.Fatalf("c on Ada: %q", m.notice.text)
+		t.Fatalf("enter on Ada's home: %q", m.notice.text)
+	}
+	if m, _ = pressCmd(m, "+"); m.screen != screenNew || m.newTeammate().ID != "t3" {
+		t.Fatalf("+ on Ada's home: screen %v, teammate %q", m.screen, m.newTeammate().ID)
 	}
 	pane := ansi.Strip(strings.Join(m.matePane(80, 24), "\n"))
 	if !strings.Contains(pane, "none yet; + gives Ada a computer of its own") || strings.Contains(pane, "c starts one") {

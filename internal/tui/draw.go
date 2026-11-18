@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -150,106 +149,6 @@ func cardBox(lines []string, w int, rule, frame lipgloss.Style) []string {
 	return append(out, frame.Render("╰"+strings.Repeat("─", edge)+"╯"))
 }
 
-// tab is a tab of the header: a screen reached with one key.
-type tab int
-
-const (
-	tabHome tab = iota
-	tabActivity
-	tabSettings
-)
-
-// tabSpan is where a tab, or the environment, sits on the header line.
-type tabSpan struct {
-	tab    tab
-	env    bool // the environment's name, which opens the picker
-	x0, x1 int  // the cells it covers, x1 excluded
-}
-
-// activeTab is the tab of the screen on show.
-func (m *app) activeTab() tab {
-	s := m.screen
-	if s == screenHelp {
-		s = m.helpBack
-	}
-	switch s {
-	case screenActivity, screenEntry, screenGit:
-		return tabActivity
-	case screenSettings:
-		return tabSettings
-	}
-	return tabHome
-}
-
-// tabHeader is the visual look's header of w cells: Studio's mark, the environment, the tabs
-// with their counts, and the clock. Below 100 columns the tabs shorten to their initial and
-// count. It returns where the tabs are, for the mouse and the rule under the header.
-func (m *app) tabHeader(w int) (string, []tabSpan) {
-	short := w < 100
-	var b strings.Builder
-	var spans []tabSpan
-	put := func(s string) { b.WriteString(s) }
-	put(" " + m.pal.brand.Render("◆") + " " + styleBold.Render("Studio") + "  ")
-	envName := firstNonEmpty(m.env.Name, "…") + " ▾"
-	x := lipgloss.Width(b.String())
-	spans = append(spans, tabSpan{env: true, x0: x, x1: x + lipgloss.Width(envName)})
-	put(envName + "   ")
-	tabs := []struct {
-		t     tab
-		name  string
-		count int
-	}{
-		{tabHome, "Home", m.needCount()},
-		{tabActivity, "Activity", 0},
-		{tabSettings, "Settings", 0},
-	}
-	active := m.activeTab()
-	for i, t := range tabs {
-		name := t.name
-		if short {
-			name = map[tab]string{tabHome: "H", tabActivity: "L", tabSettings: ","}[t.t]
-		}
-		label := name
-		if t.t == active {
-			label = styleBold.Render(name)
-		}
-		if t.count > 0 {
-			sep := " "
-			if short {
-				sep = ""
-			}
-			label += sep + m.pal.waiting.Render(fmt.Sprint(t.count))
-		}
-		x := lipgloss.Width(b.String())
-		spans = append(spans, tabSpan{tab: t.t, x0: x, x1: x + lipgloss.Width(label)})
-		put(label)
-		if i < len(tabs)-1 {
-			if short {
-				put("  ")
-			} else {
-				put("   ")
-			}
-		}
-	}
-	right := styleDim.Render(m.now.Format("15:04")) + " "
-	if n := m.needCount(); n > 0 {
-		right = m.waitingMark(fmt.Sprintf("▲ %d waiting for you", n)) + styleDim.Render(" · ") + right
-	}
-	return spread(b.String(), m.sessionsHeader()+right, w), spans
-}
-
-// tabRule is the rule under the tab header: the accent under the tab on show, dim elsewhere.
-func (m *app) tabRule(w int, spans []tabSpan) string {
-	active := m.activeTab()
-	for _, s := range spans {
-		if !s.env && s.tab == active && s.x1 <= w {
-			return styleDim.Render(strings.Repeat("─", s.x0)) + styleAccent.Render(strings.Repeat("━", s.x1-s.x0)) +
-				styleDim.Render(strings.Repeat("─", w-s.x1))
-		}
-	}
-	return styleDim.Render(strings.Repeat("─", w))
-}
-
 // Key groups of the key bar: what acts on the thing under the cursor, where to go from it, and
 // the keys of the app itself.
 const (
@@ -272,9 +171,10 @@ func barKey(b key.Binding) string {
 func keyGroup(b key.Binding) int {
 	h := b.Help()
 	switch h.Key + " " + h.Desc {
-	case "t terminal", "c thread", "l activity", "\\ list", "e env", "h checkpoints", "/ filter", "/ computer", "r rules (browser)":
+	case "t terminal", "tab computer", "tab thread", "\\ sidebar", "m next computer", "l activity", "e env",
+		"h checkpoints", "/ filter", "/ computer", ", settings", "r rules (browser)":
 		return groupGo
-	case "? help", "q quit", "esc/q back", "esc cancel", "esc close":
+	case "? help", "q quit", "esc/q back", "esc back", "esc cancel", "esc close":
 		return groupApp
 	}
 	return groupAct

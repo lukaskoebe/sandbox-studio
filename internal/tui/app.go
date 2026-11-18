@@ -14,16 +14,15 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// screen is what the body shows. Overlays (the environment picker, help) are screens too:
-// esc or any key returns to the screen they came from.
+// screen is what the body shows: the frame of the place on show, or a full screen over it.
+// Overlays (the environment picker, help) are screens too: esc or any key returns to the screen
+// they came from.
 type screen int
 
 const (
-	screenHome screen = iota
-	screenDetail
+	screenMain screen = iota // the frame: the sidebar and the place on show (frame.go)
 	screenEnvs
 	screenHelp
-	screenChat        // one thread's transcript
 	screenActivity    // the connections and decisions log
 	screenEntry       // one entry of the log, and its rule
 	screenPager       // the review of a git push or pull request
@@ -75,15 +74,22 @@ type app struct {
 
 	screen      screen
 	helpBack    screen             // where help returns to, and whose keys it lists
-	helpInbox   bool               // help was opened from Home's list, so it lists the list's keys
-	chats       chatState          // the chat screens
+	helpPart    string             // the part of the frame help was opened from, whose keys it lists: home, thread, mate, computer
+	here        place              // the place on show
+	history     []place            // the places esc goes back through, the last one shown last
+	focus       focusArea          // the part of the frame that has Studio's keys
+	flip        bool               // below splitWidth, the main column shows the computer instead of the thread
+	drawer      bool               // below paneWidth, the sidebar is drawn over the body and has the keys
+	zoom        bool               // the column with the keys takes the whole frame
+	comp        computerState      // the computer pane's computer and tab
+	chats       chatState          // the thread on show, or the one in Home's reading pane
 	activity    activityState      // the Activity screens
 	pager       pagerState         // the review of a git approval
 	git         gitState           // the Git screen
 	newSb       newState           // a new computer, from its form to its create's end
 	checkpoints checkpointState    // the checkpoints screen
 	ports       portsState         // the open ports of the sandbox on the detail screen
-	at          rowKind            // what the cursor of Home's list is on: Home, a teammate, a thread, a computer, a place
+	at          rowKind            // what the sidebar's cursor is on: Home, a teammate, a thread, a computer, a place
 	mate        string             // the teammate whose row or thread the cursor is on
 	cursor      int                // the selected computer, among the visible ones
 	sub         int                // the thread or terminal the cursor is on, under its teammate or computer; -1 for the computer
@@ -91,8 +97,6 @@ type app struct {
 	rowAction   rowAction          // the + row the cursor is on
 	sess        sessionsState      // the threads and terminals, which Home lists under teammates and computers
 	computers   computersState     // the Computers screen
-	detailBack  screen             // where the computer's detail returns to
-	detailHome  *homeCursor        // the cursor of Home's list the detail was opened from, for esc
 	choices     map[string]*choice // the approvals' choices, by the ID of a card's first approval
 	split       map[string]bool    // the approvals reviewed one by one, out of their group
 	picker      int                // the environment picker's cursor
@@ -264,6 +268,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if sb := m.selected(); sb != nil {
 			prev = sb.ID
 		}
+		first := !m.loaded
 		m.loaded = true
 		m.sandboxes = msg.list
 		m.team = msg.teammates
@@ -272,18 +277,24 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.teammates[t.ID] = t.Name
 		}
 		if _, ok := m.mateOf(m.mate); m.at == atMate && !ok {
-			m.at = atHome // the teammate on show is gone
+			m.at = atHome // the teammate under the cursor is gone
 		}
-		found := m.reselect(prev)
-		if !found && m.screen == screenDetail {
-			m.leaveDetail() // the computer on show is gone
-			m.report("That computer was deleted.", true)
+		m.reselect(prev)
+		var cmd tea.Cmd
+		if !m.placeLives(m.here) {
+			if m.here.kind == placeComputer || m.here.kind == placeThread {
+				m.report("That computer was deleted.", true)
+			}
+			cmd = m.back()
+		} else if first {
+			m.cursorToHere()
 		}
-		if m.screen == screenComputers || m.screen == screenDetail && m.detailBack == screenComputers {
+		if m.screen == screenComputers {
 			m.computersFollow()
 		}
 		m.followProgress()
 		m.lineage.stale = true // a checkpoint, a fork or a restore adds to the history
+		return m, cmd
 	case approvalsLoaded:
 		if msg.err != nil {
 			m.fail(msg.err)
@@ -323,20 +334,6 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.home.undo = msg.undo
 		}
 		return m, m.refresh()
-	case attachDone:
-		switch {
-		case msg.err != nil:
-			m.report("Could not open the terminal: "+msg.err.Error(), true)
-		case msg.waiting != "":
-			// An approval came in while the terminal was attached: show it, and attach the
-			// terminal again once it is decided.
-			m.goWaiting(msg.waiting, &resumeState{approval: msg.waiting, back: screenHome,
-				attach: &attachTarget{id: msg.id, sandbox: msg.sandbox, name: msg.name}})
-			m.setNotice("Answer it, and you're back in "+msg.name+". esc stays here.", false)
-		default:
-			m.report("Detached from "+msg.name+" in "+msg.sandbox+".", false)
-		}
-		return m, m.refresh()
 	}
 	return m, nil
 }
@@ -345,7 +342,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // approvals of every environment, and the list of the screen on show.
 func (m *app) refresh() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSandboxes(), m.loadApprovals()}
-	if m.screen == screenHome {
+	if m.screen == screenMain {
 		cmds = append(cmds, m.readSessions(false))
 	}
 	switch m.screen {
@@ -369,7 +366,7 @@ func (m *app) paste(text string) {
 		id := m.selectedID()
 		*m.filterTarget() += strings.Join(strings.Fields(text), " ")
 		m.filtered(id)
-	case m.chatShows() && m.chats.composing:
+	case m.chats.on && m.chats.composing:
 		m.chats.draft.paste(text)
 	case m.paneFocused() && m.pane.term != nil:
 		m.pane.term.paste(text)

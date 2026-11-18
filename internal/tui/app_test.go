@@ -33,7 +33,7 @@ func sampleApp() *app {
 		{Sandbox: store.Sandbox{ID: "sb3", Name: "docs-site", TeammateID: "t1"}, Status: "stopped", TemplateName: "node@3"},
 		{Sandbox: store.Sandbox{ID: "sb4", Name: "demo"}, Status: "starting", TemplateName: "base"},
 	}
-	m.approvals = []api.ApprovalView{{Approval: store.Approval{ID: "a1", SandboxID: "sb2", Kind: "network", Status: "pending"}}}
+	m.approvals = []api.ApprovalView{{Approval: store.Approval{ID: "a1", SandboxID: "sb2", Kind: "network", Subject: "pypi.org:443", Status: "pending", CreatedAt: m.now.Add(-time.Minute)}}}
 	m.at, m.sub = atSandbox, -1 // most tests start on the first sandbox's row, a row below Home's
 	return m
 }
@@ -87,33 +87,37 @@ func run(m *app, cmd tea.Cmd) *app {
 
 func TestCursorStaysInTheList(t *testing.T) {
 	m := sampleApp()
+	toSidebar(m)
 	press(m, "k")
-	if m.cursor != 0 {
-		t.Fatalf("cursor above the first row: %d", m.cursor)
+	if m.at != atHome {
+		t.Fatalf("cursor above the first row: at %v", m.at)
 	}
-	press(m, "j", "j", "j", "j", "j", "j")
-	if m.cursor != 3 {
-		t.Fatalf("cursor below the last row: %d", m.cursor)
+	rows := m.homeRows()
+	for range len(rows) + 3 {
+		press(m, "j")
+	}
+	if got := m.cursorRow(m.homeRows()); got != len(rows)-1 {
+		t.Fatalf("cursor below the last row: row %d of %d", got, len(rows))
 	}
 }
 
 func TestEnterOpensTheSandboxAndEscGoesBack(t *testing.T) {
-	m := press(sampleApp(), "j", "enter")
-	if m.screen != screenDetail || m.selected().Name != "api-refactor" {
-		t.Fatalf("detail of %v on screen %v", m.selected(), m.screen)
+	m := onComputer(t, sampleApp(), "sb4")
+	m = press(m, "enter")
+	if m.here.kind != placeComputer || m.computerOn() == nil || m.computerOn().Name != "demo" || m.focus != focusMain {
+		t.Fatalf("enter on demo's row: here %+v, focus %v", m.here, m.focus)
 	}
-	if got := press(m, "esc").screen; got != screenHome {
-		t.Fatalf("esc from the detail: screen %v", got)
+	if m = press(m, "esc"); m.here.kind != placeHome || m.screen != screenMain {
+		t.Fatalf("esc from the computer: here %+v, screen %v", m.here, m.screen)
 	}
 }
 
 func TestFilterNarrowsTheListAndEscClearsIt(t *testing.T) {
-	m := press(sampleApp(), "j", "/", "a", "p", "i")
+	m := sampleApp()
+	toSidebar(m)
+	m = press(m, "/", "a", "p", "i")
 	if got := names(m.visible()); got != "api-refactor" {
 		t.Fatalf("filtered to %q", got)
-	}
-	if m.selectedID() != "sb2" {
-		t.Fatalf("selection lost while filtering: %q", m.selectedID())
 	}
 	m = press(m, "enter")
 	if m.filtering || m.filter != "api" {
@@ -132,7 +136,7 @@ func TestTeammateNamesFilterToo(t *testing.T) {
 }
 
 func TestDeleteAsksAndDeletesOnYes(t *testing.T) {
-	m := press(sampleApp(), "d")
+	m := press(openComputer(sampleApp(), "sb1", tabDetails), "d")
 	if m.confirm == nil || m.confirm.Name != "blub" {
 		t.Fatalf("delete does not ask about blub: %+v", m.confirm)
 	}
@@ -144,7 +148,7 @@ func TestDeleteAsksAndDeletesOnYes(t *testing.T) {
 }
 
 func TestDeleteKeepsTheSandboxOnAnyOtherKey(t *testing.T) {
-	m := press(sampleApp(), "d", "n")
+	m := press(openComputer(sampleApp(), "sb1", tabDetails), "d", "n")
 	if m.confirm != nil || m.notice.text != "Kept blub" {
 		t.Fatalf("no: confirm %v, notice %q", m.confirm, m.notice.text)
 	}
@@ -201,7 +205,7 @@ func TestEnvironmentPickerSwitchesAndLoads(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(*app)
-	if m.env.ID != "env2" || m.screen != screenHome || m.loaded || cmd == nil {
+	if m.env.ID != "env2" || m.screen != screenMain || m.loaded || cmd == nil {
 		t.Fatalf("switch: env %q, screen %v, loaded %v, cmd %v", m.env.ID, m.screen, m.loaded, cmd != nil)
 	}
 	if m.sandboxes != nil || len(m.visible()) != 0 {
@@ -251,12 +255,12 @@ func TestSelectionFollowsTheSandboxAcrossRefreshes(t *testing.T) {
 }
 
 func TestDetailGoesHomeWhenItsSandboxIsGone(t *testing.T) {
-	m := press(sampleApp(), "enter")
+	m := openComputer(sampleApp(), "sb1", tabDetails)
 	list := m.sandboxes[1:]
 	next, _ := m.Update(sandboxesLoaded{env: m.env.ID, list: list})
 	m = next.(*app)
-	if m.screen != screenHome || !m.notice.failed {
-		t.Fatalf("deleted sandbox: screen %v, notice %+v", m.screen, m.notice)
+	if m.screen != screenMain || m.here.kind != placeHome || !m.notice.failed {
+		t.Fatalf("deleted sandbox: screen %v, here %+v, notice %+v", m.screen, m.here, m.notice)
 	}
 }
 
@@ -334,11 +338,11 @@ func names(list []sandboxes.View) string {
 
 // z suspends a running sandbox, and says why it doesn't for one that isn't.
 func TestSuspendFollowsThePhase(t *testing.T) {
-	m := sampleApp()
+	m := openComputer(sampleApp(), "sb1", tabDetails)
 	if _, cmd := pressCmd(m, "z"); cmd == nil || m.notice.text != "Suspending blub…" {
 		t.Fatalf("z on a running sandbox: %+v", m.notice)
 	}
-	m.cursor = 2 // docs-site, stopped
+	m = openComputer(m, "sb3", tabDetails) // docs-site, stopped
 	if _, cmd := pressCmd(m, "z"); cmd != nil || m.notice.text != "Only a running computer can be suspended." {
 		t.Fatalf("z on a stopped sandbox: %+v", m.notice)
 	}

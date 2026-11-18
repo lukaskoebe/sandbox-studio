@@ -99,15 +99,15 @@ func TestActivityFiltersBySandbox(t *testing.T) {
 	if m = press(m, "esc"); m.activity.filter != "" || m.screen != screenActivity {
 		t.Fatalf("esc: filter %q, screen %v", m.activity.filter, m.screen)
 	}
-	if m = press(m, "esc"); m.screen != screenHome {
+	if m = press(m, "esc"); m.screen != screenMain {
 		t.Fatalf("esc again returns to %v", m.screen)
 	}
-	m = press(sampleApp(), "j", "enter", "l")
+	m = press(openComputer(sampleApp(), "sb2", tabDetails), "l")
 	if m.screen != screenActivity || m.activity.filter != "api-refactor" {
-		t.Fatalf("l on the detail: screen %v, filter %q", m.screen, m.activity.filter)
+		t.Fatalf("l on the Details tab: screen %v, filter %q", m.screen, m.activity.filter)
 	}
-	if m = press(m, "q"); m.screen != screenDetail {
-		t.Fatalf("q returns to %v", m.screen)
+	if m = press(m, "q"); m.screen != screenMain || m.here.kind != placeComputer || m.comp.tab != tabDetails {
+		t.Fatalf("q returns to %v, here %+v, tab %v", m.screen, m.here, m.comp.tab)
 	}
 }
 

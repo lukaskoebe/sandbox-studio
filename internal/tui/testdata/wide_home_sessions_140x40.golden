@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 2   Activity   Settings                                                             ▲ 2 waiting for you · 12:00 
-───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 2 │ claude · blub                                                                       ✓ in the terminal · done
-                              │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────
- TEAMMATES                    │ Connecting…
-  Iris frontend               │ 
-▌ 1 ✓ claude                  │ 
-  2 ○ Fix the login form      │ 
-  3 ◷ Update the deploy notes │ 
-      + 4 older               │ 
-  4   main                    │ 
-  Finn backend            ▲ 2 │ 
-  5 ▲ codex                   │ 
-  6 ▲ Port the parser to go   │ 
-  7   main                    │ 
-  + New teammate              │ 
-                              │ 
- YOUR COMPUTERS               │ 
-  ◐ demo              booting │ 
-  + New computer              │ 
-                              │ 
- ENVIRONMENT                  │ 
-  Computers                 4 │ 
-  Network                 ▲ 1 │ 
-  Secrets                     │ 
-  Memory                      │ 
-  Activity                    │ 
-  , Settings              dev │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-enter type in  1-9 jump in  tab next waiting  alt+z full screen  T new agent  C new thread │ \ list │ ? more  q quit
+ ◆ Studio          Default ▾  │ Home                                                                            ▲ 2 waiting for you · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 2 │  WAITING FOR YOU · 2                          │ ╭──────────────────────────────────────────────────────────╮
+                              │  ⇅ Finn  A computer wants pypi.org:443     1m │ ┃ ▶ AGENT PERMISSION                                       │
+ TEAMMATES                    │ ▌? Finn  Asks:                                │ ┃ In the teammate's thread “New thread”                    │
+▌ Iris frontend               │                                               │ ┃  i  Ignore                                               │
+    ✓ claude                  │  QUIET                                        │ ╰──────────────────────────────────────────────────────────╯
+    ○ Fix the login form      │  ✓ Iris  claude                     done   2m │                                                             
+    ◷ Update the deploy notes │  ○ Iris  Fix the login form         blub   3m │                                                             
+      + 4 older               │  ◷ Iris  Update the deploy n…  docs-site   5h │                                                             
+  Finn backend            ▲ 2 │  ◐ demo  your computer · booting    base      │                                                             
+    ▲ codex                   │                                               │                                                             
+    ▲ Port the parser to go   │  EARLIER TODAY                                │                                                             
+  + New teammate              │  Loading…                                     │                                                             
+                              │                                               │                                                             
+ YOUR COMPUTERS               │                                               │                                                             
+  ◐ demo              booting │                                               │                                                             
+  + New computer              │                                               │                                                             
+                              │                                               │                                                             
+ ENVIRONMENT                  │                                               │                                                             
+  Computers                 4 │                                               │                                                             
+  Network                 ▲ 1 │                                               │                                                             
+  Secrets                     │                                               │                                                             
+  Memory                      │                                               │                                                             
+  Activity                    │                                               │                                                             
+  , Settings              dev │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+                              │                                               │                                                             
+──────────────────────────────┴───────────────────────────────────────────────┴─────────────────────────────────────────────────────────────
+y allow once  a always  n deny  enter thread  tab next  + new computer │ l activity  , settings  e env  \ sidebar │ ? more  q quit

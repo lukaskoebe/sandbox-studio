@@ -117,20 +117,28 @@ func TestGoldenVisualActivity(t *testing.T) {
 	goldenVisual(t, "visual_activity", sampleActivity(visualApp(80, 24)), true)
 }
 
-func TestGoldenVisualDetail(t *testing.T) {
-	goldenVisual(t, "visual_detail", withDetailData(press(visualApp(80, 24), "j", "enter")), true)
+func TestGoldenVisualComputer(t *testing.T) {
+	goldenVisual(t, "visual_computer", withDetailData(openComputer(visualApp(80, 24), "sb2", tabDetails)), true)
+}
+
+func TestGoldenVisualThread(t *testing.T) {
+	goldenVisual(t, "visual_thread", threadWithCard(visualApp(80, 24)), true)
+}
+
+// A thread with its computer's Details beside it, at 140 and at 120 columns (A4).
+func TestGoldenWideThread(t *testing.T) {
+	for _, size := range [][2]int{{140, 40}, {120, 30}} {
+		m := threadWithCard(visualApp(size[0], size[1]))
+		m.comp.tab = tabDetails // A4 shows Changes, which phase 3b adds
+		detailDataOf(m, "sb1")
+		goldenVisual(t, fmt.Sprintf("wide_thread_%dx%d", size[0], size[1]), m, false)
+	}
 }
 
 func TestGoldenVisualPager(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
 	goldenVisual(t, "visual_pager", press(onCard(m, 0), "enter"), true)
-}
-
-func TestGoldenWideHeaderShort(t *testing.T) {
-	m := visualApp(96, 24)
-	sampleApprovals(m)
-	goldenVisual(t, "wide_header_96x24", m, false)
 }
 
 func TestGoldenWideHome(t *testing.T) {
@@ -247,8 +255,9 @@ func TestSparklineAndBar(t *testing.T) {
 // TestGroupedKeyBar puts a dim │ between the key groups and calls help "more".
 func TestGroupedKeyBar(t *testing.T) {
 	m := visualApp(100, 24)
+	m.approvals = nil // Home with nothing waiting
 	got := ansi.Strip(m.keyBar(100, 0))
-	if got != "enter open  n new  s start/stop │ \\ list  t terminal  c thread │ ? more  q quit" {
+	if got != "enter open  tab next  + new computer │ l activity  , settings  e env  \\ sidebar │ ? more  q quit" {
 		t.Errorf("key bar: %q", got)
 	}
 	if got := ansi.Strip(m.keyBar(40, 0)); !strings.HasSuffix(got, " …") || len([]rune(got)) > 40 {
@@ -256,33 +265,46 @@ func TestGroupedKeyBar(t *testing.T) {
 	}
 }
 
+// A click on a row of the sidebar selects it and gives the sidebar the cursor; a double click
+// opens its place.
 func TestMouseSelectsAndOpens(t *testing.T) {
-	m := visualApp(80, 24)
-	m.View()                                                                 // records where the rows lead
-	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 8, Button: tea.MouseLeft} // demo, under Home, TEAMMATES and YOUR COMPUTERS
+	m := visualApp(120, 30)
+	m.View() // records where the rows lead
+	var demo rowHit
+	for _, r := range m.mouse.rows {
+		if rows := m.homeRows(); r.target == rowTree && rows[r.index].kind == atSandbox && m.visible()[rows[r.index].sb].ID == "sb4" {
+			demo = r
+		}
+	}
+	if demo.target == 0 {
+		t.Fatal("demo's row of the sidebar records no click")
+	}
+	click := tea.MouseClickMsg{X: demo.x0 + 2, Y: demo.y, Button: tea.MouseLeft}
 	next, _ := m.Update(click)
 	m = next.(*app)
-	if m.cursor != 3 || m.screen != screenHome {
-		t.Fatalf("a click selects the row: cursor %d, screen %v", m.cursor, m.screen)
+	if m.selectedID() != "sb4" || m.focus != focusSidebar || m.here.kind != placeHome {
+		t.Fatalf("a click selects the row: %s, focus %v, here %+v", m.selectedID(), m.focus, m.here)
 	}
 	m.View()
 	next, _ = m.Update(click)
 	m = next.(*app)
-	if m.screen != screenDetail || m.selectedID() != "sb4" {
-		t.Errorf("a double click opens it: screen %v, sandbox %s", m.screen, m.selectedID())
+	if m.here.kind != placeComputer || m.here.sandbox != "sb4" {
+		t.Errorf("a double click opens it: here %+v", m.here)
 	}
 }
 
+// The wheel over Home's list moves its cursor; the plain look leaves the mouse alone.
 func TestMouseWheelMovesTheList(t *testing.T) {
 	m := visualApp(80, 24)
-	next, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	rows := m.inboxRows()
+	next, _ := m.Update(tea.MouseWheelMsg{X: 5, Y: bodyTop + 1, Button: tea.MouseWheelDown})
 	m = next.(*app)
-	if m.cursor != 1 {
-		t.Errorf("the wheel moves the cursor: %d", m.cursor)
+	if m.inbox.cursor != rows[1].id {
+		t.Errorf("the wheel moves the cursor: %q, want %q", m.inbox.cursor, rows[1].id)
 	}
-	m = sampleApp() // the plain look leaves the mouse alone
-	next, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
-	if next.(*app).cursor != 0 {
+	m = sampleApp()
+	next, _ = m.Update(tea.MouseWheelMsg{X: 5, Y: bodyTop + 1, Button: tea.MouseWheelDown})
+	if next.(*app).inbox.cursor != "" {
 		t.Error("the plain look took the wheel")
 	}
 }
@@ -297,30 +319,36 @@ func TestMouseWheelScrollsThePager(t *testing.T) {
 	}
 }
 
-func TestClickingATabActsAsItsKey(t *testing.T) {
-	m := visualApp(120, 30)
-	sampleApprovals(m)
-	m.View()
-	var settings, activity tabSpan
-	for _, s := range m.mouse.tabs {
-		switch {
-		case s.tab == tabSettings && !s.env:
-			settings = s
-		case s.tab == tabActivity && !s.env:
-			activity = s
+// The crumb row's parts act on a click: ≡ opens the drawer, the count of what waits goes Home,
+// and the sidebar's environment opens the picker.
+func TestClickingTheCrumbRow(t *testing.T) {
+	at := func(m *app, part crumbPart) crumbSpan {
+		t.Helper()
+		m.View()
+		for _, s := range m.mouse.crumb {
+			if s.part == part {
+				return s
+			}
 		}
+		t.Fatalf("the crumb row has no part %v: %+v", part, m.mouse.crumb)
+		return crumbSpan{}
 	}
-	next, _ := m.Update(tea.MouseClickMsg{X: settings.x0, Y: 0, Button: tea.MouseLeft})
-	m = next.(*app)
-	if m.screen != screenSettings || m.settings.back != screenHome {
-		t.Fatalf("Settings opens Settings from Home: screen %v, back %v", m.screen, m.settings.back)
+	m := visualApp(80, 24)
+	next, _ := m.Update(tea.MouseClickMsg{X: at(m, crumbMenu).x0, Y: 0, Button: tea.MouseLeft})
+	if m = next.(*app); !m.drawer || !m.sidebarKeys() {
+		t.Fatalf("≡ opens the drawer: drawer %v", m.drawer)
 	}
-	m = press(m, "esc")
-	m.View()
-	next, _ = m.Update(tea.MouseClickMsg{X: activity.x0, Y: 0, Button: tea.MouseLeft})
-	m = next.(*app)
-	if m.screen != screenActivity || m.activity.back != screenHome {
-		t.Errorf("Activity opens the log from Home: screen %v, back %v", m.screen, m.activity.back)
+
+	m = visualApp(120, 30)
+	sampleApprovals(m)
+	m = sampleChat(m)
+	next, _ = m.Update(tea.MouseClickMsg{X: at(m, crumbWaiting).x0, Y: 0, Button: tea.MouseLeft})
+	if m = next.(*app); m.here.kind != placeHome {
+		t.Fatalf("what waits goes Home: here %+v", m.here)
+	}
+	next, _ = m.Update(tea.MouseClickMsg{X: at(m, crumbEnv).x0, Y: 0, Button: tea.MouseLeft})
+	if m = next.(*app); m.screen != screenEnvs {
+		t.Errorf("the environment opens the picker: screen %v", m.screen)
 	}
 }
 
@@ -437,7 +465,7 @@ func TestClickingAKeycapPressesIt(t *testing.T) {
 		t.Errorf("the key bar's esc is on row %d, want 28", h.y)
 	}
 	next, _ = m.Update(tea.MouseClickMsg{X: h.x1 - 1, Y: h.y, Button: tea.MouseLeft})
-	if m = next.(*app); m.screen != screenHome {
+	if m = next.(*app); m.screen != screenMain {
 		t.Errorf("the key bar's esc goes back: screen %v", m.screen)
 	}
 }

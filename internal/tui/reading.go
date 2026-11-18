@@ -21,7 +21,7 @@ func (m *app) reading(r inboxRow, rc rect) []string {
 		return m.readingCard(*r.card, rc)
 	case r.thread != nil:
 		sb, _ := m.sandboxByID(r.thread.sandbox)
-		return m.sessionPane(*r.thread, sb, rc.w, rc.h)
+		return m.sessionPane(*r.thread, sb, rc)
 	case r.sb != "":
 		if sb, ok := m.sandboxByID(r.sb); ok {
 			return m.dashboard(sb, rc.w, rc.h)

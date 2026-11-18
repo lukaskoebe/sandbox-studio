@@ -54,11 +54,10 @@ func TestStopAndDeleteGoThroughTheServer(t *testing.T) {
 	}
 
 	m := newApp(ctx, c, s.Addr)
-	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
-	m.cursor = 0
-	m = run(m, m.remove(*m.selected()))
+	m = openComputer(m, sb.ID, tabDetails)
+	m = run(m, m.remove(*m.computerOn()))
 	if m.notice.text != "Deleted blub" || m.notice.failed {
 		t.Fatalf("delete notice: %+v", m.notice)
 	}

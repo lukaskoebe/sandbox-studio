@@ -1,23 +1,23 @@
-Sandbox Studio · Default                                     ▲ 2 waiting for you
+ ≡  Home                                                    ▲ 2 waiting for you 
 ────────────────────────────────────────────────────────────────────────────────
-  Home                                                       ▲ 2 waiting for you
-
- TEAMMATES
-  Iris frontend                                                                 
-  1 ✓ claude                                              in the terminal · done
-▸ 2 ○ Fix the login form                                         thread · 3m ago
-  3 ◷ Update the deploy notes                                 scheduled · 5h ago
-      + 4 older
-  4   main                                                   terminal · attached
-  Finn backend                                                               ▲ 2
-  5 ▲ codex                                            in the terminal · waiting
-  6 ▲ Port the parser to go                                     thread · waiting
-  7   main                                                              terminal
-  + New teammate                                                                
-
- YOUR COMPUTERS
-  ◐ demo  base                                                           booting
-  + New computer                                                                
-
+ WAITING FOR YOU · 2                                                            
+ ⇅ Finn  A computer wants pypi.org:443                                       1m 
+ ? Finn  Asks:                                                                  
+                                                                                
+ QUIET                                                                          
+▸✓ Iris  claude                                                       done   2m 
+ ○ Iris  Fix the login form                                           blub   3m 
+ ◷ Iris  Update the deploy notes                                 docs-site   5h 
+ ◐ demo  your computer · booting                                      base      
 ────────────────────────────────────────────────────────────────────────────────
-enter go in  1-9 jump in  tab next waiting  \ list  ? help  q quit  T new agent 
+claude · blub                                           ✓ in the terminal · done
+────────────────────────────────────────────────────────────────────────────────
+Connecting…                                                                     
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+────────────────────────────────────────────────────────────────────────────────
+enter thread  tab next  ? help  q quit  + new computer  l activity  , settings  

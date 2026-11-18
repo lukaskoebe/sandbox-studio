@@ -1,0 +1,29 @@
+ ◆ Studio          Default ▾  │ Iris › Fix the login form                                        ● blub ▾ · ▲ 4 · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 4 │ ┃ The login form doesn't submit on     │  Terminal   Details                  ● running 
+                              │ ┃ enter. Can you fix it?               │ ────────────━━━━━━━────────────────────────────
+ TEAMMATES                    │                                        │ blub                      ● Running · up 2h 14m
+  Iris frontend           ▲ 2 │   ▸ Thought it through                 │ ───────────────────────────────────────────────
+▌   ▲ Fix the login form      │   ▸ ≡ Read src/login.tsx         ● done│ Iris · node-22+python-3.13@2 · 2 CPUs · 2 GiB
+    ○ Rename the guides       │   ▸ ✎ Edit src/login.tsx         ● done│ 
+    ◷ Update the deploy notes │                                        │ CPU  2 % of 2 CPUs           avg 1 % · peak 2 %
+  Finn backend            ▲ 2 │ Fixed                                  │ 100┤                                           
+    ▲ Port the parser to go   │                                        │    │                                           
+  + New teammate              │ The form used a div as its button, so  │   0┤····························▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                              │ enter did nothing. It is a real submit │     86 s ago                                now
+ YOUR COMPUTERS               │ button now:                            │ 
+  ◐ demo              booting │                                        │ MEMORY  600 MiB / 2 GiB                    29 %
+  + New computer              │   │ tsx                                │     █████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+                              │   │ <button type="submit">Sign in</but…│     ····························▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+ ENVIRONMENT                  │                                        │ 
+  Computers                 4 │ • Enter submits the form.              │ ╭─────────────────────────────────────────────╮
+  Network                 ▲ 2 │ • The button is focusable.             │ ┃ ▶ AGENT PERMISSION… blub · Default · 3m ago │
+  Secrets                     │                                        │ ┃ In Iris's thread “Fix the login form”       │
+  Memory                      │ ╭─────────────────────────────────────╮│ ╰─────────────────────────────────────────────╯
+  Activity                    │ ┃ ⇅ NETWORK   blub… Default · 10m ago ││   1 more · Home answers them
+  , Settings              dev │ ┃ pattern *.npmjs.org ‹p›   scope Ir… ││ 
+                              │ ┃  y  Allow   n  Deny   o  Once   O … ││ TERMINALS  main · claude · 2
+                              │ ╰─────────────────────────────────────╯│ PORTS      :3000 · :8080
+                              │  › Write to Iris…          enter write │ HISTORY    ○──·──●──◇──○──◆ now
+──────────────────────────────┴────────────────────────────────────────┴────────────────────────────────────────────────
+y allow  n deny  o allow once  enter write  ↑/↓ tools  pgup scroll  + new thread  tab computer  t terminal …

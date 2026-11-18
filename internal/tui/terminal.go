@@ -15,17 +15,14 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/term"
 
-	tea "charm.land/bubbletea/v2"
-
-	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
-// terminalName is the sandbox's tmux session t attaches to: the one the web workspace opens
-// first, which it creates when it doesn't exist.
+// terminalName is the sandbox's tmux session a Terminal tab opens first: the one the web
+// workspace opens first, which it creates when it doesn't exist.
 const terminalName = "main"
 
-// detachKey is Ctrl-], which returns from an attached terminal to the TUI.
+// detachKey is Ctrl-], which lets go of an attached terminal.
 const detachKey = 0x1d
 
 // resizeEvery is how often the attached terminal's size is checked. Polling works on every
@@ -40,20 +37,8 @@ const (
 	quietFor       = 150 * time.Millisecond
 )
 
-// attachDone ends an attachment: err is why the terminal could not be shown, or nil when the
-// user detached. waiting is an approval of the sandbox that came in while it was attached and
-// still waited when the user detached.
-type attachDone struct {
-	id      string // the sandbox's
-	sandbox string
-	name    string // the terminal's
-	waiting string
-	err     error
-}
-
-// attachment is a sandbox's terminal, shown in this terminal. The TUI hands the screen, the keys
-// and the resizes to the sandbox until the user presses Ctrl-]. It is a tea.ExecCommand, so
-// Bubble Tea releases the terminal while it runs and takes it back afterwards.
+// attachment is a sandbox's terminal, shown in this terminal, as studio shell shows it: the
+// screen, the keys and the resizes go to the sandbox until the user presses Ctrl-].
 type attachment struct {
 	ctx     context.Context
 	client  *Client
@@ -64,7 +49,7 @@ type attachment struct {
 	out     io.Writer // the terminal's output, given by Bubble Tea
 	// size is the terminal's size when it is not a terminal itself, such as in tests.
 	size func() (cols, rows uint16)
-	// watch has the attachment tell of the sandbox's new approvals, as the TUI's does.
+	// watch has the attachment tell of the sandbox's new approvals.
 	watch bool
 
 	mu      sync.Mutex
@@ -72,10 +57,6 @@ type attachment struct {
 	waiting string    // a new approval that waits, by its ID
 	ended   bool      // the sandbox ended the terminal
 }
-
-func (a *attachment) SetStdin(r io.Reader)  { a.in = r }
-func (a *attachment) SetStdout(w io.Writer) { a.out = w }
-func (a *attachment) SetStderr(io.Writer)   {}
 
 // Run shows the terminal until the user detaches. The sandbox's end of the terminal is shown
 // too, and then any key returns; that key is not sent to the sandbox.
@@ -325,35 +306,8 @@ func (c *Client) Attach(ctx context.Context, env, id, name string, cols, rows ui
 	return conn, nil
 }
 
-// AttachTerminal shows a running sandbox's terminal by its name in this one, as the TUI does,
+// AttachTerminal shows a running sandbox's terminal by its name in this one,
 // until the user detaches with Ctrl-] or the sandbox ends the terminal. See Shell.
 func AttachTerminal(ctx context.Context, c *Client, env, sandbox, name string) error {
 	return Shell(ctx, c, env, sandbox, name, os.Stdin, os.Stdout)
-}
-
-// attachTo shows a sandbox's terminal by its name. Only a running sandbox has terminals; the
-// others say what to do.
-func (m *app) attachTo(sb *sandboxes.View, name string) tea.Cmd {
-	if sb == nil {
-		return nil
-	}
-	switch phaseOf(*sb) {
-	case phaseReady:
-	case phaseStopped, phaseSuspended:
-		m.setNotice("Start "+sb.Name+" first, with s.", false)
-		return nil
-	case phaseFailed:
-		m.setNotice(sb.Name+" could not be created. Delete it with d.", true)
-		return nil
-	default:
-		m.setNotice(sb.Name+" is still starting.", false)
-		return nil
-	}
-	sandbox, id := sb.Name, sb.ID
-	at := &attachment{ctx: m.ctx, client: m.client, env: m.env.ID, sandbox: sb.ID, name: name, watch: true}
-	return tea.Exec(at, func(err error) tea.Msg {
-		at.mu.Lock()
-		defer at.mu.Unlock()
-		return attachDone{id: id, sandbox: sandbox, name: name, waiting: at.waiting, err: err}
-	})
 }

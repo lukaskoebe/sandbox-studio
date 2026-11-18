@@ -1,49 +1,49 @@
- ◆ Studio  Default ▾   Home 1   Activity   Settings                                                                                                     ▲ 1 waiting for you · 12:00 
-───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 1 │ Finn · backend                                                                                                                                ○ idle
-                              │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- TEAMMATES                    │ COMPUTER   ● api-refactor · go@2 · 2 CPUs · 2 GiB · up 12m
-  Iris frontend               │ 
-▌ Finn backend            ▲ 1 │ THREADS    none yet; c starts one
-  + New teammate              │ 
-                              │ TASKS      …
- YOUR COMPUTERS               │ 
-  ◐ demo              booting │ NETWORK    Default, the environment's · new rules apply to Finn's computers
-  + New computer              │ 
-                              │ c new thread · T agent in a terminal · t shell · + another computer · f fork
- ENVIRONMENT                  │ 
-  Computers                 4 │ 
-  Network                 ▲ 1 │ 
-  Secrets                     │ 
-  Memory                      │ 
-  Activity                    │ 
-  , Settings              dev │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-c new thread  T agent  t shell  + add computer  →/← older threads  f fork  s start/stop  1-9 jump in  tab next waiting │ ? more  q quit
+ ◆ Studio          Default ▾  │ Home                                                                                                                    ▲ 1 waiting for you · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 1 │  WAITING FOR YOU · 1                                        │ demo                                                                         ◐ Booting
+                              │  ⇅ Finn  A computer wants pypi.org:443                   1m │ ──────────────────────────────────────────────────────────────────────────────────────
+ TEAMMATES                    │                                                             │ no teammate · base · 0 CPUs · 0 MiB                                                   
+▌ Iris frontend               │  QUIET                                                      │                                                                                       
+  Finn backend            ▲ 1 │ ▌◐ demo  your computer · booting                  base      │ CPU  ▓▒░░░░░░░░░░░░░░░░░░░░░░                                                         
+  + New teammate              │                                                             │                                                                                       
+                              │  EARLIER TODAY                                              │ HISTORY    …                                                                          
+ YOUR COMPUTERS               │  Loading…                                                   │ ID         sb4                                                                        
+  ◐ demo              booting │                                                             │                                                                                       
+  + New computer              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+ ENVIRONMENT                  │                                                             │                                                                                       
+  Computers                 4 │                                                             │                                                                                       
+  Network                 ▲ 1 │                                                             │                                                                                       
+  Secrets                     │                                                             │                                                                                       
+  Memory                      │                                                             │                                                                                       
+  Activity                    │                                                             │                                                                                       
+  , Settings              dev │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+                              │                                                             │                                                                                       
+──────────────────────────────┴─────────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────
+enter open  tab next  + new computer │ l activity  , settings  e env  \ sidebar │ ? more  q quit

@@ -1,6 +1,10 @@
 # Home as a sidebar and a pane (design)
 
-Status: built (2026-10-18), the banner reworked the same day; [tui.md](../tui.md#the-pane) describes it as it is. It follows
+Replaced (2026-11-18) by [tui-frame.md](tui-frame.md): the sidebar, a thread and its computer.
+What follows is the design as it was.
+
+Status: built (2026-10-18), the banner reworked the same day, and replaced on 2026-11-18; the
+pane is now [the computer](../tui.md#the-computer). It follows
 [tui-sessions.md](tui-sessions.md), which put every session one key away, and is mock A2 of the
 layout proposals: a sidebar of sandboxes with their sessions, and beside it the selected
 session as it runs, as herdr shows its agents.

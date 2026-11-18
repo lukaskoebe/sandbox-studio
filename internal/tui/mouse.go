@@ -23,7 +23,7 @@ const (
 	rowFold                            // a folded tool call or thought of a transcript
 	rowFile                            // a file of the git review's file list
 	rowPush                            // a push or pull request of the Git screen
-	rowTree                            // a row of Home's list, by its index among homeRows
+	rowTree                            // a row of the sidebar, by its index among homeRows
 	rowSetting                         // a section of Settings
 )
 
@@ -46,7 +46,7 @@ type keyHit struct {
 type mouseState struct {
 	rows  []rowHit
 	keys  []keyHit
-	tabs  []tabSpan
+	crumb []crumbSpan // the parts of the crumb row, and the sidebar's environment, on row 0
 	last  time.Time
 	lastX int
 	lastY int
@@ -89,14 +89,14 @@ func pressOf(k string) tea.KeyPressMsg {
 func (m *app) typingKeys() bool {
 	return m.filtering || m.typing != nil || m.confirm != nil ||
 		(m.checkpoints.restoring != nil && m.screen == screenCheckpoints) ||
-		(m.chatShows() && m.chats.composing)
+		m.composerKeys()
 }
 
 // enterKey is the key a double click presses.
 var enterKey = tea.KeyPressMsg{Code: tea.KeyEnter}
 
-// click answers a click: on a tab or a key it acts as that key, on a row it selects it, and a
-// double click opens it as enter does.
+// click answers a click: on a part of the crumb row or a key it acts as that does, on a row it
+// selects it, a double click opens it as enter does, and a click in a column gives it the cursor.
 func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if msg.Button != tea.MouseLeft || m.look.plain || m.typingKeys() {
 		return m, nil
@@ -108,9 +108,9 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		m.mouse.last = time.Time{} // a third click starts again
 	}
 	if msg.Y == 0 {
-		for _, s := range m.mouse.tabs {
+		for _, s := range m.mouse.crumb {
 			if msg.X >= s.x0 && msg.X < s.x1 {
-				return m, m.openTab(s)
+				return m, m.clickCrumb(s.part)
 			}
 		}
 		return m, nil
@@ -126,11 +126,67 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			return m.clickRow(r, double)
 		}
 	}
-	// A click in Home's pane gives it the keys.
-	if _, ok := m.paneTarget(); ok && m.paneRect().has(msg.X, msg.Y) {
-		return m, m.focusPane()
+	return m, m.clickColumn(msg.X, msg.Y)
+}
+
+// clickCrumb acts on a part of the crumb row: ≡ opens the drawer, the chip shows the teammate's
+// next computer, what waits goes to Home, and the environment opens the picker.
+func (m *app) clickCrumb(part crumbPart) tea.Cmd {
+	switch part {
+	case crumbMenu:
+		m.toggleSidebar()
+	case crumbChip:
+		m.nextComputer()
+	case crumbWaiting:
+		if m.screen != screenMain || m.here.kind != placeHome {
+			return m.open(place{})
+		}
+	case crumbEnv:
+		m.openEnvs()
 	}
-	return m, nil
+	return nil
+}
+
+// clickColumn gives the column under a click of the frame the cursor; on a terminal that is on
+// show, the keys.
+func (m *app) clickColumn(x, y int) tea.Cmd {
+	if m.screen != screenMain {
+		return nil
+	}
+	l := m.layoutFor(m.width)
+	if m.drawer && x <= sidebarW {
+		return nil
+	}
+	if m.drawer {
+		m.drawer, m.focus = false, focusMain
+		return nil
+	}
+	if l.sidebar > 0 && x < l.sidebar {
+		m.focus = focusSidebar
+		m.chats.composing = false
+		return nil
+	}
+	if rc, ok := m.paneRect(); ok && rc.has(x, y) {
+		if t, on := m.paneTarget(); on && t.kind != sessionChat {
+			if m.sidePane() == paneComputer {
+				if _, side := m.frameColumns(); side.has(x, y) {
+					m.focus = focusSide
+				} else {
+					m.focus = focusMain
+				}
+			}
+			return m.focusPane()
+		}
+	}
+	main, side := m.frameColumns()
+	switch {
+	case side.w > 0 && side.has(x, y) && m.sidePane() == paneComputer:
+		m.focus = focusSide
+		m.chats.composing = false
+	case main.has(x, y):
+		m.focus = focusMain
+	}
+	return nil
 }
 
 // clickRow selects what a row leads to; a double click opens it, as enter would.
@@ -139,14 +195,17 @@ func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 	case rowInbox:
 		if rows := m.inboxRows(); r.index < len(rows) {
 			m.inboxTo(rows, r.index)
-			m.inbox.sidebar, m.pane.focus = false, false
+			m.focus, m.pane.focus = focusMain, false
 		}
 	case rowEntry:
 		m.activity.cursor = r.index
 	case rowTree:
 		if rows := m.homeRows(); r.index < len(rows) {
 			m.setCursor(rows[r.index])
-			m.pane.focus, m.inbox.sidebar = false, true
+			m.pane.focus = false
+			if !m.drawer {
+				m.focus = focusSidebar
+			}
 		}
 	case rowCheckpoint:
 		m.checkpoints.cursor = r.index
@@ -190,27 +249,32 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 	switch m.screen {
 	case screenPager:
 		m.pager.scroll = max(m.pager.scroll+dir*wheelLines, 0)
-	case screenChat:
-		m.wheelChat(dir)
-	case screenHome:
-		_, onSession := m.paneTarget()
+	case screenMain:
 		reading, readingOn := m.readingRect()
-		x0, _ := m.homeColumn()
+		chat := m.chatRect()
+		main, _ := m.frameColumns()
+		rc, termOn := m.paneRect()
+		_, target := m.paneTarget()
+		l := m.layoutFor(m.width)
 		switch {
-		case m.chats.inPane && onSession && m.paneRect().has(msg.X, msg.Y):
-			m.wheelChat(dir)
-		case m.paneFocused() || onSession && m.paneRect().has(msg.X, msg.Y):
-			// a terminal in the pane scrolls itself: its program reads the keys
-		case readingOn && reading.has(msg.X, msg.Y):
-			m.inbox.scroll = max(m.inbox.scroll+dir*wheelLines, 0)
-		case m.inboxShows() && msg.X >= x0:
-			m.inboxMove(dir)
-		default:
+		case m.drawer && msg.X <= sidebarW, l.sidebar > 0 && msg.X < l.sidebar:
 			k := tea.KeyPressMsg{Code: tea.KeyDown}
 			if dir < 0 {
 				k = tea.KeyPressMsg{Code: tea.KeyUp}
 			}
-			m.key(k)
+			if m.drawer || m.focus == focusSidebar {
+				m.key(k)
+			} else {
+				m.moveRow(dir)
+			}
+		case m.chats.on && chat.has(msg.X, msg.Y) && (m.chats.reading || m.mainPane() == paneThread):
+			m.wheelChat(dir)
+		case target && termOn && rc.has(msg.X, msg.Y):
+			// a terminal scrolls itself: its program reads the keys
+		case readingOn && reading.has(msg.X, msg.Y):
+			m.inbox.scroll = max(m.inbox.scroll+dir*wheelLines, 0)
+		case m.inboxShows() && main.has(msg.X, msg.Y):
+			m.inboxMove(dir)
 		}
 	case screenActivity, screenCheckpoints, screenEnvs:
 		if m.checkpoints.restoring != nil && m.screen == screenCheckpoints {
@@ -232,39 +296,4 @@ func (m *app) wheelChat(dir int) {
 	}
 	total := len(m.transcript(m.chatWidth()).lines)
 	c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
-}
-
-// openTab shows a tab's screen, as its key does: Home is Home's row. The environment's name opens the picker from Home, as e does.
-func (m *app) openTab(s tabSpan) tea.Cmd {
-	if s.env {
-		if m.screen == screenHome {
-			m.openEnvs()
-		}
-		return nil
-	}
-	leave := func() {
-		if m.screen == screenChat {
-			m.stopChat()
-		}
-	}
-	switch s.tab {
-	case tabHome:
-		leave()
-		m.goHome()
-	case tabSettings:
-		if m.screen == screenSettings {
-			return nil
-		}
-		leave()
-		m.screen = screenHome
-		return m.openSettings()
-	case tabActivity:
-		if m.screen == screenActivity {
-			return nil
-		}
-		leave()
-		m.screen = screenHome // a tab is a way in from the top: esc returns to Home
-		return m.openActivity("")
-	}
-	return nil
 }

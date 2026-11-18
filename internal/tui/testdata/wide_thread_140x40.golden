@@ -1,0 +1,39 @@
+ ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 4 · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 4 │ ┃ The login form doesn't submit on enter.   │  Terminal   Details                                 ● running 
+                              │ ┃ Can you fix it?                           │ ────────────━━━━━━━───────────────────────────────────────────
+ TEAMMATES                    │                                             │ blub                                     ● Running · up 2h 14m
+  Iris frontend           ▲ 2 │   ▸ Thought it through                      │ ──────────────────────────────────────────────────────────────
+▌   ▲ Fix the login form      │   ▸ ≡ Read src/login.tsx              ● done│ Iris · node-22+python-3.13@2 · 2 CPUs · 2 GiB
+    ○ Rename the guides       │   ▸ ✎ Edit src/login.tsx              ● done│ 
+    ◷ Update the deploy notes │                                             │ CPU  2 % of 2 CPUs                          avg 1 % · peak 2 %
+  Finn backend            ▲ 2 │ Fixed                                       │ 100┤                                                          
+    ▲ Port the parser to go   │                                             │    │                                                          
+  + New teammate              │ The form used a div as its button, so enter │    │                                                          
+                              │ did nothing. It is a real submit button now:│   0┤···········································▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+ YOUR COMPUTERS               │                                             │     116 s ago                                              now
+  ◐ demo              booting │   │ tsx                                     │ 
+  + New computer              │   │ <button type="submit">Sign in</button>  │ MEMORY  600 MiB / 2 GiB                                   29 %
+                              │                                             │     █████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+ ENVIRONMENT                  │ • Enter submits the form.                   │     ···········································▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+  Computers                 4 │ • The button is focusable.                  │ 
+  Network                 ▲ 2 │                                             │ ╭────────────────────────────────────────────────────────────╮
+  Secrets                     │                                             │ ┃ ▶ AGENT PERMISSION   npm test      blub · Default · 3m ago │
+  Memory                      │                                             │ ┃ In Iris's thread “Fix the login form”                      │
+  Activity                    │                                             │ ╰────────────────────────────────────────────────────────────╯
+  , Settings              dev │                                             │   1 more · Home answers them
+                              │                                             │ 
+                              │                                             │ TERMINALS  main · claude · 2
+                              │                                             │ PORTS      :3000 · :8080
+                              │                                             │ HISTORY    ○──·──●──◇──○──◆ now
+                              │                                             │            created 3d ago · 2 checkpoints · 1 fork · 1 restore
+                              │                                             │ ID         sb1
+                              │                                             │ 
+                              │ ╭──────────────────────────────────────────╮│ NETWORK
+                              │ ┃ ⇅ NETWORK   blub wan…  Default · 10m ago ││ Loading…
+                              │ ┃ pattern *.npmjs.org ‹p›   scope Iris's … ││ 
+                              │ ┃  y  Allow   n  Deny   o  Once   O  Deny… ││ 
+                              │ ╰──────────────────────────────────────────╯│ 
+                              │  › Write to Iris…               enter write │ 
+──────────────────────────────┴─────────────────────────────────────────────┴───────────────────────────────────────────────────────────────
+y allow  n deny  o allow once  enter write  ↑/↓ tools  pgup scroll  + new thread  tab computer  t terminal  m next computer  \ sidebar …

@@ -32,10 +32,9 @@ const chatPageTurns = 40
 // chatState is what the chat screen shows: a chat of a sandbox with its transcript, kept
 // current from the chat's stream.
 type chatState struct {
-	sandbox sandboxes.View // the sandbox whose chat this is
-	back    screen         // where esc returns to
-	picking bool           // c waits for the sandbox's chats, to open the newest
-	inPane  bool           // the chat shows in Home's pane, not on its own screen
+	sandbox sandboxes.View // the computer whose chat this is
+	on      bool           // a thread or a new one is open: in the main column, or in Home's reading pane
+	reading bool           // it is Home's reading pane's, which esc and the composer don't reach
 
 	id     string // the chat on show; "" for a new chat, which the first prompt starts
 	gen    int    // counts the chats opened, so the messages of a stream left behind are dropped
@@ -65,11 +64,6 @@ type chatState struct {
 
 // The messages of the chat screens. gen ties a chat's messages to the chat they were for.
 type (
-	chatsListed struct {
-		sandbox string
-		list    []store.Chat
-		err     error
-	}
 	chatLoaded struct {
 		gen int
 		log chat.Log
@@ -106,7 +100,6 @@ var (
 	keyPrompt  = key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "prompt"))
 	keyExpand  = key.NewBinding(key.WithKeys("enter", "space"), key.WithHelp("enter", "expand"))
 	keyStop    = key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "stop"))
-	keyNewChat = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new thread"))
 	keySend    = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send"))
 	keyNewline = key.NewBinding(key.WithKeys("shift+enter", "ctrl+j"), key.WithHelp("ctrl+j", "new line"))
 	keyLeave   = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
@@ -116,50 +109,6 @@ var (
 	keyTop     = key.NewBinding(key.WithKeys("home", "g"))
 	keyBottom  = key.NewBinding(key.WithKeys("end", "G"))
 )
-
-// openChats opens the newest chat of a sandbox, or a new one when it has none. Only a sandbox
-// with a teammate has chats: the chat is with its teammate.
-func (m *app) openChats(sb *sandboxes.View) tea.Cmd {
-	if !m.chatsIn(sb) {
-		return nil
-	}
-	m.stopChat()
-	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, picking: true, gen: m.chats.gen}
-	return m.loadChats()
-}
-
-// newChat opens the composer of a new chat in a sandbox; the first prompt starts it.
-func (m *app) newChat(sb *sandboxes.View) tea.Cmd {
-	if !m.chatsIn(sb) {
-		return nil
-	}
-	m.stopChat()
-	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, gen: m.chats.gen}
-	return m.openChat("")
-}
-
-// chatsIn reports whether a sandbox has chats, saying why not when it hasn't.
-func (m *app) chatsIn(sb *sandboxes.View) bool {
-	if sb == nil {
-		return false
-	}
-	if sb.TeammateID == "" {
-		m.setNotice(sb.Name+" has no teammate to work with. Give it one in the browser.", true)
-		return false
-	}
-	return true
-}
-
-// loadChats reads the chats of the chat screen's sandbox, for c to open the newest.
-func (m *app) loadChats() tea.Cmd {
-	ctx, client, env, sandbox := m.ctx, m.client, m.env.ID, m.chats.sandbox.ID
-	return func() tea.Msg {
-		rctx, cancel := requestContext(ctx)
-		defer cancel()
-		list, err := client.SandboxChats(rctx, env, sandbox)
-		return chatsListed{sandbox: sandbox, list: list, err: err}
-	}
-}
 
 // openChat shows a chat: its log, then its stream from the log's rev. An empty id opens a new
 // chat, whose composer starts it.
@@ -173,9 +122,7 @@ func (m *app) openChat(id string) tea.Cmd {
 	c.laid, c.sorted = map[string]laidItem{}, nil
 	c.from, c.early = 0, false
 	c.fold, c.scroll = -1, 0
-	if !c.inPane {
-		m.screen = screenChat
-	}
+	c.on = true
 	if id == "" {
 		c.composing = true
 		return nil
@@ -273,19 +220,6 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		return gen == c.gen && m.chatShows() && c.id != ""
 	}
 	switch msg := msg.(type) {
-	case chatsListed:
-		if msg.sandbox != c.sandbox.ID || !c.picking || m.screen == screenChat {
-			return nil, true
-		}
-		c.picking = false
-		if msg.err != nil {
-			m.fail(msg.err)
-			return nil, true
-		}
-		if len(msg.list) == 0 {
-			return m.openChat(""), true
-		}
-		return m.openChat(byActivity(msg.list)[0].ID), true
 	case chatLoaded:
 		if !current(msg.gen) {
 			return nil, true
@@ -385,10 +319,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		}
 		c.draft.set("")
 		m.setNotice("", false)
-		if !m.chatShows() || c.id != "" {
-			return nil, true
-		}
-		return m.openChat(msg.chat.ID), true
+		return m.threadStarted(msg.chat), true
 	case promptSent:
 		if msg.gen != c.gen {
 			return nil, true
@@ -483,8 +414,7 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	folds := len(m.transcript(m.chatWidth()).folds)
 	switch {
 	case key.Matches(msg, keyBack):
-		m.stopChat()
-		m.screen = c.back
+		return m, m.back()
 	case key.Matches(msg, keyUp):
 		switch {
 		case folds == 0:
@@ -520,13 +450,6 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		c.fold, c.scroll = -1, 0
 	case key.Matches(msg, keyStop):
 		return m, m.stopTurn()
-	case key.Matches(msg, keyNewChat):
-		return m, m.openChat("")
-	case key.Matches(msg, keyAnswerIt) && m.screen == screenChat:
-		if card, ok := m.sandboxCard(c.sandbox.ID); ok {
-			id := card.first().ID
-			m.goWaiting(id, &resumeState{approval: id, back: screenChat})
-		}
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
@@ -608,10 +531,7 @@ func (m *app) composeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keySend):
 		return m, m.send()
 	case key.Matches(msg, keyEsc):
-		c.composing = false
-		if c.id == "" { // a new chat that never started
-			m.screen = c.back
-		}
+		c.composing = false // the draft stays for the next time
 	default:
 		c.draft.key(msg)
 	}
@@ -623,11 +543,11 @@ func (m *app) startComposing() tea.Cmd {
 	c := &m.chats
 	switch {
 	case c.gone:
-		m.setNotice("This thread was deleted. n starts a new one.", true)
+		m.setNotice("This thread was deleted. + starts a new one.", true)
 	case c.chat.State == store.ChatTerminal:
 		m.setNotice("This thread continues in the computer's terminal. Bring it back to the thread in the browser.", false)
 	case c.chat.State == store.ChatOrphaned:
-		m.setNotice("This thread ended: its computer was reset or removed. n starts a new one.", false)
+		m.setNotice("This thread ended: its computer was reset or removed. + starts a new one.", false)
 	default:
 		c.composing = true
 	}
@@ -689,27 +609,24 @@ func (m *app) scrollTranscript(dir int) {
 	c.scroll = min(max(c.scroll-dir*max(rows-1, 1), 0), max(total-rows, 0))
 }
 
-// transcriptRows is how many rows the transcript gets: the body less the chat's title line and
-// the composer.
+// transcriptRows is how many rows the transcript gets: the rows the chat is drawn in less its
+// title line, the card waiting above the composer and the composer.
 func (m *app) transcriptRows() int {
-	rows := m.bodyRows()
-	if m.chats.inPane {
-		rows = m.paneRect().h
+	top := 0
+	if m.chats.reading {
+		top = 1 // the title
 	}
-	return max(rows-1-m.composerRows(), 1)
+	return max(m.chatRect().h-top-m.threadCardRows()-m.composerRows(), 1)
 }
 
-// chatShows reports whether the chat is on show: on its screen, or in Home's pane.
+// chatShows reports whether a chat is on show: a thread, or Home's reading pane's.
 func (m *app) chatShows() bool {
-	return m.screen == screenChat || m.chats.inPane
+	return m.chats.on
 }
 
-// chatWidth is the width the chat on show is laid out in: the screen's, or the pane's.
+// chatWidth is the width the chat on show is laid out in.
 func (m *app) chatWidth() int {
-	if m.chats.inPane {
-		return m.paneW()
-	}
-	return m.width
+	return m.chatRect().w
 }
 
 // lastFoldInView is the last folded item the transcript shows, or the last one above the view.
@@ -1273,12 +1190,22 @@ func (m *app) chatBody(w, h int) []string {
 			state = styleDim.Render(chatStateWords[c.chat.State])
 		}
 	}
-	lines := []string{spread(styleBold.Render(title), state, w)}
-	box := m.composer(w)
-	rows := max(h-1-len(box), 1)
+	var lines []string // the crumb row says which thread it is; Home's reading pane says it here
+	if c.reading {
+		lines = []string{spread(styleBold.Render(title), state, w)}
+	}
+	card, caps := m.threadCardLines(w)
+	box := append(card, m.composer(w)...)
+	defer func() { // the card's keycaps, once its rows are known
+		top := bodyTop + h - len(box)
+		for _, k := range caps {
+			m.hitKeys(top+k.y, k.x0, []keySpan{{x1: k.x1 - k.x0, key: k.key}})
+		}
+	}()
+	rows := max(h-len(lines)-len(box), 1)
 	switch {
 	case c.gone:
-		return append(lines, "", "This thread was deleted. Press n to start a new one.")
+		return append(lines, "", "This thread was deleted. Press + to start a new one.")
 	case c.id == "":
 		return withComposer(append(lines, "", styleDim.Render("Write what "+m.teammateName()+" should do. Enter sends it and starts the thread.")), box, h)
 	case !c.loaded:
@@ -1299,22 +1226,20 @@ func (m *app) chatBody(w, h int) []string {
 			m.hitRow(len(lines)+f.line-start, 0, w, rowFold, i)
 		}
 	}
-	return withComposer(m.withBanner(append(lines, t.lines[start:end]...), w), box, h)
+	return withComposer(append(lines, t.lines[start:end]...), box, h)
 }
 
-// withBanner draws the approval waiting in the chat's sandbox over the transcript, under the
-// title, as Home's pane does over a terminal. The chat's own permission requests are in the
-// transcript instead.
-func (m *app) withBanner(lines []string, w int) []string {
-	c, ok := m.sandboxCard(m.chats.sandbox.ID)
-	if !ok || w < 24 || m.chats.inPane && m.inboxShows() { // Home's list shows the request itself
-		return lines
+// threadStarted shows the thread the first prompt of a new one started: in place of the new
+// thread, or from the teammate's home it was written on.
+func (m *app) threadStarted(ch store.Chat) tea.Cmd {
+	switch {
+	case m.here.kind == placeThread && m.here.chat == "" && m.here.term == "":
+		m.here.chat = ch.ID
+		return m.openChat(ch.ID)
+	case m.here.kind == placeMate:
+		return m.open(place{kind: placeThread, mate: m.here.mate, chat: ch.ID, sandbox: ch.SandboxID})
 	}
-	typing := m.screen == screenChat || m.paneFocused()
-	b := m.banner(c, m.chats.sandbox.ID, typing, w)
-	lines = pad(lines, len(b)+1)
-	copy(lines[1:], b)
-	return lines
+	return nil
 }
 
 // chatBindings are the keys the key bar shows on the chat screen.
@@ -1335,7 +1260,7 @@ func (m *app) chatBindings() []key.Binding {
 	if c.running() {
 		bindings = append(bindings, keyStop)
 	}
-	return append(bindings, keyNewChat, keyBack, keyHelp)
+	return append(bindings, keyNewThread, keyBack)
 }
 
 // askOwner names the choices of a permission request or question for the arrows.

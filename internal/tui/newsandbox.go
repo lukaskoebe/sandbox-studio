@@ -166,10 +166,11 @@ func (m *app) followProgress() {
 	}
 	switch {
 	case !found:
-		m.screen = screenHome
+		m.screen = screenMain
 	case listed && phaseOf(sb) != phaseCreating && phaseOf(sb) != phaseFailed:
 		m.reselect(sb.ID)
-		m.screen = screenDetail
+		m.open(place{kind: placeComputer, sandbox: sb.ID})
+		m.comp.tab = tabDetails
 		m.setNotice("Created "+sb.Name+".", false)
 	}
 }
@@ -188,7 +189,7 @@ func (m *app) newKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case n.step == stepTemplate && len(m.team) > 0:
 			n.step = stepTeammate
 		default:
-			m.screen = screenHome
+			m.screen = screenMain
 		}
 	}
 	if n.step == stepName {
@@ -227,7 +228,7 @@ func (m *app) progressKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	sb, _, found := m.progressSandbox()
 	switch {
 	case key.Matches(msg, keyBack):
-		m.screen = screenHome
+		m.screen = screenMain
 		if found {
 			m.reselect(sb.ID)
 		}
@@ -482,7 +483,7 @@ func (m *app) forked(msg sandboxForked) tea.Cmd {
 		m.setNotice(msg.err.Error(), true)
 		return nil
 	}
-	if m.screen != screenHome && m.screen != screenDetail {
+	if m.screen != screenMain {
 		m.setNotice("Forking "+msg.sb.Name+"…", false)
 		return m.refresh()
 	}

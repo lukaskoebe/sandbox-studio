@@ -11,18 +11,18 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
-// Home's list is the web's sidebar: Home first, with what waits for you; TEAMMATES, each with
-// its threads under it; YOUR COMPUTERS, the computers without a teammate with their terminals;
-// and ENVIRONMENT, the places of the environment and Settings.
+// The sidebar is the web's sidebar: Home first, with what waits for you; TEAMMATES, each with
+// its threads under it; YOUR COMPUTERS, the computers without a teammate; and ENVIRONMENT, the
+// places of the environment and Settings.
 
-// rowKind is what a row of Home's list is.
+// rowKind is what a row of the sidebar is.
 type rowKind int
 
 const (
-	atSandbox rowKind = iota // a computer of yours, under YOUR COMPUTERS, or a terminal under it
+	atSandbox rowKind = iota // a computer of yours, under YOUR COMPUTERS
 	atHome                   // Home's row: what waits for you
 	atMate                   // a teammate's row
-	atThread                 // a row under a teammate: a thread, or a terminal of its computers
+	atThread                 // a row under a teammate: a thread, or its agent in a terminal
 	atPlace                  // an ENVIRONMENT row, or Settings
 	atAction                 // + New teammate, + New computer
 )
@@ -31,16 +31,16 @@ const (
 type envPlace int
 
 const (
-	placeComputers envPlace = iota
-	placeNetwork
-	placeSecrets
-	placeMemory
-	placeActivity
-	placeSettings
+	envComputers envPlace = iota
+	envNetwork
+	envSecrets
+	envMemory
+	envActivity
+	envSettings
 )
 
 // envPlaces are ENVIRONMENT's rows, in order.
-var envPlaces = []envPlace{placeComputers, placeNetwork, placeSecrets, placeMemory, placeActivity, placeSettings}
+var envPlaces = []envPlace{envComputers, envNetwork, envSecrets, envMemory, envActivity, envSettings}
 
 // rowAction is a row that makes something new.
 type rowAction int
@@ -50,14 +50,14 @@ const (
 	actionNewComputer
 )
 
-// Sections of Home's list, the dim labels above their first rows.
+// Sections of the sidebar, the dim labels above their first rows.
 const (
 	sectionTeammates   = "TEAMMATES"
 	sectionComputers   = "YOUR COMPUTERS"
 	sectionEnvironment = "ENVIRONMENT"
 )
 
-// homeRow is a row of Home's list. sb is a computer by its index among the visible ones: a
+// homeRow is a row of the sidebar. sb is a computer by its index among the visible ones: a
 // computer of yours, the computer of a thread, a teammate's first computer, or -1. sub is the
 // row's index among threadsOf(mate) for a thread, among sessionsOf for a terminal of yours, and
 // -1 for the computer's own row.
@@ -67,12 +67,11 @@ type homeRow struct {
 	sb, sub int
 	place   envPlace
 	action  rowAction
-	num     int    // the session's number, 1 to 9, or 0
 	gap     bool   // a blank line goes before the row
 	section string // the section's label, drawn before its first row
 }
 
-// homeRows are the rows of Home's list, in order. While the filter narrows the list, only the
+// homeRows are the rows of the sidebar, in order. While the filter narrows the list, only the
 // teammates and computers that match show, with their threads and terminals.
 func (m *app) homeRows() []homeRow {
 	visible := m.visible()
@@ -96,13 +95,6 @@ func (m *app) homeRows() []homeRow {
 		}
 		rows = append(rows, r)
 	}
-	num := 0
-	number := func(r *homeRow, x session) {
-		if x.kind != sessionOlder && num < 9 {
-			num++
-			r.num = num
-		}
-	}
 	if !filtering {
 		add(homeRow{kind: atHome, sb: -1, sub: -1}, "")
 	}
@@ -117,9 +109,7 @@ func (m *app) homeRows() []homeRow {
 		}
 		add(r, sectionTeammates)
 		for j, x := range m.threadsOf(t.ID) {
-			tr := homeRow{kind: atThread, mate: t.ID, sb: at(x.sandbox), sub: j}
-			number(&tr, x)
-			add(tr, sectionTeammates)
+			add(homeRow{kind: atThread, mate: t.ID, sb: at(x.sandbox), sub: j}, sectionTeammates)
 		}
 	}
 	if !filtering {
@@ -127,11 +117,6 @@ func (m *app) homeRows() []homeRow {
 	}
 	for _, i := range m.yourComputers() {
 		add(homeRow{sb: i, sub: -1}, sectionComputers)
-		for j, x := range m.sessionsOf(visible[i]) {
-			r := homeRow{sb: i, sub: j}
-			number(&r, x)
-			add(r, sectionComputers)
-		}
 	}
 	if filtering {
 		return rows
@@ -151,14 +136,6 @@ func (m *app) setCursor(r homeRow) {
 	}
 	m.sub = r.sub
 	m.rowPlace, m.rowAction = r.place, r.action
-}
-
-// goHome puts the cursor on Home's row, and Home on show.
-func (m *app) goHome() {
-	m.screen = screenHome
-	m.at, m.mate, m.sub = atHome, "", -1
-	m.pane.focus, m.inbox.sidebar = false, false
-	m.filter = ""
 }
 
 // cursorRow is the index of the cursor's row among rows. A thread that went leaves the cursor on
@@ -368,13 +345,13 @@ func (m *app) placeLine(p envPlace, selected bool, w int) string {
 	left := m.cursorMark(selected) + name
 	right := ""
 	switch p {
-	case placeComputers:
+	case envComputers:
 		right = styleDim.Render(fmt.Sprint(len(m.sandboxes)))
-	case placeNetwork:
+	case envNetwork:
 		if n := len(m.networkCards()); n > 0 {
 			right = m.waitingMark(fmt.Sprintf("▲ %d", n))
 		}
-	case placeSettings:
+	case envSettings:
 		left = m.cursorMark(selected) + styleDim.Render(", ") + name
 		right = styleDim.Render(version.Version)
 	}
@@ -390,7 +367,7 @@ func (m *app) actionLine(a rowAction, selected bool, w int) string {
 	return fitStyled(m.cursorMark(false)+styleDim.Render(text), w)
 }
 
-// treeLine is the line of a row of Home's list.
+// treeLine is the line of a row of the sidebar.
 func (m *app) treeLine(r homeRow, visible []sandboxes.View, selected bool, w int) string {
 	switch r.kind {
 	case atHome:
@@ -403,12 +380,12 @@ func (m *app) treeLine(r homeRow, visible []sandboxes.View, selected bool, w int
 	case atAction:
 		return m.actionLine(r.action, selected, w)
 	}
-	if r.kind == atSandbox && r.sub < 0 {
+	if r.kind == atSandbox {
 		return m.computerLine(visible[r.sb], selected, w)
 	}
 	x, ok := m.rowSession(r, visible)
 	if !ok {
 		return ""
 	}
-	return m.sessionRow(x, r.num, selected, 0, w)
+	return m.sessionRow(x, selected, 0, w)
 }

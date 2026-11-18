@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 4   Activity   Settings                                                             ▲ 4 waiting for you · 12:00 
-───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 4 │ Fix the login form · blub                                                                 ▲ thread · waiting
-                              │ Loading…
- TEAMMATES                    │ 
-  Iris frontend           ▲ 2 │ 
-▌ 1 ▲ Fix the login form      │ 
-  2 ○ Rename the guides       │ 
-  3 ◷ Update the deploy notes │ 
-  Finn backend            ▲ 2 │ 
-  4 ▲ Port the parser to go   │ 
-  + New teammate              │ 
-                              │ 
- YOUR COMPUTERS               │ 
-  ◐ demo              booting │ 
-  + New computer              │ 
-                              │ 
- ENVIRONMENT                  │ 
-  Computers                 4 │ 
-  Network                 ▲ 2 │ 
-  Secrets                     │ 
-  Memory                      │ 
-  Activity                    │ 
-  , Settings              dev │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-                              │ 
-──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-enter type in  1-9 jump in  tab next waiting  y allow  o allow once  n deny  ←/→ choose  alt+z full screen  T new agent  C new thread …
+ ◆ Studio          Default ▾  │ Home                                                                            ▲ 4 waiting for you · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 4 │  WAITING FOR YOU · 4                          │ ± GIT PUSH  Push 2 commits to feature/login on GitHub/acme/…
+                              │ ▌± Finn  Push 2 commits t…  api-refactor  30s │ 2 files  +7 −1  █████████████▒▒                             
+ TEAMMATES                    │  ⇅ Finn  api-refactor want…  pypi.org +2   1m │                                                             
+  Iris frontend           ▲ 2 │  ? Iris  Asks to run n…  Fix the login …   3m │   Repository GitHub/acme/web                                
+▌   ▲ Fix the login form      │  ⇅ Iris  blub wants regist…  *.npmjs.org  10m │   Computer   api-refactor · teammate Finn                   
+    ○ Rename the guides       │                                               │   Branch     feature/login · new branch                     
+    ◷ Update the deploy notes │  QUIET                                        │   Change     ∅ → a4c2f0d · 2 files +7 −1                    
+  Finn backend            ▲ 2 │  ○ Iris  Rename the guides         ended   1h │                                                             
+    ▲ Port the parser to go   │  ◷ Iris  Update the deploy n…  docs-site  20h │ Nothing reaches the forge until you approve; the agent sees 
+  + New teammate              │  ◐ demo  your computer · booting    base      │ a rejection on its next fetch.                              
+                              │                                               │                                                             
+ YOUR COMPUTERS               │  EARLIER TODAY                                │ Commits (2)                                                 
+  ◐ demo              booting │  Loading…                                     │   a4c2f0d Test that enter submits the login f… Finn · 2m ago
+  + New computer              │                                               │   77d0b2c Submit the login form on enter       Finn · 5m ago
+                              │                                               │                                                             
+ ENVIRONMENT                  │                                               │ Diff                                                        
+  Computers                 4 │                                               │ diff --git a/src/login.tsx b/src/login.tsx                  
+  Network                 ▲ 2 │                                               │ index 3b18e51..a4c2f0d 100644                               
+  Secrets                     │                                               │ --- a/src/login.tsx                                         
+  Memory                      │                                               │ +++ b/src/login.tsx                                         
+  Activity                    │                                               │ @@ -10,7 +10,7 @@ export function Login() {                 
+  , Settings              dev │                                               │    return (                                                 
+                              │                                               │      <form onSubmit={submit}>                               
+                              │                                               │        <input name="user" />                                
+                              │                                               │ -      <div onClick={submit}>Sign in</div>                  
+                              │                                               │ +      <button type="submit">Sign in</button>               
+                              │                                               │      </form>                                                
+                              │                                               │    )                                                        
+                              │                                               │  }                                                          
+                              │                                               │ diff --git a/src/login.test.tsx b/src/login.test.tsx        
+                              │                                               │ new file mode 100644                                        
+                              │                                               │ --- /dev/null                                               
+                              │                                               │ +++ b/src/login.test.tsx                                    
+                              │                                               │ @@ -0,0 +1,6 @@                                             
+                              │                                               │ +import { render } from "@testing-library/react"            
+──────────────────────────────┴───────────────────────────────────────────────┴─────────────────────────────────────────────────────────────
+enter open  ↑/k up  + new thread  →/← older threads  tab next waiting │ \ sidebar  / filter  , settings  l activity  e env │ ? more  q quit
