@@ -20,6 +20,7 @@ type forgeGuest struct {
 	mu       sync.Mutex
 	branch   string
 	outdated bool // a guest without FilesGitRemotes
+	remotes  []agentproto.GitRemote // the checkout's remotes, when not origin through "forge"
 	written  []agentproto.HomeDir
 }
 
@@ -31,8 +32,11 @@ func (g *forgeGuest) Files(_ context.Context, _ string, req agentproto.FilesRequ
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return agentproto.FilesReply{Repos: []agentproto.GitRepo{{Path: "web", Branch: g.branch,
-		Remotes: []agentproto.GitRemote{{Name: "origin", Forge: "forge", Repository: "acme/web"}}}}}, nil
+	remotes := g.remotes
+	if remotes == nil {
+		remotes = []agentproto.GitRemote{{Name: "origin", Forge: "forge", Repository: "acme/web"}}
+	}
+	return agentproto.FilesReply{Repos: []agentproto.GitRepo{{Path: "web", Branch: g.branch, Remotes: remotes}}}, nil
 }
 
 func (g *forgeGuest) WriteHomeDir(_ context.Context, _ string, dir agentproto.HomeDir) error {
@@ -220,5 +224,28 @@ func TestRenderForgeRedactsAndCuts(t *testing.T) {
 		if strings.HasSuffix(f.Path, "pulls/7/pr.md") && !strings.Contains(f.Content, "[cut: ") {
 			t.Errorf("pr.md wasn't cut")
 		}
+	}
+}
+
+// A checkout whose origin is a forge without pull requests, a local one, and whose second remote
+// is the forge with them, gets that forge's pull requests: every remote through Studio counts,
+// whatever its name.
+func TestForgeFilesTakeEveryRemoteThroughStudio(t *testing.T) {
+	svc, _, sb, _ := newReviewHarness(t)
+	g := &forgeGuest{branch: "feature/coupons", remotes: []agentproto.GitRemote{
+		{Name: "origin", Forge: "local", Repository: "lukas/web"},
+		{Name: "forgejo", Forge: "forge", Repository: "acme/web"},
+	}}
+	svc.NoteCall(sb.ID, agentproto.MethodHook, json.RawMessage(`{"event":"session-start"}`))
+	svc.syncForgeFiles(context.Background(), g)
+	files := g.last(t)
+	var pr string
+	for p, c := range files {
+		if strings.HasSuffix(p, "/acme/web/pulls/42/pr.md") {
+			pr = c
+		}
+	}
+	if !strings.Contains(pr, "head: feature/coupons\n") {
+		t.Fatalf("no pull request of the second remote: %v\nindex:\n%s", keys(files), files["index.md"])
 	}
 }
