@@ -1,6 +1,6 @@
  ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 1 · 12:00 
  / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 1 │ ┃ The login form doesn't submit on enter.   │  Terminal   Details                                 ● running 
+  Home                    ▲ 1 │ ┃ The login form doesn't submit on enter.   │  Terminal   Changes   Details                       ● running 
                               │ ┃ Can you fix it?                           │ ─━━━━━━━━─────────────────────────────────────────────────────
  TEAMMATES                    │                                             │  main  + new shell                                            
 ▌ Iris frontend               │   ▸ Thought it through                      │ Connecting…
@@ -36,4 +36,4 @@
                               │                                             │ 
                               │  › Write to Iris…                   p write │ 
 ──────────────────────────────┴─────────────────────────────────────────────┴───────────────────────────────────────────────────────────────
-p prompt  ↑/↓ tools  pgup scroll  x stop  + new thread │ tab computer  t terminal  m next computer  \ sidebar │ esc/q back  ? more
+p prompt  ↑/↓ tools  pgup scroll  x stop  + new thread  c changes  tab computer  t terminal  m next computer  \ sidebar  esc/q back  ? more

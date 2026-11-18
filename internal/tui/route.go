@@ -52,6 +52,8 @@ func (m *app) mainKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.mateKey(msg)
 	case paneComputer:
 		return m.sideKey(msg)
+	case paneReview:
+		return m.reviewPlaceKey(msg)
 	}
 	return m, nil
 }
@@ -215,9 +217,6 @@ func (m *app) sidebarOpen() tea.Cmd {
 		case sessionOlder:
 			m.showOlder(x.mate, true)
 			return nil
-		case sessionReview:
-			m.drawer, m.focus = false, focusMain
-			return m.enterOf(x)
 		}
 		return m.enterOf(x)
 	}

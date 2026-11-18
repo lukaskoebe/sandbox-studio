@@ -21,8 +21,8 @@ const (
 	rowCheckpoint                      // a checkpoint
 	rowEnv                             // an environment of the picker
 	rowFold                            // a folded tool call or thought of a transcript
-	rowFile                            // a file of the git review's file list
-	rowPush                            // a push or pull request of the Git screen
+	rowFile                            // a file of a review place's file list
+	rowChange                          // a row of the Changes tab's rail, by its index among changeRows
 	rowTree                            // a row of the sidebar, by its index among homeRows
 	rowSetting                         // a section of Settings
 )
@@ -214,8 +214,16 @@ func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 		m.picker = r.index
 	case rowSetting:
 		m.settings.cursor = r.index
-	case rowPush:
-		m.git.cursor = r.index
+	case rowChange:
+		if rows := m.changeRows(); r.index < len(rows) && rows[r.index].pickable() {
+			if rows[r.index].key != m.changes.cursor {
+				m.changes.cursor, m.changes.scroll = rows[r.index].key, 0
+			}
+		}
+		if double {
+			return m, m.changesKey(enterKey)
+		}
+		return m, nil
 	case rowFold:
 		m.chats.fold = r.index
 		m.chats.scroll = m.foldScroll(r.index)
@@ -247,8 +255,6 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 		return
 	}
 	switch m.screen {
-	case screenPager:
-		m.pager.scroll = max(m.pager.scroll+dir*wheelLines, 0)
 	case screenMain:
 		reading, readingOn := m.readingRect()
 		chat := m.chatRect()
@@ -271,6 +277,10 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 			m.wheelChat(dir)
 		case target && termOn && rc.has(msg.X, msg.Y):
 			// a terminal scrolls itself: its program reads the keys
+		case m.mainPane() == paneReview && main.has(msg.X, msg.Y):
+			m.pager.scroll = max(m.pager.scroll+dir*wheelLines, 0) // drawing keeps it in the review
+		case m.comp.tab == tabChanges && m.computerOn() != nil && m.overComputer(msg.X, msg.Y):
+			m.wheelChanges(msg.X, dir)
 		case readingOn && reading.has(msg.X, msg.Y):
 			m.inbox.scroll = max(m.inbox.scroll+dir*wheelLines, 0)
 		case m.inboxShows() && main.has(msg.X, msg.Y):
@@ -296,4 +306,10 @@ func (m *app) wheelChat(dir int) {
 	}
 	total := len(m.transcript(m.chatWidth()).lines)
 	c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
+}
+
+// overComputer reports whether a cell is on the computer pane, in the main column or beside it.
+func (m *app) overComputer(x, y int) bool {
+	rc, ok := m.paneRectOf(paneComputer)
+	return ok && rc.has(x, y)
 }

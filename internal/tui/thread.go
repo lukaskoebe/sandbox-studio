@@ -137,6 +137,9 @@ func (m *app) threadKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.newThread(m.here.mate)
 	case key.Matches(msg, keyShellTab):
 		return m, m.shellTab()
+	case key.Matches(msg, keyChangesTab):
+		m.changesView()
+		return m, nil
 	case key.Matches(msg, keyComputer):
 		m.nextComputer()
 		return m, nil
@@ -181,7 +184,7 @@ func (m *app) threadBindings() []key.Binding {
 	if m.hasSide() {
 		bindings = append(bindings, keyToSide)
 	}
-	bindings = append(bindings, keyShellTab)
+	bindings = append(bindings, keyShellTab, keyChangesTab)
 	if sb := m.computerOn(); sb != nil && len(m.sandboxesOf(sb.TeammateID)) > 1 {
 		bindings = append(bindings, keyComputer)
 	}
@@ -220,6 +223,8 @@ func (m *app) mateKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.startComposing()
 	case key.Matches(msg, keyShellTab):
 		return m, m.shellTab()
+	case key.Matches(msg, keyChangesTab):
+		m.changesView()
 	case key.Matches(msg, keyComputer):
 		m.nextComputer()
 	case key.Matches(msg, keyBack):
@@ -239,7 +244,7 @@ func (m *app) mateBindings() []key.Binding {
 	if m.hasSide() {
 		bindings = append(bindings, keyToSide)
 	}
-	bindings = append(bindings, keyShellTab, keyNewComputer)
+	bindings = append(bindings, keyShellTab, keyChangesTab, keyNewComputer)
 	if len(m.sandboxesOf(m.here.mate)) > 1 {
 		bindings = append(bindings, keyComputer)
 	}

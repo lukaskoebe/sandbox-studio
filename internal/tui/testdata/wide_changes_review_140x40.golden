@@ -1,0 +1,39 @@
+ ◆ Studio          Default ▾  │ Finn › desk                                                                    ● api-refactor · ▲ 1 · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ Home                    ▲ 1 │  Terminal   Changes   Details                                                                     ● running 
+                              │ ────────────━━━━━━━─────────────────────────────────────────────────────────────────────────────────────────
+ TEAMMATES                    │  WAITING FOR YOU  1        │ ± GIT PUSH  Push 2 commits to fix-login on GitHub/acme/web                     
+  Iris frontend               │ ▌ Push to fix-login        │ 2 files  +7 −1  █████████████▒▒                                                
+  Finn backend            ▲ 1 │                            │                                                                                
+  + New teammate              │                            │   Repository GitHub/acme/web                                                   
+                              │                            │   Computer   api-refactor · teammate Finn                                      
+ YOUR COMPUTERS               │                            │   Branch     fix-login · new branch                                            
+  ◐ demo              booting │                            │   Change     ∅ → a4c2f0d · 2 files +7 −1                                       
+  + New computer              │                            │                                                                                
+                              │                            │ Nothing reaches the forge until you approve; the agent sees a rejection on     
+ ENVIRONMENT                  │                            │ its next fetch.                                                                
+  Computers                 4 │                            │ Approving pushes it over SSH to ssh://git@github.com/acme/web.git.             
+  Network                     │                            │                                                                                
+  Secrets                     │                            │ Commits (2)                                                                    
+  Memory                      │                            │   a4c2f0d Test that enter submits the login form                  Finn · 2m ago
+  Activity                    │                            │   77d0b2c Submit the login form on enter                          Finn · 5m ago
+  , Settings              dev │                            │           The sign-in control was a div.                                       
+                              │                            │                                                                                
+                              │                            │ Diff                                                                           
+                              │                            │ diff --git a/src/login.tsx b/src/login.tsx                                     
+                              │                            │ index 3b18e51..a4c2f0d 100644                                                  
+                              │                            │ --- a/src/login.tsx                                                            
+                              │                            │ +++ b/src/login.tsx                                                            
+                              │                            │ @@ -10,7 +10,7 @@ export function Login() {                                    
+                              │                            │    return (                                                                    
+                              │                            │      <form onSubmit={submit}>                                                  
+                              │                            │        <input name="user" />                                                   
+                              │                            │ -      <div onClick={submit}>Sign in</div>                                     
+                              │                            │ +      <button type="submit">Sign in</button>                                  
+                              │                            │      </form>                                                                   
+                              │                            │    )                                                                           
+                              │                            │  }                                                                             
+                              │                            │ diff --git a/src/login.test.tsx b/src/login.test.tsx                           
+                              │                            │ new file mode 100644                                                           
+──────────────────────────────┴────────────────────────────┴────────────────────────────────────────────────────────────────────────────────
+y approve and push  r request changes  n reject  i ignore  j/k change  1-5 tab │ \ sidebar │ esc/q back  ? more

@@ -36,7 +36,6 @@ const (
 	sessionChat                        // a thread with a teammate
 	sessionTerminal                    // any other terminal
 	sessionOlder                       // the row that shows a teammate's older threads
-	sessionReview                      // a git push or pull request that waits for your review
 )
 
 // session is a row under a teammate or a computer: a terminal by its tmux name, or a chat.
@@ -46,8 +45,7 @@ type session struct {
 	mate    string // the teammate whose row it is under, if any
 	term    sandboxes.Terminal
 	chat    store.Chat
-	older   int              // the threads the older row hides
-	review  api.ApprovalView // the push or pull request a review row opens
+	older   int // the threads the older row hides
 }
 
 // id names a session across reads: its computer and terminal, or its chat.
@@ -55,8 +53,6 @@ func (s session) id() string {
 	switch s.kind {
 	case sessionChat:
 		return "chat/" + s.chat.ID
-	case sessionReview:
-		return "review/" + s.review.ID
 	case sessionOlder:
 		return "older/" + s.mate
 	}
@@ -70,8 +66,6 @@ func (s session) title() string {
 		return chatTitle(s.chat)
 	case sessionOlder:
 		return fmt.Sprintf("+ %d older", s.older)
-	case sessionReview:
-		return reviewTitle(s.review)
 	}
 	return firstNonEmpty(s.term.Label, s.term.Name)
 }
@@ -393,8 +387,6 @@ func reviewTitle(a api.ApprovalView) string {
 // which process asked.
 func (m *app) stateOf(x session) agentState {
 	switch x.kind {
-	case sessionReview:
-		return stateBlocked
 	case sessionChat:
 		if len(m.threadWaiting(x.chat)) > 0 {
 			return stateBlocked
@@ -514,10 +506,6 @@ func (m *app) enterOf(x session) tea.Cmd {
 	case sessionOlder:
 		m.showOlder(x.mate, true)
 		return nil
-	case sessionReview:
-		m.openPager(x.review)
-		m.pager.back = screenMain
-		return nil
 	}
 	return m.open(placeOf(x))
 }
@@ -587,7 +575,7 @@ func (m *app) sessionMark(x session, st agentState) string {
 
 // sessionWords say what a session is and how it is.
 func (m *app) sessionWords(x session, st agentState) string {
-	kind := map[sessionKind]string{sessionAgent: "in the terminal", sessionChat: "thread", sessionTerminal: "terminal", sessionReview: "review"}[x.kind]
+	kind := map[sessionKind]string{sessionAgent: "in the terminal", sessionChat: "thread", sessionTerminal: "terminal"}[x.kind]
 	switch {
 	case x.kind == sessionChat && x.chat.Heartbeat:
 		kind = "check-in"
@@ -597,8 +585,6 @@ func (m *app) sessionWords(x session, st agentState) string {
 	switch {
 	case x.kind == sessionOlder:
 		return ""
-	case x.kind == sessionReview:
-		return "review · waiting"
 	case st == stateBlocked:
 		return kind + " · waiting"
 	case st == stateWorking:
@@ -623,7 +609,7 @@ func sessionKindWord(x session) string {
 	case x.kind == sessionChat && x.chat.TaskID != "":
 		return "sched"
 	}
-	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "thread", sessionTerminal: "term", sessionReview: "review"}[x.kind]
+	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "thread", sessionTerminal: "term"}[x.kind]
 }
 
 // sessionRow is a session's row in w cells, indent cells in: its number, its mark and its

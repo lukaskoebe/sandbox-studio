@@ -26,7 +26,7 @@ func (m *app) layoutFor(w int) layout {
 	if m.zoom && m.screen == screenMain {
 		return layout{0, w, 0}
 	}
-	if w < paneWidth || m.screen == screenPager || m.screen == screenGit {
+	if w < paneWidth {
 		return layout{0, w, 0}
 	}
 	l := layout{sidebar: sidebarW, main: w - sidebarW - 1}
@@ -56,6 +56,7 @@ const (
 	paneThread            // a thread: its transcript and composer, or its terminal
 	paneMateHome          // a teammate's home
 	paneComputer          // the computer, with its tabs
+	paneReview            // a push's review alone
 	paneScreen            // a full screen: Activity, Settings, the keys…
 )
 
@@ -70,6 +71,8 @@ func (m *app) mainPane() paneKind {
 		return paneHomeList
 	case placeComputer:
 		return paneComputer
+	case placeReview:
+		return paneReview
 	}
 	if m.computerOn() != nil && (m.zoom && m.focus == focusSide || m.layoutFor(m.width).side == 0 && m.flip) {
 		return paneComputer
@@ -248,6 +251,8 @@ func (m *app) paneLines(k paneKind, rc rect) func() []string {
 			return m.mateHome(rc.w, rc.h)
 		case paneComputer:
 			return m.computerPane(rc.w, rc.h)
+		case paneReview:
+			return m.reviewPlace(rc.w, rc.h)
 		case paneScreen:
 			return m.body(rc.w, rc.h)
 		}
@@ -294,8 +299,12 @@ func (m *app) paneColumns(w int, l layout) []int {
 		}
 	case m.screen == screenComputers && m.computersSplit(main.w):
 		cols = append(cols, main.x+sidebarWidth(main.w))
-	case m.screen == screenPager && m.pagerSplit(w):
-		cols = append(cols, pagerListWidth(w))
+	case m.screen == screenMain && m.mainPane() == paneReview && m.pagerSplit(main.w):
+		cols = append(cols, main.x+pagerListWidth(main.w))
+	case m.screen == screenMain && m.comp.tab == tabChanges && m.computerOn() != nil:
+		if rc, ok := m.paneRectOf(paneComputer); ok && rc.w >= railBeside && len(m.changeRows()) > 0 {
+			cols = append(cols, rc.x+railWidth(rc.w))
+		}
 	}
 	return cols
 }
@@ -378,10 +387,6 @@ func (m *app) crumb() string {
 		return "New computer"
 	case screenCheckpoints:
 		return "Checkpoints"
-	case screenGit:
-		return "Git"
-	case screenPager:
-		return "Review"
 	}
 	p := m.here
 	mate := m.teammates[p.mate]
@@ -398,6 +403,8 @@ func (m *app) crumb() string {
 			return sb.Name + " › " + title
 		}
 		return firstNonEmpty(mate, "Thread") + " › " + title
+	case placeReview:
+		return "Review"
 	case placeComputer:
 		if sb == nil {
 			return "Computer"

@@ -1,12 +1,12 @@
 # The TUI's frame: sidebar, thread and computer (design)
 
 Status: built in part (2026-11-18): the frame, the places, the thread beside its computer, and
-the computer's Terminal and Details tabs. [tui.md](../tui.md#the-frame) describes it as it is.
+the computer's Terminal, Changes and Details tabs. [tui.md](../tui.md#the-frame) describes it as
+it is.
 It replaces Home as a sidebar and a pane ([tui-home-panes.md](tui-home-panes.md)) and the
 sessions on Home ([tui-sessions.md](tui-sessions.md)). It is mock A of the TUI revamp, with
-mock B's inbox as its Home. Still to come: the Changes tab (it takes the Git screen and the git
-review), the Files and Browser tabs, comments on lines of a diff, Search Studio on `ctrl+k`, and
-`/` commands and `@` files in the composer.
+mock B's inbox as its Home. Still to come: the Files and Browser tabs, comments on lines of a
+diff, Search Studio on `ctrl+k`, and `/` commands and `@` files in the composer.
 
 Where the build differs from the text below:
 
@@ -14,7 +14,23 @@ Where the build differs from the text below:
   opens New computer. It doesn't ask "`t` thread · `c` computer · `m` teammate" yet.
 - On a teammate's home `+` gives the teammate another computer, and `enter` writes to it.
 - The sidebar's second row is `/ Filter` until Search Studio replaces the filter.
-- `g` on Home still opens the Git screen until the Changes tab takes the pushes.
+- The Changes tab took the Git screen and the git review, and `g` on Home is gone. A decided
+  push is in the tab's PUSHED for a day, and in Activity under git after that.
+- PUSHED is read from `GET .../approvals?status=approved` every third read of git (about 15
+  seconds) while the tab shows, filtered to the computer and the last day. Its `#n` comes from
+  the push's pull request URL: the TUI doesn't read the pull request's live state yet.
+- `enter` on a push opens its computer on its own, unless the place on show is that computer's
+  (a thread on it, or its teammate's home showing it); then the tab opens beside it.
+- A push of a computer the environment on show doesn't have, or that went, opens a review
+  place: the review alone, with the review's keys and `j/k` scrolling.
+- A forge review or comment that waits shows as its card in the tab, decided with the card's
+  keys.
+- The rail is beside main from a pane of 70 cells, and a diff is side by side from a pane of
+  160 (so after `alt+z` at 180 columns). A repository's header takes the cursor and shows its
+  branch, upstream and changes.
+- The first pick waits for git's status, so that a change, not a repository, gets the cursor.
+- A change's diff starts at its first hunk: the head over it names the file.
+- On a review the key bar leaves out `↑↓` and `[/]` for the decisions; `?` lists them.
 
 ## The frame keeps its five fixed rows
 

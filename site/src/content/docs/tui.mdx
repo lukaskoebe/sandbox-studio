@@ -8,6 +8,7 @@ import TerminalScreen from '../../components/TerminalScreen.astro'
 import home from '../../../../internal/tui/testdata/visual_inbox.golden?raw'
 import thread from '../../../../internal/tui/testdata/visual_thread.golden?raw'
 import computer from '../../../../internal/tui/testdata/visual_computer.golden?raw'
+import changes from '../../../../internal/tui/testdata/visual_changes.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It is
 laid out as the browser is: a sidebar with your teammates, their threads and your computers,
@@ -78,7 +79,7 @@ a request, and `+` makes something new.
 | `pgup` `pgdn` | scroll the reading pane |
 | `u` | undo the network decision you just made, for a minute |
 | `+` | create a new computer |
-| `l` `,` `g` `e` | Activity, Settings, Git, switch environment |
+| `l` `,` `e` | Activity, Settings, switch environment |
 | `\` | give the keys to [the sidebar](#the-sidebar) |
 | `?` | help |
 | `q` | quit |
@@ -102,13 +103,15 @@ a request, and `+` makes something new.
 | `y` `a` `n` | answer its permission: allow once, always, or no |
 | `+` | a new thread with the teammate |
 | `t` | its computer's terminal, with the keys |
+| `c` | its computer's changes |
 | `m` | the teammate's next computer |
 | `tab` | its computer, and back |
 
 | Key | On a computer |
 |---|---|
-| `1` `5` | the Terminal tab, the Details tab |
+| `1` `3` `5` | the Terminal tab, the Changes tab, the Details tab |
 | `enter` | on Terminal: type into the terminal |
+| `j` `k` | on Changes: the next or the previous change; `↑` `↓` scroll it |
 | `+` | on Terminal: a new shell |
 | `T` | start the teammate's agent in a new terminal |
 | `s` `z` `f` `h` `d` | on Details: start or stop, suspend, fork, checkpoints, delete |
@@ -209,7 +212,7 @@ A teammate's row opens its home, as its page in the browser does: its role and h
 its computers (`◂` marks the one shown beside it), its open tasks, what it knows and its network
 level. Under them is a box, `› Write to Iris…`: `enter` opens it, and your first prompt starts a
 thread on the computer shown. `+` gives the teammate another computer, `t` opens its computer's
-terminal and `m` shows its next computer.
+terminal, `c` its changes, and `m` shows its next computer.
 
 ## Thread
 
@@ -235,15 +238,15 @@ choices are listed under it.
 
 Any other request the thread waits on, such as a host one of the agent's tools wants or the push
 it made, is a card above the box, and the card's keys answer it. `y` on a push asks once more,
-and `enter` opens its review.
+and `enter` opens its review in the computer's Changes tab. `c` shows that tab too.
 
 A thread that is an agent in a terminal, such as `claude`, is that terminal, with the
 computer's Details beside it.
 
 ## The computer
 
-A computer has the browser's tabs: **Terminal** and **Details** for now. `1` picks Terminal and
-`5` Details; the numbers in between are kept for the Files, Changes and Browser tabs.
+A computer has the browser's tabs: **Terminal**, **Changes** and **Details** for now. `1` picks
+Terminal, `3` Changes and `5` Details; `2` and `4` are kept for the Files and Browser tabs.
 
 ### Terminal
 
@@ -255,6 +258,25 @@ and `T` starts the teammate's agent in a new terminal.
 Resizing your window resizes the computer's terminal. A terminal open in the browser too takes
 the size of whichever window was resized last. Alt keys need a terminal that sends them; on
 macOS, set Option to act as Meta.
+
+### Changes
+
+The Changes tab shows what git sees on the computer. On the left is a list in sections: the
+pushes and pull requests that wait for you, the ones that went out in the last day with their
+pull request's number, each repository under `/workspace` with its branch and its changes
+(staged, not staged and untracked), and, beside a thread, the requests of the thread that
+changed files. Beside the list is the row you're on: a push's review, a change's diff, or what
+a request changed.
+
+<TerminalScreen ansi={changes} label="The Changes tab of Finn's computer api-refactor: its repositories web and api, web's staged rename, two changes not staged and an untracked file, with the diff of src/login.tsx beside them" />
+
+`j` and `k` move through the list, and the diff follows. `↑` and `↓` scroll it, `pgup`/`pgdn`
+(or `b`/`space`) a page, `g` and `G` jump to its start or end, and `[` and `]` to the previous or
+next file. `enter` on a repository folds its changes. In a narrow pane the list is one line over
+the diff, `‹ M src/login.tsx +1 −1 · 3 of 7 ›`, and `j` and `k` still move through it.
+
+The tab reads git every few seconds while it shows, and at once when a request of the thread
+ends. A stopped computer's changes are read once it runs again.
 
 ### Details
 
@@ -337,14 +359,14 @@ you:
   one.
 - **Move with the arrows:** `←` and `→` move over the card's toggles (pattern, scope, ports)
   and its choices, and `space` or `enter` presses the one you're on, as its key does.
-- **Review a git push:** `enter` opens the push in a pager: the repository, branch and change,
-  the commits, and the diff with added lines in green and removed ones in red. Scroll with the
-  arrows, `pgup`/`pgdn` (or `b`/`space`), `g` and `G`. Then `y` approves and pushes it, `n`
-  rejects it, and `i` ignores it. From its row on Home, `y` asks once more before it pushes. A
-  push that rewrites its branch lists the commits it drops, and only `F` force-pushes it. A pull
-  request shows its title and description, and `y` opens it. `g` on Home lists every push and
-  pull request, the ones waiting for you first and then the decided ones with what came of
-  them; `enter` opens one.
+- **Review a git push:** `enter` opens the push in its computer's [Changes tab](#changes):
+  the repository, branch and change, the commits, and the diff with added lines in green and
+  removed ones in red. Scroll with the arrows, `pgup`/`pgdn` (or `b`/`space`), `g` and `G`.
+  Then `y` approves and pushes it, `n` rejects it, and `i` ignores it. From its row on Home, `y`
+  asks once more before it pushes. A push that rewrites its branch lists the commits it drops,
+  and only `F` force-pushes it. A pull request shows its title and description, and `y` opens
+  it. Once it's out, the push is listed under PUSHED in the tab for a day, and in Activity under
+  git. A push of a computer in another environment opens on its own, with the same keys.
 
 The other cards are decided with their own keys:
 
@@ -377,8 +399,8 @@ network, git, browser, memory and threads. Status dots are colored, and a reques
 Wider terminals use the extra room:
 
 - Home's reading pane is beside the list instead of under it.
-- From 120 columns, the git review lists the changed files, and `[` and `]` jump between them.
-- From 160 columns, the diff is side by side, and `v` toggles it.
+- From 160 columns of the computer's pane, a diff is side by side, and `v` toggles it. `alt+z`
+  gives the pane the whole terminal.
 - The words a changed line changes are highlighted.
 - What an action did, or an error, shows for 3 seconds at the top right.
 

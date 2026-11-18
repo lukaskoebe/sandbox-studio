@@ -99,7 +99,7 @@ func (m *app) paneTarget() (session, bool) {
 		if _, ok := m.readingRect(); !ok {
 			return session{}, false
 		}
-		if r, ok := m.inboxRow(); ok && r.thread != nil && r.thread.kind != sessionOlder && r.thread.kind != sessionReview {
+		if r, ok := m.inboxRow(); ok && r.thread != nil && r.thread.kind != sessionOlder {
 			return *r.thread, true
 		}
 		return session{}, false

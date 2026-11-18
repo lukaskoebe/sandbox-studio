@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The terminal UI's computer has the browser's Changes tab, between Terminal and Details. On
+  the left it lists the computer's pushes and pull requests that wait for you, the ones that
+  went out in the last day with their pull request's number, each repository under `/workspace`
+  with its branch and its staged, not staged and untracked changes, and beside a thread the
+  requests of the thread that changed files. Beside the list is the row you're on: a push's
+  review, decided there with its usual keys, a change's diff, or what a request changed. `j`
+  and `k` move through the list, `↑` and `↓` scroll, `[` and `]` jump between files, `enter`
+  folds a repository, and `c` in a thread or on a teammate's home shows the tab. Git is read
+  every 5 seconds while the tab shows and at once when a request of the thread ends. `enter`
+  on a push on Home now opens it in this tab, and the Git screen and its `g` key are gone; a
+  push of a computer in another environment opens on its own.
 - The terminal UI is laid out as the browser is. The top row says where you are (`Iris › Fix
   the login form`) with the computer on show and what waits for you. From 100 columns the
   sidebar is always on the left, and narrower `\` slides it in. A thread has its computer

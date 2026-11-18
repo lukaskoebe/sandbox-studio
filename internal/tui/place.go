@@ -21,6 +21,7 @@ const (
 	placeMate                      // a teammate's home: who it is, its tasks, and a composer that starts a thread
 	placeThread                    // a thread: a chat, a new one (chat ""), or an agent in a terminal (term)
 	placeComputer                  // a computer on its own
+	placeReview                    // a push's review alone, its computer not in the environment on show
 )
 
 // place is a place to show.
@@ -30,6 +31,7 @@ type place struct {
 	chat    string // the thread's chat
 	term    string // the terminal of a thread that is an agent in a terminal
 	sandbox string // the computer it shows: the thread's, the teammate's picked one, or the computer
+	review  string // the approval a review place shows
 	over    screen // the full screen it was left from, which going back to it shows again
 }
 
@@ -94,6 +96,9 @@ func (m *app) placeLives(p place) bool {
 		return ok
 	case placeThread, placeComputer:
 		_, ok := m.sandboxByID(p.sandbox)
+		return ok
+	case placeReview:
+		_, ok := m.reviewByID(p.review)
 		return ok
 	}
 	return true
@@ -198,7 +203,7 @@ func (m *app) hereSandbox() *sandboxes.View {
 	if p.kind == placeMate {
 		id = m.mateComputer(p.mate, p.sandbox)
 	}
-	if p.kind == placeHome || id == "" {
+	if p.kind == placeHome || p.kind == placeReview || id == "" {
 		return nil
 	}
 	for i := range m.sandboxes {
@@ -242,7 +247,7 @@ func (m *app) mateComputer(mate, asked string) string {
 
 // computerOn is the computer the computer pane shows, while the place on show has one.
 func (m *app) computerOn() *sandboxes.View {
-	if m.here.kind == placeHome || m.comp.sandbox == "" {
+	if m.here.kind == placeHome || m.here.kind == placeReview || m.comp.sandbox == "" {
 		return nil
 	}
 	for i := range m.sandboxes {

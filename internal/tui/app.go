@@ -25,11 +25,9 @@ const (
 	screenHelp
 	screenActivity    // the connections and decisions log
 	screenEntry       // one entry of the log, and its rule
-	screenPager       // the review of a git push or pull request
 	screenNew         // the form of a new computer
 	screenProgress    // a new computer's create or a fork, until it is ready
 	screenCheckpoints // a computer's checkpoints
-	screenGit         // the environment's pushes and pull requests
 	screenSettings    // the sections of Settings
 	screenComputers   // every computer of the environment
 )
@@ -84,8 +82,8 @@ type app struct {
 	comp        computerState      // the computer pane's computer and tab
 	chats       chatState          // the thread on show, or the one in Home's reading pane
 	activity    activityState      // the Activity screens
-	pager       pagerState         // the review of a git approval
-	git         gitState           // the Git screen
+	pager       pagerState         // the review of a git approval on show
+	changes     changesState       // the Changes tab of the computer on show
 	newSb       newState           // a new computer, from its form to its create's end
 	checkpoints checkpointState    // the checkpoints screen
 	ports       portsState         // the open ports of the sandbox on the detail screen
@@ -171,7 +169,7 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	return next, tea.Batch(cmd, m.watchInbox(), m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
 		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions(), m.watchPane(),
-		m.watchHome(), m.watchMate())
+		m.watchHome(), m.watchMate(), m.watchChanges())
 }
 
 // update applies one message to the model.
@@ -206,7 +204,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.paneUpdate(msg); ok {
 		return m, cmd
 	}
-	if cmd, ok := m.gitUpdate(msg); ok {
+	if cmd, ok := m.changesUpdate(msg); ok {
 		return m, cmd
 	}
 	if cmd, ok := m.homeUpdate(msg); ok {
@@ -345,11 +343,11 @@ func (m *app) refresh() tea.Cmd {
 	if m.screen == screenMain {
 		cmds = append(cmds, m.readSessions(false))
 	}
-	switch m.screen {
-	case screenCheckpoints:
+	if m.screen == screenCheckpoints {
 		cmds = append(cmds, m.loadCheckpoints())
-	case screenGit:
-		cmds = append(cmds, m.loadGit())
+	}
+	if m.changes.tick != 0 && !m.changes.busy {
+		m.changes.tick = 0 // the Changes tab reads git again
 	}
 	return tea.Batch(cmds...)
 }

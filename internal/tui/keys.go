@@ -78,16 +78,12 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.activityKey(msg)
 	case screenEntry:
 		return m.entryKey(msg)
-	case screenPager:
-		return m.pagerKey(msg)
 	case screenNew:
 		return m.newKey(msg)
 	case screenProgress:
 		return m.progressKey(msg)
 	case screenCheckpoints:
 		return m.checkpointsKey(msg)
-	case screenGit:
-		return m.gitKey(msg)
 	case screenComputers:
 		return m.computersKey(msg)
 	case screenSettings:
@@ -253,6 +249,10 @@ func (m *app) openHelp() {
 		switch {
 		case m.inboxKeys():
 			m.helpPart = "home"
+		case m.mainPane() == paneReview:
+			m.helpPart = "review"
+		case (m.focus == focusSide || m.mainPane() == paneComputer) && m.comp.tab == tabChanges:
+			m.helpPart = "changes"
 		case m.focus == focusSide, m.mainPane() == paneComputer, m.here.term != "":
 			m.helpPart = "computer"
 		case m.mainPane() == paneMateHome:
@@ -295,14 +295,10 @@ func (m *app) bindings() []key.Binding {
 		return []key.Binding{keyBack}
 	case screenActivity, screenEntry:
 		return m.activityBindings()
-	case screenPager:
-		return m.pagerBindings()
 	case screenNew, screenProgress:
 		return m.newBindings()
 	case screenCheckpoints:
 		return m.checkpointBindings()
-	case screenGit:
-		return m.gitBindings()
 	case screenComputers:
 		return m.computersBindings()
 	}
@@ -329,6 +325,8 @@ func (m *app) bindings() []key.Binding {
 		return append(m.inboxBindings(), keySidebarTo)
 	case m.mainPane() == paneMateHome:
 		bindings = m.mateBindings()
+	case m.mainPane() == paneReview:
+		return append(m.reviewPlaceBindings(), keySidebarTo)
 	case m.here.term != "":
 		if sb, ok := m.sandboxByID(m.here.sandbox); ok {
 			bindings = m.terminalBindings(sb)

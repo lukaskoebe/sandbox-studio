@@ -48,12 +48,12 @@ var (
 )
 
 // computerTabs are the tabs the pane has: the Terminal tab, but beside a thread that is an
-// agent in a terminal, which shows that terminal itself, and Details.
+// agent in a terminal, which shows that terminal itself, Changes and Details.
 func (m *app) computerTabs() []computerTab {
 	if m.here.kind == placeThread && m.here.term != "" {
-		return []computerTab{tabDetails}
+		return []computerTab{tabChanges, tabDetails}
 	}
-	return []computerTab{tabTerminal, tabDetails}
+	return []computerTab{tabTerminal, tabChanges, tabDetails}
 }
 
 // computerPane is the computer pane in w cells and h rows: the tab row, its rule and the tab.
@@ -68,6 +68,8 @@ func (m *app) computerPane(w, h int) []string {
 	switch m.comp.tab {
 	case tabTerminal:
 		lines = append(lines, m.terminalTab(*sb, w, body)...)
+	case tabChanges:
+		lines = append(lines, m.changesTab(*sb, w, body)...)
 	default:
 		lines = append(lines, m.detailsTab(*sb, w, body)...)
 	}
@@ -86,6 +88,9 @@ func (m *app) tabRow(sb sandboxes.View, w int) (string, string) {
 			b.WriteString("   ")
 		}
 		name := tabNames[t]
+		if t == tabChanges {
+			name = m.changesLabel()
+		}
 		if t == m.comp.tab {
 			x0 = lipgloss.Width(b.String())
 			x1 = x0 + lipgloss.Width(name)
@@ -135,8 +140,11 @@ func (m *app) computerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.nextComputer()
 		return m, nil
 	}
-	if m.comp.tab == tabTerminal {
+	switch m.comp.tab {
+	case tabTerminal:
 		return m, m.terminalKey(msg, *sb)
+	case tabChanges:
+		return m, m.changesKey(msg)
 	}
 	return m, m.detailsKey(msg, *sb)
 }
@@ -148,9 +156,12 @@ func (m *app) computerBindings() []key.Binding {
 		return nil
 	}
 	var bindings []key.Binding
-	if m.comp.tab == tabTerminal {
+	switch m.comp.tab {
+	case tabTerminal:
 		bindings = m.terminalBindings(*sb)
-	} else {
+	case tabChanges:
+		bindings = m.changesBindings()
+	default:
 		bindings = m.detailsBindings(*sb)
 	}
 	bindings = append(bindings, keyTabs)

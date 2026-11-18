@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -16,13 +15,13 @@ import (
 )
 
 // pagerState is the review of one git approval: the push's facts, its commits and its diff, or
-// the pull request it would open, in a pager the user scrolls before deciding.
+// the pull request it would open, which the user scrolls before deciding. The Changes tab shows
+// it beside its rail, and a review place alone when its computer isn't in the environment.
 type pagerState struct {
 	approval api.ApprovalView
-	back     screen // where esc and a decision return to: the approvals or the Git screen
-	scroll   int    // the first line on show
-	unified  bool   // v turned side by side off, on a terminal wide enough for it
-	openPR   bool   // approving the push also opens the pull request its review offers
+	scroll   int  // the first line on show
+	unified  bool // v turned side by side off, on a terminal wide enough for it
+	openPR   bool // approving the push also opens the pull request its review offers
 
 	// lines caches the review laid out for width, which a long diff makes worth keeping, and
 	// files where each file's diff starts in it.
@@ -62,16 +61,53 @@ var (
 // sideWidth is the width from which the visual look shows a diff's hunks side by side.
 const sideWidth = 160
 
-// openPager shows the review of a git approval.
-func (m *app) openPager(a api.ApprovalView) {
-	m.pager = pagerState{approval: a, back: m.screen, openPR: defaultOpenPR(a)}
-	m.screen = screenPager
+// openReview shows the review of a push or pull request in its computer's Changes tab: beside
+// the place on show when it shows that computer, else on the computer's own. A push of a computer
+// the environment on show hasn't gets a review place, the review alone.
+func (m *app) openReview(a api.ApprovalView) tea.Cmd {
+	m.reviewOn(a)
+	m.pager.scroll = 0
+	sb, ok := m.sandboxByID(a.SandboxID)
+	if !ok || a.EnvironmentID != m.env.ID {
+		return m.open(place{kind: placeReview, review: a.ID})
+	}
+	var cmd tea.Cmd
+	if on := m.computerOn(); on == nil || on.ID != sb.ID || m.here.kind == placeHome || m.screen != screenMain {
+		cmd = m.open(place{kind: placeComputer, sandbox: sb.ID})
+	}
+	if m.changes.sandbox != sb.ID {
+		m.changes = changesState{sandbox: sb.ID, gen: m.changes.gen + 1}
+	}
+	m.changes.cursor, m.changes.scroll = "review/"+a.ID, 0
+	m.changesView()
+	return cmd
 }
 
-// pagerLines is the review laid out for width w.
-func (m *app) pagerLines(w int) []string {
+// reviewByID is a review the environment's requests or the review on show have.
+func (m *app) reviewByID(id string) (api.ApprovalView, bool) {
+	for _, a := range m.approvals {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	if m.pager.approval.ID == id && id != "" {
+		return m.pager.approval, true
+	}
+	return api.ApprovalView{}, false
+}
+
+// decided is where a decision made on a review leaves you: a review place goes back, and the
+// Changes tab stays, its rail showing what came of it.
+func (m *app) decided() tea.Cmd {
+	if m.here.kind == placeReview && m.screen == screenMain {
+		return m.back()
+	}
+	return nil
+}
+
+// pagerLines is the review laid out for width w, its hunks side by side when side is set.
+func (m *app) pagerLines(w int, side bool) []string {
 	p := &m.pager
-	side := m.sideBySide()
 	if p.lines == nil || p.width != w || p.side != side {
 		p.lines, p.files = m.reviewLines(p.approval, w, side)
 		p.width, p.side = w, side
@@ -79,10 +115,10 @@ func (m *app) pagerLines(w int) []string {
 	return p.lines
 }
 
-// sideBySide reports whether the review shows its hunks side by side: in the visual look, on a
-// terminal of sideWidth columns, unless v turned it off.
-func (m *app) sideBySide() bool {
-	return !m.look.plain && m.width >= sideWidth && !m.pager.unified
+// sideBySide reports whether a review place of w cells shows its hunks side by side: in the
+// visual look, from sideWidth cells, unless v turned it off.
+func (m *app) sideBySide(w int) bool {
+	return !m.look.plain && w >= sideWidth && !m.pager.unified
 }
 
 // splitWidth is the width from which the git review shows its file list beside the diff.
@@ -108,9 +144,20 @@ func (m *app) reviewWidth(w int) int {
 	return w
 }
 
+// reviewLayout is the width the review on show is laid out in, and whether side by side: a
+// review place's main column less its file list, or the Changes tab's main.
+func (m *app) reviewLayout() (int, bool) {
+	if m.here.kind == placeReview {
+		w := m.mainW()
+		return m.reviewWidth(w), m.sideBySide(w)
+	}
+	w, _, pw := m.changesMainRect()
+	return max(w, 1), m.changesSide(pw)
+}
+
 // pagerFiles are the files of the review on show, with where each one starts.
 func (m *app) pagerFiles() []diffFile {
-	m.pagerLines(m.reviewWidth(m.width))
+	m.pagerLines(m.reviewLayout())
 	return m.pager.files
 }
 
@@ -394,10 +441,15 @@ func shortSHA(sha string) string {
 	return sha
 }
 
-// pagerBody is the part of the review in view, h lines from the scroll position, with the file
-// list beside it on a wide terminal.
-func (m *app) pagerBody(w, h int) []string {
-	lines := m.pagerLines(m.reviewWidth(w))
+// reviewPlace is a review place in w cells and h rows: the review from the scroll position, with
+// the file list beside it on a wide terminal.
+func (m *app) reviewPlace(w, h int) []string {
+	a, ok := m.reviewByID(m.here.review)
+	if !ok {
+		return []string{styleDim.Render("That review is gone.")}
+	}
+	m.reviewOn(a)
+	lines := m.pagerLines(m.reviewWidth(w), m.sideBySide(w))
 	p := &m.pager
 	p.scroll = min(max(p.scroll, 0), max(len(lines)-h, 0))
 	view := lines[p.scroll:min(p.scroll+h, len(lines))]
@@ -456,71 +508,66 @@ func (m *app) fileBar(f diffFile, most, w int) string {
 		strings.Repeat(" ", w-cells)
 }
 
-// pagerKey scrolls the review and decides it, while it waits. A decision returns to the screen
-// the review came from.
-func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	p := &m.pager
-	_, h := m.size()
-	page := max(h-6, 1)
-	a := p.approval
+// reviewPlaceKey answers the keys of a review place: esc goes back, j and k scroll as the arrows
+// do, and the rest scroll the review and decide it.
+func (m *app) reviewPlaceKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	a, ok := m.reviewByID(m.here.review)
 	switch {
 	case key.Matches(msg, keyBack):
-		m.screen = p.back
-	case key.Matches(msg, keyPush, keyForcePush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
-		m.setNotice(gitDecidedText(a), false)
+		return m, m.back()
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
-	case key.Matches(msg, keyUp):
-		p.scroll--
-	case key.Matches(msg, keyDown):
-		p.scroll++
-	case key.Matches(msg, keyPageUp):
-		p.scroll -= page
-	case key.Matches(msg, keyPageDn):
-		p.scroll += page
-	case key.Matches(msg, keyTop):
-		p.scroll = 0
-	case key.Matches(msg, keyBottom):
-		w, _ := m.size()
-		p.scroll = len(m.pagerLines(m.reviewWidth(w)))
-	case key.Matches(msg, keyNextFile):
-		for _, f := range m.pagerFiles() {
-			if f.line > p.scroll {
-				p.scroll = f.line
-				break
-			}
-		}
-	case key.Matches(msg, keyPrevFile):
-		for _, f := range slices.Backward(m.pagerFiles()) {
-			if f.line < p.scroll {
-				p.scroll = f.line
-				break
-			}
-		}
+		return m, nil
+	case !ok:
+		return m, nil
+	}
+	m.reviewOn(a)
+	switch msg.String() {
+	case "j":
+		msg = tea.KeyPressMsg{Code: tea.KeyDown}
+	case "k":
+		msg = tea.KeyPressMsg{Code: tea.KeyUp}
+	}
+	w, side := m.reviewLayout()
+	lines := m.pagerLines(w, side)
+	if scrollKey(msg, &m.pager.scroll, len(lines), m.pager.files, m.bodyRows()) {
+		return m, nil
+	}
+	return m, m.reviewKey(msg)
+}
+
+// reviewKey decides the review on show while it waits: approve and push or open the pull
+// request, force-push, ask for changes, reject or ignore. p says whether approving opens the
+// pull request too, o opens it after, and v turns side by side off and on.
+func (m *app) reviewKey(msg tea.KeyPressMsg) tea.Cmd {
+	p := &m.pager
+	a := p.approval
+	if a.Git == nil {
+		return nil
+	}
+	switch {
+	case key.Matches(msg, keyPush, keyForcePush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
+		m.setNotice(gitDecidedText(a), false)
 	case key.Matches(msg, keySide):
 		p.unified = !p.unified
+		m.changes.unified = p.unified
 	case key.Matches(msg, keyTogglePR) && a.Git.Review != nil && a.Git.Review.PullRequest != nil && gitPending(a):
 		p.openPR = !p.openPR
 		p.lines = nil
 	case key.Matches(msg, keyOpenLater) && canOpenLater(a):
-		m.screen = p.back
-		return m, m.openPullRequest(a)
+		return tea.Batch(m.openPullRequest(a), m.decided())
 	case key.Matches(msg, keyPush) && forced(a):
 		m.setNotice("The push rewrites "+gitBranch(a)+": F force-pushes it.", false)
 	case key.Matches(msg, keyPush, keyForcePush) && (forced(a) == key.Matches(msg, keyForcePush)):
-		m.screen = p.back
-		return m, m.approvePush(a, p.openPR)
+		return tea.Batch(m.approvePush(a, p.openPR), m.decided())
 	case key.Matches(msg, keyChanges) && a.Git.PullRequest == nil:
-		m.askChanges(a, p.back)
+		m.askChanges(a)
 	case key.Matches(msg, keyReject):
-		m.screen = p.back
-		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
+		return tea.Batch(m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a)), m.decided())
 	case key.Matches(msg, keyIgnore):
-		m.screen = p.back
-		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "dismiss", Scope: "sandbox"}, "Ignored", gitWhat(a))
+		return tea.Batch(m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "dismiss", Scope: "sandbox"}, "Ignored", gitWhat(a)), m.decided())
 	}
-	p.scroll = max(p.scroll, 0) // pagerBody keeps it off the end
-	return m, nil
+	return nil
 }
 
 // approvePush approves a push, with its pull request when openPR says so, or opens a pull
@@ -543,7 +590,7 @@ func (m *app) approvePush(a api.ApprovalView, openPR bool) tea.Cmd {
 // askChanges asks what the agent should change, and then rejects the push with it as the note.
 // For a teammate's sandbox the note also goes to a new chat there, as the web's review does by
 // default, so the agent picks it up and pushes again.
-func (m *app) askChanges(a api.ApprovalView, back screen) {
+func (m *app) askChanges(a api.ApprovalView) {
 	who := firstNonEmpty(a.Git.Push.TeammateName, "the agent")
 	m.ask(&linePrompt{
 		label: "What should " + who + " change? ",
@@ -553,8 +600,7 @@ func (m *app) askChanges(a api.ApprovalView, back screen) {
 			if note == "" {
 				return "say what to change", nil
 			}
-			m.screen = back
-			return "", m.requestChanges(a, note)
+			return "", tea.Batch(m.requestChanges(a, note), m.decided())
 		},
 	})
 }
@@ -602,8 +648,8 @@ func gitWhat(a api.ApprovalView) string {
 	return "the push of " + gitBranch(a)
 }
 
-// pagerBindings are the keys the key bar shows in the pager.
-func (m *app) pagerBindings() []key.Binding {
+// reviewBindings are the keys that decide the review on show, for the key bar.
+func (m *app) reviewBindings() []key.Binding {
 	approve := keyPush
 	if m.pager.approval.Git.PullRequest != nil {
 		approve = keyOpenPR
@@ -611,29 +657,38 @@ func (m *app) pagerBindings() []key.Binding {
 		approve = keyForcePush
 	}
 	a := m.pager.approval
-	bindings := []key.Binding{approve, keyChanges, keyReject, keyIgnore, keyScrollBar}
+	bindings := []key.Binding{approve, keyChanges, keyReject, keyIgnore}
 	switch {
 	case a.Git.PullRequest != nil:
-		bindings = []key.Binding{approve, keyReject, keyIgnore, keyScrollBar}
+		bindings = []key.Binding{approve, keyReject, keyIgnore}
 	case a.Git.Review != nil && a.Git.Review.PullRequest != nil:
-		bindings = []key.Binding{approve, keyTogglePR, keyChanges, keyReject, keyIgnore, keyScrollBar}
+		bindings = []key.Binding{approve, keyTogglePR, keyChanges, keyReject, keyIgnore}
 	}
 	if !gitPending(a) {
-		bindings = []key.Binding{keyScrollBar}
+		bindings = nil
 		if canOpenLater(a) {
-			bindings = []key.Binding{keyOpenLater, keyScrollBar}
+			bindings = []key.Binding{keyOpenLater}
 		}
 	}
+	return bindings
+}
+
+// reviewPlaceBindings are the keys of a review place.
+func (m *app) reviewPlaceBindings() []key.Binding {
+	if a, ok := m.reviewByID(m.here.review); ok {
+		m.reviewOn(a)
+	}
+	bindings := append(m.reviewBindings(), keyScrollBar)
 	if !m.look.plain && len(m.pagerFiles()) > 1 {
 		bindings = append(bindings, keyFilesBar)
 	}
-	if !m.look.plain && m.width >= sideWidth {
+	if !m.look.plain && m.mainW() >= sideWidth {
 		bindings = append(bindings, keySide)
 	}
 	return append(bindings, keyBack, keyHelp)
 }
 
-// isGit reports whether an approval is a push or pull request the pager can review.
+// isGit reports whether an approval is a push or pull request a review shows.
 func isGit(a api.ApprovalView) bool {
 	return strings.HasPrefix(a.Kind, "git.") && a.Git != nil
 }
@@ -707,4 +762,14 @@ func tipFilesLine(rv *gitreview.PushReview) string {
 		files += fmt.Sprintf(" and %d more", rv.MoreTipFiles)
 	}
 	return "The tips differ in " + files + "."
+}
+
+// gitPending reports whether a review can still be decided.
+func gitPending(a api.ApprovalView) bool {
+	return a.Status == "" || a.Status == "pending"
+}
+
+// gitDecidedText says how a review on show was decided, for the notice line.
+func gitDecidedText(a api.ApprovalView) string {
+	return "Decided: " + strings.ToLower(firstNonEmpty(a.Git.Push.State, a.Status)) + "."
 }

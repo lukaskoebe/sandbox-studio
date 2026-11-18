@@ -1,8 +1,10 @@
- ≡  Review                                                                                                                                                              ▲ 1 · 12:00 
+ ≡  Finn › desk                                                                                                                                        ● api-refactor · ▲ 1 · 12:00 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-FILES  2                            │ ± GIT PUSH  Push 2 commits to fix-login on GitHub/acme/web                                                                                    
-  src/login.tsx              +−     │ 2 files  +7 −1  █████████████▒▒                                                                                                               
-  src/login.test.tsx         ++++++ │                                                                                                                                               
+ Terminal   Changes   Details                                                                                                                                             ● running 
+────────────━━━━━━━─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ WAITING FOR YOU  1                 │ ± GIT PUSH  Push 2 commits to fix-login on GitHub/acme/web                                                                                    
+▌ Push to fix-login                 │ 2 files  +7 −1  █████████████▒▒                                                                                                               
+                                    │                                                                                                                                               
                                     │   Repository GitHub/acme/web                                                                                                                  
                                     │   Computer   api-refactor · teammate Finn                                                                                                     
                                     │   Branch     fix-login · new branch                                                                                                           
@@ -43,7 +45,5 @@ FILES  2                            │ ± GIT PUSH  Push 2 commits to fix-login
                                     │                                                                       │   6 })                                                                
                                     │                                                                                                                                               
                                     │                                                                                                                                               
-                                    │                                                                                                                                               
-                                    │                                                                                                                                               
 ────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-y approve and push  r request changes  n reject  i ignore  ↑↓/pgdn scroll  [/] file  v side by side │ esc/q back  ? more
+y approve and push  r request changes  n reject  i ignore  j/k change  v side by side  1-5 tab │ \ sidebar │ esc/q back  ? more

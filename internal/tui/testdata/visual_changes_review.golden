@@ -1,0 +1,23 @@
+ ≡  [1mFinn › desk[m                                            [36m●[m api-refactor[2m · [m[1;38;5;221m▲ 1[m 
+[2m────────────────────────────────────────────────────────────────────────────────[m
+ [2mTerminal[m   [1mChanges[m   [2mDetails[m                                         [36m●[m [2mrunning[m 
+[2m────────────[m━━━━━━━[2m─────────────────────────────────────────────────────────────[m
+ [1;38;5;141mWAITING FOR YOU[m[2m  1[m     [2m│[m [1;38;5;141m± GIT PUSH[m  [1mPush 2 commits to fix-login on GitHub/acm…[m
+[36m▌[m [1mPush to fix-login[m     [2m│[m 2 files  [38;5;77m+7[m [38;5;203m−1[m  [38;5;77m█████████████[m[38;5;203m▒▒[m                       
+                        [2m│[m                                                       
+                        [2m│[m   [2mRepository [mGitHub/acme/web                          
+                        [2m│[m   [2mComputer   [mapi-refactor[2m · teammate [mFinn             
+                        [2m│[m   [2mBranch     [mfix-login[2m · new branch[m                   
+                        [2m│[m   [2mChange     [m∅ → a4c2f0d · 2 files [32m+7[m [31m−1[m              
+                        [2m│[m                                                       
+                        [2m│[m [2mNothing reaches the forge until you approve; the agent[m
+                        [2m│[m [2msees a rejection on its next fetch.[m                   
+                        [2m│[m [2mApproving pushes it over SSH to[m                       
+                        [2m│[m [2mssh://git@github.com/acme/web.git.[m                    
+                        [2m│[m                                                       
+                        [2m│[m [1mCommits (2)[m                                           
+                        [2m│[m   [2ma4c2f0d[m Test that enter submits the l… [2mFinn · 2m ago[m
+                        [2m│[m   [2m77d0b2c[m Submit the login form on enter [2mFinn · 5m ago[m
+                        [2m│[m           [2mThe sign-in control was a div.[m              
+[2m────────────────────────┴───────────────────────────────────────────────────────[m
+[1my[m [2mapprove and push[m  [1mr[m [2mrequest changes[m  [1mn[m [2mreject[m  [1mi[m [2mignore[m  [1mj/k[m [2mchange[m  [1m1-5[m [2mtab[m[2m …[m

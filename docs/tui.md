@@ -96,8 +96,9 @@ screen, and back; a resize keeps it there. A terminal in full screen keeps one s
 beside its computer, or a computer on its own. `enter` on a row of the sidebar opens its place.
 `esc` goes back through the places opened before, skipping the ones that went, and last to
 Home; `q` does too, except on Home and in the sidebar, where it quits. The other screens
-(Activity, Settings, Computers, New computer, Checkpoints, Git, the git review, Environments,
-help) cover the frame and return to it with `esc`.
+(Activity, Settings, Computers, New computer, Checkpoints, Environments, help) cover the frame
+and return to it with `esc`. A push of a computer the environment on show doesn't have is a
+place of its own, its review alone.
 
 ## Screens and keys
 
@@ -107,16 +108,15 @@ request, and `+` makes something new.
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | [Home's list](#home): what waits for you, what works and what is quiet, with a reading pane for the row under the cursor | `↑/↓` `j/k` move over the rows · `tab` the next request · the row's own answers, such as `y` `n` `o` on a network request · `enter` open the row · `pgup/pgdn` scroll the reading pane · `u` undo · `+` new computer · `l` Activity · `,` Settings · `g` Git · `e` environment · `\` the sidebar · `?` help · `q` quit |
+| **Home** | [Home's list](#home): what waits for you, what works and what is quiet, with a reading pane for the row under the cursor | `↑/↓` `j/k` move over the rows · `tab` the next request · the row's own answers, such as `y` `n` `o` on a network request · `enter` open the row · `pgup/pgdn` scroll the reading pane · `u` undo · `+` new computer · `l` Activity · `,` Settings · `e` environment · `\` the sidebar · `?` help · `q` quit |
 | **The sidebar** (from `\`, or beside the place from 100 columns) | Home, TEAMMATES with their [threads](#threads), YOUR COMPUTERS, and ENVIRONMENT | `↑/↓` `j/k` move · `enter` open the row's place · `+` a new thread with the teammate under the cursor, or a new computer · `→`/`←` show or hide a teammate's older threads · `tab` the next thread that waits · `u` undo · `/` filter by name, teammate or template · `l` `,` `e` · `\` or `esc` back to the place · `?` · `q` quit |
-| **A teammate's home** (from its row) | [who it is](#a-teammates-home), its computers, tasks and what it knows, over a composer | `enter` write to it · `+` another computer · `t` its computer's terminal · `m` its next computer · `tab` the computer · `esc` back |
-| **A thread** (from its row, or a request's) | the [transcript](#thread), streaming, a request it waits on as a card, and the composer | `p` or `enter` write · `↑/↓` the tool calls · `x` stop · `y` `a` `n` its permission · the card's keys · `+` a new thread · `t` the terminal · `m` the next computer · `tab` the computer · `esc` back |
-| **A computer** (beside a thread or a teammate's home, from `tab`, or on its own) | [its tabs](#the-computer): Terminal and Details | `1`–`5` a tab · on Terminal `enter` type in, `alt+1`–`alt+9` another terminal, `+` a new shell, `T` the agent · on Details `s` start, stop or resume, `z` suspend, `f` fork, `h` checkpoints, `d` delete, `l` its Activity, `t` the terminal, `T` the agent · `m` the next computer · `tab` back to the thread · `esc` back |
+| **A teammate's home** (from its row) | [who it is](#a-teammates-home), its computers, tasks and what it knows, over a composer | `enter` write to it · `+` another computer · `t` its computer's terminal · `c` its changes · `m` its next computer · `tab` the computer · `esc` back |
+| **A thread** (from its row, or a request's) | the [transcript](#thread), streaming, a request it waits on as a card, and the composer | `p` or `enter` write · `↑/↓` the tool calls · `x` stop · `y` `a` `n` its permission · the card's keys · `+` a new thread · `t` the terminal · `c` the changes · `m` the next computer · `tab` the computer · `esc` back |
+| **A computer** (beside a thread or a teammate's home, from `tab`, or on its own) | [its tabs](#the-computer): Terminal, Changes and Details | `1`–`5` a tab · on Terminal `enter` type in, `alt+1`–`alt+9` another terminal, `+` a new shell, `T` the agent · on Changes `j/k` the rail's row, `↑/↓` scroll, `enter` fold a repository, `v` side by side, and a push's [review keys](#reviewing-a-push) · on Details `s` start, stop or resume, `z` suspend, `f` fork, `h` checkpoints, `d` delete, `l` its Activity, `t` the terminal, `T` the agent · `m` the next computer · `tab` back to the thread · `esc` back |
 | **Computers** (from ENVIRONMENT › Computers) | every computer of the environment, the teammates' and then yours, one row each with its owner, template, requests and status. From 100 columns, the dashboard of the one under the cursor beside the list | `↑/↓` move · `enter` the computer · `t` its terminal · `s` `z` `f` `h` `d` as on Details · `+` a new computer · `esc` back, the cursor where it was |
 | **Checkpoints** (from `h`) | the computer's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
 | **New computer** (from `+` or `+ New computer`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
-| **Git** (from `g`) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their computer and outcome | `↑/↓` move · `enter` the review · `l` Activity · `esc` back |
-| **Git review** (from `enter` on a push's row on Home, a push's card in a thread, or a push on the Git screen) | the push's facts, commits and diff, or the pull request | see below |
+| **A review** (from `enter` on a push of another environment's computer, or of one that went) | the push's facts, commits and diff, or the pull request | the [review keys](#reviewing-a-push) · `↑/↓` `j/k` scroll · `esc` back |
 | **Activity** (from `l`, or ENVIRONMENT › Activity; Network opens it on network) | connections of the environment's computers and every decision, newest first | `←/→` the kind: all, network, git, agents, memory · `enter` the entry and its rule · `/` filter by computer · `r` print the URL of Settings → Network · `esc` back |
 | **Settings** (from `,`) | the web's Settings sections in their three groups, each with what it is set to | `↑/↓` move · `enter` Activity opens here, the others print their address in the browser · `l` Activity · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
@@ -313,8 +313,8 @@ thread with the teammate: the composer opens, and the first prompt creates it (`
 .../sandboxes/{id}/chats`). A chat continued in the terminal, or one whose computer was reset,
 takes no prompt here.
 
-`t` goes to the computer's Terminal tab with the keys, and `m` shows the teammate's next
-computer beside the thread.
+`t` goes to the computer's Terminal tab with the keys, `c` to its Changes tab, and `m` shows
+the teammate's next computer beside the thread.
 
 A thread that is an agent in a terminal, such as `claude`, has no transcript: the main column
 is that terminal, with the computer's terminals as chips over it, and beside it is the
@@ -322,12 +322,12 @@ computer's Details tab. Its keys are the [Terminal tab's](#terminal).
 
 ### The computer
 
-The computer pane is the web's computer screen: a row of tabs, `Terminal` and `Details`, the
-active one bold over a heavy `━` in the rule, and the computer's status dot and word on the
-right. It is beside a thread or a teammate's home from 120 columns, in their place after `tab`
+The computer pane is the web's computer screen: a row of tabs, `Terminal`, `Changes` and
+`Details`, the active one bold over a heavy `━` in the rule, and the computer's status dot and
+word on the right. It is beside a thread or a teammate's home from 120 columns, in their place after `tab`
 below, and alone for a computer of yours or one opened from Home or Computers. `1` to `5` pick
 a tab by its place in the web's row (Terminal, Files, Changes, Browser, Details), so the
-numbers stay as the Files, Changes and Browser tabs arrive; today `1` and `5` have a tab. `m`
+numbers stay as the Files and Browser tabs arrive; today `1`, `3` and `5` have a tab. `m`
 shows the teammate's next computer, and `tab` goes back to the thread.
 
 #### Terminal
@@ -348,6 +348,44 @@ blub first: Details, then s.`
 The pane sends its size when it attaches and when it changes. tmux sizes a session to its
 latest client, so a terminal open in the web too follows whichever was resized last. Alt keys
 need a terminal that sends them as `ESC` and the key; on macOS, set Option to act as Meta.
+
+#### Changes
+
+What git sees on the computer, the pushes that wait for you and the ones that went out, and
+what the open thread changed, as the web's Changes tab (`web/src/components/computer/
+changes.tsx`). The tab's label counts the changes of every repository: `Changes 5`. On the
+left is the rail, in sections:
+
+- **WAITING FOR YOU**: the computer's pushes, pull requests, forge reviews and comments that
+  wait, oldest first: `Push to fix-login`.
+- **PUSHED**: its pushes and pull requests allowed in the last day: `Push to fix-login · #12`,
+  or `· failed`.
+- **REPOSITORIES**: each repository under `/workspace`, `▾ web · fix-login ↑2` and its count,
+  then its changes under dim `staged`, `not staged` and `untracked`: `M src/login.tsx +1 −1`
+  (`A` added, `M` modified, `D` deleted, `R` renamed, `!` conflicted). A repository after the
+  first starts folded, `enter` on its header folds or opens it, and one without changes says
+  `clean`.
+- **THIS THREAD**: beside a thread, its requests that changed files, newest first, by their
+  prompt.
+
+The rest of the pane shows the row under the cursor: a push's [review](#reviewing-a-push), a
+forge review or comment as its card, a repository's branch, upstream and changes, a change's
+diff from its first hunk under its path and area, or the files a request changed with their
+diffs. At first the cursor is on the first push that waits, else the first change, else the
+thread's newest request. `j/k` move it, and the cursor stays on its row as git is read again.
+`↑/↓` scroll, `pgup/pgdn` (or `b`/`space`) scroll a page, `g`/`G` jump to the start or the end,
+and `[`/`]` to the previous or the next file. From a pane of 70 cells the rail is beside the
+diff; narrower it is one line over it, `‹ M src/login.tsx +1 −1 · 3 of 7 ›`. From a pane of
+160 cells the diff is side by side, which `v` toggles: at 180 columns that is after `alt+z`.
+
+Git is read with `GET .../sandboxes/{id}/git` every 5 seconds while the tab shows, every 20
+seconds while only its label does, and at once when a request of the open thread ends. PUSHED
+comes from `GET .../approvals?status=approved`, read every third time while the tab shows. A
+change's diff is read when the cursor comes to it (`GET .../git/diff?repo&path&area`, and
+`from` for a rename) and again once git says the change moved on; a request's files come from
+`GET .../chats/{chat}/turns/{turn}/changes`. A stopped computer has no git to read: `Git's
+changes are read while docs-site runs. Details, then s starts it.` A computer whose agent is
+from an older Studio says `Restart the computer to see its git changes`.
 
 #### Details
 
@@ -417,7 +455,7 @@ way the web card starts them: the pattern level and the scope its teammate last 
 |---|---|
 | Network request | `y` allow · `n` deny (each makes a rule) · `o` allow once · `O` deny once (no rule) · `1` allow for 1 hour · `i` ignore · `p` cycle the host pattern, then a browser request's method and path · `s` scope: environment, the teammate's computers or only this computer; for a browser request, who: its browser, all browsers, or browsers and computers · `x` any port instead of the default ports · `w` allow the navigation's site for this browser session |
 | Group | `A` allow all · `D` deny all · `r` review one by one · `s` scope, or who for a browser page's requests |
-| Git push or pull request | `enter` opens the git review · `y` asks once more, then approves · `F` force-pushes · `r` requests changes · `n` reject · `i` ignore |
+| Git push or pull request | `enter` opens its review in the computer's Changes tab · `y` asks once more, then approves · `F` force-pushes · `r` requests changes · `n` reject · `i` ignore |
 | Browser action | `y` allow · `n` deny · `i` ignore · `r` toggles whether the decision holds for every such action on the origin (the web's "always") |
 | Browser credential | `y` fill · `n` deny · `i` ignore |
 | Memory share | `y` share with every teammate · `n` decline · `i` ignore |
@@ -441,21 +479,23 @@ does: `POST .../memory/conflicts/{id}/resolve` with `{resolution: "keep_a" | "ke
 then closes the approval. Keeping both facts, or editing one, needs a text editor for two
 facts, so it stays in the browser.
 
-### Git review
+### Reviewing a push
 
-`enter` on a push's row, or on its card in a thread, opens the review the web's git sheet and page show (`web/src/components/git-review.tsx`),
+`enter` on a push's row on Home, or on its card in a thread, opens the push in its computer's
+[Changes tab](#changes): beside the thread when the thread is on that computer, else on the
+computer's own. It shows what the web's review shows (`web/src/components/git-review.tsx`),
 from the approval's `git` detail: the repository, computer and teammate, the branch (and whether
 it is new), the change with its file count and line totals, the commits, and the unified diff,
 colored as on the web (`+` green, `-` red, hunks in the accent). A pull request shows its
-branches, title and body instead. The review is a pager: `↑/↓` `j/k` scroll a line,
-`pgup/pgdn` (or `b`/`space`) a page, `g`/`G` jump to the start or the end. In the visual look,
-`[` and `]` jump to the previous or next file. From 120 columns a file list sits beside the
-review, and from 160 columns the diff is side by side, which `v` toggles.
+branches, title and body instead. It scrolls as the tab does. A push of a computer that the
+environment on show doesn't have, or that went, opens a review place: the review alone, where
+`j/k` scroll too, and from 120 columns a file list sits beside it.
 
 `y` approves and pushes (or opens the pull request), `n` rejects, `i` ignores. A forced push
 shows **Rewrites history** with the commits it drops, and `F` (force-push) approves it instead
 of `y`, which only says so. Each decides with
-`{action, scope: "sandbox"}`, as the web does, and returns to where the review was opened. On a
+`{action, scope: "sandbox"}`, as the web does. The Changes tab stays, the push going to PUSHED
+once it is out; a review place goes back. On a
 push to a branch other than the default one, `p` says whether approving opens a pull request
 too, and `o` opens it after a push without one. `r` requests changes: it asks for a note,
 rejects the push with it, and for a teammate's push sends it to a new thread on the computer
@@ -613,12 +653,12 @@ and [design/tui-visual.md](design/tui-visual.md)):
   own, Home's list has its reading pane beside it. A computer's dashboard has the history line
   from its lineage and its network: its connections newest first, with their verdict's dot, age, host and verdict,
   read from `GET .../sandboxes/{id}/connections` every 2 seconds while it shows (`dash.go`).
-  From 120 columns the git review gains a file list with +/− bars, where `[` and `]` jump
+  From 120 columns a review place gains a file list with +/− bars, where `[` and `]` jump
   between files. When the computer's teammate's browser runs, the dashboard ends with its page's
   address and, on terminals with 256 colors or more, a picture of the page about 40×9 cells,
   drawn in half blocks (`▀`, two pixels a cell) from `GET .../browser/frame` every 3 seconds
-  (`picture.go`). A picture that doesn't fit the pane's height is left out. From 160 columns the diff is side by side, and `v` toggles
-  it. Inside a changed line, the words it changes are in reverse video. They come from a
+  (`picture.go`). A picture that doesn't fit the pane's height is left out. From 160 columns of its pane a
+  diff is side by side, and `v` toggles it. Inside a changed line, the words it changes are in reverse video. They come from a
   diff of the words of each removed line and the added line paired with it (`worddiff.go`),
   and lines that share no word, or have more than 300, keep their line's color only.
 - **Live numbers.** From 100 columns, the Computers screen's rows have a CPU sparkline per
@@ -630,9 +670,9 @@ and [design/tui-visual.md](design/tui-visual.md)):
   connection sparklines.
 - **Mouse.** Bubble Tea's cell-motion mode is on, and holding shift keeps the terminal's own
   selection. A click selects a row: a computer, thread, place, card, log entry, checkpoint,
-  environment, fold or file, and gives its column the cursor. A double click opens it as
-  `enter` does. A click on a terminal gives it the keys. The wheel scrolls the review and the
-  transcript, and moves the cursor in lists. A click on the crumb row's `≡`, chip or what waits
+  environment, fold, file or change, and gives its column the cursor. A double click opens it as
+  `enter` does. A click on a terminal gives it the keys. The wheel scrolls a review, the
+  Changes tab and the transcript, and moves the cursor in lists and on the Changes rail. A click on the crumb row's `≡`, chip or what waits
   acts as [the frame](#the-frame) says, and a click on the sidebar's environment opens the
   picker. A click on a card's keycap or a key of the key bar presses
   that key; the bar's arrows and keys with a modifier take no clicks.
@@ -642,7 +682,7 @@ and [design/tui-visual.md](design/tui-visual.md)):
   notice line. A new request's card slides in from the top of the reading pane over about
   150 ms. Nothing else moves but the spinner and the booting shimmer.
 
-No key changed between the looks. Only `[`, `]` and `v` in the git review are new.
+No key changed between the looks. Only `[`, `]` and `v` in a diff are new.
 
 ## Code
 
@@ -668,12 +708,13 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `approvals.go` ports the web's card grouping (`web/src/lib/approval-groups.ts`) and the
   decision choices of `web/src/components/approval-decision.tsx`. `kinds.go` decides the other
   kinds (browser, memory, agent permissions) and reads a question's schema into the one field
-  the TUI answers. `pager.go` is the git review, and `git.go` the Git screen.
+  the TUI answers. `pager.go` lays out a push's review and decides it, and is the review place.
 - `thread.go` is a thread (its card above the composer and its keys) and a teammate's home,
   which `mate.go` reads. `chat.go` is the chat: the stream, the transcript's layout and folds.
   `composer.go` is the composer's box.
 - `computer.go` is the computer pane: its tabs and their keys. `tab_terminal.go` is the
-  Terminal tab, with its chips and new shells, and `tab_details.go` the Details tab, which draws
+  Terminal tab, with its chips and new shells, `changes.go` the Changes tab, with git's reads,
+  the rail and what it shows, and `tab_details.go` the Details tab, which draws
   `detail.go`'s facts or `charts.go`'s dashboard. `homepane.go` is the live terminal's state and
   keys and the approval banner, and `pane.go` the terminal itself, an emulator between the
   attachment's websocket and the frame.

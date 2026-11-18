@@ -335,8 +335,6 @@ func (m *app) activityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 	case key.Matches(msg, keyRules):
 		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/settings/network"), false)
-	case key.Matches(msg, keyGit):
-		return m, m.openGit()
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}

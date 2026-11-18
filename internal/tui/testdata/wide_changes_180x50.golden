@@ -1,0 +1,49 @@
+ ≡  Finn › desk                                                                                                                                        ● api-refactor · ▲ 1 · 12:00 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Terminal   Changes 5   Details                                                                                                                                           ● running 
+────────────━━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ REPOSITORIES  2                    │ src/login.tsx                                                                                                                            +1 −1
+  ▾ web · fix-login ↑2             4│ not staged · web                                                                                                                              
+    staged                          │                                                                                                                                               
+  R src/form.tsx                  +3│ @@ -10,7 +10,7 @@ export function Login() {                                                                                                   
+    not staged                      │   10   return (                                                       │  10   return (                                                        
+▌ M src/login.tsx              +1 −1│   11     <form onSubmit={submit}>                                     │  11     <form onSubmit={submit}>                                      
+  ! src/merge.go                    │   12       <input name="user" />                                      │  12       <input name="user" />                                       
+    untracked                       │   13       <div onClick={submit}>Sign in</div>                        │  13       <button type="submit">Sign in</button>                      
+  A notes.md                        │   14     </form>                                                      │  14     </form>                                                       
+  ▸ api · main ↓1                  1│   15   )                                                              │  15   )                                                               
+                                    │   16 }                                                                │  16 }                                                                 
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+                                    │                                                                                                                                               
+────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+j/k change  ↑↓ scroll  [/] file  v side by side  1-5 tab │ \ sidebar │ esc/q back  ? more

@@ -57,16 +57,12 @@ func (m *app) body(w, h int) []string {
 		return m.activityBody(w, h)
 	case screenEntry:
 		return m.entryBody(w, h)
-	case screenPager:
-		return m.pagerBody(w, h)
 	case screenNew:
 		return m.newBody(w, h)
 	case screenProgress:
 		return m.progressBody(w, h)
 	case screenCheckpoints:
 		return m.checkpointsBody(w, h)
-	case screenGit:
-		return m.gitBody(w, h)
 	case screenSettings:
 		return m.settingsBody(w, h)
 	case screenComputers:
@@ -164,7 +160,7 @@ func (m *app) helpBody() []string {
 			{"pgup/pgdn", "scroll the reading pane"},
 			{"\\", "the sidebar: teammates, their threads and computers; \\ comes back"},
 			{"+ / e / /", "new computer; switch environment; filter the sidebar"},
-			{"l / , / g", "Activity; Settings; the pushes and pull requests"},
+			{"l / ,", "Activity; Settings"},
 			{"? / q", "this help; quit"},
 		}
 	case m.helpBack == screenMain && m.helpPart == "thread":
@@ -182,7 +178,7 @@ func (m *app) helpBody() []string {
 			{"i / r", "ignore the permission or skip the question; r types an answer"},
 			{"card", "a request above the composer takes its own keys, as on Home"},
 			{"+", "start a new thread with the teammate"},
-			{"t / m", "the computer's terminal with the keys; the teammate's next computer"},
+			{"t / c / m", "the computer's terminal with the keys; its changes; its next computer"},
 			{"tab", "the computer, beside the thread or in its place"},
 		}
 		footer = []string{
@@ -193,14 +189,14 @@ func (m *app) helpBody() []string {
 		keys = [][2]string{
 			{"enter", "write to the teammate; the first prompt starts a thread"},
 			{"+", "give the teammate another computer"},
-			{"t / m", "the computer's terminal with the keys; its next computer"},
+			{"t / c / m", "the computer's terminal with the keys; its changes; its next computer"},
 			{"tab", "the computer, beside the teammate or in its place"},
 			{"esc / q", "back a place"},
 		}
 	case m.helpBack == screenMain && m.helpPart == "computer":
 		title = "Computer"
 		keys = [][2]string{
-			{"1-5", "a tab: Terminal and Details today; Files, Changes, Browser come later"},
+			{"1-5", "a tab: Terminal, Changes and Details today; Files and Browser come later"},
 			{"enter", "Terminal: type into the terminal; ctrl+] gives the keys back"},
 			{"alt+1-9", "Terminal: another of the computer's terminals"},
 			{"+ / T", "Terminal: a new shell; start the teammate's agent"},
@@ -262,10 +258,31 @@ func (m *app) helpBody() []string {
 			{"esc / q", "back"},
 		}
 		footer = []string{"The sections are the web's, and say what each is set to."}
-	case m.helpBack == screenPager:
-		title = "Git review"
+	case m.helpBack == screenMain && m.helpPart == "changes":
+		title = "Changes"
+		keys = [][2]string{
+			{"j / k", "the rail's next or previous row; main shows it"},
+			{"↑/↓", "scroll main a line"},
+			{"pgup/pgdn", "scroll a page; b and space too"},
+			{"g / G", "the start or the end"},
+			{"[ / ]", "the previous or the next file"},
+			{"enter", "fold or open a repository's changes"},
+			{"v", "side by side or unified, from 160 columns"},
+			{"y / F", "a push: approve and push, or open its pull request; F force-pushes"},
+			{"p / o", "whether approving opens a pull request too; open it later"},
+			{"r / n / i", "ask for changes in a note; reject; ignore"},
+			{"1-5 / m", "another tab; the teammate's next computer"},
+			{"tab / esc", "back to the thread; esc back a place"},
+		}
+		footer = []string{
+			"Git is read every 5 seconds while the tab shows. Comments on lines of a",
+			"diff are written in the browser.",
+		}
+	case m.helpBack == screenMain && m.helpPart == "review":
+		title = "Review"
 		keys = [][2]string{
 			{"y", "approve and push, or open the pull request"},
+			{"F", "force-push a push that rewrites its branch"},
 			{"p", "whether approving opens a pull request too"},
 			{"o", "open the pull request of a branch pushed before"},
 			{"r", "request changes: a note to the teammate, in a new thread"},
@@ -279,6 +296,7 @@ func (m *app) helpBody() []string {
 			{"esc / q", "back"},
 		}
 		footer = []string{
+			"A push of a computer in another environment is reviewed here, alone.",
 			"Comments on lines of the diff are written in the browser.",
 		}
 	}

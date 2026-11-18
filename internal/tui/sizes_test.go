@@ -86,12 +86,19 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 			m.flip = true
 			return m
 		},
-		"details":   func(_ *testing.T, m *app) *app { return openComputer(m, "sb2", tabDetails) },
-		"mate":      func(_ *testing.T, m *app) *app { m.open(place{kind: placeMate, mate: "t1"}); return m },
-		"asks":      func(_ *testing.T, m *app) *app { return pendingAsks(sampleChat(m), `{"type":"object"}`) },
-		"inbox":     func(_ *testing.T, m *app) *app { sampleApprovals(m); return press(onCard(m, 2), "right") },
-		"git":       func(_ *testing.T, m *app) *app { samplePush(m); return press(m, "g") },
-		"review":    func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "enter") },
+		"details":        func(_ *testing.T, m *app) *app { return openComputer(m, "sb2", tabDetails) },
+		"mate":           func(_ *testing.T, m *app) *app { m.open(place{kind: placeMate, mate: "t1"}); return m },
+		"asks":           func(_ *testing.T, m *app) *app { return pendingAsks(sampleChat(m), `{"type":"object"}`) },
+		"inbox":          func(_ *testing.T, m *app) *app { sampleApprovals(m); return press(onCard(m, 2), "right") },
+		"changes":        func(_ *testing.T, m *app) *app { return withGitStatus(openComputer(m, "sb2", tabChanges)) },
+		"changes review": func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "enter") },
+		"review place": func(_ *testing.T, m *app) *app {
+			a := samplePush(m)
+			a.EnvironmentID = "env2"
+			m.approvals = nil
+			m.openReview(a)
+			return m
+		},
 		"push asks": func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "y") },
 		"thread row": func(t *testing.T, m *app) *app {
 			m.goHome()

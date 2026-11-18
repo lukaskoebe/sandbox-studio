@@ -135,10 +135,10 @@ func TestGoldenWideThread(t *testing.T) {
 	}
 }
 
-func TestGoldenVisualPager(t *testing.T) {
+func TestGoldenVisualChangesReview(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
-	goldenVisual(t, "visual_pager", press(onCard(m, 0), "enter"), true)
+	goldenVisual(t, "visual_changes_review", press(onCard(m, 0), "enter"), true)
 }
 
 func TestGoldenWideHome(t *testing.T) {
@@ -153,16 +153,17 @@ func TestGoldenWideHome180(t *testing.T) {
 	goldenVisual(t, "wide_home_180x50", m, false)
 }
 
-func TestGoldenWidePager(t *testing.T) {
+func TestGoldenWideChangesReview(t *testing.T) {
 	m := visualApp(140, 40)
 	samplePush(m)
-	goldenVisual(t, "wide_pager_140x40", press(onCard(m, 0), "enter"), false)
+	goldenVisual(t, "wide_changes_review_140x40", press(onCard(m, 0), "enter"), false)
 }
 
-func TestGoldenWidePagerSideBySide(t *testing.T) {
+// At 180 columns alt+z gives the tab the whole frame, and its diff goes side by side.
+func TestGoldenWideChangesReviewSideBySide(t *testing.T) {
 	m := visualApp(180, 50)
 	samplePush(m)
-	goldenVisual(t, "wide_pager_180x50", press(onCard(m, 0), "enter"), false)
+	goldenVisual(t, "wide_changes_review_180x50", press(onCard(m, 0), "enter", "alt+z"), false)
 }
 
 func TestGoldenWideInbox(t *testing.T) {
@@ -309,13 +310,20 @@ func TestMouseWheelMovesTheList(t *testing.T) {
 	}
 }
 
-func TestMouseWheelScrollsThePager(t *testing.T) {
+func TestMouseWheelScrollsTheReview(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
 	m = press(onCard(m, 0), "enter")
-	next, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m.View()
+	next, _ := m.Update(tea.MouseWheelMsg{X: 40, Y: 8, Button: tea.MouseWheelDown})
 	if got := next.(*app).pager.scroll; got != wheelLines {
-		t.Errorf("the wheel scrolls the review: %d", got)
+		t.Errorf("the wheel over main scrolls the review: %d", got)
+	}
+	m = next.(*app)
+	m.changes.status, m.changes.loaded = []agentproto.GitRepo{{Path: "/workspace/web", Branch: "fix-login", Changes: []agentproto.GitChange{{Path: "src/a.go", Area: "unstaged", Status: "modified"}}}}, true
+	next, _ = m.Update(tea.MouseWheelMsg{X: 3, Y: 8, Button: tea.MouseWheelDown})
+	if got := next.(*app).changes.cursor; got != "repo//workspace/web" {
+		t.Errorf("the wheel over the rail moves its row: %q", got)
 	}
 }
 
@@ -353,7 +361,7 @@ func TestClickingTheCrumbRow(t *testing.T) {
 }
 
 func TestBracketsJumpBetweenFiles(t *testing.T) {
-	m := visualApp(140, 40)
+	m := visualApp(140, 16) // short, so that each file's start can come to the top
 	samplePush(m)
 	m = press(onCard(m, 0), "enter")
 	files := m.pagerFiles()
@@ -378,10 +386,14 @@ func TestVTogglesSideBySide(t *testing.T) {
 	m := visualApp(180, 50)
 	samplePush(m)
 	m = press(onCard(m, 0), "enter")
-	if !m.sideBySide() {
-		t.Fatal("180 columns: not side by side")
+	side := func() bool { _, _, pw := m.changesMainRect(); return m.changesSide(pw) }
+	if side() {
+		t.Fatal("180 columns beside the sidebar: the 149-cell pane is side by side")
 	}
-	if m = press(m, "v"); m.sideBySide() {
+	if m = press(m, "alt+z"); !side() {
+		t.Fatal("180 columns full screen: not side by side")
+	}
+	if m = press(m, "v"); side() || !m.pager.unified {
 		t.Error("v did not turn side by side off")
 	}
 }
@@ -432,7 +444,7 @@ func TestClickingACardSelectsIt(t *testing.T) {
 func TestGoldenVisualPagerWords(t *testing.T) {
 	m := visualApp(80, 24)
 	samplePush(m)
-	goldenVisual(t, "visual_pager_words", press(onCard(m, 0), "enter", "G"), true)
+	goldenVisual(t, "visual_changes_words", press(onCard(m, 0), "enter", "G"), true)
 }
 
 func TestClickingAKeycapPressesIt(t *testing.T) {
@@ -457,8 +469,8 @@ func TestClickingAKeycapPressesIt(t *testing.T) {
 	h := at("enter", "review")
 	next, _ := m.Update(tea.MouseClickMsg{X: h.x0 + 1, Y: h.y, Button: tea.MouseLeft})
 	m = next.(*app)
-	if m.screen != screenPager {
-		t.Fatalf("the git card's keycap opens the review: screen %v", m.screen)
+	if m.comp.tab != tabChanges || m.changes.cursor != "review/g1" {
+		t.Fatalf("the git card's keycap opens the review: tab %v, cursor %q", m.comp.tab, m.changes.cursor)
 	}
 	h = at("esc", "back")
 	if h.y != 28 {

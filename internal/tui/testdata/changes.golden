@@ -1,0 +1,23 @@
+ ≡  Finn › desk                                            ● api-refactor · ▲ 1 
+────────────────────────────────────────────────────────────────────────────────
+ Terminal   Changes 5   Details                                       ● running 
+────────────━━━━━━━━━───────────────────────────────────────────────────────────
+ REPOSITORIES  2        │ src/login.tsx                                    +1 −1
+  ▾ web · fix-login ↑2 4│ not staged · web                                      
+    staged              │                                                       
+  R src/form.tsx      +3│ @@ -10,7 +10,7 @@ export function Login() {           
+    not staged          │    return (                                           
+▸ M src/login.tsx  +1 −1│      <form onSubmit={submit}>                         
+  ! src/merge.go        │        <input name="user" />                          
+    untracked           │ -      <div onClick={submit}>Sign in</div>            
+  A notes.md            │ +      <button type="submit">Sign in</button>         
+  ▸ api · main ↓1      1│      </form>                                          
+                        │    )                                                  
+                        │  }                                                    
+                        │                                                       
+                        │                                                       
+                        │                                                       
+                        │                                                       
+                        │                                                       
+────────────────────────┴───────────────────────────────────────────────────────
+j/k change  ↑↓ scroll  1-5 tab  esc/q back  \ sidebar  ? help

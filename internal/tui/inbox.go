@@ -373,8 +373,6 @@ func (m *app) inboxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openActivity("")
 	case key.Matches(msg, keyEnv):
 		m.openEnvs()
-	case key.Matches(msg, keyGit): // until the Changes tab takes the pushes
-		return m, m.openGit()
 	case key.Matches(msg, keyNewComputer):
 		if m.env.ID != "" {
 			return m, m.openNew()
@@ -426,8 +424,7 @@ func (m *app) inboxCardKey(msg tea.KeyPressMsg, c card) tea.Cmd {
 func (m *app) pushRowKey(msg tea.KeyPressMsg, a api.ApprovalView) tea.Cmd {
 	switch {
 	case key.Matches(msg, keyOpen):
-		m.openPager(a)
-		m.pager.back = screenMain
+		return m.openReview(a)
 	case key.Matches(msg, keyPush, keyForcePush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
 		m.setNotice(gitDecidedText(a), false)
 	case key.Matches(msg, keyPush) && forced(a):
@@ -437,7 +434,7 @@ func (m *app) pushRowKey(msg tea.KeyPressMsg, a api.ApprovalView) tea.Cmd {
 	case key.Matches(msg, keyForcePush) && forced(a):
 		return m.approvePush(a, defaultOpenPR(a))
 	case key.Matches(msg, keyChanges) && a.Git.PullRequest == nil:
-		m.askChanges(a, screenMain)
+		m.askChanges(a)
 	case key.Matches(msg, keyReject):
 		return m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
 	case key.Matches(msg, keyIgnore):

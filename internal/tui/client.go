@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -347,6 +348,40 @@ func (c *Client) CancelChat(ctx context.Context, env, id string) error {
 func (c *Client) Approvals(ctx context.Context, env string) ([]api.ApprovalView, error) {
 	var out []api.ApprovalView
 	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/approvals?status=all", nil, nil, &out)
+	return out, err
+}
+
+// ApprovalsWith lists an environment's approvals of one status, newest first.
+func (c *Client) ApprovalsWith(ctx context.Context, env, status string) ([]api.ApprovalView, error) {
+	var out []api.ApprovalView
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/approvals?status="+url.QueryEscape(status), nil, nil, &out)
+	return out, err
+}
+
+// GitStatus reads the git repositories of a sandbox's workspace as git sees them.
+func (c *Client) GitStatus(ctx context.Context, env, sandbox string) (api.GitStatus, error) {
+	var out api.GitStatus
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/git", nil, nil, &out)
+	return out, err
+}
+
+// GitDiff reads one change's diff in a repository of a sandbox's workspace: repo is relative to
+// /workspace, path to the repository, from a renamed file's old path, and area staged, unstaged
+// or untracked.
+func (c *Client) GitDiff(ctx context.Context, env, sandbox, repo, path, from, area string) (api.GitDiff, error) {
+	q := url.Values{"repo": {repo}, "path": {path}, "area": {area}}
+	if from != "" {
+		q.Set("from", from)
+	}
+	var out api.GitDiff
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/git/diff?"+q.Encode(), nil, nil, &out)
+	return out, err
+}
+
+// TurnChanges reads the files a turn of a chat changed, with their diffs.
+func (c *Client) TurnChanges(ctx context.Context, env, chatID, turn string) (chat.TurnChanges, error) {
+	var out chat.TurnChanges
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/chats/"+chatID+"/turns/"+turn+"/changes", nil, nil, &out)
 	return out, err
 }
 

@@ -67,8 +67,8 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyRight}
 	case "space":
 		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-	case "alt+a":
-		return tea.KeyPressMsg{Code: 'a', Mod: tea.ModAlt}
+	case "alt+a", "alt+z":
+		return tea.KeyPressMsg{Code: rune(k[4]), Mod: tea.ModAlt}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	default:
