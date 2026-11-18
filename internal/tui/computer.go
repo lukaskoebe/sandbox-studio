@@ -47,13 +47,19 @@ var (
 	keyFlip      = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "thread"))
 )
 
-// computerTabs are the tabs the pane has: the Terminal tab, but beside a thread that is an
-// agent in a terminal, which shows that terminal itself, Changes and Details.
+// computerTabs are the tabs the pane has, as the web's: Terminal, but beside a thread that is an
+// agent in a terminal, which shows that terminal itself; Files and Changes; Browser on a
+// teammate's computer; and Details.
 func (m *app) computerTabs() []computerTab {
-	if m.here.kind == placeThread && m.here.term != "" {
-		return []computerTab{tabChanges, tabDetails}
+	var tabs []computerTab
+	if m.here.kind != placeThread || m.here.term == "" {
+		tabs = append(tabs, tabTerminal)
 	}
-	return []computerTab{tabTerminal, tabChanges, tabDetails}
+	tabs = append(tabs, tabFiles, tabChanges)
+	if sb := m.computerOn(); sb != nil && sb.TeammateID != "" {
+		tabs = append(tabs, tabBrowser)
+	}
+	return append(tabs, tabDetails)
 }
 
 // computerPane is the computer pane in w cells and h rows: the tab row, its rule and the tab.
@@ -71,6 +77,10 @@ func (m *app) computerPane(w, h int) []string {
 	switch m.comp.tab {
 	case tabTerminal:
 		lines = append(lines, m.terminalTab(*sb, w, body)...)
+	case tabFiles:
+		lines = append(lines, m.filesTab(*sb, w, body)...)
+	case tabBrowser:
+		lines = append(lines, m.browserTab(*sb, w, body)...)
 	case tabChanges:
 		lines = append(lines, m.changesTab(*sb, w, body)...)
 	default:
@@ -120,8 +130,11 @@ func (m *app) tabRow(sb sandboxes.View, w int) (string, string) {
 func (m *app) pickTab(n int) {
 	t := computerTab(n - 1)
 	if !slices.Contains(m.computerTabs(), t) {
-		if n >= 1 && n <= len(tabNames) {
-			m.setNotice(tabNames[t]+" comes to the terminal UI later. The browser has it.", false)
+		switch t {
+		case tabTerminal:
+			m.setNotice("This thread is the terminal: it shows beside the computer.", false)
+		case tabBrowser:
+			m.setNotice("Only a teammate's computer has a browser.", false)
 		}
 		return
 	}
@@ -146,8 +159,12 @@ func (m *app) computerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.comp.tab {
 	case tabTerminal:
 		return m, m.terminalKey(msg, *sb)
+	case tabFiles:
+		return m, m.filesKey(msg)
 	case tabChanges:
 		return m, m.changesKey(msg)
+	case tabBrowser:
+		return m, nil // the browser is driven in the web
 	}
 	return m, m.detailsKey(msg, *sb)
 }
@@ -162,8 +179,11 @@ func (m *app) computerBindings() []key.Binding {
 	switch m.comp.tab {
 	case tabTerminal:
 		bindings = m.terminalBindings(*sb)
+	case tabFiles:
+		bindings = m.filesBindings()
 	case tabChanges:
 		bindings = m.changesBindings()
+	case tabBrowser:
 	default:
 		bindings = m.detailsBindings(*sb)
 	}

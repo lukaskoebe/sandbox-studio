@@ -1,0 +1,23 @@
+ ≡  Finn › desk                                            ● api-refactor · ▲ 1 
+────────────────────────────────────────────────────────────────────────────────
+ Terminal   Files   Changes   Browser   Details                       ● running 
+────────────━━━━━───────────────────────────────────────────────────────────────
+ /workspace/src/              │  login.tsx  /workspace/src · 218 B              
+  components/                 │                                                 
+▸ login.tsx             218 B │   1  import { useState } from "react"           
+  main.tsx              318 B │   2                                             
+                              │   3  export function Login() {                  
+                              │   4      const [name, setName] = useState("")   
+                              │   5      return (                               
+                              │   6          <form onSubmit={submit}>           
+                              │   7              <input value={name} onChange={…
+                              │   8          </form>                            
+                              │   9      )                                      
+                              │  10  }                                          
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+──────────────────────────────┴─────────────────────────────────────────────────
+enter open  j/k move  ← up  ↑↓ scroll  r /tmp  o in the browser  1-5 tab …

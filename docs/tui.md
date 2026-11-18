@@ -322,13 +322,14 @@ computer's Details tab. Its keys are the [Terminal tab's](#terminal).
 
 ### The computer
 
-The computer pane is the web's computer screen: a row of tabs, `Terminal`, `Changes` and
-`Details`, the active one bold over a heavy `━` in the rule, and the computer's status dot and
-word on the right. It is beside a thread or a teammate's home from 120 columns, in their place after `tab`
-below, and alone for a computer of yours or one opened from Home or Computers. `1` to `5` pick
-a tab by its place in the web's row (Terminal, Files, Changes, Browser, Details), so the
-numbers stay as the Files and Browser tabs arrive; today `1`, `3` and `5` have a tab. `m`
-shows the teammate's next computer, and `tab` goes back to the thread.
+The computer pane is the web's computer screen: a row of tabs, `Terminal`, `Files`, `Changes`,
+`Browser` and `Details`, the active one bold over a heavy `━` in the rule, and the computer's
+status dot and word on the right. It is beside a thread or a teammate's home from 120 columns,
+in their place after `tab` below, and alone for a computer of yours or one opened from Home or
+Computers. `1` to `5` pick a tab by its place in that row. Only a teammate's computer has a
+browser, so a computer of yours has no Browser tab, and `4` says so; beside a thread that is an
+agent in a terminal the thread is the terminal, and `1` says so. `m` shows the teammate's next
+computer, and `tab` goes back to the thread.
 
 #### Terminal
 
@@ -348,6 +349,33 @@ blub first: Details, then s.`
 The pane sends its size when it attaches and when it changes. tmux sizes a session to its
 latest client, so a terminal open in the web too follows whichever was resized last. Alt keys
 need a terminal that sends them as `ESC` and the key; on macOS, set Option to act as Meta.
+
+#### Files
+
+The computer's files, to read, as the web's Files tab. The top line is the folder on show,
+`/workspace/src/`, over its entries, folders first: a folder with its slash, a link with `→`, a
+file with its size and, in a list of 44 cells or more, how long ago it changed. From a pane of 80
+cells the list is 30 cells wide with the file opened beside it; narrower, the file shows in the
+list's place. A file shows as its text with line numbers, as a picture on a terminal of 256
+colors or more (PNG, JPEG and GIF; a WebP says it is a picture), or as a line that says why
+neither: larger than 1 MiB, not text, or not readable by the computer's user.
+
+`j` and `k` move through the list, and so do `↑` and `↓` unless a file is open beside it, which
+they scroll; `pgup`/`pgdn` (or `b`/`space`), `g` and `G` scroll it too. `enter` or `→` opens a
+folder or a file. `←` or `backspace` goes up a folder, with the cursor on the one it came from,
+or, where the file shows alone, back to its folder. Studio doesn't follow links: `enter` on one
+says so. `r` goes to the next root: `/workspace`, `/tmp`, then the whole computer (`/`). `o`
+prints the tab's address in the browser, where files are edited and uploaded. A click picks an
+entry and a double click opens it; the wheel moves the cursor over the list and scrolls a file.
+
+The folder is read with `GET .../sandboxes/{id}/files?path&root` when the tab shows and every 10
+seconds after; a file with `GET .../files/content?path&root` when it opens, and again when its
+folder says it changed. A listing has at most 1,000 entries; a longer one says the browser lists
+them. A stopped computer has no files to read: `Files are read while docs-site runs. Details,
+then s starts it.` A computer whose agent is from an older Studio lists only `/workspace`, and
+the other roots say `Restart the computer to browse outside /workspace: its agent is from an
+older Studio.` A file's text is cleaned as the rest of Studio's answers are: escape sequences go,
+and a tab is four spaces.
 
 #### Changes
 
@@ -386,6 +414,23 @@ change's diff is read when the cursor comes to it (`GET .../git/diff?repo&path&a
 `GET .../chats/{chat}/turns/{turn}/changes`. A stopped computer has no git to read: `Git's
 changes are read while docs-site runs. Details, then s starts it.` A computer whose agent is
 from an older Studio says `Restart the computer to see its git changes`.
+
+#### Browser
+
+The teammate's browser, to look at. The top line is the page's address, `No page yet` before
+the first; under it who drove it last (`api-refactor drove it last.`, or `You're driving.` while
+you drive it in the web) and how many pages agents opened in sessions of their own, then the web
+address where it is driven. A page a rule blocked names the rule (`The page didn't load: a rule
+for *.example blocks intranet.example. Settings, then Network edits it.`), and a page that asks
+for a username and password says so. On a terminal of 256 colors or more the page follows in
+half blocks, as wide as the pane and as tall as its rows let it, each cell two pixels of the
+browser's latest frame. A browser that isn't running says what it is doing, in the web's words
+(`Asleep`, `Waking up…`, `Going to sleep…`, `Stopped unexpectedly`, `No browser yet`), and
+where the web wakes it.
+
+The tab has no keys of its own: the browser is driven, and woken, in the web. It reads `GET
+.../teammates/{id}/browser`, and while the browser runs `GET .../browser/frame`, every 3 seconds
+while the tab shows, as Home's reading pane does.
 
 #### Details
 
@@ -604,8 +649,8 @@ the first time. Only a running computer has terminals.
 
 Editing Settings, providers, templates and the template editor, rules, memory, lineage,
 secrets and the git forges; creating or editing a teammate; deleting or renaming checkpoints
-and their schedule; browsing and editing a computer's files; comments on lines of a diff; and
-driving the teammate's browser and its DevTools. Some answers stay there too, because they need more than a key:
+and their schedule; editing a computer's files and uploading to it; comments on lines of a
+diff; and driving the teammate's browser and its DevTools. Some answers stay there too, because they need more than a key:
 
 - keeping both facts of a memory conflict, or editing one: two texts to edit;
 - a chat question that is a form of several fields, or a list: a form to fill;
@@ -718,8 +763,10 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   which `mate.go` reads. `chat.go` is the chat: the stream, the transcript's layout and folds.
   `composer.go` is the composer's box.
 - `computer.go` is the computer pane: its tabs and their keys. `tab_terminal.go` is the
-  Terminal tab, with its chips and new shells, `changes.go` the Changes tab, with git's reads,
-  the rail and what it shows, and `tab_details.go` the Details tab, which draws
+  Terminal tab, with its chips and new shells, `tab_files.go` the Files tab, with its reads, the
+  list and the file opened, `changes.go` the Changes tab, with git's reads, the rail and what it
+  shows, `tab_browser.go` the Browser tab, which draws `picture.go`'s reads at the pane's size,
+  and `tab_details.go` the Details tab, which draws
   `detail.go`'s facts or `charts.go`'s dashboard. `homepane.go` is the live terminal's state and
   keys and the approval banner, and `pane.go` the terminal itself, an emulator between the
   attachment's websocket and the frame.

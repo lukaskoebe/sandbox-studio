@@ -378,6 +378,31 @@ func (c *Client) GitDiff(ctx context.Context, env, sandbox, repo, path, from, ar
 	return out, err
 }
 
+// Files lists a folder of a sandbox, directories first: path is relative to root, which is ""
+// for /workspace, "tmp" for /tmp and "fs" for the whole computer.
+func (c *Client) Files(ctx context.Context, env, sandbox, root, path string) (api.FileList, error) {
+	var out api.FileList
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/files?"+filesQuery(root, path), nil, nil, &out)
+	return out, err
+}
+
+// FileContent reads a file of a sandbox, path relative to root as Files has it: text and
+// images of at most 1 MiB with their data, other files with why not.
+func (c *Client) FileContent(ctx context.Context, env, sandbox, root, path string) (api.FileContent, error) {
+	var out api.FileContent
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/files/content?"+filesQuery(root, path), nil, nil, &out)
+	return out, err
+}
+
+// filesQuery is the query of a path under a root.
+func filesQuery(root, path string) string {
+	q := url.Values{"path": {path}}
+	if root != "" {
+		q.Set("root", root)
+	}
+	return q.Encode()
+}
+
 // TurnChanges reads the files a turn of a chat changed, with their diffs.
 func (c *Client) TurnChanges(ctx context.Context, env, chatID, turn string) (chat.TurnChanges, error) {
 	var out chat.TurnChanges

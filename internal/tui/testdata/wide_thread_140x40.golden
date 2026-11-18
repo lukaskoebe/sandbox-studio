@@ -1,7 +1,7 @@
  ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 4 · 12:00 
  / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home                    ▲ 4 │ ┃ The login form doesn't submit on enter.   │  Terminal   Changes   Details                       ● running 
-                              │ ┃ Can you fix it?                           │ ──────────────────────━━━━━━━─────────────────────────────────
+  Home                    ▲ 4 │ ┃ The login form doesn't submit on enter.   │  Terminal   Files   Changes   Browser   Details     ● running 
+                              │ ┃ Can you fix it?                           │ ────────────────────────────────────────━━━━━━━───────────────
  TEAMMATES                    │                                             │ blub                                     ● Running · up 2h 14m
   Iris frontend           ▲ 2 │   ▸ Thought it through                      │ ──────────────────────────────────────────────────────────────
 ▌   ▲ Fix the login form      │   ▸ ≡ Read src/login.tsx              ● done│ Iris · node-22+python-3.13@2 · 2 CPUs · 2 GiB

@@ -1,7 +1,9 @@
 ---
 // A terminal screen from its ANSI text, such as a golden file of the TUI's tests, drawn as
 // colored spans on a dark terminal in both site themes. It knows the SGR codes the TUI
-// writes: reset, bold, dim, the 16 basic colors and the 256-color palette. The colors the TUI
+// writes: reset, bold, dim, the 16 basic colors, the 256-color palette and 24-bit color. A half
+// block ▀, of which the TUI draws pictures, is a cell in its two colors, top and bottom, so the
+// picture has no gaps between its lines. The colors the TUI
 // uses are read from --t-* properties when a page sets them, as the landing page does to follow
 // its light and dark themes; without them the dark terminal's colors stay.
 interface Props {
@@ -58,6 +60,10 @@ function apply(style: Style, params: number[]): Style {
     else if ((p === 38 || p === 48) && params[i + 1] === 5) {
       s[p === 38 ? 'fg' : 'bg'] = color(params[i + 2])
       i += 2
+    } else if ((p === 38 || p === 48) && params[i + 1] === 2) {
+      // 24-bit color, as the browser's picture in half blocks has it.
+      s[p === 38 ? 'fg' : 'bg'] = `rgb(${params[i + 2]}, ${params[i + 3]}, ${params[i + 4]})`
+      i += 4
     }
   }
   return s
@@ -82,6 +88,9 @@ const lines: Run[][] = text.replace(/\n$/, '').split('\n').map((line) => {
 const cells = (text: string) => text.split(/([\u2190-\u24ff\u2580-\u2bff])/).filter(Boolean)
 const symbol = (t: string) => /^[\u2190-\u24ff\u2580-\u2bff]$/.test(t)
 
+// half is a half block's two colors: the text's on top, the background's below.
+const half = (s: Style) => `background:linear-gradient(${s.fg ?? 'currentColor'} 50%, ${s.bg ?? 'transparent'} 50%)`
+
 const css = (s: Style) =>
   [s.fg && `color:${s.fg}`, s.bg && `background:${s.bg}`, s.bold && 'font-weight:700']
     .filter(Boolean)
@@ -89,7 +98,7 @@ const css = (s: Style) =>
 ---
 
 <figure class="terminal-screen not-content" aria-label={label}>
-  <pre>{lines.map((runs) => (<span class="line">{runs.map((r) => (<span class:list={{ dim: r.style.dim }} style={css(r.style)}>{cells(r.text).map((t) => (symbol(t) ? <span class="cell">{t}</span> : t))}</span>))}{'\n'}</span>))}</pre>
+  <pre>{lines.map((runs) => (<span class="line">{runs.map((r) => (<span class:list={{ dim: r.style.dim }} style={css(r.style)}>{cells(r.text).map((t) => (t === '▀' ? <span class="half" style={half(r.style)} /> : symbol(t) ? <span class="cell">{t}</span> : t))}</span>))}{'\n'}</span>))}</pre>
 </figure>
 
 <style>
@@ -116,6 +125,14 @@ const css = (s: Style) =>
   .dim {
     color: var(--t-dim);
     opacity: var(--t-dim-opacity, 0.6);
+  }
+  /* A line's height: the margin keeps the cell from making its line taller than the others. */
+  .half {
+    display: inline-block;
+    width: 1ch;
+    height: 1.45em;
+    margin-bottom: -0.5em;
+    vertical-align: top;
   }
   .cell {
     display: inline-block;

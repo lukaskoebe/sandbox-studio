@@ -49,6 +49,9 @@ type (
 
 // pictureWanted is the teammate whose browser the screen on show draws.
 func (m *app) pictureWanted() string {
+	if sb := m.tabOnShow(tabBrowser); sb != nil {
+		return sb.TeammateID
+	}
 	if !m.dashShows() {
 		return ""
 	}

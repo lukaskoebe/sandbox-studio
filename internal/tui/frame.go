@@ -305,6 +305,12 @@ func (m *app) paneColumns(w int, l layout) []int {
 		if rc, ok := m.paneRectOf(paneComputer); ok && rc.w >= railBeside && len(m.changeRows()) > 0 {
 			cols = append(cols, rc.x+railWidth(rc.w))
 		}
+	case m.screen == screenMain && m.comp.tab == tabFiles && m.computerOn() != nil:
+		if sb := m.computerOn(); phaseOf(*sb) == phaseReady {
+			if rc, ok := m.paneRectOf(paneComputer); ok && m.filesSplit(rc.w) {
+				cols = append(cols, rc.x+filesListW)
+			}
+		}
 	}
 	return cols
 }

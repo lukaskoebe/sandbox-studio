@@ -9,6 +9,8 @@ import home from '../../../../internal/tui/testdata/visual_inbox.golden?raw'
 import thread from '../../../../internal/tui/testdata/visual_thread.golden?raw'
 import computer from '../../../../internal/tui/testdata/visual_computer.golden?raw'
 import changes from '../../../../internal/tui/testdata/visual_changes.golden?raw'
+import files from '../../../../internal/tui/testdata/visual_files.golden?raw'
+import browserTab from '../../../../internal/tui/testdata/visual_browser.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It is
 laid out as the browser is: a sidebar with your teammates, their threads and your computers,
@@ -245,8 +247,9 @@ computer's Details beside it.
 
 ## The computer
 
-A computer has the browser's tabs: **Terminal**, **Changes** and **Details** for now. `1` picks
-Terminal, `3` Changes and `5` Details; `2` and `4` are kept for the Files and Browser tabs.
+A computer has the browser's tabs: **Terminal**, **Files**, **Changes**, **Browser** and
+**Details**, and `1` to `5` pick them in that order. Only a teammate's computer has a browser,
+so a computer of yours has no Browser tab.
 
 ### Terminal
 
@@ -258,6 +261,23 @@ and `T` starts the teammate's agent in a new terminal.
 Resizing your window resizes the computer's terminal. A terminal open in the browser too takes
 the size of whichever window was resized last. Alt keys need a terminal that sends them; on
 macOS, set Option to act as Meta.
+
+### Files
+
+The Files tab lists a folder of the computer, folders first, each file with its size and how
+long ago it changed. Open a file and it shows beside the list with its line numbers, or as a
+picture if it is one and your terminal has 256 colors or more. In a narrow pane, such as beside a
+thread, the file takes the list's place.
+
+<TerminalScreen ansi={files} label="The Files tab of Finn's computer api-refactor: the folder /workspace/src with components, login.tsx and main.tsx, and login.tsx open beside it with its line numbers" />
+
+`j` and `k` move through the list. `enter` (or `→`) opens a folder or a file, and `←` (or
+`backspace`) goes back up. `↑` and `↓` scroll the file, as do `pgup`/`pgdn` and `g`/`G`. `r`
+switches between `/workspace`, `/tmp` and the whole computer. Files are edited and uploaded in
+the browser: `o` prints the tab's address there.
+
+The tab reads the folder again every 10 seconds, and a file when it changes. It shows files of
+up to 1 MiB, and doesn't follow links.
 
 ### Changes
 
@@ -277,6 +297,15 @@ the diff, `‹ M src/login.tsx +1 −1 · 3 of 7 ›`, and `j` and `k` still mov
 
 The tab reads git every few seconds while it shows, and at once when a request of the thread
 ends. A stopped computer's changes are read once it runs again.
+
+### Browser
+
+The Browser tab shows the page the teammate's browser is on: its address, who drove it last,
+and the page itself if your terminal has 256 colors or more. It says when a rule blocked the
+page or the page asks for a sign-in, and when the browser is asleep. You drive it, or wake it,
+in the browser; the tab prints the address.
+
+<TerminalScreen ansi={browserTab} label="The Browser tab of Finn's computer api-refactor: the address of the page, a pull request list on GitHub, who drove it last, and the page drawn in colored half blocks" />
 
 ### Details
 
@@ -429,7 +458,7 @@ you're back in the terminal.
 
 Editing Settings, providers, teammates, templates, the rules, memory, secrets and the git forges
 happens in the browser; `,` lists the sections with what each is set to, and `enter` prints the
-address of one. So do a computer's files and its browser with its DevTools, comments on the
-lines of a diff, and a few answers: keeping both facts of a memory conflict, questions with
-several fields, and a preview's first login. The TUI prints their addresses where it has a key
-for them, and `?` shows where the browser is.
+address of one. Editing a computer's files, driving its browser and its DevTools, comments on
+the lines of a diff, and a few answers stay there too: keeping both facts of a memory conflict,
+questions with several fields, and a preview's first login. The TUI prints their addresses where
+it has a key for them, and `?` shows where the browser is.

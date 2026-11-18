@@ -92,6 +92,11 @@ func TestEveryScreenDrawsAtAnySize(t *testing.T) {
 		"inbox":          func(_ *testing.T, m *app) *app { sampleApprovals(m); return press(onCard(m, 2), "right") },
 		"changes":        func(_ *testing.T, m *app) *app { return withGitStatus(openComputer(m, "sb2", tabChanges)) },
 		"changes review": func(_ *testing.T, m *app) *app { samplePush(m); return press(onCard(m, 0), "enter") },
+		"files":          func(_ *testing.T, m *app) *app { return withFiles(openComputer(m, "sb2", tabFiles), "sb2") },
+		"file open": func(_ *testing.T, m *app) *app {
+			return withFileOpen(withFiles(openComputer(m, "sb2", tabFiles), "sb2"))
+		},
+		"browser": func(_ *testing.T, m *app) *app { return withBrowser(openComputer(m, "sb2", tabBrowser)) },
 		"review place": func(_ *testing.T, m *app) *app {
 			a := samplePush(m)
 			a.EnvironmentID = "env2"

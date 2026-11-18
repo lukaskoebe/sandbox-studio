@@ -1,0 +1,23 @@
+ ≡  Finn › desk                                            ● api-refactor · ▲ 1 
+────────────────────────────────────────────────────────────────────────────────
+ Terminal   Files   Changes   Browser   Details                       ● running 
+────────────━━━━━───────────────────────────────────────────────────────────────
+ /workspace                   │                                                 
+  docs/                       │  enter opens the file under the cursor.         
+  node_modules/               │                                                 
+  src/                        │                                                 
+  current →                   │                                                 
+  README.md           2.3 KiB │                                                 
+▸ package.json        1.2 KiB │                                                 
+  tsconfig.json         412 B │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+──────────────────────────────┴─────────────────────────────────────────────────
+enter open  j/k move  r /tmp  o in the browser  1-5 tab  esc/q back  \ sidebar  

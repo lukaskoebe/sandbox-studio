@@ -1,12 +1,12 @@
 # The TUI's frame: sidebar, thread and computer (design)
 
 Status: built in part (2026-11-18): the frame, the places, the thread beside its computer, and
-the computer's Terminal, Changes and Details tabs. [tui.md](../tui.md#the-frame) describes it as
-it is.
+the computer's Terminal, Files, Changes, Browser and Details tabs. [tui.md](../tui.md#the-frame)
+describes it as it is.
 It replaces Home as a sidebar and a pane ([tui-home-panes.md](tui-home-panes.md)) and the
 sessions on Home ([tui-sessions.md](tui-sessions.md)). It is mock A of the TUI revamp, with
-mock B's inbox as its Home. Still to come: the Files and Browser tabs, comments on lines of a
-diff, Search Studio on `ctrl+k`, and `/` commands and `@` files in the composer.
+mock B's inbox as its Home. Still to come: comments on lines of a diff, Search Studio on
+`ctrl+k`, and `/` commands and `@` files in the composer.
 
 Where the build differs from the text below:
 
@@ -31,6 +31,17 @@ Where the build differs from the text below:
 - The first pick waits for git's status, so that a change, not a repository, gets the cursor.
 - A change's diff starts at its first hunk: the head over it names the file.
 - On a review the key bar leaves out `↑↓` and `[/]` for the decisions; `?` lists them.
+- The Files tab's list is beside the file from a pane of 80 cells, not 90: a computer alone at
+  120 columns has 89. A folder that couldn't be read takes the pane's width for its reason.
+- Files has `o`, which prints the web's Files tab for editing and uploads. The folder is read
+  again every 10 seconds while the tab shows, and the file opened when the folder says it
+  changed. `↑`/`↓` move the list until a file is open beside it, then scroll the file; `j`/`k`
+  always move the list. A WebP says it is a picture: the TUI decodes PNG, JPEG and GIF.
+- The Browser tab has no title to show (the browser's status has none): under the address are
+  who drove it last, the agents' own pages, the web address, and a blocked page's rule or a
+  sign-in. A browser that isn't running says what it does in the web's words.
+- Beside a thread that is an agent in a terminal the tabs are Files, Changes, Browser and
+  Details; `1` there says the thread is the terminal.
 
 ## The frame keeps its five fixed rows
 

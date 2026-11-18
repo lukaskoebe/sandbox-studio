@@ -196,7 +196,7 @@ func (m *app) helpBody() []string {
 	case m.helpBack == screenMain && m.helpPart == "computer":
 		title = "Computer"
 		keys = [][2]string{
-			{"1-5", "a tab: Terminal, Changes and Details today; Files and Browser come later"},
+			{"1-5", "a tab: Terminal, Files, Changes, Browser on a teammate's computer, Details"},
 			{"enter", "Terminal: type into the terminal; ctrl+] gives the keys back"},
 			{"alt+1-9", "Terminal: another of the computer's terminals"},
 			{"+ / T", "Terminal: a new shell; start the teammate's agent"},
@@ -277,6 +277,24 @@ func (m *app) helpBody() []string {
 		footer = []string{
 			"Git is read every 5 seconds while the tab shows. Comments on lines of a",
 			"diff are written in the browser.",
+		}
+	case m.helpBack == screenMain && m.helpPart == "files":
+		title = "Files"
+		keys = [][2]string{
+			{"j / k", "the list's next or previous entry; the arrows too, but in a file"},
+			{"enter / →", "open a folder, or a file beside the list"},
+			{"← / backspace", "the folder above, or back to the list from a file alone"},
+			{"↑/↓", "scroll the file opened a line"},
+			{"pgup/pgdn", "scroll a page; b and space too"},
+			{"g / G", "the start or the end"},
+			{"r", "the next root: /workspace, /tmp, the whole computer"},
+			{"o", "print where the browser edits and uploads"},
+			{"1-5 / m", "another tab; the teammate's next computer"},
+			{"tab / esc", "back to the thread; esc back a place"},
+		}
+		footer = []string{
+			"The folder is read every 10 seconds while the tab shows, and a file again",
+			"when it changes. Files of up to 1 MiB show; links aren't followed.",
 		}
 	case m.helpBack == screenMain && m.helpPart == "review":
 		title = "Review"

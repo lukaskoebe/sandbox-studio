@@ -84,6 +84,7 @@ type app struct {
 	activity    activityState      // the Activity screens
 	pager       pagerState         // the review of a git approval on show
 	changes     changesState       // the Changes tab of the computer on show
+	files       filesState         // the Files tab of the computer on show
 	newSb       newState           // a new computer, from its form to its create's end
 	checkpoints checkpointState    // the checkpoints screen
 	ports       portsState         // the open ports of the sandbox on the detail screen
@@ -169,7 +170,7 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	return next, tea.Batch(cmd, m.watchInbox(), m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
 		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions(), m.watchPane(),
-		m.watchHome(), m.watchMate(), m.watchChanges())
+		m.watchHome(), m.watchMate(), m.watchChanges(), m.watchFiles())
 }
 
 // update applies one message to the model.
@@ -205,6 +206,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.changesUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.filesUpdate(msg); ok {
 		return m, cmd
 	}
 	if cmd, ok := m.homeUpdate(msg); ok {

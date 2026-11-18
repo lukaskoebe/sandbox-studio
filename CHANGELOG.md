@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The terminal UI's computer has the browser's Files and Browser tabs. Files lists a folder of
+  the computer, folders first with each file's size and age, and shows the file you open beside
+  the list with its line numbers, or as a picture on a terminal of 256 colors or more; `j` and
+  `k` move, `enter` opens, `←` goes up, `r` switches between `/workspace`, `/tmp` and the whole
+  computer, and `o` prints where the browser edits and uploads. Browser, on a teammate's
+  computer, shows the page its browser is on, who drove it last and the page itself, sized to
+  the pane, with the address where you drive it in the browser. `1` to `5` pick the tabs in the
+  web's order.
 - The terminal UI no longer passes a computer's escape sequences to your terminal. A file name,
   a line of a diff, an agent's answer or its tool's output could carry one, which could set
   your terminal's title or clipboard; they are removed now, and other control characters show

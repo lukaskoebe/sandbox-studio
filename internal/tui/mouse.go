@@ -23,6 +23,7 @@ const (
 	rowFold                            // a folded tool call or thought of a transcript
 	rowFile                            // a file of a review place's file list
 	rowChange                          // a row of the Changes tab's rail, by its index among changeRows
+	rowFilesEntry                      // an entry of the Files tab's list, by its index
 	rowTree                            // a row of the sidebar, by its index among homeRows
 	rowSetting                         // a section of Settings
 )
@@ -224,6 +225,12 @@ func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 			return m, m.changesKey(enterKey)
 		}
 		return m, nil
+	case rowFilesEntry:
+		m.files.cursor = r.index
+		if double {
+			m.openEntry()
+		}
+		return m, nil
 	case rowFold:
 		m.chats.fold = r.index
 		m.chats.scroll = m.foldScroll(r.index)
@@ -281,6 +288,8 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 			m.pager.scroll = max(m.pager.scroll+dir*wheelLines, 0) // drawing keeps it in the review
 		case m.comp.tab == tabChanges && m.computerOn() != nil && m.overComputer(msg.X, msg.Y):
 			m.wheelChanges(msg.X, dir)
+		case m.comp.tab == tabFiles && m.computerOn() != nil && m.overComputer(msg.X, msg.Y):
+			m.wheelFiles(msg.X, dir)
 		case readingOn && reading.has(msg.X, msg.Y):
 			m.inbox.scroll = max(m.inbox.scroll+dir*wheelLines, 0)
 		case m.inboxShows() && main.has(msg.X, msg.Y):

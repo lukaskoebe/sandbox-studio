@@ -1,7 +1,7 @@
  ≡  Iris › desk                                             ○ docs-site ▾ · ▲ 1 
 ────────────────────────────────────────────────────────────────────────────────
- Terminal   Changes   Details                                         ○ stopped 
-────────────━━━━━━━─────────────────────────────────────────────────────────────
+ Terminal   Files   Changes   Browser   Details                       ○ stopped 
+────────────────────━━━━━━━─────────────────────────────────────────────────────
                                                                                 
  Git's changes are read while docs-site runs. Details, then s starts it.        
                                                                                 

@@ -1,0 +1,39 @@
+ ◆ Studio          Default ▾  │ Iris › Fix the login form                                                            ● blub ▾ · ▲ 1 · 12:00 
+ / Filter                     │─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home                    ▲ 1 │ ┃ The login form doesn't submit on enter.   │  Terminal   Files   Changes   Browser   Details     ● running 
+                              │ ┃ Can you fix it?                           │ ────────────━━━━━─────────────────────────────────────────────
+ TEAMMATES                    │                                             │  login.tsx  /workspace/src · 218 B
+▌ Iris frontend               │   ▸ Thought it through                      │ 
+  Finn backend            ▲ 1 │   ▸ ≡ Read src/login.tsx              ● done│   1  import { useState } from "react"
+  + New teammate              │   ▸ ✎ Edit src/login.tsx              ● done│   2  
+                              │                                             │   3  export function Login() {
+ YOUR COMPUTERS               │ Fixed                                       │   4      const [name, setName] = useState("")
+  ◐ demo              booting │                                             │   5      return (
+  + New computer              │ The form used a div as its button, so enter │   6          <form onSubmit={submit}>
+                              │ did nothing. It is a real submit button now:│   7              <input value={name} onChange={(e) => setName…
+ ENVIRONMENT                  │                                             │   8          </form>
+  Computers                 4 │   │ tsx                                     │   9      )
+  Network                 ▲ 1 │   │ <button type="submit">Sign in</button>  │  10  }
+  Secrets                     │                                             │ 
+  Memory                      │ • Enter submits the form.                   │ 
+  Activity                    │ • The button is focusable.                  │ 
+  , Settings              dev │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │                                             │ 
+                              │  › Write to Iris…                   p write │ 
+──────────────────────────────┴─────────────────────────────────────────────┴───────────────────────────────────────────────────────────────
+p prompt  ↑/↓ tools  pgup scroll  + new thread  c changes │ tab computer  t terminal  m next computer  \ sidebar │ esc/q back  ? more

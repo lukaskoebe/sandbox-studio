@@ -1,7 +1,7 @@
  ≡  Finn › desk                                            ● api-refactor · ▲ 1 
 ────────────────────────────────────────────────────────────────────────────────
- Terminal   Changes   Details                                         ● running 
-────────────━━━━━━━─────────────────────────────────────────────────────────────
+ Terminal   Files   Changes   Browser   Details                       ● running 
+────────────────────━━━━━━━─────────────────────────────────────────────────────
  WAITING FOR YOU  1     │        <input name="user" />                          
 ▸ Push to fix-login     │ -      <div onClick={submit}>Sign in</div>            
                         │ +      <button type="submit">Sign in</button>         

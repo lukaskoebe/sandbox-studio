@@ -1,0 +1,29 @@
+ [1;38;5;74m◆[m [1mStudio[m          Default ▾  [2m│[m [1mFinn › desk[m                                                [36m●[m api-refactor[2m · [m[1;38;5;221m▲ 1[m[2m · [m[2m12:00[m 
+[2m / Filter[m                     [2m│[m[2m─────────────────────────────────────────────────────────────────────────────────────────[m
+  [1mHome[m                    [1;38;5;221m▲ 1[m [2m│[m  [2mTerminal[m   [1mFiles[m   [2mChanges[m   [2mBrowser[m   [2mDetails[m                               [36m●[m [2mrunning[m 
+                              [2m│[m [2m────────────[m━━━━━[2m───────────────────────────────────────────────────────────────────────[m
+ [2mTEAMMATES[m                    [2m│[m  [1m/workspace/src/[m              [2m│[m  [1mlogin.tsx[m  [2m/workspace/src · 218 B[m                      
+[2m▌[m [1mIris[m [2mfrontend[m               [2m│[m   [36mcomponents/[m                [2m[m [2m│[m                                                         
+  [1mFinn[m [2mbackend[m            [1;38;5;221m▲ 1[m [2m│[m [36m▌[m [1mlogin.tsx[m             [2m218 B[m [2m│[m [2m  1[m  import { useState } from "react"                   
+  [2m+ New teammate[m              [2m│[m   main.tsx              [2m318 B[m [2m│[m [2m  2[m                                                     
+                              [2m│[m                               [2m│[m [2m  3[m  export function Login() {                          
+ [2mYOUR COMPUTERS[m               [2m│[m                               [2m│[m [2m  4[m      const [name, setName] = useState("")           
+  [36m◐[m [1mdemo[m              [2mbooting[m [2m│[m                               [2m│[m [2m  5[m      return (                                       
+  [2m+ New computer[m              [2m│[m                               [2m│[m [2m  6[m          <form onSubmit={submit}>                   
+                              [2m│[m                               [2m│[m [2m  7[m              <input value={name} onChange={(e) => s…
+ [2mENVIRONMENT[m                  [2m│[m                               [2m│[m [2m  8[m          </form>                                    
+  Computers                 [2m4[m [2m│[m                               [2m│[m [2m  9[m      )                                              
+  Network                 [1;38;5;221m▲ 1[m [2m│[m                               [2m│[m [2m 10[m  }                                                  
+  Secrets                     [2m│[m                               [2m│[m                                                         
+  Memory                      [2m│[m                               [2m│[m                                                         
+  Activity                    [2m│[m                               [2m│[m                                                         
+  [2m, [mSettings              [2mdev[m [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+                              [2m│[m                               [2m│[m                                                         
+[2m──────────────────────────────┴───────────────────────────────┴─────────────────────────────────────────────────────────[m
+[1menter[m [2mopen[m  [1mj/k[m [2mmove[m  [1m←[m [2mup[m  [1m↑↓[m [2mscroll[m  [1mr[m [2m/tmp[m  [1mo[m [2min the browser[m  [1m1-5[m [2mtab[m[2m │ [m[1m\[m [2msidebar[m[2m │ [m[1mesc/q[m [2mback[m  [1m?[m [2mmore[m

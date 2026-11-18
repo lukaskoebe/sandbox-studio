@@ -253,6 +253,8 @@ func (m *app) openHelp() {
 			m.helpPart = "review"
 		case (m.focus == focusSide || m.mainPane() == paneComputer) && m.comp.tab == tabChanges:
 			m.helpPart = "changes"
+		case (m.focus == focusSide || m.mainPane() == paneComputer) && m.comp.tab == tabFiles:
+			m.helpPart = "files"
 		case m.focus == focusSide, m.mainPane() == paneComputer, m.here.term != "":
 			m.helpPart = "computer"
 		case m.mainPane() == paneMateHome:
