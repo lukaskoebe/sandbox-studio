@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -81,6 +82,11 @@ func browse(workspace string, owner [2]int, req agentproto.FilesRequest) (agentp
 			return agentproto.FilesReply{}, errors.New("no file to read")
 		}
 		return readFile(root, name, owner)
+	case agentproto.FilesReadRange:
+		if name == "." {
+			return agentproto.FilesReply{}, errors.New("no file to read")
+		}
+		return readRange(root, name, owner, req.Offset, req.Limit)
 	case agentproto.FilesSpace:
 		dir, err := unix.Openat2(root, name, beneath)
 		if err != nil {
@@ -163,6 +169,42 @@ func listDir(root int, name string, owner [2]int) (agentproto.FilesReply, error)
 // previewable are the image types the browser shows; anything else that isn't text is
 // only described.
 var previewable = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+// readRange reads limit bytes of a file from offset, at most MaxRangeBytes, whatever it holds:
+// the host puts a larger file together from its parts.
+func readRange(root int, name string, owner [2]int, offset, limit int64) (agentproto.FilesReply, error) {
+	if offset < 0 || limit < 0 {
+		return agentproto.FilesReply{}, errors.New("invalid range")
+	}
+	fd, err := unix.Openat2(root, name, &unix.OpenHow{
+		Flags:   unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC,
+		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS,
+	})
+	if err != nil {
+		return agentproto.FilesReply{}, browseError(err)
+	}
+	f := os.NewFile(uintptr(fd), name)
+	defer f.Close()
+	var fs unix.Stat_t
+	if err := unix.Fstat(fd, &fs); err != nil {
+		return agentproto.FilesReply{}, err
+	}
+	if fs.Mode&unix.S_IFMT != unix.S_IFREG {
+		return agentproto.FilesReply{}, errors.New("not a regular file")
+	}
+	reply := agentproto.FilesReply{Size: fs.Size}
+	if !may(fs, owner, 0o4) {
+		reply.Unreadable = true
+		return reply, nil
+	}
+	data := make([]byte, min(limit, agentproto.MaxRangeBytes))
+	n, err := f.ReadAt(data, offset)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return agentproto.FilesReply{}, err
+	}
+	reply.Data = data[:n]
+	return reply, nil
+}
 
 func readFile(root int, name string, owner [2]int) (agentproto.FilesReply, error) {
 	fd, err := unix.Openat2(root, name, &unix.OpenHow{

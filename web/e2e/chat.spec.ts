@@ -63,6 +63,24 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   ).toHaveCount(0)
   await expect(main).toContainText("Allowed")
 
+  // The screenshot the message shows is copied out of the computer and shown, larger on a click.
+  const shot = main.getByRole("img", {
+    name: "The checkout page after the change",
+  })
+  await expect(shot).toBeVisible()
+  await expect
+    .poll(() => shot.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBe(240)
+  await shot.click()
+  const large = page.getByRole("dialog", {
+    name: "The checkout page after the change",
+  })
+  await expect(
+    large.getByRole("img", { name: "The checkout page after the change" })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(large).toHaveCount(0)
+
   const agents = (await api.guest(id)).acp
   expect(agents).toHaveLength(1)
   expect(agents[0].chat).toBe(chat.id)

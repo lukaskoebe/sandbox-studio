@@ -535,7 +535,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	// Chats drive the teammates' harnesses over ACP. Turns that ran when Studio stopped
 	// end interrupted before anything new starts.
 	chats := &chat.Service{Store: st, Guest: hub, Bus: bus, Log: log, PromptNote: gitRemote.PromptNote, OnIdle: agentMem.ChatIdled,
-		OnTaskDone: mgr.TaskDone}
+		OnTaskDone: mgr.TaskDone, Images: filepath.Join(p.Data, "chat-images")}
 	if err := chats.Recover(ctx); err != nil {
 		return fmt.Errorf("chats: %w", err)
 	}

@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -624,5 +626,43 @@ func TestChatModel(t *testing.T) {
 	waitIdle(t, h, base)
 	if got := agent.SwitchedModels(); strings.Join(got, ",") != "claude-opus-5-5,claude-sonnet-4-5" {
 		t.Fatalf("switched to %q", got)
+	}
+}
+
+// A picture an agent's message shows is served from its copy; one that couldn't be copied
+// says why, and a path the message doesn't show is no picture.
+func TestChatImage(t *testing.T) {
+	agent := &acptest.Agent{SessionID: "ses_1", Turns: []acptest.Turn{
+		{Steps: []acptest.Step{{Update: json.RawMessage(`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"See ![the page](/tmp/shot.png)"}}`)}}},
+	}}
+	h, s, _, env := newChatServer(t, agent)
+	s.Chats.Images = t.TempDir()
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+	rec := do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"Show me"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	c := decode[store.Chat](t, rec)
+	log := waitIdle(t, h, envBase+"/chats/"+c.ID)
+	image := envBase + "/chats/" + c.ID + "/items/" + log.Items[1].ID + "/image?src="
+	// This guest is from before the whole computer's root, so it can't send the picture.
+	if rec := do(h, "GET", image+"/tmp/shot.png", ""); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Restart the computer") {
+		t.Fatalf("older guest: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", image+"/etc/passwd", ""); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "no such picture") {
+		t.Fatalf("not shown: %d %s", rec.Code, rec.Body)
+	}
+	if err := os.WriteFile(filepath.Join(s.Chats.Images, "a.png"), []byte("\x89PNG\r\n\x1a\n0000"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.PutChatImage(context.Background(), store.ChatImage{ItemID: log.Items[1].ID, Src: "/tmp/shot.png", ChatID: c.ID,
+		File: "a.png", MimeType: "image/png", Size: 12}); err != nil {
+		t.Fatal(err)
+	}
+	rec = do(h, "GET", image+"/tmp/shot.png", "")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" || rec.Header().Get("X-Content-Type-Options") != "nosniff" || rec.Body.Len() != 12 {
+		t.Fatalf("copied picture: %d %v %d", rec.Code, rec.Header(), rec.Body.Len())
 	}
 }

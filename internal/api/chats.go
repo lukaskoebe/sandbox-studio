@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -656,6 +657,42 @@ type ChatTerminal struct {
 // (chat.Turn), `item` (chat.Item) and `queue` ([]chat.QueuedPrompt, first and whenever the
 // prompts waiting for the running turn change); each carries a rev as the event ID, so a
 // reconnect resumes where it left off. The stream ends when the chat is deleted.
+// chatImage serves a picture an agent's message shows (?src= as the message writes it), copied
+// out of its sandbox (chat/images.go). One that can't be shown is a 404 whose text says why.
+func (s *Server) chatImage(w http.ResponseWriter, r *http.Request) {
+	chats, err := s.chats()
+	if err != nil {
+		http.Error(w, "chats are not available", http.StatusServiceUnavailable)
+		return
+	}
+	file, mimeType, err := chats.Image(r.Context(), r.PathValue("env"), r.PathValue("chat"), r.PathValue("item"), r.URL.Query().Get("src"))
+	// Why a picture can't be shown changes, as when its computer starts.
+	w.Header().Set("Cache-Control", "no-store")
+	switch {
+	case chat.IsImageError(err):
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	case errors.Is(err, store.ErrNotFound):
+		http.Error(w, "the message shows no such picture", http.StatusNotFound)
+		return
+	case err != nil:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		http.Error(w, "the picture is gone", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	h := w.Header()
+	h.Set("Content-Type", mimeType)
+	h.Set("Cache-Control", "private, max-age=86400")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "default-src 'none'")
+	http.ServeContent(w, r, "", time.Time{}, f)
+}
+
 func (s *Server) streamChat(w http.ResponseWriter, r *http.Request) {
 	chats, err := s.chats()
 	if err != nil {

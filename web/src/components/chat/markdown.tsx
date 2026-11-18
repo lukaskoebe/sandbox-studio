@@ -22,8 +22,17 @@ export const WikiLinks = createContext<
 >(null)
 
 /**
+ * Shows the pictures a message writes as ![what it shows](src), src as written. It returns null
+ * for one it doesn't show, which then stays a link when src is a web address and as written
+ * otherwise, as every picture does without it.
+ */
+export const Pictures = createContext<
+  ((src: string, alt: string) => ReactNode) | null
+>(null)
+
+/**
  * A small markdown renderer for agent messages: headings, paragraphs, lists, quotes, code
- * blocks, tables, rules, and inline code, bold, italics and links. It builds React elements and
+ * blocks, tables, rules, and inline code, bold, italics, links and pictures. It builds React elements and
  * never HTML, so agent text can't inject markup. Anything it doesn't know stays plain text.
  * Links to localhost:<port> open the sandbox's preview inside a PreviewSandbox.
  */
@@ -314,9 +323,11 @@ export function CodeBlock({
 }
 
 // Inline code first, so markup inside backticks stays literal. A link to localhost comes before
-// other URLs, so http://localhost:5173 is one.
+// other URLs, so http://localhost:5173 is one. A picture, last, is found as the chat service
+// finds it (internal/chat/images.go): ![alt](src), ![alt](<src with spaces>), either with a
+// "title"; its ! comes before the [ a link would start at.
 const inlinePattern =
-  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\[\[([^[\]|\n]{1,128})(?:\|([^[\]\n]{1,200}))?\]\]/
+  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\[\[([^[\]|\n]{1,128})(?:\|([^[\]\n]{1,200}))?\]\]|!\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^)\s]+))(?:\s+"[^"\n]*")?\)/
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
@@ -383,6 +394,15 @@ function inline(text: string): ReactNode[] {
           {m[10]}
         </SafeLink>
       )
+    } else if (m[13] !== undefined) {
+      out.push(
+        <Picture
+          key={k}
+          src={(m[14] ?? "") + (m[15] ?? "")}
+          alt={m[13]}
+          raw={m[0] ?? ""}
+        />
+      )
     } else {
       out.push(
         <WikiLink
@@ -409,6 +429,15 @@ function WikiLink({
 }) {
   const render = useContext(WikiLinks)
   return <>{render ? render(target.toLowerCase(), label) : raw}</>
+}
+
+function Picture({ src, alt, raw }: { src: string; alt: string; raw: string }) {
+  const render = useContext(Pictures)
+  const shown = render?.(src, alt)
+  if (shown) return <>{shown}</>
+  // A picture on the web isn't loaded: that would tell its server who reads the chat.
+  if (/^https?:/i.test(src)) return <SafeLink href={src}>{alt || src}</SafeLink>
+  return <>{raw}</>
 }
 
 /** Links open in a new tab; anything but http(s) and mailto stays text. */

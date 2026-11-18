@@ -18,6 +18,7 @@ type entry struct {
 	body       any
 	saved      bool // inserted into the store
 	dirty      bool // changed since it was last written
+	pictured   bool // the pictures an agent's message shows were sent to be copied
 }
 
 // change is what an update did to an entry.

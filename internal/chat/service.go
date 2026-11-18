@@ -125,6 +125,9 @@ type Service struct {
 	// OnTaskDone, when set, is told that a turn ended that changed the sandbox's files, or may
 	// have. A checkpoint schedule that runs after every task takes one then.
 	OnTaskDone func(sandboxID string)
+	// Images is the folder the pictures agents show in their messages are copied into
+	// (images.go); without it they aren't.
+	Images string
 
 	mu    sync.Mutex
 	live  map[string]*live
@@ -136,6 +139,8 @@ type Service struct {
 	// stops holds the chats whose message Send starts, and whether the user stopped it
 	// before its turn existed.
 	stops map[string]bool
+	// copying holds the pictures being copied out of sandboxes, by item and src, until done.
+	copying map[string]chan struct{}
 }
 
 // queuedPrompt is a prompt that waits for its chat to become idle.
@@ -397,6 +402,9 @@ func (s *Service) Recover(ctx context.Context) error {
 			return err
 		}
 		s.changed(c.EnvironmentID, c.ID, true)
+	}
+	if err := s.sweepImages(ctx); err != nil {
+		s.log().Warn("chat: removing the pictures of deleted chats", "err", err)
 	}
 	return s.recoverApprovals(ctx)
 }
@@ -1177,14 +1185,18 @@ func (l *live) write(r *run, changes []change) {
 	wrote := false
 	for _, c := range changes {
 		e := c.e
-		if e.saved && (!c.ended || !e.dirty) {
-			continue
+		if !e.saved || (c.ended && e.dirty) {
+			if err := l.s.save(r.turn, e); err != nil {
+				l.s.log().Warn("chat: store item", "chat", l.chatID, "err", err)
+				continue
+			}
+			wrote = true
 		}
-		if err := l.s.save(r.turn, e); err != nil {
-			l.s.log().Warn("chat: store item", "chat", l.chatID, "err", err)
-			continue
+		// A message is written once it ended: what it shows is copied then.
+		if b, ok := e.body.(*TextBody); ok && c.ended && e.kind == KindAgent && !e.pictured {
+			e.pictured = true
+			l.s.keepImages(l.chatID, l.sandboxID, e.id, b.Text)
 		}
-		wrote = true
 	}
 	if wrote {
 		l.s.changed(l.envID, l.chatID, false)

@@ -83,6 +83,10 @@ type FileChange struct {
 const (
 	FilesList = "list"
 	FilesRead = "read"
+	// FilesReadRange reads part of a file of any type, Limit bytes from Offset and at most
+	// MaxRangeBytes, so that each reply stays within one stream window (docs/guest-agent.md).
+	// FilesReply.Size is the whole file's. A guest from before it answers "unknown files op".
+	FilesReadRange = "read-range"
 	// FilesIndex lists the workspace's files for mentions in a chat: in a git repository the
 	// files git knows, tracked or untracked but not ignored; elsewhere every file, past the
 	// folders of dependencies and caches.
@@ -156,6 +160,7 @@ type GitChange struct {
 const (
 	MaxListEntries = 1000
 	MaxReadBytes   = 1 << 20
+	MaxRangeBytes  = 128 << 10
 	MaxIndexPaths  = 20000
 	MaxIndexBytes  = 1 << 20 // of the paths in all
 )
@@ -172,6 +177,9 @@ type FilesRequest struct {
 	File string `json:"file,omitempty"`
 	From string `json:"from,omitempty"`
 	Area string `json:"area,omitempty"`
+	// Offset and Limit are a FilesReadRange's part of the file.
+	Offset int64 `json:"offset,omitempty"`
+	Limit  int64 `json:"limit,omitempty"`
 }
 
 // FilesRootTmp roots a FilesRequest at /tmp.

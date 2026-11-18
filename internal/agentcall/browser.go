@@ -17,7 +17,8 @@ the shell over many pages.
 An action on a new site waits for the user's approval: the command exits 75, and --wait asks
 again until they decide. Log in with fill-credential: Studio fills the vault secret itself after
 the user approves, and you never see its value. Script, cookie and storage access is not
-available. A screenshot is an image file whose path is printed: read the file to see it.
+available. A screenshot is an image file whose path is printed: read the file to see it, and
+show it to the user in your message as ![what it shows](<the path>).
 
 For a throwaway browser that keeps no cookies or storage, open --ephemeral, pass the session it
 prints to the other commands as --session, and close it when done. When you have built

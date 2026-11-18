@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"net"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -52,6 +53,10 @@ type fakeGuest struct {
 	// newAgent, when set, serves each stream with an agent of its own, for chats that run
 	// side by side; an acptest.Agent serves one stream at a time.
 	newAgent func() *acptest.Agent
+	// pics are files anywhere on the computer by absolute path, read through the root "fs";
+	// older answers their range reads as a guest from before them does.
+	pics  map[string][]byte
+	older bool
 }
 
 func (g *fakeGuest) Disks(context.Context, string) ([]agentproto.Disk, error) {
@@ -138,6 +143,9 @@ func (g *fakeGuest) Upload(_ context.Context, _ string, _ agentproto.UploadReque
 func (g *fakeGuest) Files(_ context.Context, _ string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if req.Root == agentproto.FilesRootFS {
+		return g.fsFiles(req)
+	}
 	if req.Op == agentproto.FilesRead {
 		if c, ok := g.ws[req.Path]; ok {
 			return agentproto.FilesReply{Size: int64(len(c)), MimeType: "text/plain; charset=utf-8", Data: []byte(c)}, nil
@@ -149,6 +157,37 @@ func (g *fakeGuest) Files(_ context.Context, _ string, req agentproto.FilesReque
 		if !strings.Contains(p, "/") {
 			r.Entries = append(r.Entries, agentproto.FileEntry{Name: p, Type: "file", Size: int64(len(c))})
 		}
+	}
+	return r, nil
+}
+
+// fsFiles answers for the whole computer, from pics.
+func (g *fakeGuest) fsFiles(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
+	g.files++
+	r := agentproto.FilesReply{Root: req.Root}
+	switch req.Op {
+	case agentproto.FilesReadRange:
+		if g.older {
+			return r, errors.New("unknown files op")
+		}
+		b, ok := g.pics["/"+req.Path]
+		if !ok {
+			return r, errors.New("no such file or directory")
+		}
+		from := min(int(req.Offset), len(b))
+		r.Size, r.Data = int64(len(b)), b[from:min(from+int(min(req.Limit, agentproto.MaxRangeBytes)), len(b))]
+	case agentproto.FilesList:
+		for p, b := range g.pics {
+			if path.Dir(p) == "/"+req.Path {
+				r.Entries = append(r.Entries, agentproto.FileEntry{Name: path.Base(p), Type: "file", Size: int64(len(b))})
+			}
+		}
+	case agentproto.FilesRead:
+		b, ok := g.pics["/"+req.Path]
+		if !ok {
+			return r, errors.New("no such file or directory")
+		}
+		r.Size, r.Data = int64(len(b)), b
 	}
 	return r, nil
 }

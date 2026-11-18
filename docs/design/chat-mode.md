@@ -599,6 +599,41 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
 - Actions: Download, and "Attach to message", which inserts a `resource_link`.
 - There's no editing. Changes go through the agent, so undo stays truthful.
 
+### Pictures in messages
+
+An agent shows the user a picture, such as a screenshot of a UI it changed, by writing a file
+on its computer into its message as markdown: `![what it shows](/abs/path.png)`, or
+`![…](<a path with spaces>)`, either with a `"title"`; `file://` is dropped, and a relative path
+is in `/workspace`. The managed instructions ([harnesses](../harnesses.md)) and `studio browser
+--help` say so. No ACP content block is involved: every harness writes text, and an agent's
+`image` blocks are for its own reading.
+
+- **Copy.** When an agent message ends, the chat service (`internal/chat/images.go`) copies each
+  picture it shows, in the background, into `<data>/chat-images/<random>.<ext>` (0600) and
+  records a `chat_images` row (`item_id`, `src` as written, the file, its type and size, or
+  why it wasn't copied). The copy outlives the file, the computer being stopped or removed,
+  and its later changes. Rows go with their item (`ON DELETE CASCADE`); files no row keeps are
+  removed when Studio starts (`Recover`). One copy of an item's `src` runs at a time.
+- **Reading.** `files` `read-range` with root `fs` reads the file as the agent user, beneath
+  `/` without symlinks, in parts of at most 128 KiB (`agentproto.MaxRangeBytes`), each reply
+  well within one stream window ([guest agent](../guest-agent.md#limits-of-the-channel-on-msbs-vsock)).
+  A guest from before the op answers "unknown files op" (or, before roots, ignores `root`, which
+  its reply doesn't echo); then a file up to 180 KB comes in one `read`, and a larger one says
+  to restart the computer. Only PNG, JPEG, GIF and WebP, by their bytes
+  (`http.DetectContentType`), up to 8 MiB.
+- **Serving.** `GET /api/environments/{env}/chats/{chat}/items/{item}/image?src=` serves the
+  copy, with its type, `nosniff`, `default-src 'none'` and a day's private caching. `src` must
+  be a picture that agent message shows, so the endpoint reads nothing else. A picture without
+  a copy is tried again first, as after the computer was started; one that still can't be
+  shown is a 404 whose text says why, uncached.
+- **Web.** `markdown.tsx` finds `![alt](src)` as the service does. Inside an agent message
+  (the `Pictures` context) a file on the computer is fetched once the message is written
+  (`chat-picture.tsx`): shown up to 320 px high with its alt text under it, larger in a dialog
+  on a click, or the reason with **Try again**. A web address stays a link with the alt text,
+  as loading it would tell its server who reads the chat; outside a message, pictures stay as
+  written.
+- **TUI.** `[picture: alt] (src)`, dim.
+
 ## 6. Stages
 
 Each stage ends green on the rules' checks (`go vet`, `go test`, `make api`, `tsc`, lint,

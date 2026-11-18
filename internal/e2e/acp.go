@@ -23,6 +23,8 @@ const (
 	ACPTable = "\n\n| Package | Result |\n| --- | :---: |\n| `./... | tee` | ok |\n"
 	// ACPPreview ends the message with a link to a server in the sandbox, as agents write them.
 	ACPPreview = "\nThe app runs at http://localhost:5173/login."
+	// ACPPicture shows a screenshot from the computer, as a reviewer does.
+	ACPPicture = "\n\n![The checkout page after the change](/home/agent/shots/checkout.png)"
 )
 
 // acpTurns is the script of every prompt: the agent thinks a moment, answers, asks to run a
@@ -57,6 +59,7 @@ func acpTurns(n int) []acptest.Turn {
 			{Update: text(ACPDone)},
 			{Update: text(ACPTable)},
 			{Update: text(ACPPreview)},
+			{Update: text(ACPPicture)},
 		}}
 	}
 	return turns

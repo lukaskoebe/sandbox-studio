@@ -335,7 +335,7 @@ The transcript:
 - Prompts are bold, after `›`. The agent's text is rendered as markdown (`markdown.go`, the
   same blocks and inline marks as `web/src/components/chat/markdown.tsx`): headings and
   `**bold**` are bold, `*italics*` italic, and a link shows its text with its address dim
-  after it. Bullets become `•` (`◦` nested) and items wrap under their text; quotes get a
+  after it; a picture, which the terminal can't show, is a dim `[picture: alt] (path)`. Bullets become `•` (`◦` nested) and items wrap under their text; quotes get a
   `│` rule (`>` in the plain look). Code blocks drop their fences and get a dim `│` rule
   with their language (indented four spaces in the plain look); inline code takes the accent
   color (keeps its backticks in the plain look). Tables are boxed, each column as wide as its

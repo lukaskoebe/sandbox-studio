@@ -134,3 +134,9 @@ func TestChatDrawsAMessageOnce(t *testing.T) {
 		t.Errorf("a streamed message kept its old text: %q", got)
 	}
 }
+
+// A picture, which a terminal can't show, says what it shows and where; a link stays a link.
+func TestMarkdownPicturesSayWhatTheyShow(t *testing.T) {
+	got := plainMarkdown("See ![the login page](/tmp/login.png) and ![](<shots/a b.png> \"t\"), [a link](/x).", 100)
+	sameLines(t, got, []string{"See [picture: the login page] (/tmp/login.png) and [picture: shots/a b.png], a link."})
+}

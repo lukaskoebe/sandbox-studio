@@ -65,6 +65,8 @@ var (
 	// A table's delimiter row, as in GitHub's markdown: |---|:---:|, with at least one pipe.
 	mdDelimiter = regexp.MustCompile(`^\s{0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$`)
 	mdParaEnd   = regexp.MustCompile("^\\s{0,3}(```|~~~|#{1,6}\\s|>)")
+	// mdPicture is a picture as the chat service finds it (internal/chat/images.go).
+	mdPicture = regexp.MustCompile(`^!\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^)\s]+))(?:\s+"[^"\n]*")?\)`)
 )
 
 func parseMarkdown(text string) []mdBlock {
@@ -506,7 +508,8 @@ func (r md) style(s mdStyle) lipgloss.Style {
 }
 
 // inline splits text into its runs: code spans first, so markup inside backticks stays
-// literal, then bold, italics and links. A link shows its text and then, dim, its address.
+// literal, then bold, italics and links. A link shows its text and then, dim, its address. A
+// picture, which a terminal can't show, says what it shows and where it is, dim.
 func (r md) inline(s string, st mdStyle) []mdSpan {
 	var out []mdSpan
 	var lit strings.Builder
@@ -561,6 +564,23 @@ func (r md) inline(s string, st mdStyle) []mdSpan {
 				es.italic = true
 				out = append(out, r.inline(s[i+1:j], es)...)
 				i = j + 1
+				continue
+			}
+		}
+		if c == '!' {
+			if m := mdPicture.FindStringSubmatch(s[i:]); m != nil {
+				flush()
+				src, what := m[2]+m[3], m[1]
+				if what == "" {
+					what = src
+				}
+				ps := st
+				ps.dim = true
+				out = append(out, mdSpan{"[picture: " + what + "]", ps})
+				if what != src {
+					out = append(out, mdSpan{" (" + src + ")", ps})
+				}
+				i += len(m[0])
 				continue
 			}
 		}

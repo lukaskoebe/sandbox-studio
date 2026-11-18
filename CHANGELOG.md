@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Teammates can show you pictures in the chat, such as a screenshot of a page they changed. A
+  teammate writes the picture's path into its message as `![what it shows](/path.png)`, and
+  the chat shows it, larger on a click; teammates are told how, and the soul can ask for a
+  screenshot after every UI change. Studio keeps a copy of PNG, JPEG, GIF and WebP pictures up
+  to 8 MiB once the message is written, so the picture stays after the file changes or the
+  computer is stopped or removed; one it couldn't copy says why, with **Try again**. A picture
+  on the web stays a link, and the terminal UI names the picture and its path. A computer
+  started by an older Studio sends pictures up to 180 KB until it restarts.
 - Home's lines cross less. A session that opened and closed while another was still open now
   branches nearer the sandbox's line than it, so the two no longer cross, and terminals,
   browser sessions and previews share lanes. Flags' words no longer cover another flag's tick

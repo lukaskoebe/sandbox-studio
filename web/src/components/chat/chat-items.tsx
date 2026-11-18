@@ -10,8 +10,14 @@ import {
   WarningIcon,
   type Icon,
 } from "@phosphor-icons/react"
+import { useCallback } from "react"
 import type { Prompt } from "@/components/chat/composer"
-import { Markdown } from "@/components/chat/markdown"
+import {
+  ChatPicture,
+  chatPictureURL,
+  isComputerPicture,
+} from "@/components/chat/chat-picture"
+import { Markdown, Pictures } from "@/components/chat/markdown"
 import { MentionedText } from "@/components/chat/mention-picker"
 import { PermissionCard } from "@/components/chat/permission-card"
 import { PlanCard } from "@/components/chat/plan-card"
@@ -82,7 +88,7 @@ export function ChatItemView({
           <MessageContent>
             <Bubble variant="ghost" className="w-full">
               <BubbleContent>
-                <Markdown text={item.text.text} />
+                <AgentText item={item} text={item.text.text} ctx={ctx} />
                 {item.text.truncated && <Truncated />}
               </BubbleContent>
             </Bubble>
@@ -138,6 +144,36 @@ export function ChatItemView({
     default:
       return null
   }
+}
+
+/** An agent's message, with the pictures it shows from its computer. */
+function AgentText({
+  item,
+  text,
+  ctx,
+}: {
+  item: ChatItem
+  text: string
+  ctx: ItemContext
+}) {
+  const { env, chatId, live } = ctx
+  const pictures = useCallback(
+    (src: string, alt: string) =>
+      isComputerPicture(src) ? (
+        <ChatPicture
+          url={chatPictureURL(env, chatId, item.id, src)}
+          src={src}
+          alt={alt}
+          writing={live}
+        />
+      ) : null,
+    [env, chatId, item.id, live]
+  )
+  return (
+    <Pictures.Provider value={pictures}>
+      <Markdown text={text} />
+    </Pictures.Provider>
+  )
 }
 
 function UserMessage({ item }: { item: ChatItem }) {

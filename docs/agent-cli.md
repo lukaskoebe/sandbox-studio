@@ -142,7 +142,9 @@ arm, both arms against the same browser backend) compared the MCP tools with the
   command saves.
 
 A screenshot is written to a file whose path is printed; each harness reads images from a file
-(Claude Code's and OpenCode's read tool, Codex's image viewer).
+(Claude Code's and OpenCode's read tool, Codex's image viewer). To show it to the user, the
+agent writes the path into its message as `![what it shows](path)` ([chat
+pictures](design/chat-mode.md#pictures-in-messages)).
 
 ## ~/forge
 

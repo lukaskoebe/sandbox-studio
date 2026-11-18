@@ -50,6 +50,16 @@ Network requests to hosts without a rule still go through [network approvals](..
 
 Sometimes the agent asks you something, such as which option to pick. The question appears as a short form in the chat. Fill it in and choose **Send answer**, or choose **Skip this question**.
 
+## Pictures from your teammate
+
+A teammate can show you a picture in its message, such as a screenshot of a page it changed. It writes the picture's path on its computer into the message as `![what it shows](/path/to/picture.png)`, and the chat shows the picture with those words under it; select it to see it larger. Teammates know how; to have one always show you its changes to a UI, say so in its soul, for example: "After you change the UI, take a screenshot with `studio browser screenshot` and show it in your message."
+
+- Studio copies the picture once the message is written, so it stays when the file changes or the computer stops or is removed. The copies go with the chat.
+- PNG, JPEG, GIF, and WebP pictures up to 8 MiB are shown. Otherwise the chat says why in place of the picture, for example that the file isn't there or that the computer wasn't running; start the computer and choose **Try again**.
+- A computer that was already running when Studio was updated sends pictures only up to 180 KB; restart it for larger ones.
+- A picture on the web stays a link: loading it would tell its server who reads the chat.
+- The [terminal UI](../tui/) names a picture and its path instead.
+
 ## Undo a change
 
 Each finished request that changed files shows **Changed N files** and **Undo** below it. Undo puts the files in the sandbox's `/workspace` back to how they were before that message.

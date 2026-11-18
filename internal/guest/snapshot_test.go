@@ -453,6 +453,20 @@ func TestFiles(t *testing.T) {
 	if r, _ := browse(ws, me, agentproto.FilesRequest{Op: agentproto.FilesRead, Path: "big"}); !r.TooLarge || r.Data != nil {
 		t.Fatalf("big %+v", r)
 	}
+	// A file of any size comes in parts of at most MaxRangeBytes; the last is short.
+	for _, c := range []struct{ off, limit, want int64 }{
+		{0, 1 << 30, agentproto.MaxRangeBytes},
+		{agentproto.MaxReadBytes - 10, 100, 11},
+		{agentproto.MaxReadBytes + 1, 100, 0},
+	} {
+		r, err := browse(ws, me, agentproto.FilesRequest{Op: agentproto.FilesReadRange, Path: "big", Offset: c.off, Limit: c.limit})
+		if err != nil || int64(len(r.Data)) != c.want || r.Size != agentproto.MaxReadBytes+1 {
+			t.Fatalf("range %+v: %d bytes of %d, %v", c, len(r.Data), r.Size, err)
+		}
+	}
+	if _, err := browse(ws, me, agentproto.FilesRequest{Op: agentproto.FilesReadRange, Path: "s"}); err == nil {
+		t.Fatal("a range read followed a symlink")
+	}
 	if r, _ := browse(ws, [2]int{-2, -2}, agentproto.FilesRequest{Op: agentproto.FilesRead, Path: "b.txt"}); r.Unreadable {
 		t.Fatalf("world-readable file %+v", r)
 	}

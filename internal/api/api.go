@@ -145,6 +145,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerOnboarding(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/chats/{chat}/stream", s.streamChat)
+	mux.HandleFunc("GET /api/environments/{env}/chats/{chat}/items/{item}/image", s.chatImage)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	mux.HandleFunc("GET /api/environments/{env}/providers/{id}/login/terminal", s.attachLoginTerminal)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/live", s.browserLive)

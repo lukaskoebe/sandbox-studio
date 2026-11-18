@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	_ "embed"
 	"errors"
 	"path"
 	"slices"
@@ -100,12 +101,18 @@ var tmp = map[string]string{
 	"vite-cache/deps.json": "{}\n",
 }
 
+// checkoutShot is the screenshot the scripted agent shows (ACPPicture).
+//
+//go:embed checkout.png
+var checkoutShot string
+
 // computer is every e2e sandbox's whole file system: /workspace, /tmp and a few more.
 func computer() map[string]string {
 	all := map[string]string{
-		"etc/hostname":       "shop\n",
-		"etc/os-release":     "PRETTY_NAME=\"Ubuntu 24.04 LTS\"\n",
-		"home/agent/.bashrc": "export EDITOR=vi\n",
+		"etc/hostname":                  "shop\n",
+		"etc/os-release":                "PRETTY_NAME=\"Ubuntu 24.04 LTS\"\n",
+		"home/agent/.bashrc":            "export EDITOR=vi\n",
+		"home/agent/shots/checkout.png": checkoutShot,
 	}
 	for p, data := range workspace {
 		all["workspace/"+p] = data
@@ -198,6 +205,14 @@ func browseIn(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 			return agentproto.FilesReply{}, errors.New("no such file or directory")
 		}
 		return agentproto.FilesReply{Size: int64(len(data)), MimeType: "text/plain; charset=utf-8", Data: []byte(data)}, nil
+	case agentproto.FilesReadRange:
+		data, ok := workspace[name]
+		if !ok {
+			return agentproto.FilesReply{}, errors.New("no such file or directory")
+		}
+		from := min(int(req.Offset), len(data))
+		to := min(from+int(min(req.Limit, agentproto.MaxRangeBytes)), len(data))
+		return agentproto.FilesReply{Size: int64(len(data)), Data: []byte(data[from:to])}, nil
 	}
 	return agentproto.FilesReply{}, errors.New("unknown files op")
 }
