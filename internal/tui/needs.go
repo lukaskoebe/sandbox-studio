@@ -199,7 +199,7 @@ func (m *app) needsPane(w, h int, narrow bool) []string {
 	if narrow {
 		x = 0
 	}
-	head := styleBold.Render("Needs you")
+	head := styleBold.Render("Waiting for you")
 	if n := len(cards); n > 0 {
 		head += m.waitingMark(fmt.Sprintf(" · %d", n))
 	}
@@ -213,7 +213,7 @@ func (m *app) needsPane(w, h int, narrow bool) []string {
 		if !m.look.plain {
 			mark = m.pal.running.Render("✓")
 		}
-		lines = append(lines, mark+" "+styleDim.Render(clip("Nothing needs you. New asks show up here, and as a count in the list.", w-2)))
+		lines = append(lines, mark+" "+styleDim.Render(clip("Nothing waits for you. New requests show up here, and as a count in the list.", w-2)))
 	}
 	// The cards, the one in focus kept in view.
 	var block []string
@@ -259,7 +259,6 @@ func (m *app) needsPane(w, h int, narrow bool) []string {
 	}
 	if narrow {
 		if len(lines)+1 < h {
-			lines = append(lines, styleDim.Render("TEAMMATES"))
 			rows := m.homeRows()
 			if len(rows) > 0 && rows[0].kind == atHome {
 				rows = rows[1:]
@@ -289,7 +288,7 @@ func (m *app) narrowHome(w, h int) []string {
 func cardLine(c card) string {
 	a := c.first()
 	glyph := strings.SplitN(kindChip(a), " ", 2)[0]
-	who := firstNonEmpty(approvalSource(a), "A sandbox")
+	who := firstNonEmpty(approvalSource(a), "A computer")
 	switch {
 	case c.group:
 		return fmt.Sprintf("%s %s wants %d hosts", glyph, who, len(c.approvals))

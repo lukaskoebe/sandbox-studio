@@ -1,23 +1,23 @@
-[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m▲ 1 need you[m
+[1mSandbox Studio[m[2m · [mDefault                                     [1;38;5;221m▲ 1 waiting for you[m
 [2m────────────────────────────────────────────────────────────────────────────────[m
-  [1mHome[m [2m────────────────────────…[m[1;38;5;221m[m [38;5;203m╭────────────────────────────────────────────╮[m
+  [1mHome[m                         …[1;38;5;221m[m [38;5;203m╭────────────────────────────────────────────╮[m
                                  [38;5;203m│[m [38;5;203m✕[m stop api-refactor: the runtime did not   [38;5;203m│[m
-[36m▌[m [1mblub[m[2m · Iris[m  [2mnode-22+python-3…[m[2m[m[38;5;77m[m[38;5;77m[m[2m[m [38;5;203m│[m   answer in time, so the sandbox may still [38;5;203m│[m
-                                 [38;5;203m│[m   be running                               [38;5;203m│[m
-  [1mapi-refactor[m[2m · Finn[m  [2mgo@2[m [2m───…[m[38;5;77m[m[1;38;5;221m[m[38;5;77m[m[2m[m [38;5;203m╰────────────────────────────────────────────╯[m
+ [2mTEAMMATES[m                       [38;5;203m│[m   answer in time, so the sandbox may still [38;5;203m│[m
+[36m▌[m [1mIris[m [2mfrontend[m                … [38;5;203m│[m   be running                               [38;5;203m│[m
+  [1mFinn[m [2mbackend[m                 …[1;38;5;221m[m [38;5;203m╰────────────────────────────────────────────╯[m
+  [2m+ New teammate[m                                                                
 
-  [1mdocs-site[m[2m · Iris[m  [2mnode@3[m [2m───────────────────────────────────────────[m [2m○[m [2mstopped[m
+ [2mYOUR COMPUTERS[m
+  [36m◐[m [1mdemo[m  [2mbase[m                                                           [2mbooting[m
+  [2m+ New computer[m                                                                
 
-  [1mdemo[m  [2mbase[m [2m────────────────────────────────────────────────[m [2m▓▒░░░░░░[m [36m◐[m [2mbooting[m
-
-
-
-
-
-
-
-
-
+ [2mENVIRONMENT[m
+  Computers                                                                    [2m4[m
+  Network                                                                    [1;38;5;221m▲ 1[m
+  Secrets                                                                       
+  Memory                                                                        
+  Activity                                                                      
+  [2m, [mSettings                                                                 [2mdev[m
 
 [2m────────────────────────────────────────────────────────────────────────────────[m
-[1menter[m [2mopen[m  [1mn[m [2mnew[m  [1ms[m [2mstart/stop[m  [1ma[m [2mapprovals[m  [1mt[m [2mterminal[m  [1mc[m [2mchat[m  [1m?[m [2mmore[m  [1mq[m [2mquit[m
+[1menter[m [2mopen[m  [1mn[m [2mnew[m  [1ms[m [2mstart/stop[m  [1ma[m [2mrequests[m  [1mt[m [2mterminal[m  [1mc[m [2mthread[m  [1m?[m [2mmore[m[2m …[m

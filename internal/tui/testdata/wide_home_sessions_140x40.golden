@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 2   Activity   Settings                                                        2 blocked · ▲ 2 need you · 12:00 
+ ◆ Studio  Default ▾   Home 2   Activity   Settings                                                             ▲ 2 waiting for you · 12:00 
 ───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home ─────────────────────── ▲ 2 need you │ claude · blub                                                                   ✓ agent · done
-                                            │ ──────────────────────────────────────────────────────────────────────────────────────────────
-  blub · Iris ─────────────── ▁▁▁▁▁▁▁▁ ● 2h │ Connecting…
-▌ 1 ✓ claude                          agent │ 
-  2 ○ Fix the login form               chat │ 
-  3   main                             term │ 
-                                            │ 
-  api-refactor · Finn ────────── ▲ 2  ● 12m │ 
-  4 ▲ codex                           agent │ 
-  5 ▲ Port the parser to go            chat │ 
-  6   main                             term │ 
-                                            │ 
-  docs-site · Iris ────────────── ○ stopped │ 
-  7 ○ Update the deploy notes         sched │ 
-  8 ○ Check-in                        check │ 
-  9 ○ Rename the guides                chat │ 
-      + 2 older                             │ 
-                                            │ 
-  demo ───────────────── ▓▒░░░░░░ ◐ booting │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────
-enter type in  1-9 jump in  tab next waiting  alt+z full screen  T new agent  C new chat │ a approvals │ ? more  q quit
+  Home                    ▲ 2 │ claude · blub                                                                       ✓ in the terminal · done
+                              │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ TEAMMATES                    │ Connecting…
+  Iris frontend               │ 
+▌ 1 ✓ claude                  │ 
+  2 ○ Fix the login form      │ 
+  3 ◷ Update the deploy notes │ 
+      + 4 older               │ 
+  4   main                    │ 
+  Finn backend            ▲ 2 │ 
+  5 ▲ codex                   │ 
+  6 ▲ Port the parser to go   │ 
+  7   main                    │ 
+  + New teammate              │ 
+                              │ 
+ YOUR COMPUTERS               │ 
+  ◐ demo              booting │ 
+  + New computer              │ 
+                              │ 
+ ENVIRONMENT                  │ 
+  Computers                 4 │ 
+  Network                 ▲ 1 │ 
+  Secrets                     │ 
+  Memory                      │ 
+  Activity                    │ 
+  , Settings              dev │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+enter type in  1-9 jump in  tab next waiting  alt+z full screen  T new agent  C new thread │ a requests │ ? more  q quit

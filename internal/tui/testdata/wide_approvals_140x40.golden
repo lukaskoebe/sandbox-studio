@@ -1,6 +1,6 @@
- ◆ Studio  Default ▾   Home 9   Activity   Settings                                                        1 blocked · ▲ 9 need you · 12:00 
+ ◆ Studio  Default ▾   Home 9   Activity   Settings                                                             ▲ 9 waiting for you · 12:00 
 ───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Approvals from every environment, newest first
+Requests from every environment, newest first
 
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 ┃ ± GIT PUSH   Push 2 commits to feature/login on GitHub/acme/web                                         api-refactor · Default · 30s ago │
@@ -13,7 +13,7 @@ Approvals from every environment, newest first
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 ┃ ⇅ NETWORK   blub wants registry.npmjs.org:443                                                                          Default · 10m ago │
-┃ pattern *.npmjs.org ‹p›   scope Iris's sandboxes ‹s›   ports default ‹x›                                                                 │
+┃ pattern *.npmjs.org ‹p›   scope Iris's computers ‹s›   ports default ‹x›                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 ┃ ▣ BROWSER ACTION   click “Buy now” on https://shop.example                                                       blub · Default · 1m ago │

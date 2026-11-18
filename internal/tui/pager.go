@@ -145,7 +145,7 @@ func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []dif
 	if git.Push.TeammateName != "" {
 		sandbox += styleDim.Render(" · teammate ") + git.Push.TeammateName
 	}
-	lines = append(lines, fact("Sandbox", sandbox))
+	lines = append(lines, fact("Computer", sandbox))
 	branch := ""
 	switch {
 	case pr != nil:
@@ -565,7 +565,7 @@ func (m *app) requestChanges(a api.ApprovalView, note string) tea.Cmd {
 		if err := client.Do(rctx, http.MethodPost, path, map[string]any{"note": note, "newChat": true}, nil); err != nil {
 			return actionDone{err: fmt.Errorf("rejected the push, but could not send the note: %w", err)}
 		}
-		return actionDone{done: "Asked " + a.Git.Push.TeammateName + " for changes on " + gitBranch(a) + " in a new chat."}
+		return actionDone{done: "Asked " + a.Git.Push.TeammateName + " for changes on " + gitBranch(a) + " in a new thread."}
 	}
 }
 

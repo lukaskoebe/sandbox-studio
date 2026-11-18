@@ -286,6 +286,21 @@ func (c *Client) CreateSandbox(ctx context.Context, env, name, teammate, templat
 	return out, err
 }
 
+// EnvironmentChats lists every chat of the environment, most recently active first.
+func (c *Client) EnvironmentChats(ctx context.Context, env string) ([]store.Chat, error) {
+	var out []store.Chat
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/chats", nil, nil, &out)
+	return out, err
+}
+
+// EnvironmentTerminals lists the terminals of the environment's computers whose guest is
+// connected, with what runs in each and whether its agent works.
+func (c *Client) EnvironmentTerminals(ctx context.Context, env string) ([]sandboxes.SandboxTerminals, error) {
+	var out []sandboxes.SandboxTerminals
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/terminals", nil, nil, &out)
+	return out, err
+}
+
 // SandboxChats lists the chats of a sandbox.
 func (c *Client) SandboxChats(ctx context.Context, env, sandbox string) ([]store.Chat, error) {
 	var out []store.Chat

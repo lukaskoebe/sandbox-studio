@@ -114,7 +114,7 @@ func TestActivityFiltersBySandbox(t *testing.T) {
 func TestActivityEntryShowsItsRule(t *testing.T) {
 	m := press(sampleActivity(sampleApp()), "enter")
 	body := strings.Join(m.entryBody(80, 19), "\n")
-	for _, want := range []string{"*.npmjs.org", "Iris's sandboxes", "an approval", "14, the last 1m ago", "npm installs"} {
+	for _, want := range []string{"*.npmjs.org", "Iris's computers", "a request", "14, the last 1m ago", "npm installs"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the entry lacks %q:\n%s", want, body)
 		}

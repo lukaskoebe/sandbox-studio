@@ -16,7 +16,7 @@ func blockedAgent(t *testing.T) *app {
 	t.Helper()
 	m := paneApp()
 	m.approvals[0].Network = &policy.NetworkRequest{Host: "proxy.golang.org", Port: 443, SandboxName: "api-refactor"}
-	m = press(m, "j", "j", "j", "j", "j")
+	m = onSession(t, m, "sb2", "codex")
 	if x, _ := m.paneTarget(); x.term.Name != "codex" {
 		t.Fatalf("on %+v", x)
 	}
@@ -122,7 +122,7 @@ func TestBannerShowsOnEverySessionOfTheSandbox(t *testing.T) {
 	if x := must(m.paneTarget()); x.sandbox != m.approvals[0].SandboxID || x.term.Name == "codex" || m.paneBanner(x, 90) == nil {
 		t.Errorf("no banner over %+v", x)
 	}
-	m = press(m, "k", "k", "k") // blub's sessions
+	m = press(m, "k", "k", "k") // Iris's main terminal, in blub
 	if x, ok := m.paneTarget(); ok && x.sandbox != m.approvals[0].SandboxID && m.paneBanner(x, 90) != nil {
 		t.Error("another sandbox shows the banner")
 	}

@@ -233,7 +233,7 @@ func (m *app) tabHeader(w int) (string, []tabSpan) {
 	}
 	right := styleDim.Render(m.now.Format("15:04")) + " "
 	if n := m.needCount(); n > 0 {
-		right = m.waitingMark(fmt.Sprintf("▲ %d need you", n)) + styleDim.Render(" · ") + right
+		right = m.waitingMark(fmt.Sprintf("▲ %d waiting for you", n)) + styleDim.Render(" · ") + right
 	}
 	return spread(b.String(), m.sessionsHeader()+right, w), spans
 }
@@ -272,7 +272,7 @@ func barKey(b key.Binding) string {
 func keyGroup(b key.Binding) int {
 	h := b.Help()
 	switch h.Key + " " + h.Desc {
-	case "t terminal", "c chat", "l activity", "a approvals", "e env", "h checkpoints", "/ filter", "/ sandbox", "r rules (browser)":
+	case "t terminal", "c thread", "l activity", "a requests", "e env", "h checkpoints", "/ filter", "/ computer", "r rules (browser)":
 		return groupGo
 	case "? help", "q quit", "esc/q back", "esc cancel", "esc close":
 		return groupApp

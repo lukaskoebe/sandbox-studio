@@ -43,10 +43,11 @@ type (
 )
 
 var (
-	keyMateChat = key.NewBinding(key.WithKeys("c", "C"), key.WithHelp("c", "new chat"))
+	keyMateChat = key.NewBinding(key.WithKeys("c", "C"), key.WithHelp("c", "new thread"))
 	keyShell    = key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "shell"))
 	keyAgentTUI = key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "agent"))
-	keyAnother  = key.NewBinding(key.WithKeys("+"), key.WithHelp("+", "add sandbox"))
+	keyAnother  = key.NewBinding(key.WithKeys("+"), key.WithHelp("+", "add computer"))
+	keyOlder    = key.NewBinding(key.WithKeys("right", "left"), key.WithHelp("→/←", "older threads"))
 )
 
 // watchMate reads the tasks and facts of the teammate whose row is on show in the pane.
@@ -107,10 +108,13 @@ func (m *app) mateKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	}
 	sb := m.selected()
 	needsOne := func() tea.Cmd {
-		m.setNotice(t.Name+" has no sandbox yet. + gives it one.", false)
+		m.setNotice(t.Name+" has no computer yet. + gives it one.", false)
 		return nil
 	}
 	switch {
+	case key.Matches(msg, keyOlder):
+		m.showOlder(t.ID, msg.String() == "right")
+		return nil, true
 	case key.Matches(msg, keyAnother):
 		return m.openNewFor(t.ID), true
 	case key.Matches(msg, keyMateChat):
@@ -138,7 +142,7 @@ func (m *app) mateKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	return nil, false
 }
 
-// openNewFor opens the form of a new sandbox for a teammate, which it skips to the template.
+// openNewFor opens the form of a new computer for a teammate, which it skips to the template.
 func (m *app) openNewFor(mate string) tea.Cmd {
 	cmd := m.openNew()
 	for i, t := range m.team {
@@ -151,7 +155,7 @@ func (m *app) openNewFor(mate string) tea.Cmd {
 
 // mateBindings are the keys the key bar shows on a teammate's row.
 func (m *app) mateBindings() []key.Binding {
-	bindings := []key.Binding{keyMateChat, keyAgentTUI, keyShell, keyAnother}
+	bindings := []key.Binding{keyMateChat, keyAgentTUI, keyShell, keyAnother, keyOlder}
 	if m.selected() != nil {
 		bindings = append(bindings, keyFork, keyLifecycle)
 	}
@@ -161,21 +165,19 @@ func (m *app) mateBindings() []key.Binding {
 // mateState is how the teammate is, from its sessions: needs you, working, done or idle.
 func (m *app) mateStatus(id string) string {
 	var blocked, working, done bool
-	for _, sb := range m.sandboxesOf(id) {
-		for _, x := range m.sessionsOf(sb) {
-			switch m.stateOf(x) {
-			case stateBlocked:
-				blocked = true
-			case stateWorking:
-				working = true
-			case stateDone:
-				done = true
-			}
+	for _, x := range m.threadsOf(id) {
+		switch m.stateOf(x) {
+		case stateBlocked:
+			blocked = true
+		case stateWorking:
+			working = true
+		case stateDone:
+			done = true
 		}
 	}
 	switch {
 	case blocked:
-		return m.waitingMark("▲ needs you")
+		return m.waitingMark("▲ waiting for you")
 	case working:
 		return m.stateMark(stateWorking) + styleDim.Render(" working")
 	case done:
@@ -205,10 +207,10 @@ func (m *app) matePane(w, h int) []string {
 	list := m.sandboxesOf(t.ID)
 	name := "COMPUTER"
 	if len(list) > 1 {
-		name = "SANDBOXES"
+		name = "COMPUTERS"
 	}
 	if len(list) == 0 {
-		lines = append(lines, label(name)+styleDim.Render(clip("none yet; + gives "+t.Name+" a sandbox of its own", w-11)))
+		lines = append(lines, label(name)+styleDim.Render(clip("none yet; + gives "+t.Name+" a computer of its own", w-11)))
 	}
 	for i, sb := range list {
 		ph := phaseOf(sb)
@@ -232,26 +234,29 @@ func (m *app) matePane(w, h int) []string {
 	}
 	lines = append(lines, "")
 	first := true
+	visible := m.visible()
 	for _, r := range m.homeRows() {
-		if r.kind != atSandbox || r.sub < 0 || r.sb < 0 || m.visible()[r.sb].TeammateID != t.ID {
+		if r.kind != atThread || r.mate != t.ID {
 			continue
 		}
-		x := m.sessionsOf(m.visible()[r.sb])[r.sub]
-		if x.kind == sessionOlder {
+		x, ok := m.rowSession(r, visible)
+		if !ok || x.kind == sessionOlder {
 			continue
 		}
 		lead := blank
 		if first {
-			lead, first = label("SESSIONS"), false
+			lead, first = label("THREADS"), false
 		}
 		n := " "
 		if r.num > 0 {
 			n = fmt.Sprint(r.num)
 		}
-		lines = append(lines, lead+styleDim.Render(n)+" "+m.stateMark(m.stateOf(x))+" "+clip(x.title(), w/2)+"  "+styleDim.Render(sessionKindWord(x)))
+		lines = append(lines, lead+styleDim.Render(n)+" "+m.sessionMark(x, m.stateOf(x))+" "+clip(x.title(), w/2)+"  "+styleDim.Render(sessionKindWord(x)))
 	}
-	if first {
-		lines = append(lines, label("SESSIONS")+styleDim.Render("none yet; c starts a chat"))
+	if first && len(list) == 0 {
+		lines = append(lines, label("THREADS")+styleDim.Render("none yet"))
+	} else if first {
+		lines = append(lines, label("THREADS")+styleDim.Render("none yet; c starts one"))
 	}
 	lines = append(lines, "")
 	s := &m.mates
@@ -300,7 +305,7 @@ func (m *app) matePane(w, h int) []string {
 		level = levelWords(m.env.SecurityLevel) + styleDim.Render(", the environment's")
 	}
 	lines = append(lines, label("NETWORK")+level+styleDim.Render(clip(" · new rules apply to "+scopeWords(t), max(w-11-len(level), 0))))
-	lines = append(lines, "", styleDim.Render(clip("c new chat · T agent in a terminal · t shell · + another sandbox · f fork", w)))
+	lines = append(lines, "", styleDim.Render(clip("c new thread · T agent in a terminal · t shell · + another computer · f fork", w)))
 	return lines[:min(len(lines), h)]
 }
 
@@ -308,11 +313,11 @@ func (m *app) matePane(w, h int) []string {
 func scopeWords(t store.Teammate) string {
 	switch t.ApprovalScope {
 	case "sandbox":
-		return "the sandbox that asks"
+		return "the computer that asks"
 	case "environment":
 		return "the environment"
 	}
-	return t.Name + "'s sandboxes"
+	return t.Name + "'s computers"
 }
 
 // phaseDot is a phase's dot, styled.

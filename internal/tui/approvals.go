@@ -487,12 +487,12 @@ func (m *app) approvalsBody(w, h int) []string {
 	cards := m.cards()
 	if len(cards) == 0 {
 		return []string{
-			styleDim.Render("No approvals are waiting."),
+			styleDim.Render("Nothing waits for you."),
 			"",
-			styleDim.Render("Requests from sandboxes show up here as they come in."),
+			styleDim.Render("Requests from computers show up here as they come in."),
 		}
 	}
-	lines := []string{styleBold.Render("Approvals") + styleDim.Render(" from every environment, newest first"), ""}
+	lines := []string{styleBold.Render("Requests") + styleDim.Render(" from every environment, newest first"), ""}
 	cursorAt, cursorLen := len(lines), 0
 	starts := make([]int, 0, len(cards)+1)
 	var keys []keyHit // the cursor's card's keycaps, on the lines of the list
@@ -551,7 +551,7 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 	var details []string
 	if c.group {
 		// As the web's group card: a browser page's requests name the page and its sandbox.
-		title = firstNonEmpty(a.Network.Site, source, "A sandbox") + " wants " + fmt.Sprint(len(c.approvals)) + " hosts"
+		title = firstNonEmpty(a.Network.Site, source, "A computer") + " wants " + fmt.Sprint(len(c.approvals)) + " hosts"
 		if a.Network.Site != "" {
 			details = append(details, source)
 		}
@@ -649,7 +649,7 @@ func reachLabel(a api.ApprovalView, reach string) string {
 	case reach == "browsers":
 		return "all browsers"
 	case reach == "everywhere":
-		return "browsers and sandboxes"
+		return "browsers and computers"
 	case a.Teammate != nil:
 		return a.Teammate.Name + "'s browser"
 	}
@@ -660,9 +660,9 @@ func reachLabel(a api.ApprovalView, reach string) string {
 func scopeLabel(a api.ApprovalView, scope string) string {
 	switch {
 	case scope == "teammate" && a.Teammate != nil:
-		return a.Teammate.Name + "'s sandboxes"
+		return a.Teammate.Name + "'s computers"
 	case scope == "sandbox":
-		return "only " + firstNonEmpty(approvalSource(a), "this sandbox")
+		return "only " + firstNonEmpty(approvalSource(a), "this computer")
 	}
 	return "environment"
 }
@@ -720,7 +720,7 @@ func kindTitle(kind string) string {
 	case "chat.permission":
 		return "Agent permission"
 	}
-	return "Approval"
+	return "Request"
 }
 
 // approvalSource is the sandbox or teammate that asked, when the request names one.

@@ -1,4 +1,4 @@
-Sandbox Studio · Default                                1 blocked · ▲ 1 need you
+Sandbox Studio · Default                                     ▲ 1 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
    return (
      <form onSubmit={submit}>

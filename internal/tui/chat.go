@@ -106,7 +106,7 @@ var (
 	keyPrompt  = key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "prompt"))
 	keyExpand  = key.NewBinding(key.WithKeys("enter", "space"), key.WithHelp("enter", "expand"))
 	keyStop    = key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "stop"))
-	keyNewChat = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new chat"))
+	keyNewChat = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new thread"))
 	keySend    = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send"))
 	keyNewline = key.NewBinding(key.WithKeys("shift+enter", "ctrl+j"), key.WithHelp("ctrl+j", "new line"))
 	keyLeave   = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
@@ -144,7 +144,7 @@ func (m *app) chatsIn(sb *sandboxes.View) bool {
 		return false
 	}
 	if sb.TeammateID == "" {
-		m.setNotice(sb.Name+" has no teammate to chat with. Give it one in the browser.", true)
+		m.setNotice(sb.Name+" has no teammate to work with. Give it one in the browser.", true)
 		return false
 	}
 	return true
@@ -380,7 +380,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		c.sending = false
 		if msg.err != nil {
 			c.composing = true
-			m.setNotice("Could not start the chat: "+msg.err.Error(), true)
+			m.setNotice("Could not start the thread: "+msg.err.Error(), true)
 			return nil, true
 		}
 		c.draft.set("")
@@ -625,11 +625,11 @@ func (m *app) startComposing() tea.Cmd {
 	c := &m.chats
 	switch {
 	case c.gone:
-		m.setNotice("This chat was deleted. n starts a new one.", true)
+		m.setNotice("This thread was deleted. n starts a new one.", true)
 	case c.chat.State == store.ChatTerminal:
-		m.setNotice("This chat continues in the sandbox's terminal. Bring it back to chat in the browser.", false)
+		m.setNotice("This thread continues in the computer's terminal. Bring it back to the thread in the browser.", false)
 	case c.chat.State == store.ChatOrphaned:
-		m.setNotice("This chat ended: its sandbox was reset or removed. n starts a new one.", false)
+		m.setNotice("This thread ended: its computer was reset or removed. n starts a new one.", false)
 	default:
 		c.composing = true
 	}
@@ -646,7 +646,7 @@ func (m *app) send() tea.Cmd {
 	c.composing, c.sending = false, true
 	ctx, client, env, sandbox, id, gen := m.ctx, m.client, m.env.ID, c.sandbox.ID, c.id, c.gen
 	if id == "" {
-		m.setNotice("Starting the chat…", false)
+		m.setNotice("Starting the thread…", false)
 		return func() tea.Msg {
 			created, err := client.CreateChat(ctx, env, sandbox, text)
 			return chatCreated{chat: created, err: err}
@@ -1250,13 +1250,13 @@ var chatStateWords = map[string]string{
 
 // chatTitle is a chat's title, or a stand-in until the agent names it.
 func chatTitle(c store.Chat) string {
-	return firstNonEmpty(oneLine(c.Title), "New chat")
+	return firstNonEmpty(oneLine(c.Title), "New thread")
 }
 
 // chatBody is the chat on show: its title and state, and the transcript's rows in view.
 func (m *app) chatBody(w, h int) []string {
 	c := &m.chats
-	title := "New chat with " + m.teammateName()
+	title := "New thread with " + m.teammateName()
 	state := ""
 	if c.id != "" {
 		title = chatTitle(c.chat) + styleDim.Render(" · "+c.sandbox.Name)
@@ -1276,9 +1276,9 @@ func (m *app) chatBody(w, h int) []string {
 	rows := max(h-1-len(box), 1)
 	switch {
 	case c.gone:
-		return append(lines, "", "This chat was deleted. Press n to start a new one.")
+		return append(lines, "", "This thread was deleted. Press n to start a new one.")
 	case c.id == "":
-		return withComposer(append(lines, "", styleDim.Render("Write what "+m.teammateName()+" should do. Enter sends it and starts the chat.")), box, h)
+		return withComposer(append(lines, "", styleDim.Render("Write what "+m.teammateName()+" should do. Enter sends it and starts the thread.")), box, h)
 	case !c.loaded:
 		return append(lines, styleDim.Render("Loading…"))
 	}

@@ -71,7 +71,7 @@ func (m *app) composer(w int) []string {
 	}
 	title := " › " + m.teammateName() + " "
 	if c.id == "" {
-		title = " › a new chat with " + m.teammateName() + " "
+		title = " › a new thread with " + m.teammateName() + " "
 	}
 	keys := " enter sends · ctrl+j new line "
 	fill := max(w-4-lipgloss.Width(title)-lipgloss.Width(keys), 0)

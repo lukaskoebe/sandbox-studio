@@ -1,6 +1,6 @@
-Sandbox Studio · Default                                1 blocked · ▲ 3 need you
+Sandbox Studio · Default                                     ▲ 3 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
-Approvals from every environment, newest first
+Requests from every environment, newest first
 
   Git push  api-refactor · Default · 30s ago                                    
     Push 2 commits to feature/login on GitHub/acme/web
@@ -12,7 +12,7 @@ Approvals from every environment, newest first
 
   Network access  blub · Default · 10m ago                                      
     registry.npmjs.org:443
-    pattern *.npmjs.org   scope Iris's sandboxes   ports default
+    pattern *.npmjs.org   scope Iris's computers   ports default
 
 
 

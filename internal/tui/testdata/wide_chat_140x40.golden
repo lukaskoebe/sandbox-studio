@@ -1,4 +1,4 @@
- ◆ Studio  Default ▾   Home 1   Activity   Settings                                                                    ▲ 1 need you · 12:00 
+ ◆ Studio  Default ▾   Home 1   Activity   Settings                                                             ▲ 1 waiting for you · 12:00 
 ───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Fix the login form · blub                                                                                                          ⠋ Working
 ┃ The login form doesn't submit on enter. Can you fix it?
@@ -36,4 +36,4 @@ The form used a div as its button, so enter did nothing. It is a real submit but
 
  › Write to Iris…                                                                                                                   p write 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-p prompt  ↑/↓ tools  pgup scroll  x stop  n new chat │ esc/q back  ? more
+p prompt  ↑/↓ tools  pgup scroll  x stop  n new thread │ esc/q back  ? more

@@ -23,6 +23,7 @@ func sampleApp() *app {
 	m.env = store.Environment{ID: "env1", Name: "Default"}
 	m.envs = []store.Environment{m.env, {ID: "env2", Name: "work"}}
 	m.loaded = true
+	m.team = []store.Teammate{{ID: "t1", Name: "Iris", Role: "frontend"}, {ID: "t2", Name: "Finn", Role: "backend"}}
 	m.teammates = map[string]string{"t1": "Iris", "t2": "Finn"}
 	started := m.now.Add(-2*time.Hour - 14*time.Minute)
 	recent := m.now.Add(-12 * time.Minute)
@@ -239,7 +240,8 @@ func TestStreamLossReconnectsAndRefreshes(t *testing.T) {
 }
 
 func TestSelectionFollowsTheSandboxAcrossRefreshes(t *testing.T) {
-	m := press(sampleApp(), "j", "j")
+	m := sampleApp()
+	m.cursor = 2 // docs-site
 	list := []sandboxes.View{m.sandboxes[3], m.sandboxes[2], m.sandboxes[1], m.sandboxes[0]}
 	next, _ := m.Update(sandboxesLoaded{env: m.env.ID, list: list})
 	m = next.(*app)
@@ -337,7 +339,7 @@ func TestSuspendFollowsThePhase(t *testing.T) {
 		t.Fatalf("z on a running sandbox: %+v", m.notice)
 	}
 	m.cursor = 2 // docs-site, stopped
-	if _, cmd := pressCmd(m, "z"); cmd != nil || m.notice.text != "Only a running sandbox can be suspended." {
+	if _, cmd := pressCmd(m, "z"); cmd != nil || m.notice.text != "Only a running computer can be suspended." {
 		t.Fatalf("z on a stopped sandbox: %+v", m.notice)
 	}
 	m.sandboxes[2].Status = "suspended"

@@ -371,7 +371,7 @@ func (m *app) activityBody(w, h int) []string {
 	a := &m.activity
 	head := styleBold.Render("Activity") + styleDim.Render(" · connections and decisions, newest first")
 	if a.filter != "" {
-		head += styleDim.Render(" · ") + "sandbox “" + a.filter + "”"
+		head += styleDim.Render(" · ") + "computer “" + a.filter + "”"
 	}
 	chips := make([]string, len(activityKinds))
 	for i, k := range activityKinds {
@@ -390,10 +390,10 @@ func (m *app) activityBody(w, h int) []string {
 	}
 	list := m.activityEntries()
 	if len(list) == 0 {
-		empty := "Connections and decisions show up here as sandboxes make them."
+		empty := "Connections and decisions show up here as computers make them."
 		switch {
 		case a.filter != "":
-			empty = "Nothing from a sandbox matching “" + a.filter + "” yet."
+			empty = "Nothing from a computer matching “" + a.filter + "” yet."
 		case a.kind > 0:
 			empty = "No " + activityKinds[a.kind] + " activity yet."
 		}
@@ -553,7 +553,7 @@ func (m *app) entryBody(w, h int) []string {
 	lines := []string{
 		styleBold.Render(kind) + "  " + clip(e.host, max(w-10, 8)),
 		"",
-		fact("Sandbox", firstNonEmpty(e.sandbox, "—")),
+		fact("Computer", firstNonEmpty(e.sandbox, "—")),
 		fact("Verdict", e.verdict),
 		fact("When", age(m.now.Sub(e.at))),
 	}
@@ -617,7 +617,7 @@ func noRuleWhy(e activityEntry) string {
 	case e.verdict == "unanswered":
 		return "Nobody answered in time, so it was refused."
 	case e.verdict == "waiting":
-		return "It waits for a decision: see the approvals (a)."
+		return "It waits for a decision: see the requests (a)."
 	}
 	return "No rule decided it: a decision, the level or the curated list did."
 }
@@ -642,12 +642,12 @@ func (m *app) ruleScope(r store.Rule) string {
 				return "only " + sb.Name
 			}
 		}
-		return "one sandbox"
+		return "one computer"
 	case r.TeammateID != "":
 		if name := m.teammates[r.TeammateID]; name != "" {
-			return name + "'s sandboxes"
+			return name + "'s computers"
 		}
-		return "a teammate's sandboxes"
+		return "a teammate's computers"
 	}
 	return "the environment"
 }
@@ -656,7 +656,7 @@ func (m *app) ruleScope(r store.Rule) string {
 func ruleOrigin(origin string) string {
 	switch origin {
 	case "approval":
-		return "an approval"
+		return "a request"
 	case "curated":
 		return "the curated list"
 	case "reviewer":
@@ -685,4 +685,4 @@ func (m *app) activityBindings() []key.Binding {
 
 var keyKind = key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "kind"))
 
-var keyFilterSandbox = key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "sandbox"))
+var keyFilterSandbox = key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "computer"))

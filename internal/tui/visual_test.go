@@ -247,7 +247,7 @@ func TestSparklineAndBar(t *testing.T) {
 func TestGroupedKeyBar(t *testing.T) {
 	m := visualApp(100, 24)
 	got := ansi.Strip(m.keyBar(100, 0))
-	if got != "enter open  n new  s start/stop │ a approvals  t terminal  c chat │ ? more  q quit" {
+	if got != "enter open  n new  s start/stop │ a requests  t terminal  c thread │ ? more  q quit" {
 		t.Errorf("key bar: %q", got)
 	}
 	if got := ansi.Strip(m.keyBar(40, 0)); !strings.HasSuffix(got, " …") || len([]rune(got)) > 40 {
@@ -258,16 +258,16 @@ func TestGroupedKeyBar(t *testing.T) {
 func TestMouseSelectsAndOpens(t *testing.T) {
 	m := visualApp(80, 24)
 	m.View()                                                                 // records where the rows lead
-	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 6, Button: tea.MouseLeft} // docs-site's header, under Home and two groups
+	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 8, Button: tea.MouseLeft} // demo, under Home, TEAMMATES and YOUR COMPUTERS
 	next, _ := m.Update(click)
 	m = next.(*app)
-	if m.cursor != 2 || m.screen != screenHome {
+	if m.cursor != 3 || m.screen != screenHome {
 		t.Fatalf("a click selects the row: cursor %d, screen %v", m.cursor, m.screen)
 	}
 	m.View()
 	next, _ = m.Update(click)
 	m = next.(*app)
-	if m.screen != screenDetail || m.selectedID() != "sb3" {
+	if m.screen != screenDetail || m.selectedID() != "sb4" {
 		t.Errorf("a double click opens it: screen %v, sandbox %s", m.screen, m.selectedID())
 	}
 }
@@ -442,10 +442,9 @@ func TestClickingAKeycapPressesIt(t *testing.T) {
 }
 
 func TestNetworkColumnReadsTheSelectedSandbox(t *testing.T) {
-	m := visualApp(180, 50)
-	m = press(m, "j")
+	m := onComputersScreen(t, visualApp(180, 50), "sb2")
 	if got := m.netWanted(); got != "sb2" {
-		t.Fatalf("Home's dashboard reads the selected sandbox's connections: %q", got)
+		t.Fatalf("the Computers screen's dashboard reads the selected computer's connections: %q", got)
 	}
 	if visualApp(99, 50).netWanted() != "" || press(visualApp(180, 50), "a").netWanted() != "" {
 		t.Error("the network is read without the pane, or off Home")

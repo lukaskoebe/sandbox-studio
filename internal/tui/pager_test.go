@@ -223,7 +223,7 @@ func TestRequestChangesRejectsAndSendsTheNote(t *testing.T) {
 	if f := rec.requests[1]; f.path != "/api/environments/env1/approvals/g1/feedback" || !strings.Contains(f.body, `"newChat":true`) {
 		t.Errorf("the feedback: %+v", f)
 	}
-	if !strings.Contains(m.notice.text, "Asked Finn for changes on fix-login in a new chat.") {
+	if !strings.Contains(m.notice.text, "Asked Finn for changes on fix-login in a new thread.") {
 		t.Errorf("notice %q", m.notice.text)
 	}
 }

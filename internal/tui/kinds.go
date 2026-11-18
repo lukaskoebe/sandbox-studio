@@ -265,7 +265,7 @@ func (m *app) kindLines(c card, w int) []string {
 		}
 	case a.Kind == "chat.permission" && a.ChatPermission != nil:
 		p := a.ChatPermission
-		lines = append(lines, styleDim.Render(fit("In "+firstNonEmpty(p.TeammateName, "the teammate")+"'s chat “"+firstNonEmpty(oneLine(p.ChatTitle), "New chat")+"”", w)))
+		lines = append(lines, styleDim.Render(fit("In "+firstNonEmpty(p.TeammateName, "the teammate")+"'s thread “"+firstNonEmpty(oneLine(p.ChatTitle), "New thread")+"”", w)))
 		lines = append(lines, picksText(permissionPicks(p.Options))+styleDim.Render("  i ignore"))
 	default:
 		lines = append(lines, styleDim.Render("enter opens it in the browser"))

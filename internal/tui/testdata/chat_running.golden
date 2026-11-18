@@ -1,4 +1,4 @@
-Sandbox Studio · Default                                            ▲ 1 need you
+Sandbox Studio · Default                                     ▲ 1 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
 Fix the login form · blub                                              ◐ Working
   ▸ Thought it through
@@ -20,4 +20,4 @@ button now:
   ▸ npm test -- login                                                    working
  › Write to Iris…                                                       p write 
 ────────────────────────────────────────────────────────────────────────────────
-p prompt  ↑/↓ tools  pgup scroll  x stop  n new chat  esc/q back  ? help
+p prompt  ↑/↓ tools  pgup scroll  x stop  n new thread  esc/q back  ? help

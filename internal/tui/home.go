@@ -107,7 +107,7 @@ func (m *app) groupHeader(sb sandboxes.View, selected bool, indent, w int) strin
 	if n := m.pendingFor(sb.ID); n > 0 {
 		waiting := fmt.Sprintf("▲ %d", n)
 		if wide {
-			waiting += " " + plural(n, "approval", "approvals")
+			waiting += " " + plural(n, "request", "requests")
 		}
 		right = m.waitingMark(waiting) + "  " + right
 	}
@@ -160,8 +160,8 @@ func shortUptime(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 }
 
-// homeBody is Home: the tree of the environment's teammates, sandboxes and sessions, with the
-// pane beside it on a wide terminal.
+// homeBody is Home: the list of the environment's teammates, threads, computers and places, with
+// the pane beside it on a wide terminal.
 func (m *app) homeBody(w, h int) []string {
 	switch {
 	case m.env.ID == "":
@@ -180,13 +180,13 @@ func (m *app) homeBody(w, h int) []string {
 	return m.sidebar(w, h)
 }
 
-// sidebar is the rows of Home's list in w cells and h lines, the cursor's row in view: Home,
-// each teammate with its sandboxes and sessions under it, and a blank line between teammates.
+// sidebar is the rows of Home's list in w cells and h lines, the cursor's row in view.
 func (m *app) sidebar(w, h int) []string {
 	return m.treeLines(m.homeRows(), w, h)
 }
 
-// treeLines draws rows of Home's list in w cells and h lines, the cursor's row in view.
+// treeLines draws rows of Home's list in w cells and h lines, the cursor's row in view: a blank
+// line before each section, and its label.
 func (m *app) treeLines(rows []homeRow, w, h int) []string {
 	all := m.homeRows()
 	at := m.cursorRow(all)
@@ -194,20 +194,23 @@ func (m *app) treeLines(rows []homeRow, w, h int) []string {
 	for i, r := range all {
 		index[r] = i
 	}
-	const blank, label = -1, -2
-	var order []int // the row of each line, blank or label for the lines between
+	type line struct {
+		row   int    // the row the line draws, or -1
+		label string // the section label it draws instead, or "" for a blank line
+	}
+	var order []line
 	cursorLine := 0
 	for i, r := range rows {
 		if r.gap && len(order) > 0 {
-			order = append(order, blank)
+			order = append(order, line{row: -1})
 		}
-		if r.label != "" {
-			order = append(order, label)
+		if r.section != "" {
+			order = append(order, line{row: -1, label: r.section})
 		}
 		if index[r] == at {
 			cursorLine = len(order)
 		}
-		order = append(order, i)
+		order = append(order, line{row: i})
 	}
 	// The list scrolls once the cursor passes the last line.
 	offset := 0
@@ -216,19 +219,19 @@ func (m *app) treeLines(rows []homeRow, w, h int) []string {
 	}
 	visible := m.visible()
 	var lines []string
-	for _, i := range order[offset:] {
+	for _, l := range order[offset:] {
 		if len(lines) >= h {
 			break
 		}
-		switch i {
-		case blank:
-			lines = append(lines, "")
-			continue
-		case label:
-			lines = append(lines, "  "+styleDim.Render("no teammate"))
+		if l.row < 0 {
+			if l.label == "" {
+				lines = append(lines, "")
+			} else {
+				lines = append(lines, " "+styleDim.Render(l.label))
+			}
 			continue
 		}
-		r := rows[i]
+		r := rows[l.row]
 		m.hitRow(len(lines), 0, w, rowTree, index[r])
 		lines = append(lines, m.treeLine(r, visible, index[r] == at, w))
 	}

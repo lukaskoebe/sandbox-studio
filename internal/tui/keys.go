@@ -27,8 +27,8 @@ var (
 	keyLifecycle = key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start/stop"))
 	keySuspend   = key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "suspend"))
 	keyDelete    = key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete"))
-	keyChat      = key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "chat"))
-	keyChatNew   = key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "new chat"))
+	keyChat      = key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "thread"))
+	keyChatNew   = key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "new thread"))
 	keyAgent     = key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "new agent"))
 	keyNumber    = key.NewBinding(key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9"), key.WithHelp("1-9", "jump in"))
 	keyWaiting   = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next waiting"))
@@ -36,7 +36,7 @@ var (
 	keyYes       = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "delete"))
 	keyNo        = key.NewBinding(key.WithKeys("n", "esc"), key.WithHelp("n", "keep"))
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
-	keyApprovals = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "approvals"))
+	keyApprovals = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "requests"))
 	keyTerminal  = key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "terminal"))
 	keyActivity  = key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "activity"))
 	keyAllow     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow"))
@@ -98,6 +98,8 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.checkpointsKey(msg)
 	case screenGit:
 		return m.gitKey(msg)
+	case screenComputers:
+		return m.computersKey(msg)
 	case screenSettings:
 		return m.settingsKey(msg)
 	default: // help: any key closes it
@@ -137,12 +139,16 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pane.zoom = !m.pane.zoom
 	case key.Matches(msg, keyOpen) && inPane:
 		return m, m.focusPane()
+	case key.Matches(msg, keyOpen) && m.at == atPlace:
+		return m, m.openPlace(m.rowPlace)
+	case key.Matches(msg, keyOpen) && m.at == atAction:
+		return m, m.rowActionDo(m.rowAction)
 	case key.Matches(msg, keyOpen):
 		if _, ok := m.selectedSession(); ok {
 			return m, m.enterSession()
 		}
 		if m.selected() != nil {
-			m.screen = screenDetail
+			m.screen, m.detailBack = screenDetail, screenHome
 		}
 	case key.Matches(msg, keyNew):
 		if m.env.ID != "" {
@@ -192,7 +198,7 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keyBack):
-		m.screen = screenHome
+		m.screen = m.detailBack
 	case key.Matches(msg, keyLifecycle):
 		return m, m.toggle(m.selected())
 	case key.Matches(msg, keySuspend):
@@ -338,7 +344,7 @@ func (m *app) suspend(sb *sandboxes.View) tea.Cmd {
 	case phaseSuspended:
 		m.setNotice(sb.Name+" is suspended already. s resumes it.", false)
 	default:
-		m.setNotice("Only a running sandbox can be suspended.", false)
+		m.setNotice("Only a running computer can be suspended.", false)
 	}
 	return nil
 }
@@ -411,6 +417,8 @@ func (m *app) bindings() []key.Binding {
 		return m.checkpointBindings()
 	case screenGit:
 		return m.gitBindings()
+	case screenComputers:
+		return m.computersBindings()
 	}
 	if m.paneFocused() {
 		return m.paneBindings()
@@ -423,6 +431,9 @@ func (m *app) bindings() []key.Binding {
 	}
 	if m.at == atMate {
 		return m.mateBindings()
+	}
+	if m.at == atPlace || m.at == atAction {
+		return []key.Binding{keyOpen, keyUp, keyNumber, keyWaiting, keyHelp, keyQuit, keySettings, keyActivity, keyEnv}
 	}
 	if x, ok := m.paneTarget(); ok {
 		bindings := []key.Binding{keyFocus, keyNumber, keyWaiting}

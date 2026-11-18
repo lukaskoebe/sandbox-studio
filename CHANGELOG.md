@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- The terminal UI's list reads as the browser's sidebar: TEAMMATES with their threads under
+  them, wherever the thread runs, as the browser lists them (every live one, the two latest of
+  the day, `+ n older` or `→` for the rest), YOUR COMPUTERS with their terminals, and
+  ENVIRONMENT with Computers, Network, Secrets, Memory, Activity and Settings. Computers lists
+  every computer of the environment with its dashboard beside it from 100 columns, and takes a
+  computer's keys. A thread waits on its own permissions and on its computer's other requests
+  only while it is the teammate's latest thread there, as in the browser. The TUI uses the
+  browser's words (computer, thread, requests, "waiting for you"), reads the environment's
+  threads and terminals in two calls instead of two a computer, and the sidebar is 30 columns
+  wide. No key changed what it does.
+
 ## v0.25.0 — 2026-11-17
 
 - On Windows, Studio starts after an update made while sandboxes ran. It stopped at its start

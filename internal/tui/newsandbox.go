@@ -121,7 +121,7 @@ func (m *app) newUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 	case sandboxCreated:
 		n.creating = false
 		if msg.err != nil {
-			m.setNotice("Could not create the sandbox: "+msg.err.Error(), true)
+			m.setNotice("Could not create the computer: "+msg.err.Error(), true)
 			return nil, true
 		}
 		if m.screen != screenNew {
@@ -242,7 +242,7 @@ func (m *app) progressKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // newBody is the form: the steps done so far, and the one on show.
 func (m *app) newBody(w, h int) []string {
 	n := &m.newSb
-	lines := []string{styleBold.Render("New sandbox") + styleDim.Render(" in "+m.env.Name), ""}
+	lines := []string{styleBold.Render("New computer") + styleDim.Render(" in "+m.env.Name), ""}
 	teammate := firstNonEmpty(m.newTeammate().Name, "none")
 	if n.step > stepTeammate {
 		lines = append(lines, fact("Teammate", teammate))
@@ -275,7 +275,7 @@ func (m *app) newBody(w, h int) []string {
 		for _, t := range m.team {
 			rows = append(rows, t.Name)
 		}
-		pick("Whose sandbox is it?", append(rows, styleDim.Render("no teammate")), n.teammate)
+		pick("Whose computer is it?", append(rows, styleDim.Render("no teammate")), n.teammate)
 	case stepTemplate:
 		if !n.loaded {
 			return append(lines, styleBold.Render("What does it start from?"), styleDim.Render("Loading the templates…"))
@@ -308,7 +308,7 @@ var stepLabels = map[string]string{
 func (m *app) progressBody(w, h int) []string {
 	sb, _, found := m.progressSandbox()
 	if !found {
-		return []string{styleDim.Render("The sandbox is gone.")}
+		return []string{styleDim.Render("The computer is gone.")}
 	}
 	head := styleBold.Render("Creating "+sb.Name) + styleDim.Render(" in "+m.env.Name)
 	if phaseOf(sb) == phaseFailed {

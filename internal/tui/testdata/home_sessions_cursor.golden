@@ -1,23 +1,23 @@
-Sandbox Studio · Default                                2 blocked · ▲ 2 need you
+Sandbox Studio · Default                                     ▲ 2 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
-  Home ──────────────────────────────────────────────────────────── ▲ 2 need you
+  Home                                                       ▲ 2 waiting for you
 
-  blub · Iris  node-22+python-3.13@2 ─────────────────────────────── ● up 2h 14m
-  1 ✓ claude                                                        agent · done
-▸ 2 ○ Fix the login form                                           chat · 3m ago
-  3   main                                                   terminal · attached
+ TEAMMATES
+  Iris frontend                                                                 
+  1 ✓ claude                                              in the terminal · done
+▸ 2 ○ Fix the login form                                         thread · 3m ago
+  3 ◷ Update the deploy notes                                 scheduled · 5h ago
+      + 4 older
+  4   main                                                   terminal · attached
+  Finn backend                                                               ▲ 2
+  5 ▲ codex                                            in the terminal · waiting
+  6 ▲ Port the parser to go                                     thread · waiting
+  7   main                                                              terminal
+  + New teammate                                                                
 
-  api-refactor · Finn  go@2 ──────────────────────────── ▲ 2 approvals  ● up 12m
-  4 ▲ codex                                                      agent · blocked
-  5 ▲ Port the parser to go                                       chat · blocked
-  6   main                                                              terminal
+ YOUR COMPUTERS
+  ◐ demo  base                                                           booting
+  + New computer                                                                
 
-  docs-site · Iris  node@3 ─────────────────────────────────────────── ○ stopped
-  7 ○ Update the deploy notes                                 scheduled · 1d ago
-  8 ○ Check-in                                                 check-in · 1d ago
-  9 ○ Rename the guides                                             chat · ended
-      + 2 older
-
-  demo  base ───────────────────────────────────────────────────────── ◐ booting
 ────────────────────────────────────────────────────────────────────────────────
-enter go in  1-9 jump in  tab next waiting  a approvals  ? help  q quit …
+enter go in  1-9 jump in  tab next waiting  a requests  ? help  q quit …

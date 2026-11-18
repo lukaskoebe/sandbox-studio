@@ -123,13 +123,13 @@ func (m *app) gitBindings() []key.Binding {
 // gitBody lists the pushes: what each asks, its sandbox, where it stands and when it came.
 func (m *app) gitBody(w, h int) []string {
 	g := &m.git
-	lines := []string{styleBold.Render("Git") + styleDim.Render(" · sandboxes push through Studio, which holds each push until you review it"), ""}
+	lines := []string{styleBold.Render("Git") + styleDim.Render(" · computers push through Studio, which holds each push until you review it"), ""}
 	switch {
 	case !g.loaded:
 		return append(lines, styleDim.Render("Loading…"))
 	case len(g.list) == 0:
 		return append(lines,
-			"No pushes yet. When a sandbox pushes to one of your forges or opens a pull",
+			"No pushes yet. When a computer pushes to one of your forges or opens a pull",
 			"request, it waits here for your review.",
 			"",
 			styleDim.Render(clip("Forges are set up in the browser: "+m.browserURL("/e/"+m.env.ID+"/settings/forges"), w)))

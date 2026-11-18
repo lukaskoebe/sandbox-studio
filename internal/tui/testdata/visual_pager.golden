@@ -1,10 +1,10 @@
-[1mSandbox Studio[m[2m · [mDefault                                [2m1 blocked · [m[1;38;5;221m▲ 1 need you[m
+[1mSandbox Studio[m[2m · [mDefault                                     [1;38;5;221m▲ 1 waiting for you[m
 [2m────────────────────────────────────────────────────────────────────────────────[m
 [1;38;5;141m± GIT PUSH[m  [1mPush 2 commits to fix-login on GitHub/acme/web[m
 2 files  [38;5;77m+7[m [38;5;203m−1[m  [38;5;77m█████████████[m[38;5;203m▒▒[m
 
   [2mRepository [mGitHub/acme/web
-  [2mSandbox    [mapi-refactor[2m · teammate [mFinn
+  [2mComputer   [mapi-refactor[2m · teammate [mFinn
   [2mBranch     [mfix-login[2m · new branch[m
   [2mChange     [m∅ → a4c2f0d · 2 files [32m+7[m [31m−1[m
 

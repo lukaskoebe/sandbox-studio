@@ -54,8 +54,8 @@ func (m *app) homeSplit(w int) bool {
 }
 
 // sidebarWidth is the width of Home's sidebar at w columns; the pane gets the rest.
-func sidebarWidth(w int) int {
-	return min(max(w/3, 32), 44)
+func sidebarWidth(int) int {
+	return 30
 }
 
 // paneX is the column Home's pane starts at, and paneW its width.
@@ -99,6 +99,9 @@ func (m *app) paneTarget() (session, bool) {
 
 // dashShows reports whether the pane shows the dashboard of the sandbox under the cursor.
 func (m *app) dashShows() bool {
+	if m.screen == screenComputers {
+		return m.computersSplit(m.width) && m.selected() != nil
+	}
 	if !m.paneShows() || m.selected() == nil || m.at != atSandbox {
 		return false
 	}
@@ -320,6 +323,8 @@ func (m *app) paneBody(w, h int) []string {
 		return m.needsPane(w, h, false)
 	case atMate:
 		return m.matePane(w, h)
+	case atPlace, atAction:
+		return m.placePane(w, h)
 	}
 	sb := m.selected()
 	if sb == nil {
@@ -332,7 +337,7 @@ func (m *app) paneBody(w, h int) []string {
 	case x.kind == sessionReview:
 		return m.reviewPane(x.review, *sb, w)
 	case x.kind == sessionOlder:
-		return []string{"", styleDim.Render(clip(fmt.Sprintf("%d older chats. Enter lists them.", x.older), w))}
+		return []string{"", styleDim.Render(clip(fmt.Sprintf("%d older threads. Enter lists them.", x.older), w))}
 	case x.kind == sessionChat:
 		if !m.chats.inPane {
 			return []string{m.paneTitle(x, *sb, w), styleDim.Render("Loading…")}
@@ -439,7 +444,7 @@ func (m *app) banner(c card, sandbox string, typing bool, w int) []string {
 	a := c.first()
 	what := kindTitle(a.Kind) + ": " + summary(a)
 	if isNetwork(a) {
-		what = firstNonEmpty(approvalSource(a), "The sandbox") + " wants " + hostOf(a)
+		what = firstNonEmpty(approvalSource(a), "The computer") + " wants " + hostOf(a)
 	}
 	n := len(c.approvals)
 	if more := m.pendingFor(sandbox) - n; more > 0 {

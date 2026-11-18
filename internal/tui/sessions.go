@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -9,22 +10,23 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// Home lists under each sandbox what can be entered in it: its agent terminals, its chats and its
-// other terminals, each with the state of its agent (docs/design/tui-sessions.md). The first nine
-// get the numbers 1 to 9, which enter them from Home.
+// Home's sidebar lists under each teammate its threads, as the web's sidebar does: its chats, its
+// agents in a terminal with no chat behind them, and its computers' other terminals; under each
+// computer of yours, its terminals (docs/tui.md). The first nine get the numbers 1 to 9, which
+// enter them from Home.
 
-// Timing of the sessions: they are read again every sessionsEvery while Home shows, and an agent
-// terminal that printed within workingFor of a read counts as working.
+// Timing of the sessions: they are read again every sessionsEvery while Home shows, and on every
+// refresh. Besides the threads that run or wait, a teammate lists the recentThreads latest others
+// of the last recentFor.
 const (
-	sessionsEvery = 3 * time.Second
-	workingFor    = 5 * time.Second
-	newestChats   = 3 // the chats a sandbox lists before its "+ n older" row
+	sessionsEvery = 10 * time.Second
+	recentFor     = 24 * time.Hour
+	recentThreads = 2
 )
 
 // sessionKind is what a session row enters.
@@ -32,29 +34,32 @@ type sessionKind int
 
 const (
 	sessionAgent    sessionKind = iota // a terminal that runs a harness
-	sessionChat                        // a chat with the sandbox's teammate
+	sessionChat                        // a thread with a teammate
 	sessionTerminal                    // any other terminal
-	sessionOlder                       // the row that shows a sandbox's older chats
+	sessionOlder                       // the row that shows a teammate's older threads
 	sessionReview                      // a git push or pull request that waits for your review
 )
 
-// session is a row under a sandbox: a terminal by its tmux name, or a chat.
+// session is a row under a teammate or a computer: a terminal by its tmux name, or a chat.
 type session struct {
 	kind    sessionKind
-	sandbox string
-	term    agentproto.Session
+	sandbox string // the computer it runs on; the older row's is the teammate's first computer
+	mate    string // the teammate whose row it is under, if any
+	term    sandboxes.Terminal
 	chat    store.Chat
-	older   int              // the chats the older row hides
+	older   int              // the threads the older row hides
 	review  api.ApprovalView // the push or pull request a review row opens
 }
 
-// id names a session across reads: its sandbox and terminal, or its chat.
+// id names a session across reads: its computer and terminal, or its chat.
 func (s session) id() string {
 	switch s.kind {
 	case sessionChat:
 		return "chat/" + s.chat.ID
 	case sessionReview:
 		return "review/" + s.review.ID
+	case sessionOlder:
+		return "older/" + s.mate
 	}
 	return "term/" + s.sandbox + "/" + s.term.Name
 }
@@ -69,7 +74,7 @@ func (s session) title() string {
 	case sessionReview:
 		return reviewTitle(s.review)
 	}
-	return s.term.Name
+	return firstNonEmpty(s.term.Label, s.term.Name)
 }
 
 // agentState is a session's agent as herdr words it.
@@ -79,29 +84,30 @@ const (
 	stateNone    agentState = iota // a plain terminal, which has no agent
 	stateIdle                      // nothing runs and nothing waits
 	stateWorking                   // a turn runs, or the terminal prints
-	stateBlocked                   // an approval waits for the user
+	stateBlocked                   // a request waits for the user
 	stateDone                      // it worked, and the user hasn't entered it since
 	stateUnknown                   // the guest doesn't say when the terminal printed
 )
 
-// sessionsState is what Home knows of the sessions of the environment's sandboxes.
+// sessionsState is what Home knows of the threads and terminals of the environment.
 type sessionsState struct {
 	env     string
-	terms   map[string][]agentproto.Session // by sandbox ID, for the running ones
-	chats   map[string][]store.Chat         // by sandbox ID, the newest activity first
+	terms   map[string][]sandboxes.Terminal // by computer ID, for the running ones
+	chats   map[string][]store.Chat         // by computer ID, the newest activity first
 	working map[string]bool                 // the sessions that worked at the last read, by id
 	done    map[string]bool                 // the sessions that stopped working since they were entered
-	older   map[string]bool                 // the sandboxes whose older chats show
-	busy    bool                            // a read, or the wait for the next one, is under way
+	older   map[string]bool                 // the teammates whose older threads show
+	busy    bool                            // the watch's read, or its wait for the next one, is under way
 	gen     int                             // counts the environments read, so a read for an earlier one is dropped
 }
 
 type (
 	sessionsLoaded struct {
 		gen   int
+		tick  bool // the watch's read, which the next one follows
 		at    time.Time
-		terms map[string][]agentproto.Session
-		chats map[string][]store.Chat
+		terms map[string][]sandboxes.Terminal // nil when the read failed
+		chats map[string][]store.Chat         // nil when the read failed
 	}
 	sessionsTick struct{ gen int }
 	agentStarted struct {
@@ -111,34 +117,43 @@ type (
 	}
 )
 
-// watchSessions reads the sessions of the environment's sandboxes while Home shows, again every
+// watchSessions reads the threads and terminals of the environment while Home shows, again every
 // sessionsEvery. A model without a Studio to ask (a test's) reads none.
 func (m *app) watchSessions() tea.Cmd {
+	if m.client == nil || m.screen != screenHome || m.env.ID == "" || !m.loaded || m.sess.busy {
+		return nil
+	}
+	cmd := m.readSessions(true)
+	m.sess.busy = true
+	return cmd
+}
+
+// readSessions reads every chat and terminal of the environment, two requests whatever the
+// number of computers. tick marks the watch's read.
+func (m *app) readSessions(tick bool) tea.Cmd {
 	s := &m.sess
-	if m.client == nil || m.screen != screenHome || m.env.ID == "" || !m.loaded || s.busy {
+	if m.client == nil || m.env.ID == "" {
 		return nil
 	}
 	if s.env != m.env.ID {
 		*s = sessionsState{env: m.env.ID, gen: s.gen + 1}
 	}
-	s.busy = true
 	ctx, client, env, gen := m.ctx, m.client, m.env.ID, s.gen
-	list := slices.Clone(m.sandboxes)
 	return func() tea.Msg {
-		out := sessionsLoaded{gen: gen, terms: map[string][]agentproto.Session{}, chats: map[string][]store.Chat{}}
-		for _, sb := range list {
-			rctx, cancel := requestContext(ctx)
-			if phaseOf(sb) == phaseReady {
-				if terms, err := client.Terminals(rctx, env, sb.ID); err == nil {
-					out.terms[sb.ID] = terms
-				}
+		rctx, cancel := requestContext(ctx)
+		defer cancel()
+		out := sessionsLoaded{gen: gen, tick: tick}
+		if list, err := client.EnvironmentTerminals(rctx, env); err == nil {
+			out.terms = map[string][]sandboxes.Terminal{}
+			for _, st := range list {
+				out.terms[st.SandboxID] = st.Terminals
 			}
-			if sb.TeammateID != "" {
-				if chats, err := client.SandboxChats(rctx, env, sb.ID); err == nil {
-					out.chats[sb.ID] = byActivity(chats)
-				}
+		}
+		if list, err := client.EnvironmentChats(rctx, env); err == nil {
+			out.chats = map[string][]store.Chat{}
+			for _, c := range byActivity(list) {
+				out.chats[c.SandboxID] = append(out.chats[c.SandboxID], c)
 			}
-			cancel()
 		}
 		out.at = time.Now()
 		return out
@@ -161,6 +176,9 @@ func (m *app) sessionsUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 			return nil, true
 		}
 		m.sessionsRead(msg)
+		if !msg.tick {
+			return nil, true
+		}
 		gen := s.gen
 		return tea.Tick(sessionsEvery, func(time.Time) tea.Msg { return sessionsTick{gen} }), true
 	case sessionsTick:
@@ -184,47 +202,79 @@ func (m *app) sessionsUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 func (m *app) sessionsRead(msg sessionsLoaded) {
 	s := &m.sess
 	at, onSession := m.selectedSession()
-	s.terms, s.chats = msg.terms, msg.chats
-	if sb := m.selected(); onSession && sb != nil {
-		for i, x := range m.sessionsOf(*sb) {
-			if x.id() == at.id() || (x.kind == sessionOlder && at.kind == sessionOlder) {
+	if msg.terms != nil {
+		s.terms = msg.terms
+	}
+	if msg.chats != nil {
+		s.chats = msg.chats
+	}
+	if list, ok := m.rowsUnder(); ok && onSession {
+		for i, x := range list {
+			if x.id() == at.id() {
 				m.sub = i
 			}
 		}
 	}
 	working := map[string]bool{}
-	for _, sb := range m.sandboxes {
-		for _, x := range m.sessionsOf(sb) {
-			if x.kind == sessionOlder {
-				continue
+	for _, x := range m.allSessions() {
+		if x.kind == sessionOlder {
+			continue
+		}
+		busy := x.kind == sessionChat && x.chat.State == store.ChatRunning ||
+			x.kind == sessionAgent && x.term.State == sandboxes.TerminalWorking
+		if busy {
+			working[x.id()] = true
+			delete(s.done, x.id())
+			continue
+		}
+		if s.working[x.id()] && !m.onShow(x.id()) { // the pane shows its end
+			if s.done == nil {
+				s.done = map[string]bool{}
 			}
-			busy := x.kind == sessionChat && x.chat.State == store.ChatRunning ||
-				x.kind == sessionAgent && x.term.Activity > 0 && msg.at.Sub(time.Unix(x.term.Activity, 0)) < workingFor
-			if busy {
-				working[x.id()] = true
-				delete(s.done, x.id())
-				continue
+			s.done[x.id()] = true
+			where := ""
+			if sb, ok := m.sandboxByID(x.sandbox); ok {
+				where = " in " + sb.Name
 			}
-			if s.working[x.id()] && !m.onShow(x.id()) { // the pane shows its end
-				if s.done == nil {
-					s.done = map[string]bool{}
-				}
-				s.done[x.id()] = true
-				m.report(x.title()+" in "+sb.Name+" is done.", false)
-			}
+			m.report(x.title()+where+" is done.", false)
 		}
 	}
 	s.working = working
 }
 
-// sessionsOf are the rows under a sandbox: its agent terminals, its newest chats (or all of
-// them), the row that shows the older ones, and its other terminals. A chat continued in a
-// terminal is listed once, as its terminal.
+// yourComputers are the visible computers without a teammate, in the list's order, by their
+// index among the visible ones. A computer whose teammate is gone is yours too.
+func (m *app) yourComputers() []int {
+	known := map[string]bool{}
+	for _, t := range m.team {
+		known[t.ID] = true
+	}
+	var out []int
+	for i, sb := range m.visible() {
+		if !known[sb.TeammateID] {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// allSessions are the rows under every teammate and every computer of yours.
+func (m *app) allSessions() []session {
+	var out []session
+	for _, t := range m.team {
+		out = append(out, m.threadsOf(t.ID)...)
+	}
+	visible := m.visible()
+	for _, i := range m.yourComputers() {
+		out = append(out, m.sessionsOf(visible[i])...)
+	}
+	return out
+}
+
+// sessionsOf are a computer's terminals: the ones that run an agent first, then the others.
 func (m *app) sessionsOf(sb sandboxes.View) []session {
-	s := &m.sess
 	var agents, plain []session
-	inTerminal := map[string]bool{}
-	for _, t := range s.terms[sb.ID] {
+	for _, t := range m.sess.terms[sb.ID] {
 		x := session{kind: sessionTerminal, sandbox: sb.ID, term: t}
 		if t.Harness != "" {
 			x.kind = sessionAgent
@@ -232,28 +282,95 @@ func (m *app) sessionsOf(sb sandboxes.View) []session {
 		} else {
 			plain = append(plain, x)
 		}
-		if t.Chat != "" {
-			inTerminal[t.Chat] = true
-		}
 	}
-	out := agents
+	return append(agents, plain...)
+}
+
+// threadsOf are the rows under a teammate: its agents in a terminal, its threads as the web's
+// sidebar lists them (web/src/lib/threads.ts sidebarChats: every one that runs, waits or is in
+// the terminal, the two latest others of the last day, and the one on show), a "+ n older" row
+// for the rest, and its computers' other terminals. Its threads are the chats with it on any
+// computer, as the web's are, and the chats of its own computers that name no teammate. A chat
+// continued in a terminal is listed once, as its terminal.
+func (m *app) threadsOf(mate string) []session {
+	s := &m.sess
+	var agents, plain []session
 	var chats []store.Chat
-	for _, c := range s.chats[sb.ID] {
-		if !inTerminal[c.ID] {
-			chats = append(chats, c)
+	inTerminal := map[string]bool{}
+	own := map[string]bool{}
+	first := ""
+	for _, sb := range m.sandboxesOf(mate) {
+		own[sb.ID] = true
+		if first == "" {
+			first = sb.ID
+		}
+		for _, x := range m.sessionsOf(sb) {
+			x.mate = mate
+			if x.kind == sessionAgent {
+				agents = append(agents, x)
+			} else {
+				plain = append(plain, x)
+			}
+			if x.term.Chat != "" {
+				inTerminal[x.term.Chat] = true
+			}
 		}
 	}
-	for i, c := range chats {
-		if i == newestChats && !s.older[sb.ID] {
-			out = append(out, session{kind: sessionOlder, sandbox: sb.ID, older: len(chats) - i})
+	for _, id := range slices.Sorted(maps.Keys(s.chats)) { // in one order, for equal times
+		for _, c := range s.chats[id] {
+			if c.TeammateID == mate || c.TeammateID == "" && own[id] {
+				chats = append(chats, c)
+			}
+		}
+	}
+	byActivity(chats)
+	out := agents
+	open := ""
+	if m.chats.id != "" && (m.screen == screenChat || m.chats.inPane) {
+		open = m.chats.id
+	}
+	recent, hidden := 0, 0
+	for _, c := range chats {
+		if inTerminal[c.ID] {
+			continue
+		}
+		live := c.State == store.ChatRunning || c.State == store.ChatTerminal || len(m.threadWaiting(c)) > 0
+		isRecent := !live && recent < recentThreads && m.now.Sub(c.UpdatedAt) < recentFor
+		if isRecent {
+			recent++
+		}
+		if live || isRecent || c.ID == open || s.older[mate] {
+			out = append(out, session{kind: sessionChat, sandbox: c.SandboxID, mate: mate, chat: c})
+		} else {
+			hidden++
+		}
+	}
+	if hidden > 0 {
+		out = append(out, session{kind: sessionOlder, sandbox: first, mate: mate, older: hidden})
+	}
+	return append(out, plain...)
+}
+
+// threadWaiting are the requests a thread waits on: its own permission asks, and its computer's
+// other requests while it is the teammate's latest thread there, as a push it asks for is
+// (web/src/lib/threads.ts chatApprovals).
+func (m *app) threadWaiting(c store.Chat) []api.ApprovalView {
+	latest := ""
+	for _, other := range m.sess.chats[c.SandboxID] { // the newest first
+		if other.TeammateID == c.TeammateID {
+			latest = other.ID
 			break
 		}
-		out = append(out, session{kind: sessionChat, sandbox: sb.ID, chat: c})
 	}
-	out = append(out, plain...)
+	var out []api.ApprovalView
 	for _, a := range m.approvals {
-		if isGit(a) && a.SandboxID == sb.ID {
-			out = append(out, session{kind: sessionReview, sandbox: sb.ID, review: a})
+		switch {
+		case a.ChatPermission != nil:
+			if a.ChatPermission.ChatID == c.ID {
+				out = append(out, a)
+			}
+		case latest == c.ID && a.SandboxID == c.SandboxID && (a.Teammate == nil || c.TeammateID == "" || a.Teammate.ID == c.TeammateID):
+			out = append(out, a)
 		}
 	}
 	return out
@@ -273,18 +390,16 @@ func reviewTitle(a api.ApprovalView) string {
 	return strings.TrimPrefix(a.Git.Push.Ref, "refs/heads/")
 }
 
-// stateOf is a session's state. A chat is blocked while one of its permission requests waits;
-// an agent terminal while any other approval waits in its sandbox, since an approval doesn't say
+// stateOf is a session's state. A thread waits while a request of its own waits (threadWaiting);
+// an agent terminal while any other request waits on its computer, since a request doesn't say
 // which process asked.
 func (m *app) stateOf(x session) agentState {
 	switch x.kind {
 	case sessionReview:
 		return stateBlocked
 	case sessionChat:
-		for _, a := range m.approvals {
-			if a.ChatPermission != nil && a.ChatPermission.ChatID == x.chat.ID {
-				return stateBlocked
-			}
+		if len(m.threadWaiting(x.chat)) > 0 {
+			return stateBlocked
 		}
 	case sessionAgent:
 		for _, a := range m.approvals {
@@ -306,28 +421,56 @@ func (m *app) stateOf(x session) agentState {
 	return stateIdle
 }
 
-// subRow is the session under the cursor's sandbox that the cursor is on, -1 for the sandbox
-// itself. A session that went is replaced by the last one left.
+// rowsUnder are the rows the cursor's sub indexes: the threads of the teammate whose thread it is
+// on, or the terminals of the computer of yours it is on. ok is false elsewhere.
+func (m *app) rowsUnder() ([]session, bool) {
+	switch m.at {
+	case atThread:
+		return m.threadsOf(m.mate), true
+	case atSandbox:
+		if sb := m.selected(); sb != nil {
+			return m.sessionsOf(*sb), true
+		}
+	}
+	return nil, false
+}
+
+// subRow is the row under the cursor's teammate or computer that the cursor is on, -1 for the
+// computer itself. A session that went is replaced by the last one left.
 func (m *app) subRow() int {
-	sb := m.selected()
-	if sb == nil || m.at != atSandbox {
+	list, ok := m.rowsUnder()
+	if !ok {
 		return -1
 	}
-	m.sub = min(m.sub, len(m.sessionsOf(*sb))-1)
+	m.sub = min(m.sub, len(list)-1)
 	return m.sub
 }
 
 // selectedSession is the session under the cursor, if the cursor is on one.
 func (m *app) selectedSession() (session, bool) {
-	sb := m.selected()
-	if sb == nil || m.at != atSandbox {
+	list, ok := m.rowsUnder()
+	if !ok {
 		return session{}, false
 	}
-	list := m.sessionsOf(*sb)
 	if sub := m.subRow(); sub >= 0 && sub < len(list) {
 		return list[sub], true
 	}
 	return session{}, false
+}
+
+// rowSession is the session a row of Home's list is, if it is one.
+func (m *app) rowSession(r homeRow, visible []sandboxes.View) (session, bool) {
+	var list []session
+	switch {
+	case r.kind == atThread:
+		list = m.threadsOf(r.mate)
+	case r.kind == atSandbox && r.sb >= 0 && r.sb < len(visible):
+		list = m.sessionsOf(visible[r.sb])
+	}
+	if r.sub < 0 || r.sub >= len(list) {
+		return session{}, false
+	}
+	return list[r.sub], true
 }
 
 // moveRow moves the cursor by dir rows of Home's list.
@@ -343,7 +486,7 @@ func (m *app) moveRow(dir int) {
 }
 
 // numbered enters the session with the number n: Home's pane takes the keys for it, or, on a
-// narrow terminal, its terminal or chat takes the screen.
+// narrow terminal, its terminal or thread takes the screen.
 func (m *app) numbered(n int) tea.Cmd {
 	for _, r := range m.homeRows() {
 		if r.num == n {
@@ -366,10 +509,7 @@ func (m *app) nextWaiting() {
 	for _, want := range []agentState{stateBlocked, stateDone} {
 		for k := 1; k <= len(rows); k++ {
 			r := rows[(at+k)%len(rows)]
-			if r.kind != atSandbox || r.sub < 0 {
-				continue
-			}
-			if m.stateOf(m.sessionsOf(visible[r.sb])[r.sub]) == want {
+			if x, ok := m.rowSession(r, visible); ok && m.stateOf(x) == want {
 				m.setCursor(r)
 				return
 			}
@@ -380,11 +520,11 @@ func (m *app) nextWaiting() {
 		m.approvalCursor = 0
 		return
 	}
-	m.setNotice("No session waits for you.", false)
+	m.setNotice("Nothing waits for you.", false)
 }
 
-// enterSession enters the session under the cursor: a terminal is attached, a chat opened (an
-// idle one with the composer ready), and the older row shows the older chats.
+// enterSession enters the session under the cursor: a terminal is attached, a thread opened (an
+// idle one with the composer ready), and the older row shows the older threads.
 func (m *app) enterSession() tea.Cmd {
 	x, ok := m.selectedSession()
 	sb := m.selected()
@@ -396,16 +536,16 @@ func (m *app) enterSession() tea.Cmd {
 	delete(m.sess.working, x.id())
 	switch x.kind {
 	case sessionOlder:
-		if m.sess.older == nil {
-			m.sess.older = map[string]bool{}
-		}
-		m.sess.older[x.sandbox] = true
+		m.showOlder(x.mate, true)
 		return nil
 	case sessionReview:
 		m.openPager(x.review)
 		m.pager.back = screenHome
 		return nil
 	case sessionChat:
+		if c, ok := m.sandboxByID(x.chat.SandboxID); ok {
+			sb = &c
+		}
 		m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, gen: m.chats.gen}
 		cmd := m.openChat(x.chat.ID)
 		if x.chat.State == store.ChatIdle && m.stateOf(x) != stateBlocked {
@@ -416,7 +556,15 @@ func (m *app) enterSession() tea.Cmd {
 	return m.attachTo(sb, x.term.Name)
 }
 
-// startAgent starts the sandbox teammate's harness in a new terminal and attaches it.
+// showOlder shows or hides a teammate's older threads.
+func (m *app) showOlder(mate string, show bool) {
+	if m.sess.older == nil {
+		m.sess.older = map[string]bool{}
+	}
+	m.sess.older[mate] = show
+}
+
+// startAgent starts the computer teammate's harness in a new terminal and attaches it.
 func (m *app) startAgent(sb *sandboxes.View) tea.Cmd {
 	if sb == nil {
 		return nil
@@ -439,7 +587,7 @@ func (m *app) startAgent(sb *sandboxes.View) tea.Cmd {
 	}
 }
 
-// stateMark is a state's mark, styled: ● working, ▲ blocked, ✓ done, ○ idle, · unknown.
+// stateMark is a state's mark, styled: the spinner working, ▲ waiting, ✓ done, ○ idle, · unknown.
 func (m *app) stateMark(st agentState) string {
 	switch st {
 	case stateWorking:
@@ -462,9 +610,18 @@ func (m *app) stateMark(st agentState) string {
 	return " "
 }
 
+// sessionMark is a session's mark on its row: its state's, and ◷ for an idle scheduled run or
+// check-in.
+func (m *app) sessionMark(x session, st agentState) string {
+	if st == stateIdle && x.kind == sessionChat && (x.chat.TaskID != "" || x.chat.Heartbeat) {
+		return styleDim.Render("◷")
+	}
+	return m.stateMark(st)
+}
+
 // sessionWords say what a session is and how it is.
 func (m *app) sessionWords(x session, st agentState) string {
-	kind := map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "terminal", sessionReview: "review"}[x.kind]
+	kind := map[sessionKind]string{sessionAgent: "in the terminal", sessionChat: "thread", sessionTerminal: "terminal", sessionReview: "review"}[x.kind]
 	switch {
 	case x.kind == sessionChat && x.chat.Heartbeat:
 		kind = "check-in"
@@ -477,7 +634,7 @@ func (m *app) sessionWords(x session, st agentState) string {
 	case x.kind == sessionReview:
 		return "review · waiting"
 	case st == stateBlocked:
-		return kind + " · blocked"
+		return kind + " · waiting"
 	case st == stateWorking:
 		return kind + " · working"
 	case st == stateDone:
@@ -492,7 +649,7 @@ func (m *app) sessionWords(x session, st agentState) string {
 	return kind
 }
 
-// sessionKind is what a session is, in a word: agent, chat, term, sched or check.
+// sessionKindWord is what a session is, in a word: thread, agent, term, sched or check.
 func sessionKindWord(x session) string {
 	switch {
 	case x.kind == sessionChat && x.chat.Heartbeat:
@@ -500,11 +657,11 @@ func sessionKindWord(x session) string {
 	case x.kind == sessionChat && x.chat.TaskID != "":
 		return "sched"
 	}
-	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "term", sessionReview: "review"}[x.kind]
+	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "thread", sessionTerminal: "term", sessionReview: "review"}[x.kind]
 }
 
-// sessionRow is a session's row of the sidebar in w cells, indent cells in: its number, its
-// state's mark and its title, and on the right what it is; a wide list says how it is too.
+// sessionRow is a session's row in w cells, indent cells in: its number, its mark and its
+// title, and on the right what it is when there's room; a wide list says how it is too.
 func (m *app) sessionRow(x session, num int, selected bool, indent, w int) string {
 	pad := strings.Repeat(" ", indent)
 	w -= indent
@@ -516,16 +673,22 @@ func (m *app) sessionRow(x session, num int, selected bool, indent, w int) strin
 		n = fmt.Sprint(num)
 	}
 	st := m.stateOf(x)
-	lead := m.cursorMark(selected) + pad + styleDim.Render(n) + " " + m.stateMark(st) + " "
-	right := sessionKindWord(x)
-	if w >= 64 {
+	lead := m.cursorMark(selected) + pad + styleDim.Render(n) + " " + m.sessionMark(x, st) + " "
+	right := ""
+	switch {
+	case w >= 64:
 		right = m.sessionWords(x, st)
+	case w >= 40:
+		right = sessionKindWord(x)
 	}
 	titleW := w - 6 - lipgloss.Width(right) - 1
 	if titleW < 8 {
 		right, titleW = "", w-6
 	}
 	title := fit(x.title(), max(titleW, 0))
+	if right == "" {
+		title = clip(x.title(), max(w-6, 0))
+	}
 	if selected {
 		title = styleBold.Render(title)
 	}
@@ -535,34 +698,25 @@ func (m *app) sessionRow(x session, num int, selected bool, indent, w int) strin
 	return lead + title + " " + styleDim.Render(right)
 }
 
-// sessionCounts count the sessions of the environment that work and that are blocked, for the
-// header.
+// sessionCounts count the sessions of the environment that work and that wait, for the header.
 func (m *app) sessionCounts() (working, blocked int) {
-	for _, sb := range m.sandboxes {
-		for _, x := range m.sessionsOf(sb) {
-			switch m.stateOf(x) {
-			case stateWorking:
-				working++
-			case stateBlocked:
-				blocked++
-			}
+	for _, x := range m.allSessions() {
+		switch m.stateOf(x) {
+		case stateWorking:
+			working++
+		case stateBlocked:
+			blocked++
 		}
 	}
 	return working, blocked
 }
 
-// sessionsHeader is the header's word on the sessions: "2 working · 1 blocked · ", or nothing.
+// sessionsHeader is the header's word on the sessions: "2 working · ", or nothing. What waits
+// is the "▲ n waiting for you" beside it.
 func (m *app) sessionsHeader() string {
-	working, blocked := m.sessionCounts()
-	var parts []string
-	if working > 0 {
-		parts = append(parts, fmt.Sprintf("%d working", working))
-	}
-	if blocked > 0 {
-		parts = append(parts, fmt.Sprintf("%d blocked", blocked))
-	}
-	if len(parts) == 0 {
+	working, _ := m.sessionCounts()
+	if working == 0 {
 		return ""
 	}
-	return styleDim.Render(strings.Join(parts, " · ") + " · ")
+	return styleDim.Render(fmt.Sprintf("%d working · ", working))
 }

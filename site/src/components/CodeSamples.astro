@@ -44,24 +44,24 @@ k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s`),
 </div>
 
 <div class="tui not-content">
-  <TerminalScreen ansi={home} label="The TUI's Home: four sandboxes, one with an approval waiting" />
+  <TerminalScreen ansi={home} label="The TUI's Home: two teammates, one with a request waiting, your computer, and the environment" />
   <div class="tui-copy">
     <p class="landing-eyebrow">Terminal UI</p>
     <p>
-      <code>studio tui</code> drives the same sandboxes, approvals and git reviews from the
+      <code>studio tui</code> drives the same teammates, computers, requests and git reviews from the
       keyboard, on the Studio machine or over SSH.
     </p>
-    <ul class="tui-legend" aria-label="Sandbox states">
+    <ul class="tui-legend" aria-label="Computer states">
       <li><span class="ok">●</span> running</li>
-      <li><span class="warn">▲</span> approval</li>
+      <li><span class="warn">▲</span> waiting for you</li>
       <li><span class="off">○</span> stopped</li>
       <li><span class="acc">◐</span> booting</li>
     </ul>
     <p class="tui-keys">
       <span><kbd>enter</kbd> open</span>
-      <span><kbd>a</kbd> approvals</span>
+      <span><kbd>a</kbd> requests</span>
       <span><kbd>t</kbd> terminal</span>
-      <span><kbd>c</kbd> chat</span>
+      <span><kbd>c</kbd> thread</span>
     </p>
     <a class="tui-link" href={`${base}tui/`}>The terminal UI <span aria-hidden="true">→</span></a>
   </div>

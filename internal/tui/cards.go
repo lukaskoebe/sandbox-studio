@@ -52,7 +52,7 @@ func (m *app) visualCard(c card, selected bool, w int) ([]string, []keyHit) {
 		frame = styleAccent
 	}
 	inner := max(w-4, 10)
-	source := firstNonEmpty(approvalSource(a), "A sandbox")
+	source := firstNonEmpty(approvalSource(a), "A computer")
 	when := ""
 	if !a.CreatedAt.IsZero() {
 		when = age(m.now.Sub(a.CreatedAt))

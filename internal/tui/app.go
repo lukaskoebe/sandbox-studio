@@ -24,15 +24,16 @@ const (
 	screenEnvs
 	screenHelp
 	screenApprovals
-	screenChat        // one chat's transcript
+	screenChat        // one thread's transcript
 	screenActivity    // the connections and decisions log
 	screenEntry       // one entry of the log, and its rule
 	screenPager       // the review of a git push or pull request
-	screenNew         // the form of a new sandbox
-	screenProgress    // a new sandbox's create or a fork, until it is ready
-	screenCheckpoints // a sandbox's checkpoints
+	screenNew         // the form of a new computer
+	screenProgress    // a new computer's create or a fork, until it is ready
+	screenCheckpoints // a computer's checkpoints
 	screenGit         // the environment's pushes and pull requests
 	screenSettings    // the sections of Settings
+	screenComputers   // every computer of the environment
 )
 
 // notice is the one line under the key bar: what the last action did, or what went wrong.
@@ -80,14 +81,18 @@ type app struct {
 	activity       activityState      // the Activity screens
 	pager          pagerState         // the review of a git approval
 	git            gitState           // the Git screen
-	newSb          newState           // a new sandbox, from its form to its create's end
+	newSb          newState           // a new computer, from its form to its create's end
 	checkpoints    checkpointState    // the checkpoints screen
 	ports          portsState         // the open ports of the sandbox on the detail screen
-	at             rowKind            // what the cursor of Home's list is on: Home, a teammate, or a sandbox
-	mate           string             // the teammate whose row the cursor is on
-	cursor         int                // the selected sandbox, among the visible ones
-	sub            int                // the session under the cursor's sandbox the cursor is on; -1 for the sandbox
-	sess           sessionsState      // the sessions of the sandboxes, which Home lists under them
+	at             rowKind            // what the cursor of Home's list is on: Home, a teammate, a thread, a computer, a place
+	mate           string             // the teammate whose row or thread the cursor is on
+	cursor         int                // the selected computer, among the visible ones
+	sub            int                // the thread or terminal the cursor is on, under its teammate or computer; -1 for the computer
+	rowPlace       envPlace           // the ENVIRONMENT row the cursor is on
+	rowAction      rowAction          // the + row the cursor is on
+	sess           sessionsState      // the threads and terminals, which Home lists under teammates and computers
+	computers      computersState     // the Computers screen
+	detailBack     screen             // where the computer's detail returns to
 	approvalCursor int                // the selected card of the approvals screen
 	choices        map[string]*choice // the approvals' choices, by the ID of a card's first approval
 	split          map[string]bool    // the approvals reviewed one by one, out of their group
@@ -266,9 +271,13 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := m.mateOf(m.mate); m.at == atMate && !ok {
 			m.at = atHome // the teammate on show is gone
 		}
-		if !m.reselect(prev) && m.screen == screenDetail {
-			m.screen = screenHome // the sandbox on show is gone
-			m.report("That sandbox was deleted.", true)
+		found := m.reselect(prev)
+		if !found && m.screen == screenDetail {
+			m.screen = m.detailBack // the computer on show is gone
+			m.report("That computer was deleted.", true)
+		}
+		if m.screen == screenComputers || m.screen == screenDetail && m.detailBack == screenComputers {
+			m.computersFollow()
 		}
 		m.followProgress()
 		m.lineage.stale = true // a checkpoint, a fork or a restore adds to the history
@@ -333,6 +342,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // approvals of every environment, and the list of the screen on show.
 func (m *app) refresh() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSandboxes(), m.loadApprovals()}
+	if m.screen == screenHome {
+		cmds = append(cmds, m.readSessions(false))
+	}
 	switch m.screen {
 	case screenCheckpoints:
 		cmds = append(cmds, m.loadCheckpoints())
@@ -410,11 +422,11 @@ func (m *app) reselect(prev string) bool {
 	return found
 }
 
-// selected is the sandbox under the cursor, or nil when none is visible: on a teammate's row,
-// its first sandbox, and none on Home's row.
+// selected is the computer under the cursor, or nil when none is visible: on a teammate's row,
+// its first computer, on a thread its computer, and none on Home's row or a place's.
 func (m *app) selected() *sandboxes.View {
 	switch m.at {
-	case atHome:
+	case atHome, atPlace, atAction:
 		return nil
 	case atMate:
 		if list := m.sandboxesOf(m.mate); len(list) > 0 {

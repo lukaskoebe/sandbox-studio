@@ -41,16 +41,17 @@ func withBrowser(m *app) *app {
 	return m
 }
 
-func TestGoldenVisualHomeBrowser(t *testing.T) {
-	goldenVisual(t, "visual_home_browser", withBrowser(withDetailData(press(visualApp(140, 40), "j"))), true)
+func TestGoldenVisualComputersBrowser(t *testing.T) {
+	m := onComputersScreen(t, visualApp(140, 40), "sb2")
+	goldenVisual(t, "visual_computers_browser", withBrowser(withDetailData(m)), true)
 }
 
 // The detail pane reads the selected sandbox's teammate's browser, and its picture only on a
 // terminal of 256 colors or more; a picture that doesn't fit shows only the address.
 func TestPictureReadsTheSelectedTeammatesBrowser(t *testing.T) {
-	m := press(visualApp(140, 40), "j")
+	m := onComputersScreen(t, visualApp(140, 40), "sb2")
 	if got := m.pictureWanted(); got != "t2" {
-		t.Fatalf("Home reads the selected sandbox's teammate's browser: %q", got)
+		t.Fatalf("the Computers screen reads the selected computer's teammate's browser: %q", got)
 	}
 	if press(visualApp(140, 40), "a").pictureWanted() != "" || visualApp(80, 24).pictureWanted() != "" {
 		t.Error("the browser is read off Home, or without the detail pane")

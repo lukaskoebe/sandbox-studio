@@ -226,7 +226,7 @@ func (a *attachment) watchApprovals(ctx context.Context) {
 				waiting = ap.ID
 				title = "▲ " + kindTitle(ap.Kind) + " waits · Ctrl-] answers it"
 				if isNetwork(ap) {
-					title = "▲ " + firstNonEmpty(approvalSource(ap), "the sandbox") + " wants " + hostOf(ap) + " · Ctrl-] answers it"
+					title = "▲ " + firstNonEmpty(approvalSource(ap), "the computer") + " wants " + hostOf(ap) + " · Ctrl-] answers it"
 				}
 				if !rung[ap.ID] {
 					rung[ap.ID], bell = true, true

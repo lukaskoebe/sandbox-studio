@@ -70,7 +70,7 @@ func TestTerminalSmokeWide(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
 	tui := startTUI(t, s, 140, 40)
-	tui.waitFor("the wide Home", "◆", "Studio", "blub", "stopped", "Needs you", "EARLIER TODAY")
+	tui.waitFor("the wide Home", "◆", "Studio", "YOUR COMPUTERS", "blub", "stopped", "Waiting for you", "EARLIER TODAY")
 
 	// A click on the tab, in SGR mouse coordinates that count from 1, acts as l.
 	x := len([]rune(" ◆ Studio  Default ▾   Home   "))

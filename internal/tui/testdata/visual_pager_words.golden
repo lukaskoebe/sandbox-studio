@@ -1,4 +1,4 @@
-[1mSandbox Studio[m[2m · [mDefault                                [2m1 blocked · [m[1;38;5;221m▲ 1 need you[m
+[1mSandbox Studio[m[2m · [mDefault                                     [1;38;5;221m▲ 1 waiting for you[m
 [2m────────────────────────────────────────────────────────────────────────────────[m
    return (
      <form onSubmit={submit}>

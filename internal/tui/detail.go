@@ -12,7 +12,7 @@ import (
 func (m *app) detailBody(w, h int) []string {
 	sb := m.selected()
 	if sb == nil {
-		return []string{styleDim.Render("No sandbox is selected.")}
+		return []string{styleDim.Render("No computer is selected.")}
 	}
 	ph := phaseOf(*sb)
 	teammate := m.teammates[sb.TeammateID]
@@ -25,10 +25,10 @@ func (m *app) detailBody(w, h int) []string {
 	}
 	approvals := "none waiting"
 	if n := m.pendingFor(sb.ID); n > 0 {
-		approvals = styleAccent.Render(fmt.Sprintf("%d %s waiting", n, plural(n, "approval", "approvals")))
+		approvals = styleAccent.Render(fmt.Sprintf("%d %s waiting", n, plural(n, "request", "requests")))
 	}
 	if n := m.pendingFor(sb.ID); n > 0 && !m.look.plain {
-		approvals = m.pal.waiting.Render("●") + fmt.Sprintf(" %d %s waiting", n, plural(n, "approval", "approvals"))
+		approvals = m.pal.waiting.Render("●") + fmt.Sprintf(" %d %s waiting", n, plural(n, "request", "requests"))
 	}
 	lines := []string{
 		spread(styleBold.Render(sb.Name), m.statusCell(ph, colStatus), w),
@@ -47,7 +47,7 @@ func (m *app) detailBody(w, h int) []string {
 			lines = append(lines, fact(label, l))
 		}
 	}
-	lines = append(lines, fact("Approvals", approvals), fact("ID", sb.ID))
+	lines = append(lines, fact("Requests", approvals), fact("ID", sb.ID))
 	if !m.look.plain {
 		for i, l := range m.historyLine(*sb, w-13) {
 			label := ""
@@ -77,9 +77,9 @@ func (m *app) waitingCard(sb sandboxes.View, w int) []string {
 	if first == nil {
 		return nil
 	}
-	more := "a approvals"
+	more := "a requests"
 	if n > 1 {
-		more = fmt.Sprintf("%d more · a approvals", n-1)
+		more = fmt.Sprintf("%d more · a requests", n-1)
 	}
 	block, _ := m.visualCard(*first, false, w) // not the cursor's card, so it draws no keycaps
 	return append(block, "  "+styleDim.Render(more))

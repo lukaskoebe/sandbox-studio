@@ -1,4 +1,4 @@
-Sandbox Studio · Default                                            ▲ 1 need you
+Sandbox Studio · Default                                     ▲ 1 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
 api-refactor                                                         ● Running  
 
@@ -6,7 +6,7 @@ api-refactor                                                         ● Running
   Template   go@2
   Resources  2 CPUs, 2048 MiB of memory
   Uptime     up 12m
-  Approvals  1 approval waiting
+  Requests   1 request waiting
   ID         sb2
   Ports      …
 
@@ -20,4 +20,4 @@ api-refactor                                                         ● Running
 
 
 ────────────────────────────────────────────────────────────────────────────────
-t terminal  s start/stop  d delete  c chat  l activity  esc/q back  ? help …
+t terminal  s start/stop  d delete  c thread  l activity  esc/q back  ? help …

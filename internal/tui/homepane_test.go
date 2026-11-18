@@ -16,6 +16,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -114,10 +115,10 @@ func TestPaneSwitchesWithAltNumbers(t *testing.T) {
 	m := paneApp()
 	m = press(m, "j")
 	m.pane.focus = true
-	m = run(m, func() tea.Msg { return tea.KeyPressMsg{Code: '4', Mod: tea.ModAlt} })
+	m = run(m, func() tea.Msg { return tea.KeyPressMsg{Code: '5', Mod: tea.ModAlt} })
 	x, ok := m.paneTarget()
 	if !ok || x.term.Name != "codex" || !m.paneFocused() {
-		t.Fatalf("alt+4 goes to codex and keeps the keys in the pane: %+v focus %v", x, m.pane.focus)
+		t.Fatalf("alt+5 goes to codex and keeps the keys in the pane: %+v focus %v", x, m.pane.focus)
 	}
 }
 
@@ -173,7 +174,7 @@ func TestPaneShowsTheChat(t *testing.T) {
 func TestBannerDecidesTheAgentsApprovalFromTheSidebar(t *testing.T) {
 	m := paneApp()
 	m.approvals[0].Network = &policy.NetworkRequest{Host: "proxy.golang.org", Port: 443, SandboxName: "api-refactor"}
-	m = press(m, "j", "j", "j", "j", "j") // api-refactor's codex
+	m = onSession(t, m, "sb2", "codex")
 	if x, _ := m.paneTarget(); x.term.Name != "codex" || m.stateOf(x) != stateBlocked {
 		t.Fatalf("on %+v", x)
 	}
@@ -192,9 +193,11 @@ func TestBannerDecidesTheAgentsApprovalFromTheSidebar(t *testing.T) {
 }
 
 func TestDashboardChartsTheSandbox(t *testing.T) {
-	m := press(paneApp(), "j", "j", "j", "j") // api-refactor's header
+	m := paneApp()
+	m.sandboxes[1].TeammateID = "" // api-refactor is yours, so it has a row
+	m = onComputer(t, m, "sb2")
 	if !m.dashShows() {
-		t.Fatal("the dashboard does not show on a sandbox's row")
+		t.Fatal("the dashboard does not show on a computer's row")
 	}
 	out := shown(m)
 	for _, want := range []string{"CPU  38 % of 2 CPUs", "avg 42 % · peak 85 %", "100┤", "2 min ago", "MEMORY  1.4 / 2 GiB", "70 %", "HISTORY"} {
@@ -222,8 +225,8 @@ func TestAreaChartFillsInEighths(t *testing.T) {
 }
 
 func TestPaneLeavesAFinishedSessionUnmarkedWhileItShows(t *testing.T) {
-	m := press(paneApp(), "j", "j", "j", "j", "j") // codex, which works
-	m.sess.terms["sb2"][1].Activity = 0
+	m := onSession(t, paneApp(), "sb2", "codex") // which works
+	m.sess.terms["sb2"][1].State = sandboxes.TerminalIdle
 	m.sessionsRead(sessionsLoaded{at: m.now, terms: m.sess.terms, chats: m.sess.chats})
 	if m.sess.done["term/sb2/codex"] || strings.Contains(m.notice.text, "codex") {
 		t.Errorf("the session on show was marked done: %v, %q", m.sess.done, m.notice.text)
@@ -233,9 +236,9 @@ func TestPaneLeavesAFinishedSessionUnmarkedWhileItShows(t *testing.T) {
 func must(x session, _ bool) session { return x }
 
 func TestCursorFollowsItsSessionAcrossReads(t *testing.T) {
-	m := press(paneApp(), "j", "j", "j") // blub's main terminal, its third session
-	terms := map[string][]agentproto.Session{
-		"sb1": {{Name: "main"}, {Name: "claude", Harness: "claude"}, {Name: "gemini", Harness: "gemini"}},
+	m := onSession(t, paneApp(), "sb1", "main")
+	terms := map[string][]sandboxes.Terminal{
+		"sb1": {termOf(agentproto.Session{Name: "main"}, ""), termOf(agentproto.Session{Name: "claude", Harness: "claude"}, ""), termOf(agentproto.Session{Name: "gemini", Harness: "gemini"}, "")},
 	}
 	m.sessionsRead(sessionsLoaded{at: m.now, terms: terms, chats: m.sess.chats})
 	if x, ok := m.selectedSession(); !ok || x.term.Name != "main" {

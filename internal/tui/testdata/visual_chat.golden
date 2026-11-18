@@ -1,4 +1,4 @@
-[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m▲ 1 need you[m
+[1mSandbox Studio[m[2m · [mDefault                                     [1;38;5;221m▲ 1 waiting for you[m
 [2m────────────────────────────────────────────────────────────────────────────────[m
 [1mFix the login form[2m · blub[m[m                                                  [2mReady[m
 [38;5;114m┃[m [1mThe login form doesn't submit on enter. Can you fix it?[m
@@ -20,4 +20,4 @@ button now:
 
 [2;48;5;237m › Write to Iris…                                                       p write [m
 [2m────────────────────────────────────────────────────────────────────────────────[m
-[1mp[m [2mprompt[m  [1m↑/↓[m [2mtools[m  [1mpgup[m [2mscroll[m  [1mn[m [2mnew chat[m[2m │ [m[1mesc/q[m [2mback[m  [1m?[m [2mmore[m
+[1mp[m [2mprompt[m  [1m↑/↓[m [2mtools[m  [1mpgup[m [2mscroll[m  [1mn[m [2mnew thread[m[2m │ [m[1mesc/q[m [2mback[m  [1m?[m [2mmore[m

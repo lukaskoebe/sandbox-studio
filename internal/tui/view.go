@@ -72,9 +72,9 @@ func (m *app) frame() string {
 // on a terminal wider than 80 columns it draws the tab header instead.
 func (m *app) header(w int) string {
 	left := styleBold.Render("Sandbox Studio") + styleDim.Render(" · ") + m.env.Name
-	right := styleDim.Render("nothing needs you")
+	right := styleDim.Render("nothing waits for you")
 	if n := m.needCount(); n > 0 {
-		right = m.waitingMark(fmt.Sprintf("▲ %d need you", n))
+		right = m.waitingMark(fmt.Sprintf("▲ %d waiting for you", n))
 	}
 	return spread(left, m.sessionsHeader()+right, w)
 }
@@ -83,7 +83,7 @@ func (m *app) header(w int) string {
 // has one pane: Home's sidebar and pane, and the git review's files and diff, on wide terminals.
 func (m *app) paneColumns(w int) []int {
 	switch {
-	case m.screen == screenHome && m.homeSplit(w) && !m.zoomed():
+	case m.screen == screenHome && m.homeSplit(w) && !m.zoomed(), m.screen == screenComputers && m.computersSplit(w):
 		return []int{sidebarWidth(w)}
 	case m.screen == screenPager && m.pagerSplit(w):
 		return []int{pagerListWidth(w)}
@@ -120,6 +120,8 @@ func (m *app) body(w, h int) []string {
 		return m.gitBody(w, h)
 	case screenSettings:
 		return m.settingsBody(w, h)
+	case screenComputers:
+		return m.computersBody(w, h)
 	}
 	return m.homeBody(w, h)
 }
@@ -168,21 +170,21 @@ func (m *app) noticeLine(w int) string {
 // Studio lives.
 func (m *app) helpBody() []string {
 	keys := [][2]string{
-		{"1-9", "go into that session; Ctrl-] returns to the list"},
-		{"enter", "go into the session under the cursor, or open the sandbox"},
-		{"alt+1-9", "from a session, go into another; alt+z: full screen"},
-		{"tab", "the next session that waits for you, then Home's cards"},
+		{"1-9", "go into that thread or terminal; Ctrl-] returns to the list"},
+		{"enter", "go into the thread or terminal under the cursor, or open the row"},
+		{"alt+1-9", "from a thread or terminal, go into another; alt+z: full screen"},
+		{"tab", "the next thread that waits for you, then Home's cards"},
 		{"y / a / n", "Home's card: allow, always or deny; tab moves to the next"},
 		{"u", "undo the last network decision, for a minute after it"},
 		{"y / o / n", "an agent's banner: allow, allow once or deny what blocks it"},
-		{"t / T", "the sandbox's main terminal; T starts its teammate's agent"},
-		{"c / C", "the newest chat with the sandbox's teammate; C a new one"},
-		{"+", "on a teammate: another sandbox for it"},
+		{"t / T", "the computer's main terminal; T starts its teammate's agent"},
+		{"c / C", "the newest thread with the computer's teammate; C a new one"},
+		{"+ / → ←", "on a teammate: another computer for it; show or hide older threads"},
 		{"s / z / d", "start, stop or resume; z suspends; d deletes, after asking"},
-		{"f / h", "fork the sandbox; its checkpoints, to save or restore one"},
-		{"n", "new sandbox: a teammate, a template and a name"},
+		{"f / h", "fork the computer; its checkpoints, to save or restore one"},
+		{"n", "new computer: a teammate, a template and a name"},
 		{"e / /", "switch environment; filter by name, teammate or template"},
-		{"a / l / ,", "approvals, from every environment; Activity; Settings"},
+		{"a / l / ,", "requests, from every environment; Activity; Settings"},
 		{"↑/↓, j/k", "move the cursor"},
 		{"esc / q", "Home; esc clears the filter first, q quits from the list"},
 		{"?", "this help"},
@@ -199,12 +201,28 @@ func (m *app) helpBody() []string {
 			{"↑/↓, j/k", "move the cursor"},
 			{"n", "save a checkpoint; enter alone names it after the time"},
 			{"r", "restore the checkpoint under the cursor, after asking"},
-			{"a", "approvals, from every environment"},
+			{"a", "requests, from every environment"},
 			{"esc / q", "back"},
 		}
 		footer = []string{
-			"A checkpoint saves the disks, not running processes. A sandbox saves one",
+			"A checkpoint saves the disks, not running processes. A computer saves one",
 			"while it runs or is stopped, and goes back to one only while stopped.",
+		}
+	case screenComputers:
+		title = "Computers"
+		keys = [][2]string{
+			{"↑/↓, j/k", "move the cursor"},
+			{"enter", "the computer's detail"},
+			{"t", "its main terminal"},
+			{"s / z / d", "start, stop or resume; z suspends; d deletes, after asking"},
+			{"f / h", "fork it; its checkpoints, to save or restore one"},
+			{"+", "a new computer: a teammate, a template and a name"},
+			{"a", "requests, from every environment"},
+			{"esc / q", "back to Home"},
+		}
+		footer = []string{
+			"Every computer of the environment, the teammates' and yours. From 100",
+			"columns the dashboard of the one under the cursor shows beside the list.",
 		}
 	case screenActivity, screenEntry:
 		title = "Activity"
@@ -212,13 +230,13 @@ func (m *app) helpBody() []string {
 			{"↑/↓, j/k", "move the cursor"},
 			{"←/→", "the kind: all, network, git, agents or memory"},
 			{"enter", "the entry, and the rule that decided it"},
-			{"/", "filter by sandbox; esc clears it"},
+			{"/", "filter by computer; esc clears it"},
 			{"r", "print where the rules are edited, in the browser"},
-			{"a", "approvals, from every environment"},
+			{"a", "requests, from every environment"},
 			{"esc / q", "back"},
 		}
 		footer = []string{
-			"The log shows each sandbox's latest connections, which Studio keeps in",
+			"The log shows each computer's latest connections, which Studio keeps in",
 			"memory, and every decision. It updates every two seconds.",
 		}
 	case screenSettings:
@@ -231,34 +249,34 @@ func (m *app) helpBody() []string {
 		}
 		footer = []string{"The sections are the web's, and say what each is set to."}
 	case screenChat:
-		title = "Chat"
+		title = "Thread"
 		keys = [][2]string{
 			{"p", "write a prompt; enter sends it, ctrl+j starts a new line"},
 			{"esc", "put the prompt aside, or go back"},
 			{"↑/↓, j/k", "move between the tool calls and thoughts"},
 			{"enter", "expand or fold the one under the cursor, or write"},
 			{"pgup/pgdn", "scroll a page; b and space too"},
-			{"g / G", "the start or the end of the chat"},
+			{"g / G", "the start or the end of the thread"},
 			{"x", "stop the running turn"},
-			{"n", "start a new chat"},
+			{"n", "start a new thread"},
 			{"1-9", "answer the permission or question waiting: a numbered choice"},
 			{"i / r", "ignore the permission or skip the question; r types an answer"},
-			{"a", "approvals, from every environment"},
-			{"esc / q", "back to the chats, then to the sandbox"},
+			{"a", "requests, from every environment"},
+			{"esc / q", "back to the threads, then to the computer"},
 		}
 		footer = []string{
 			"A question that is a form of several fields is answered in the browser.",
 		}
 	case screenApprovals:
-		title = "Approvals"
+		title = "Requests"
 		keys = [][2]string{
 			{"y / n", "allow or deny: a rule for the pattern and scope"},
 			{"o / O", "allow or deny this connection once, with no rule"},
 			{"1", "allow for 1 hour"},
 			{"i", "ignore: refuse this time, with no rule"},
 			{"p", "cycle the host pattern, then a browser request's method and path"},
-			{"s", "scope: the environment, the teammate's sandboxes or this sandbox"},
-			{"", "for a browser request: its browser, all browsers or sandboxes too"},
+			{"s", "scope: the environment, the teammate's computers or this computer"},
+			{"", "for a browser request: its browser, all browsers or computers too"},
 			{"x", "any port, instead of the default ports"},
 			{"w", "allow the navigation's site for this browser session"},
 			{"A / D", "allow or deny every host of a group"},
@@ -277,7 +295,7 @@ func (m *app) helpBody() []string {
 			{"y", "approve and push, or open the pull request"},
 			{"p", "whether approving opens a pull request too"},
 			{"o", "open the pull request of a branch pushed before"},
-			{"r", "request changes: a note to the teammate, in a new chat"},
+			{"r", "request changes: a note to the teammate, in a new thread"},
 			{"n", "reject: the agent sees it on its next fetch"},
 			{"i", "ignore: decide nothing, and drop the card"},
 			{"↑/↓, j/k", "scroll a line"},

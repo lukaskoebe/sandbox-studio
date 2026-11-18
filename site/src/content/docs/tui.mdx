@@ -1,19 +1,21 @@
 ---
 title: Terminal UI
-description: Create, fork and check sandboxes, save checkpoints, answer approvals, review git pushes, chat with a teammate and open a sandbox's terminal, from the terminal on the Studio machine or over SSH.
+description: Work with your teammates' threads, create, fork and check computers, save checkpoints, answer requests, review git pushes and open a computer's terminal, from the terminal on the Studio machine or over SSH.
 ---
 
 import TerminalScreen from '../../components/TerminalScreen.astro'
 // The TUI's own golden test draws this screen, so it shows the TUI as it is.
 import home from '../../../../internal/tui/testdata/visual_home.golden?raw'
 
-`studio tui` is a keyboard client of the Studio that is already running on this machine. It
-shows the sandboxes of an environment, creates, forks and suspends them, and saves and restores
-their checkpoints. It answers approvals and reviews git pushes, chats with a sandbox's teammate, follows the network Activity, and shows a sandbox's
-terminals and agents live, beside the list, or in full screen. Everything else stays in the browser, and the TUI prints the address
+`studio tui` is a keyboard client of the Studio that is already running on this machine. Its
+list is the browser's sidebar: your teammates with their threads, your computers, and the
+environment's places. It creates, forks and suspends computers, and saves and restores their
+checkpoints. It answers requests and reviews git pushes, works in a thread with a teammate,
+follows the network Activity, and shows a computer's terminals and agents live, beside the
+list, or in full screen. Everything else stays in the browser, and the TUI prints the address
 of the page where you need it.
 
-<TerminalScreen ansi={home} label="The TUI's Home: four sandboxes, one with an approval waiting" />
+<TerminalScreen ansi={home} label="The TUI's Home: two teammates, one with a request waiting, your computer, and the environment" />
 
 ## Start it
 
@@ -35,28 +37,29 @@ shows the ones that apply where you are, and `?` lists them all.
 
 | Key | On Home's list |
 |---|---|
-| `↑` `↓` or `j` `k` | move the cursor, over Home, teammates, sandboxes and their sessions |
-| `1` to `9` | go into that session: an agent, a chat or a terminal |
-| `enter` | go into the session under the cursor; on a sandbox, open it: its facts, its open ports, and the same keys |
-| `tab` | the next session that waits for you, then [what needs you](#what-needs-you); there, the next card |
+| `↑` `↓` or `j` `k` | move the cursor, over Home, teammates and their threads, your computers and the places |
+| `1` to `9` | go into that thread or terminal |
+| `enter` | go into the thread or terminal under the cursor; on a computer, open it: its facts, its open ports, and the same keys; on a place, open it |
+| `tab` | the next thread that waits for you, then [what waits for you](#what-waits-for-you); there, the next card |
 | `y` `a` `n` | on Home's row: allow, always or deny the card under the cursor |
 | `u` | undo the network decision you just made, for a minute |
-| `+` | on a teammate: another sandbox for it |
+| `→` `←` | on a teammate: show or hide its older threads |
+| `+` | on a teammate: another computer for it |
 | `alt+z` | the pane in full screen, and back (from 100 columns) |
-| `y` `o` `n` | allow, allow once or deny the network request in the pane's [banner](#answer-from-a-session) |
+| `y` `o` `n` | allow, allow once or deny the network request in the pane's [banner](#answer-from-a-thread-or-terminal) |
 | `←` `→` then `space` | move over the banner's buttons and press one |
-| `n` | create a new sandbox |
-| `t` | open the sandbox's main terminal (it must be running) |
+| `n` | create a new computer |
+| `t` | open the computer's main terminal (it must be running) |
 | `T` | start the teammate's agent in a new terminal and open it |
-| `c` `t` | on a teammate: a new chat, or a shell, in its sandbox |
-| `s` | start, stop or resume the sandbox |
-| `z` | suspend the sandbox; `s` resumes it |
-| `f` | fork the sandbox |
-| `h` | the sandbox's checkpoints |
-| `d` | delete the sandbox; the TUI asks first |
-| `c` | the newest chat with the sandbox's teammate, or a new one |
-| `C` | a new chat |
-| `a` | approvals, from every environment |
+| `c` `t` | on a teammate: a new thread, or a shell, on its computer |
+| `s` | start, stop or resume the computer |
+| `z` | suspend the computer; `s` resumes it |
+| `f` | fork the computer |
+| `h` | the computer's checkpoints |
+| `d` | delete the computer; the TUI asks first |
+| `c` | the newest thread with the computer's teammate, or a new one |
+| `C` | a new thread |
+| `a` | requests, from every environment |
 | `l` | Activity: connections and every decision |
 | `,` | Settings: what each section is set to |
 | `g` | Git: the pushes and pull requests waiting for your review, then the decided ones |
@@ -66,70 +69,96 @@ shows the ones that apply where you are, and `?` lists them all.
 | `?` | help |
 | `q` | quit |
 
-`esc` or `q` goes back from every other screen. The header counts what needs you in every
-environment, and the terminal rings its bell once when a new approval arrives.
+On a thread's row, the keys for a computer work on the thread's computer.
 
-When the TUI asks before it deletes a sandbox or restores a checkpoint, its choices are in the
+`esc` or `q` goes back from every other screen. The header counts what waits for you in every
+environment, and the terminal rings its bell once when a new request arrives.
+
+When the TUI asks before it deletes a computer or restores a checkpoint, its choices are in the
 line at the bottom, `y Delete  [n Keep]`. Keep is chosen, so `enter` keeps; press `y`, or `←`
 and then `enter`, to go ahead.
 
 ## Home's list
 
-The list starts on **Home**, which says how many things need you, or that all is clear. Then
-come your teammates, each with the sandbox it works in, its computer, and that sandbox's
-sessions right under it. A teammate with more than one sandbox lists each, indented, with its
-sessions. The sandboxes without a teammate come last, under "no teammate".
+The list has the sections of the browser's sidebar. It starts on **Home**, which says how many
+things wait for you, or that all is clear. Then come:
 
-### What needs you
+- **Teammates**, each with its role, a spinner while it works and a count of what waits on
+  it, with [its threads](#threads) under it. **+ New teammate** prints the address of the
+  teammates page: making a teammate happens in the browser.
+- **Your computers**, the ones without a teammate, each with its terminals, and **+ New
+  computer**.
+- **Environment**: **Computers**, every computer of the environment, your teammates' too;
+  **Network**, the network log, with the requests waiting; **Secrets** and **Memory**, which
+  print their page's address; **Activity**; and **Settings**, with Studio's version.
+
+On **Computers**, `enter` lists every computer with its owner, template, requests and status,
+and the keys of a computer work on the one under the cursor. From 100 columns its dashboard is
+beside the list. `esc` goes back to Home.
+
+### What waits for you
 
 On Home's row, the pane (or the whole screen, in a narrow terminal) lists what waits for you
 as cards: network requests, pushes to review, agents' permissions, memory and browser
 requests. `tab` moves to the next card, and the keys on the card decide it: `y` allows, `n`
 denies, and on an agent's permission `a` allows always. `enter` opens a push's review. A
 network decision that made a rule can be taken back with `u` for a minute afterwards. Below
-the cards are the sessions working now and what was decided earlier today.
+the cards are the threads and agents working now and what was decided earlier today.
 
 ### A teammate
 
-On a teammate's row, the pane shows the teammate: its computer (or its sandboxes), its
-sessions, its tasks, what it knows and its network level. `c` starts a chat with it, `T` its
-agent in a terminal, `t` a shell, `f` forks its sandbox and `+` gives it another.
+On a teammate's row, the pane shows the teammate: its computers, its threads, its tasks, what
+it knows and its network level. `c` starts a thread with it, `T` its agent in a terminal, `t`
+a shell, `f` forks its computer and `+` gives it another.
 
-## Sessions
+## Threads
 
-Under each sandbox, the list shows what you can go into: its agents running in a terminal,
-the newest three chats with its teammate (`+ n older` shows the rest), its other terminals,
-and the pushes waiting for your review (`▲ branch`, which open the review).
-The first nine are numbered. Press a number and you're in: a terminal opens, and a chat opens
-ready for your prompt. `Ctrl-]` leaves a terminal, and `esc` a chat, back to the list with the
-cursor where you were. To switch to another agent, press `Ctrl-]` and its number.
+Under each teammate, the list shows what you can go into, as the browser's sidebar does: its
+agents running in a terminal, its threads, and its computers' other terminals. The threads are
+every one that runs, waits for you or continues in a terminal, the two latest others of the
+last day, and the one you have open; `+ n older` (or `→` on the teammate) shows the rest, and
+`←` hides them again. A thread a teammate started on someone else's computer is listed under
+the teammate too.
+
+The first nine rows are numbered. Press a number and you're in: a terminal opens, and a thread
+opens ready for your prompt. `Ctrl-]` leaves a terminal, and `esc` a thread, back to the list
+with the cursor where you were. To switch to another, press `Ctrl-]` and its number.
 
 ```
-Sandbox Studio · Default                                2 blocked · ▲ 2 need you
+Sandbox Studio · Default                                     ▲ 4 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
-  Home ──────────────────────────────────────────────────────────── ▲ 2 need you
+  Home                                                       ▲ 4 waiting for you
 
-▸ Iris · blub ────────────────────────────────────────────────────── ● up 2h 14m
-  1 ✓ claude                                                        agent · done
-  2 ○ Fix the login form                                           chat · 3m ago
-  3   main                                                   terminal · attached
+ TEAMMATES
+  Iris frontend                                                              ▲ 2
+▸ 1 ▲ Fix the login form                                        thread · waiting
+  2 ○ Rename the guides                                           thread · ended
+  3 ◷ Update the deploy notes                                scheduled · 20h ago
+  Finn backend                                                               ▲ 2
+  4 ▲ Port the parser to go                                     thread · waiting
+  + New teammate
 
-  Finn · api-refactor ──────────────────────────────────────────── ▲ 2  ● up 12m
-  4 ▲ codex                                                      agent · blocked
-  5 ▲ Port the parser to go                                       chat · blocked
-  6   main                                                              terminal
+ YOUR COMPUTERS
+  ◐ demo  base                                                           booting
+  + New computer
+
+ ENVIRONMENT
+  Computers                                                                    4
+  Network                                                                    ▲ 2
 ```
 
-Each agent shows what it's doing:
+Each thread and agent shows what it's doing:
 
-- `●` working: a chat's turn runs, or the agent's terminal is printing;
-- `▲` blocked: it waits for you. For a chat, that's a permission; for an agent in a terminal,
-  an approval in its sandbox;
+- `●` working: a thread's turn runs, or the agent works in its terminal;
+- `▲` waiting: it waits for you. For a thread, that's a permission, or another request of its
+  computer while it is the teammate's latest thread there; for an agent in a terminal, a
+  request on its computer;
 - `✓` done: it finished since you last looked. It stays marked until you go in;
-- `○` idle, and `·` when the sandbox doesn't say (it started before this version of Studio).
+- `○` idle or ended, `◷` a scheduled task's run or a check-in, and `·` when the computer
+  doesn't say (it started before this version of Studio).
 
-`tab` jumps to the next blocked agent, then to the next done one. The header counts the
-working and the blocked ones.
+`tab` jumps to the next waiting one, then to the next done one. The header counts the working
+ones.
 
 ## The pane
 
@@ -137,30 +166,27 @@ In a terminal 100 columns wide or more, the list becomes a sidebar, and the pane
 shows what the cursor is on, live:
 
 - on an agent or a terminal, its screen, as it runs;
-- on a chat, its transcript;
-- on a sandbox, its dashboard: CPU over the last two minutes as a chart, memory as a gauge
-  with its history, the approval waiting, its terminals, ports and history, its network as it
+- on a thread, its transcript;
+- on a computer, its dashboard: CPU over the last two minutes as a chart, memory as a gauge
+  with its history, the request waiting, its terminals, ports and history, its network as it
   happens and its teammate's browser.
 
-Each sidebar row says what kind of session it is: `agent`, `chat`, `term`, `sched` for a
-scheduled task's run, or `check` for a check-in's.
-
-`enter`, the session's number or a click hands your keys to the pane, and the line between the
+`enter`, the row's number or a click hands your keys to the pane, and the line between the
 two turns bright. Everything you type goes to the agent, `q` and `ctrl+c` too, except:
 
 | Key | In the pane |
 |---|---|
 | `Ctrl-]` | give the keys back to the sidebar |
-| `alt+1` to `alt+9` | switch to that session |
+| `alt+1` to `alt+9` | switch to that thread or terminal |
 | `alt+z` | full screen, and back |
 
 Alt keys need a terminal that sends them; on macOS, set Option to act as Meta.
 
 A terminal open in the browser too takes the size of whichever window was resized last.
 
-### Answer from a session
+### Answer from a thread or terminal
 
-When an approval waits in a sandbox, each of its sessions in the pane shows a box over its
+When a request waits on a computer, each of its threads and terminals in the pane shows a box over its
 top rows that says what waits, such as `api-refactor wants proxy.golang.org:443`, with its
 choices as buttons: **Allow once**, **Allow**, **Deny** and **More…** for a network request,
 **Review it** for anything else.
@@ -170,53 +196,53 @@ choices as buttons: **Allow once**, **Allow**, **Deny** and **More…** for a ne
 - While you type in the pane, your keys go to the agent, so the box says `alt+a answers it`.
   `alt+a` puts you on its buttons; once you've answered, or pressed `esc`, your keys go back
   to the agent.
-- `a` (**More…**) opens the approval's card, where you choose the host pattern and the scope.
-  Once you've decided, you're back in the session.
+- `a` (**More…**) opens the request's card, where you choose the host pattern and the scope.
+  Once you've decided, you're back where you were.
 
-A terminal in full screen has no room for a box. When an approval arrives while you're in one,
+A terminal in full screen has no room for a box. When a request arrives while you're in one,
 the terminal's title says what waits and the bell rings. `Ctrl-]` then takes you straight to
-the approval, and once you've answered it you're back in the terminal.
+the request, and once you've answered it you're back in the terminal.
 
-## New sandbox
+## New computer
 
-`n` asks whose sandbox it is (a teammate, or none), what it starts from (the base image or one
+`n` asks whose computer it is (a teammate, or none), what it starts from (the base image or one
 of the environment's templates), and its name, which is also its hostname: lowercase letters,
-digits and dashes. `enter` goes on and `esc` goes back a step. Studio then creates the sandbox,
+digits and dashes. `enter` goes on and `esc` goes back a step. Studio then creates the computer,
 and the TUI shows the steps as they happen, the image pull with its progress, as the browser
-does. Once the sandbox is ready it opens. If the create fails, you see the step and the reason,
-and `d` deletes the sandbox so you can try again. `esc` leaves the create to finish on its own.
+does. Once the computer is ready it opens. If the create fails, you see the step and the reason,
+and `d` deletes the computer so you can try again. `esc` leaves the create to finish on its own.
 
 ## Fork, suspend and checkpoints
 
-`f` forks the sandbox: a new sandbox with a copy of its disks. The TUI asks for the name at the
+`f` forks the computer: a new computer with a copy of its disks. The TUI asks for the name at the
 bottom, and suggests one that ends in `-fork`. `enter` forks, `esc` cancels. The fork's
-progress then shows as a new sandbox's does.
+progress then shows as a new computer's does.
 
-`z` suspends a running sandbox. `s` resumes it.
+`z` suspends a running computer. `s` resumes it.
 
-`h` lists the sandbox's checkpoints, newest first. Each shows its name, whether the schedule
+`h` lists the computer's checkpoints, newest first. Each shows its name, whether the schedule
 took it (auto) or you did (manual), and its age. A checkpoint holds the disks, not the running
 programs.
 
 - `n` saves a checkpoint. Type a name, or press `enter` alone to name it after the time. The
-  sandbox must be running or stopped.
+  computer must be running or stopped.
 - `r` restores the checkpoint under the cursor. The TUI asks first, and `y` restores. Stop the
-  sandbox first. What changed since the checkpoint is lost.
+  computer first. What changed since the checkpoint is lost.
 
 Deleting and renaming checkpoints, and their schedule, are in the browser.
 
 ## Ports
 
-A running sandbox's page lists its open ports, with each one's preview address. In a terminal
+A running computer's page lists its open ports, with each one's preview address. In a terminal
 that shows links, you can open the address from there. The list refreshes every three seconds.
 
-A preview needs a login the first time. Open it once from the Ports section of the sandbox's
+A preview needs a login the first time. Open it once from the Ports section of the computer's
 page in the browser. After that, the address from the TUI opens in that browser for eight
 hours.
 
-## Approvals
+## Requests
 
-Requests from one sandbox that come in close together are one card, as they are on the web.
+Requests from one computer that come in close together are one card, as they are on the web.
 A card lets you:
 
 - **Allow or deny** a network request. `y` and `n` make a rule for the host pattern and the
@@ -224,9 +250,9 @@ A card lets you:
   an hour; `i` ignores it. When the browser opens a new site, `w` allows the site for the
   rest of that browser session, with no rule.
 - **Choose what the rule covers:** `p` changes the host pattern (for a browser request, also
-  its method and path), `s` the scope (the environment, your teammate's sandboxes, or this
-  sandbox), and `x` any port instead of the default ports. For a browser request, `s` picks
-  who the rule covers: its browser, all browsers, or the browsers and the sandboxes.
+  its method and path), `s` the scope (the environment, your teammate's computers, or this
+  computer), and `x` any port instead of the default ports. For a browser request, `s` picks
+  who the rule covers: its browser, all browsers, or the browsers and the computers.
 - **Decide a group:** `A` allows every host, `D` denies every host, and `r` reviews them one by
   one.
 - **Move with the arrows:** `←` and `→` move over the card's toggles (pattern, scope, ports)
@@ -251,13 +277,13 @@ The other cards are decided with their own keys:
 - **Agent permission:** the agent's options are numbered. Press the number of the one you
   want, or `i` to ignore the request.
 
-## Chat
+## Thread
 
-A chat's number or `enter` opens it; `c` opens the sandbox's newest chat, and `C` or `n` (in a
-chat) starts a new one. A sandbox needs a teammate to chat with.
+A thread's number or `enter` opens it; `c` opens the computer's newest thread, and `C` or `n`
+(in a thread) starts a new one. A computer needs a teammate to work in a thread with.
 
 ```
-Sandbox Studio · Default                                            ▲ 1 need you
+Sandbox Studio · Default                                     ▲ 1 waiting for you
 ────────────────────────────────────────────────────────────────────────────────
 Fix the login form · blub                                                  Ready
 › The login form doesn't submit on enter. Can you fix it?
@@ -279,35 +305,35 @@ button now:
 
  › Write to Iris…                                                       p write
 ────────────────────────────────────────────────────────────────────────────────
-p prompt  ↑/↓ tools  pgup scroll  n new chat  esc/q back  ? help
+p prompt  ↑/↓ tools  pgup scroll  n new thread  esc/q back  ? help
 ```
 
 The transcript streams as the agent works. Thoughts and tool calls are folded to one line:
 `↑` and `↓` move between them, and `enter` expands one to show its files, its diff or its
-output. `p` writes a prompt in the box at the bottom of the chat, framed in the chat's color:
+output. `p` writes a prompt in the box at the bottom of the thread, framed in the thread's color:
 `enter` sends it, `ctrl+j` starts a new line, and `esc` puts it aside. `x` stops the turn that runs. Headings are bold and code is indented;
 there is no other formatting.
 
-When the agent asks for a permission or asks a question, you answer it in the chat. The
+When the agent asks for a permission or asks a question, you answer it in the thread. The
 choices are listed under it.
 
 - A permission: press the number of an option, or `i` to ignore it. `←`, `→` and `space`
   work too.
 - A question: press the number of a choice, or `r` to type an answer and `enter` to send it.
   `i` skips the question. A question with several fields is answered in the browser; its keys
-  print the chat's address.
+  print the thread's address.
 
-When an approval waits in the chat's sandbox, such as a host one of the agent's tools wants,
+When a request waits on the thread's computer, such as a host one of the agent's tools wants,
 it shows as a box under the title. `alt+a` opens it, and once you've answered you're back in
-the chat.
+the thread.
 
 ## Activity
 
-`l` shows the log of the environment, newest first: each connection a sandbox made, with its
+`l` shows the log of the environment, newest first: each connection a computer made, with its
 verdict, and each decision, with how it was made. `←` and `→` narrow it to one kind: network,
-git, agents or memory. On a sandbox, `l`
-shows only that sandbox; elsewhere `/` filters by sandbox name. `enter` opens an entry with the
-rule that decided it: its host pattern, action, ports, which sandboxes it covers, where it came
+git, agents or memory. On a computer, `l`
+shows only that computer; elsewhere `/` filters by computer name. `enter` opens an entry with the
+rule that decided it: its host pattern, action, ports, which computers it covers, where it came
 from, its hits and when it expires. Without a rule, it says what decided instead, such as the
 curated list or a once decision. The log refreshes every two seconds. Rules are edited in the
 browser; `r` prints the address.
@@ -315,14 +341,14 @@ browser; `r` prints the address.
 ## Look, wide terminals and the mouse
 
 On a terminal with colors, the TUI uses the web's colors. Each area has its own hue: network,
-git, browser, memory and chat. Status dots are colored, and approvals show as cards. From 81
+git, browser, memory and threads. Status dots are colored, and requests show as cards. From 81
 columns, the header becomes tabs: Home, Activity and Settings.
 
 Wider terminals use the extra room:
 
-- From 100 columns, Home is a sidebar and [the pane](#the-pane), with what needs you beside
-  it on Home's row, and on a sandbox's row the dashboard, which
-  charts its CPU and memory. When the sandbox's teammate's browser runs, the dashboard ends
+- From 100 columns, Home is a sidebar and [the pane](#the-pane), with what waits for you beside
+  it on Home's row, and on a computer's row the dashboard, which
+  charts its CPU and memory. When the computer's teammate's browser runs, the dashboard ends
   with the page it is on and a small picture of it, on terminals with 256 colors or more.
 - From 120 columns, the git review lists the changed files, and `[` and `]` jump between them.
 - From 160 columns, the diff is side by side, and `v` toggles it.
@@ -341,11 +367,11 @@ The mouse works too:
 
 ## Terminal
 
-`t` opens the sandbox's main terminal, the one the browser opens first, in full screen. A
-terminal's number opens that one, in the pane when there's room for it. From a shell, `studio shell <sandbox> [terminal]` does the same. The sandbox's
+`t` opens the computer's main terminal, the one the browser opens first, in full screen. A
+terminal's number opens that one, in the pane when there's room for it. From a shell, `studio shell <sandbox> [terminal]` does the same. The computer's
 screen takes over your terminal, and your keys go to it, as in any other terminal. Resizing
-your window resizes the sandbox's. Press `Ctrl-]` to go back to the TUI, or to the approval
-that arrived meanwhile, as [above](#answer-from-a-session). If the sandbox ends the
+your window resizes the computer's. Press `Ctrl-]` to go back to the TUI, or to the request
+that arrived meanwhile, as [above](#answer-from-a-thread-or-terminal). If the computer ends the
 terminal, you see that, and the next key returns you to the TUI.
 
 ## Stays in the browser

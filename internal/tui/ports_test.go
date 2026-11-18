@@ -49,7 +49,7 @@ func TestDetailListsThePorts(t *testing.T) {
 
 func TestPortLinesSayWhyThereAreNone(t *testing.T) {
 	m := sampleApp()
-	if got := stripANSI(strings.Join(m.portLines("sb3", false), "\n")); !strings.Contains(got, "listed while the sandbox runs") {
+	if got := stripANSI(strings.Join(m.portLines("sb3", false), "\n")); !strings.Contains(got, "listed while the computer runs") {
 		t.Fatalf("stopped: %q", got)
 	}
 	m.ports = portsState{sandbox: "sb1", loaded: true}

@@ -118,7 +118,7 @@ func (m *app) portLines(id string, ready bool) []string {
 	p := &m.ports
 	switch {
 	case !ready:
-		return []string{fact("Ports", styleDim.Render("listed while the sandbox runs"))}
+		return []string{fact("Ports", styleDim.Render("listed while the computer runs"))}
 	case p.sandbox != id || !p.loaded:
 		return []string{fact("Ports", styleDim.Render("…"))}
 	case len(p.list) == 0:

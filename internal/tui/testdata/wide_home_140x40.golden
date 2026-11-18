@@ -1,39 +1,39 @@
- ◆ Studio  Default ▾   Home 3   Activity   Settings                                                        1 blocked · ▲ 3 need you · 12:00 
+ ◆ Studio  Default ▾   Home 3   Activity   Settings                                                             ▲ 3 waiting for you · 12:00 
 ───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Home ─────────────────────── ▲ 3 need you │ api-refactor                                                                ● Running · up 12m
-                                            │ ──────────────────────────────────────────────────────────────────────────────────────────────
-  blub · Iris ────────── ▁▁▁▁▁▁▁▁ ▲ 1  ● 2h │ Finn · go@2 · 2 CPUs · 2 GiB
-                                            │ 
-▌ api-refactor · Finn ────────── ▲ 4  ● 12m │ CPU  38 % of 2 CPUs                         avg 42 % · peak 85 %
-  1 ▲ feature/login                  review │ 100┤                                                 ▃          
-                                            │    │                                                ▄█▃   ▂▇▅   
-  docs-site · Iris ────────────── ○ stopped │    │                                               ▂███▃ ▄███▅ ▄
-                                            │   0┤·············································▁▃█████▆█████▇█
-  demo ───────────────── ▓▒░░░░░░ ◐ booting │     2 min ago                                                now
-                                            │ 
-                                            │ MEMORY  1.4 / 2 GiB                                         70 %
-                                            │     ██████████████████████████████████████████░░░░░░░░░░░░░░░░░░
-                                            │     ·············································▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆
-                                            │ 
-                                            │ ╭────────────────────────────────────────────────────────────────────────────────────────────╮
-                                            │ ┃ ± GIT PUSH   Push 2 commits to feature/login on GitHub/…  api-refactor · Default · 30s ago │
-                                            │ ╰────────────────────────────────────────────────────────────────────────────────────────────╯
-                                            │   1 more · a approvals
-                                            │ 
-                                            │ TERMINALS  main · claude · 2
-                                            │ PORTS      :3000 · :8080
-                                            │ HISTORY    ○──·──●──◇──○──◆ now
-                                            │            created 3d ago · 2 checkpoints · 1 fork · 1 restore                                
-                                            │ ID         sb2
-                                            │ 
-                                            │ NETWORK
-                                            │ Loading…
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-                                            │ 
-────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────
-enter open  n new  s start/stop │ a approvals  t terminal  c chat │ ? more  q quit
+  Home                    ▲ 3 │ Finn · backend                                                                                        ○ idle
+                              │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ TEAMMATES                    │ COMPUTER   ● api-refactor · go@2 · 2 CPUs · 2 GiB · up 12m
+  Iris frontend           ▲ 1 │ 
+▌ Finn backend            ▲ 2 │ THREADS    none yet; c starts one
+  + New teammate              │ 
+                              │ TASKS      …
+ YOUR COMPUTERS               │ 
+  ◐ demo              booting │ NETWORK    Default, the environment's · new rules apply to Finn's computers
+  + New computer              │ 
+                              │ c new thread · T agent in a terminal · t shell · + another computer · f fork
+ ENVIRONMENT                  │ 
+  Computers                 4 │ 
+  Network                 ▲ 2 │ 
+  Secrets                     │ 
+  Memory                      │ 
+  Activity                    │ 
+  , Settings              dev │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+                              │ 
+──────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+c new thread  T agent  t shell  + add computer  →/← older threads  f fork  s start/stop  1-9 jump in  tab next waiting │ ? more  q quit

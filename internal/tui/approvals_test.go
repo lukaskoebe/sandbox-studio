@@ -203,7 +203,7 @@ func TestScopeKeyCyclesABrowserRequestsReach(t *testing.T) {
 		seen = append(seen, stripANSI(strings.Join(m.cardLines(m.cards()[0], true, 120), "\n")))
 		m = press(m, "s")
 	}
-	for i, want := range []string{"who Iris's browser", "who all browsers", "who browsers and sandboxes"} {
+	for i, want := range []string{"who Iris's browser", "who all browsers", "who browsers and computers"} {
 		if !strings.Contains(seen[i], want) || strings.Contains(seen[i], "scope ") {
 			t.Errorf("after %d presses: %q, want %q", i, seen[i], want)
 		}

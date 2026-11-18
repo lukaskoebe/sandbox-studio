@@ -1,6 +1,6 @@
 # Sessions on Home (design)
 
-Status: built (2026-10-18); [tui.md](../tui.md#sessions) describes it as it is. Where the
+Status: built (2026-10-18); [tui.md](../tui.md#threads) describes it as it is. Where the
 build differs from the text:
 
 - A click selects a session's row and a double click enters it, as on every other row, so a
