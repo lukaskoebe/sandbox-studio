@@ -59,6 +59,7 @@ func (m *Manager) ready(ctx context.Context, rec store.Sandbox, timeout time.Dur
 			m.Hub.Disconnect(rec.ID)
 		}
 	}
+	began := time.Now()
 	if start {
 		if err := m.ensureVMRunning(ctx, rec); err != nil {
 			return err
@@ -67,7 +68,14 @@ func (m *Manager) ready(ctx context.Context, rec store.Sandbox, timeout time.Dur
 	if err := m.WaitReady(ctx, rec.ID, timeout); err != nil {
 		return err
 	}
-	return m.ConfigureGuest(ctx, rec.EnvironmentID, rec.ID)
+	if err := m.ConfigureGuest(ctx, rec.EnvironmentID, rec.ID); err != nil {
+		return err
+	}
+	// How long a wake takes is what the user waits for, so the log keeps it.
+	if start {
+		m.Log.Info("VM woke", "sandbox", rec.ID, "kind", rec.Kind, "took", time.Since(began).Round(100*time.Millisecond))
+	}
+	return nil
 }
 
 // ensureVMRunning prepares networking and starts or resumes a disconnected VM of a browser or

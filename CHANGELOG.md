@@ -22,6 +22,8 @@
   one file it can't remove, the running `studio.exe`, instead of asking to run it again.
 - SECURITY.md and the API docs say what a browser session can't do: it lasts 30 days and
   can't be revoked before, and the web app has no logout.
+- Studio's log says how long a teammate's browser took to wake, so a slow wake can be told
+  from a slow page.
 - The spike programs Studio was planned with are archived; their results stay in
   `docs/spikes.md`, which names the commit that still has the code.
 
