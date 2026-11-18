@@ -65,6 +65,9 @@ func (m *app) computerPane(w, h int) []string {
 	row, rule := m.tabRow(*sb, w)
 	lines := []string{row, rule}
 	body := h - 2
+	// The tab records its rows for the mouse from its own top, two rows under the pane's.
+	rows, keys := len(m.mouse.rows), len(m.mouse.keys)
+	defer func() { m.shiftHits(rows, keys, 0, 2) }()
 	switch m.comp.tab {
 	case tabTerminal:
 		lines = append(lines, m.terminalTab(*sb, w, body)...)

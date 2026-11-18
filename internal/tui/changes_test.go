@@ -388,3 +388,24 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// A click on a row of the rail picks the row it is drawn on, under the tab row and its rule.
+func TestClickingTheRailPicksItsRow(t *testing.T) {
+	m := onLogin(withGitStatus(openComputer(visualApp(120, 30), "sb2", tabChanges)))
+	view := ansi.Strip(m.View().Content)
+	y := -1
+	for i, l := range strings.Split(view, "\n") {
+		if strings.Contains(l, "src/merge.go") {
+			y = i
+			break
+		}
+	}
+	if y < 0 {
+		t.Fatalf("no row of src/merge.go:\n%s", view)
+	}
+	rc, _ := m.paneRectOf(paneComputer)
+	next, _ := m.Update(tea.MouseClickMsg{X: rc.x + 4, Y: y, Button: tea.MouseLeft})
+	if got := next.(*app).changes.cursor; got != "change/web|unstaged|src/merge.go" {
+		t.Errorf("the click picked %q", got)
+	}
+}
