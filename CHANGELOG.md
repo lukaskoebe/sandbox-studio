@@ -11,9 +11,9 @@
 - Studio's pages name the places as they are now: the Network and Secrets pages under
   Environment instead of Settings, Settings → Git forges, and Home instead of the inbox, also
   in what teammates are told when they propose a memory. A check-in's thread is called
-  **Check-in** in All chats and in Home's Earlier list too, where it was **Heartbeat**, and the Network page
-  says a teammate's own level can be stricter or looser than the environment's.
-
+  **Check-in** in All chats and in Home's Earlier list too, where it was **Heartbeat**, and
+  the Network page says a teammate's own level can be stricter or looser than the
+  environment's.
 - DevTools for the teammate's browser now open in the desktop app on macOS and Linux and in
   Safari, docked under the page as in Chrome, where they used to show only their address to
   copy into Chrome. Studio gives Chrome's DevTools the one thing they need that those
