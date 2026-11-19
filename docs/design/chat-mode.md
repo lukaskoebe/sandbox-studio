@@ -514,8 +514,10 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
   - Superseded: a Claude subscription's chats run `studio-agent claude-acp` (section 1, and
     [harnesses](../harnesses.md#claude-subscription-chats)).
 - **A session the agent can't resume.** `live.open` resumes the ACP session with
-  `session/resume` (or `session/load`). When the agent answers with an error, the chat
-  becomes `orphaned`: read-only, with "Start a new chat". The agent's session files live in
+  `session/resume` (or `session/load`). When the agent answers that it doesn't have the
+  session (resource not found, or OpenCode's invalid params "session not found"), the chat
+  becomes `orphaned`: read-only, with "Start a new chat". Other errors may pass and keep the
+  chat for the next try ([harnesses](../harnesses.md)). The agent's session files live in
   the home, and rebase copies it onto a home disk, so chats resume after a rebase onto a
   current template. A fork copies the home too, but its chats stay with the source.
 - **Subagent child sessions.** They show inside their parent's tool card only.

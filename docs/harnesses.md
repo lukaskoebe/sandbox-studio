@@ -194,7 +194,12 @@ sandbox needs one it stops the agent that sat idle longest. An agent that works 
 the user is never stopped; with four of those, the fifth chat is told to wait. The next
 message to a stopped chat starts its agent again and resumes the session. A session the
 agent no longer finds ends the chat (orphaned), unless the agent never answered in it, as
-when its first message was stopped: then the chat starts a new one.
+when its first message was stopped: then the chat starts a new one. "No longer finds" is
+ACP's resource not found (-32002), which Claude's adapter and Codex answer, or OpenCode's
+invalid params "session not found" (or "does not belong to cwd"). Any other error, such as
+an agent that couldn't read its sessions for a moment, leaves the chat as it is with "the
+agent could not reopen this chat (…); try again", and a chat on its way back from the
+terminal stays there.
 
 A message sent while a turn runs goes into it: with `_session/steering` for Claude's and
 Codex's adapters, and as a second `session/prompt` that joins the running loop for

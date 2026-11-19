@@ -163,6 +163,33 @@ func TestTerminalSessionGone(t *testing.T) {
 	}
 }
 
+// A chat whose agent fails to reopen it for a passing reason stays in the terminal, so the
+// user can continue in chat again.
+func TestTerminalReopenFailureStaysInTheTerminal(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}}})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	f.wait(t, f.send(t, "one").ID)
+	if _, err := f.s.OpenInTerminal(ctx, env, f.chat.ID, f.launch()); err != nil {
+		t.Fatal(err)
+	}
+	f.agent.ReopenFails = "database is locked"
+	if err := f.s.ReturnToChat(ctx, env, f.chat.ID, f.launch()); !errors.Is(err, store.ErrConflict) || !strings.Contains(err.Error(), "try again") {
+		t.Fatalf("return: %v", err)
+	}
+	if c, _ := f.s.Store.Chat(ctx, env, f.chat.ID); c.State != store.ChatTerminal {
+		t.Fatalf("state %s", c.State)
+	}
+	f.agent.ReopenFails = ""
+	f.agent.History = history(chunk(userChunk, "one"), chunk(agentChunk, "Hi"))
+	if err := f.s.ReturnToChat(ctx, env, f.chat.ID, f.launch()); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := f.s.Store.Chat(ctx, env, f.chat.ID); c.State != store.ChatIdle {
+		t.Fatalf("state after returning %s", c.State)
+	}
+}
+
 // A TUI that fails to start gives its error back and leaves the chat idle, so the chat can
 // be used again.
 func TestTerminalStartFailureUnlocksChat(t *testing.T) {

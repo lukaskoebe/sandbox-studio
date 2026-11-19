@@ -55,8 +55,14 @@ type Agent struct {
 	Turns []Turn
 	// History is replayed as updates by session/load.
 	History []json.RawMessage
-	// MissingSessions makes session/resume and session/load fail as unknown sessions.
-	MissingSessions bool
+	// MissingSessions makes session/resume and session/load fail as unknown sessions: ACP's
+	// resource not found, as Claude's adapter and Codex answer, or with MissingAsInvalidParams
+	// invalid params "session not found: <id>", as OpenCode does.
+	MissingSessions        bool
+	MissingAsInvalidParams bool
+	// ReopenFails answers session/resume and session/load with an internal error of this
+	// message, as an agent does when it can't read its sessions for a while.
+	ReopenFails string
 	// BeforePrompt runs in the prompt handler after session/prompt is received. Tests can
 	// hold it while Serve continues reading later messages from the wire.
 	BeforePrompt func()
@@ -269,6 +275,14 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 		}
 		a.reply(id, map[string]string{"sessionId": a.SessionID}, nil)
 	case "session/resume", "session/load":
+		if a.ReopenFails != "" {
+			a.reply(id, nil, &rpcError{Code: -32603, Message: a.ReopenFails})
+			return
+		}
+		if (a.MissingSessions || p.SessionID != a.SessionID) && a.MissingAsInvalidParams {
+			a.reply(id, nil, &rpcError{Code: -32602, Message: "session not found: " + p.SessionID})
+			return
+		}
 		if a.MissingSessions || p.SessionID != a.SessionID {
 			a.reply(id, nil, &rpcError{Code: -32002, Message: "Resource not found: session " + p.SessionID})
 			return

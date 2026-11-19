@@ -1079,7 +1079,7 @@ func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer, 
 	case l.caps.CanResume():
 		err = l.conn.ResumeSession(ctx, l.session, Workdir, servers)
 	default:
-		err = &acp.Error{Message: "the agent can resume no sessions"}
+		err = errCantResume
 	}
 	var ae *acp.Error
 	if errors.As(err, &ae) && !l.s.answered(ctx, c) {
@@ -1087,14 +1087,34 @@ func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer, 
 		// message was stopped: nothing is lost by starting over.
 		return newSession()
 	}
-	if errors.As(err, &ae) {
+	if errors.As(err, &ae) && sessionGone(ae) {
 		l.s.orphan(c)
 		return nil, Conflict("the agent's session of this chat is gone (" + ae.Message + "); start a new chat")
+	}
+	if errors.As(err, &ae) {
+		// Any other refusal may pass, such as a store the agent couldn't read for a moment:
+		// the chat keeps its session for the next try.
+		return nil, Conflict("the agent could not reopen this chat (" + ae.Message + "); try again")
 	}
 	if !reload {
 		replay = nil
 	}
 	return replay, err
+}
+
+// errCantResume is the answer for an agent that can neither load nor resume a session.
+var errCantResume = &acp.Error{Message: "the agent can resume no sessions"}
+
+// sessionGone says whether an agent's refusal to reopen a session means it no longer has it,
+// so that the chat can't go on: ACP's resource not found, which Claude's adapter and Codex
+// answer, OpenCode's invalid params "session not found: <id>" or "does not belong to cwd",
+// or an agent that reopens no sessions at all.
+func sessionGone(ae *acp.Error) bool {
+	if ae == errCantResume || ae.Code == acp.CodeResourceNotFound {
+		return true
+	}
+	m := strings.ToLower(ae.Message)
+	return ae.Code == acp.CodeInvalidParams && (strings.Contains(m, "session not found") || strings.Contains(m, "does not belong to cwd"))
 }
 
 // load reattaches with session/load and returns its replay folded into entries.

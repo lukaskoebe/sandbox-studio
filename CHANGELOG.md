@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A chat is no longer lost for good when its agent fails to reopen it for a moment: only an
+  agent that says it no longer has the chat's session ends it. Any other failure says to try
+  again, and a chat coming back from the terminal stays in the terminal until it can.
 - Listing the pull requests of a large GitHub repository (`studio pr list`, `~/forge`) no longer
   fails with "unexpected end of JSON input": Studio read only the first MiB of a forge's answer,
   and a page of 100 pull requests runs to a few. It reads up to 8 MiB now, and says so when an

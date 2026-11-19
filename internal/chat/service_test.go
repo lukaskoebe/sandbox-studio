@@ -543,8 +543,15 @@ func TestChatCancelGrace(t *testing.T) {
 	}
 }
 
+// A chat whose agent says it has lost the session is orphaned, as ACP words it and as
+// OpenCode does.
 func TestChatOrphaned(t *testing.T) {
-	f := newFixture(t, &acptest.Agent{MissingSessions: true, Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}}})
+	t.Run("resource not found", func(t *testing.T) { chatOrphaned(t, false) })
+	t.Run("OpenCode's session not found", func(t *testing.T) { chatOrphaned(t, true) })
+}
+
+func chatOrphaned(t *testing.T, invalidParams bool) {
+	f := newFixture(t, &acptest.Agent{MissingSessions: true, MissingAsInvalidParams: invalidParams, Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}}})
 	ctx := context.Background()
 	f.wait(t, f.send(t, "hello").ID)
 	f.g.killAgent()
@@ -562,6 +569,29 @@ func TestChatOrphaned(t *testing.T) {
 	}
 	if _, err := f.s.Send(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "hi"}); !strings.Contains(fmt_(err), "start a new chat") {
 		t.Fatalf("again: %v", err)
+	}
+}
+
+// An agent that fails to reopen a session for another reason, such as a store it couldn't
+// read for a moment, leaves the chat as it was: the next message tries again.
+func TestChatReopenFailureKeepsTheChat(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}, {Steps: steps(chunk(agentChunk, "Again"))}}})
+	ctx := context.Background()
+	f.wait(t, f.send(t, "hello").ID)
+	f.g.killAgent()
+	waitGone(t, f)
+	f.agent.ReopenFails = "database is locked"
+	_, err := f.s.Send(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "hi"})
+	if !errors.Is(err, store.ErrConflict) || !strings.Contains(err.Error(), "could not reopen this chat (database is locked); try again") {
+		t.Fatalf("send: %v", err)
+	}
+	if c, _ := f.s.Store.Chat(ctx, f.sb.EnvironmentID, f.chat.ID); c.State != store.ChatIdle || c.ACPSessionID == "" {
+		t.Fatalf("state %s, session %q", c.State, c.ACPSessionID)
+	}
+	f.agent.ReopenFails = ""
+	turn, log := f.wait(t, f.send(t, "hi").ID)
+	if turn.StopReason != "end_turn" || !strings.Contains(kinds(log.Items), "agent") {
+		t.Fatalf("again: stop %q items %s", turn.StopReason, kinds(log.Items))
 	}
 }
 

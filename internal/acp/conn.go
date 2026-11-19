@@ -39,6 +39,9 @@ const (
 	CodeInternal       = -32603
 	// CodeAuthRequired is the agent's "authentication required" error.
 	CodeAuthRequired = -32000
+	// CodeResourceNotFound is ACP's error for a resource the agent doesn't have, such as a
+	// session it doesn't know.
+	CodeResourceNotFound = -32002
 )
 
 // ErrAuthRequired means the agent wants a login. Studio never runs ACP authentication:
