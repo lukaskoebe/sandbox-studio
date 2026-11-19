@@ -10,6 +10,19 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Kbd } from "@/components/ui/kbd"
+import {
+  CaretDownIcon,
+  CaretUpIcon,
+  ChatCircleTextIcon,
+} from "@phosphor-icons/react"
+import { plural } from "@/lib/approval-kinds"
 import { cn } from "@/lib/utils"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
@@ -181,6 +194,138 @@ export function ViewedCount({
   )
 }
 
+/** A comment in a review's list: where it is, its text, and the way to it when the diff has it. */
+export type CommentEntry = {
+  key: string
+  where: string
+  text: string
+  onPick?: () => void
+}
+
+/**
+ * The review bar's comments, in place of a tab of them: how many, a list that goes to one, and
+ * the previous and next one, as p and n do.
+ */
+export function CommentNav({
+  entries,
+  onStep,
+}: {
+  entries: CommentEntry[]
+  onStep: (dir: 1 | -1) => void
+}) {
+  if (!entries.length) return null
+  return (
+    <span className="flex items-center rounded-md ring-1 ring-foreground/10">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button size="xs" variant="ghost" className="rounded-r-none" />
+          }
+        >
+          <ChatCircleTextIcon />
+          {plural(entries.length, "comment")}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          aria-label="Comments"
+          align="end"
+          className="w-80 max-w-[calc(100vw-2rem)]"
+        >
+          {entries.map((e) => (
+            <DropdownMenuItem
+              key={e.key}
+              disabled={!e.onPick}
+              onClick={e.onPick}
+              className="grid items-start gap-0.5"
+            >
+              <span className="font-mono text-caption text-muted-foreground">
+                {e.where}
+              </span>
+              <span className="line-clamp-2 break-words">{e.text}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Previous comment"
+        title="Previous comment (p)"
+        onClick={() => onStep(-1)}
+      >
+        <CaretUpIcon />
+      </Button>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Next comment"
+        title="Next comment (n)"
+        onClick={() => onStep(1)}
+      >
+        <CaretDownIcon />
+      </Button>
+    </span>
+  )
+}
+
+/** The keys a review's diff takes, with what each does. */
+export const reviewKeys: {
+  keys: string[]
+  does: string
+  comments?: boolean
+}[] = [
+  { keys: ["j", "k"], does: "Next and previous file" },
+  { keys: ["n", "p"], does: "Next and previous comment", comments: true },
+  { keys: ["v"], does: "Mark the file viewed and go to the next unviewed one" },
+  {
+    keys: ["c"],
+    does: "Comment on the line in focus: the comment last gone to, or the line at the top",
+    comments: true,
+  },
+  { keys: ["?"], does: "All keys" },
+]
+
+/** A line under a review naming its keys, where there is a keyboard to press them. */
+export function ReviewKeys({
+  comments,
+  onHelp,
+}: {
+  /** Whether c applies: the review takes line comments. */
+  comments?: boolean
+  onHelp: () => void
+}) {
+  const short: Record<string, string> = {
+    j: "files",
+    n: "comments",
+    v: "viewed, next",
+    c: "comment",
+    "?": "all keys",
+  }
+  return (
+    <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground [@media(pointer:fine)]:flex">
+      {reviewKeys
+        .filter((k) => comments || !k.comments)
+        .map((k) => (
+          <span key={k.keys[0]} className="flex items-center gap-1">
+            {k.keys.map((key) => (
+              <Kbd key={key}>{key}</Kbd>
+            ))}
+            {k.keys[0] === "?" ? (
+              <button
+                type="button"
+                className="underline-offset-2 hover:text-foreground hover:underline"
+                onClick={onHelp}
+              >
+                {short[k.keys[0]]}
+              </button>
+            ) : (
+              short[k.keys[0]]
+            )}
+          </span>
+        ))}
+    </p>
+  )
+}
+
 /** A review without a diff to fill it, or one still loading: it scrolls as a page. */
 export function ReviewScroll({ children }: { children: ReactNode }) {
   return (
@@ -235,6 +380,7 @@ export function UnifiedDiff({
   onPlace,
   viewed,
   onViewed,
+  keys,
   ref,
 }: {
   diff: string
@@ -257,6 +403,8 @@ export function UnifiedDiff({
   /** The branch whose viewed marks it offers (viewedScope), and how many are viewed. */
   viewed?: string
   onViewed?: (progress: ViewedProgress) => void
+  /** Whether it takes the review's keys (reviewKeys) while it shows. */
+  keys?: boolean
   /** For a list of comments that jumps to them. */
   ref?: Ref<DiffViewHandle>
 }) {
@@ -286,6 +434,7 @@ export function UnifiedDiff({
           onPlace={onPlace}
           viewed={viewed}
           onViewed={onViewed}
+          keys={keys}
           ref={ref}
         />
       </Suspense>

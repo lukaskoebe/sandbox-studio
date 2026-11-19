@@ -31,10 +31,13 @@ import { textareaClass } from "@/components/memory-dialogs"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import type { DiffViewHandle } from "@/components/diff-view"
 import {
+  CommentNav,
   FeedbackTargetSelect,
+  ReviewKeys,
   ReviewScroll,
   UnifiedDiff,
   ViewedCount,
+  commentWhere,
   newChatTarget,
   reviewPaneClass,
   parseDiff,
@@ -537,6 +540,25 @@ export function ForgeReview({
           progress={progress}
           onNext={() => diffView.current?.nextUnviewed()}
         />
+        <CommentNav
+          entries={[
+            ...[...comments]
+              .sort((a, b) => a.index - b.index)
+              .map((c) => ({
+                key: String(c.index),
+                where: commentWhere(lines, c),
+                text: c.text,
+                onPick: () => diffView.current?.scrollToLine(c.index),
+              })),
+            // Outside the diff shown, they are listed after its last file.
+            ...elsewhere.map((c, i) => ({
+              key: `elsewhere-${i}`,
+              where: `${c.path}:${c.line} · outside the diff shown`,
+              text: c.body,
+            })),
+          ]}
+          onStep={(dir) => diffView.current?.nextComment(dir)}
+        />
         <DiffStyleSwitch />
       </div>
       <section
@@ -559,6 +581,7 @@ export function ForgeReview({
             draft.pullRequest.head.ref
           )}
           onViewed={setProgress}
+          keys
           ref={diffView}
           // A forge's comment is on one line here; a range would need its own fields.
           ranges={false}
@@ -660,6 +683,10 @@ export function ForgeReview({
           </div>
         </div>
       )}
+      <ReviewKeys
+        comments={pending}
+        onHelp={() => diffView.current?.showKeys()}
+      />
     </div>
   )
 }

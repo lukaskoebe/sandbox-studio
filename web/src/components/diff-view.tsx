@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -27,16 +28,26 @@ import DiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker"
 import { ChatCircleTextIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Kbd } from "@/components/ui/kbd"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
   commentWhere,
   DiffFrameText,
   parseDiff,
+  reviewKeys,
   type DiffLine,
   type LineComment,
   type ViewedProgress,
 } from "@/components/review-feedback"
+import { plural } from "@/lib/approval-kinds"
 import { useDiffStyle } from "@/lib/diff-style"
 import type { DiffPlace } from "@/lib/review-drafts"
 import { cn } from "@/lib/utils"
@@ -254,6 +265,41 @@ export type DiffViewHandle = {
   scrollToLine: (i: number) => void
   /** Brings the next file not marked viewed into view, after the one being read. */
   nextUnviewed: () => void
+  /** Goes to the next comment, or the previous one, from the one last gone to or the top. */
+  nextComment: (dir: 1 | -1) => void
+  /** Lists the keys it takes. */
+  showKeys: () => void
+}
+
+/** What a key pressed in a text field, a terminal, a dialog or a menu is meant for. */
+const typing =
+  "input, textarea, select, [contenteditable=''], [contenteditable='true'], .xterm, [role='dialog'], [role='alertdialog'], [role='menu']"
+
+/** The first of each file's changed lines, which a key that goes to the file puts in focus. */
+function firstChanges(lines: DiffLine[]) {
+  const out: Partial<Record<number, number>> = {}
+  lines.forEach((l, i) => {
+    if (l.line === undefined || out[l.fileNo] !== undefined) return
+    if (l.text.startsWith("+") || l.text.startsWith("-")) out[l.fileNo] = i
+  })
+  return out
+}
+
+/** The shadow root a file's lines are drawn in, under the element the view keeps for it. */
+function linesRoot(el: HTMLElement) {
+  if (el.shadowRoot) return el.shadowRoot
+  for (const n of el.querySelectorAll("*"))
+    if (n.shadowRoot) return n.shadowRoot
+  return undefined
+}
+
+/** Which side a drawn line is on: an unchanged line in a split diff's old column is old. */
+function drawnSide(n: HTMLElement) {
+  const type = n.dataset.lineType ?? ""
+  return type.includes("deletion") ||
+    (!type.includes("addition") && n.closest("[data-deletions]"))
+    ? "deletions"
+    : "additions"
 }
 
 export type DiffViewProps = {
@@ -286,6 +332,11 @@ export type DiffViewProps = {
   viewed?: string
   /** How many of the files are viewed, as that changes. */
   onViewed?: (progress: ViewedProgress) => void
+  /**
+   * Takes the review's keys while it shows: j and k go through the files, n and p through the
+   * comments, v marks a file viewed and goes on, c comments on the line in focus, ? lists them.
+   */
+  keys?: boolean
   ref?: Ref<DiffViewHandle>
 }
 
@@ -305,6 +356,7 @@ export default function DiffView({
   onPlace,
   viewed,
   onViewed,
+  keys,
   ref,
 }: DiffViewProps) {
   const lines = parseDiff(diff)
@@ -364,6 +416,21 @@ export default function DiffView({
     })
     return out
   }, [lines])
+  // The comments in the diff's order, which n and p go through.
+  const ordered = useMemo(
+    () => [...comments].sort((a, b) => a.index - b.index),
+    [comments]
+  )
+  const perFile = useMemo(() => {
+    const out = new Array<number>(files.length).fill(0)
+    for (const c of comments) {
+      const f = c.index < lines.length ? lines[c.index].fileNo : -1
+      if (f >= 0 && f < out.length) out[f]++
+    }
+    return out
+  }, [comments, lines, files.length])
+  const firstChanged = useMemo(() => firstChanges(lines), [lines])
+  const [keysOpen, setKeysOpen] = useState(false)
 
   // An item keeps its version until its annotations move, so the others don't render again.
   const known = useRef(new Map<number, { key: string; version: number }>())
@@ -418,36 +485,24 @@ export default function DiffView({
     })
   }, [diffKey, files, notes, comments, editing, lines, seen, opened])
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      scrollToLine: (i) => {
-        const l = lines[i]
-        if (l.line === undefined) return
-        // A jump as the view shows again goes where it was asked, not back to the place.
-        here.current = undefined
-        view.current?.scrollTo({
-          type: "line",
-          id: String(l.fileNo),
-          lineNumber: l.line,
-          side: sideOf(l),
-          align: "center",
-        })
-      },
-      nextUnviewed: () => {
-        const at = here.current
-          ? files.findIndex((f) => f.name === here.current?.file)
-          : -1
-        // Above the first file, the first is next; in a file, the one after it.
-        const from = here.current && here.current.offset >= 0 ? at + 1 : 0
-        for (let k = 0; k < files.length; k++) {
-          const i = (from + k) % files.length
-          if (seen[i] !== "viewed") return jumpToFile(i)
-        }
-      },
-    }),
-    [lines, files, seen]
-  )
+  useImperativeHandle(ref, () => ({
+    scrollToLine: (i) => {
+      // A jump as the view shows again goes where it was asked, not back to the place.
+      if (!box.current?.offsetHeight) here.current = undefined
+      goToLine(i)
+    },
+    nextUnviewed: () => {
+      const at = here.current
+        ? files.findIndex((f) => f.name === here.current?.file)
+        : -1
+      // Above the first file, the first is next; in a file, the one after it.
+      const from = here.current && here.current.offset >= 0 ? at : -1
+      const i = unviewedAfter(from)
+      if (i !== undefined) jumpToFile(i)
+    },
+    nextComment,
+    showKeys: () => setKeysOpen(true),
+  }))
 
   const commentable = !!onComment
   const selectable = commentable && ranges
@@ -539,20 +594,18 @@ export default function DiffView({
   function jumpToFile(fileNo: number) {
     // A folded file opens where it is picked, and keeps its mark.
     if (folded(fileNo)) setOpened((o) => new Set(o).add(files[fileNo].name))
-    view.current?.scrollTo({
-      type: "item",
-      id: String(fileNo),
-      align: "start",
-    })
+    toItem(fileNo)
   }
-  // A file marked from inside it folds with the view at its name, the next file below.
-  const refold = useRef<number>(undefined)
+  // What waits for the files to change, such as a scroll into a file that is opening.
+  const pending = useRef<() => void>(undefined)
   useEffect(() => {
-    const i = refold.current
-    if (i === undefined) return
-    refold.current = undefined
-    view.current?.scrollTo({ type: "item", id: String(i), align: "start" })
+    const then = pending.current
+    if (!then) return
+    pending.current = undefined
+    then()
   }, [items])
+  const toItem = (i: number) =>
+    view.current?.scrollTo({ type: "item", id: String(i), align: "start" })
   const mark = (fileNo: number, on: boolean) => {
     if (!viewed) return
     const name = files[fileNo].name
@@ -563,8 +616,9 @@ export default function DiffView({
       next.delete(name)
       return next
     })
+    // A file marked from inside it folds with the view at its name, the next file below.
     if (on && here.current?.file === name && here.current.offset > 0)
-      refold.current = fileNo
+      pending.current = () => toItem(fileNo)
   }
   const toggleFold = (fileNo: number) => {
     const name = files[fileNo].name
@@ -575,6 +629,198 @@ export default function DiffView({
     })
   }
   const overview = fill && files.length > 1
+
+  /** The next file after one that isn't viewed, going round, leaving out skip. */
+  function unviewedAfter(from: number, skip?: number) {
+    for (let k = 1; k <= files.length; k++) {
+      const i = (from + k) % files.length
+      if (i !== skip && seen[i] !== "viewed") return i
+    }
+    return undefined
+  }
+  // The comment last gone to, the line in focus for c, and the file a key went to: a key
+  // pressed again before the view has scrolled there goes on from it.
+  const cursor = useRef<number>(undefined)
+  const focusLine = useRef<number>(undefined)
+  const nav = useRef<{ file: number; at: number }>(undefined)
+  const headerHeight = fill ? Math.round(40 * scale) : 0
+  /** The file being read and how far into it: less than 0 above the first one. */
+  const current = () => {
+    const n = nav.current
+    if (n && performance.now() - n.at < 800) return { file: n.file, into: 0 }
+    const p = here.current
+    const i = p ? files.findIndex((f) => f.name === p.file) : -1
+    return { file: Math.max(i, 0), into: p ? p.offset : -1 }
+  }
+  /** The top and bottom of what shows of the lines, under the name of the file at the top. */
+  const visible = () => {
+    const r = box.current?.getBoundingClientRect()
+    return { top: (r?.top ?? 0) + headerHeight, bottom: r?.bottom ?? 0 }
+  }
+  const drawn = (fileNo: number) => {
+    const el = view.current
+      ?.getInstance()
+      ?.getRenderedItems()
+      .find((r) => r.id === String(fileNo))?.element
+    return el && linesRoot(el)
+  }
+  /**
+   * How far line i is below the top of what shows, less than 0 above it. A line the view
+   * hasn't drawn is far off: above or below by its file, or by the lines drawn of its file.
+   */
+  const offsetOf = (i: number) => {
+    const l = lines[i]
+    const at = current().file
+    const root = drawn(l.fileNo)
+    if (!root || l.line === undefined)
+      return l.fileNo >= at ? Infinity : -Infinity
+    const rows = [
+      ...root.querySelectorAll<HTMLElement>(`[data-line="${l.line}"]`),
+    ]
+    const row = rows.find((n) =>
+      l.removed
+        ? n.dataset.lineType?.includes("deletion")
+        : drawnSide(n) === "additions"
+    )
+    if (row) return row.getBoundingClientRect().top - visible().top
+    let least = Infinity
+    for (const n of root.querySelectorAll<HTMLElement>("[data-line]"))
+      least = Math.min(least, Number(n.dataset.line))
+    if (least === Infinity) return l.fileNo >= at ? Infinity : -Infinity
+    return l.line < least ? -Infinity : Infinity
+  }
+  const inView = (i: number) => {
+    const o = offsetOf(i)
+    const { top, bottom } = visible()
+    return o >= -4 && o < bottom - top
+  }
+  /** The first changed line that shows, or else the first line. */
+  const firstShown = () => {
+    const { top, bottom } = visible()
+    let plain: number | undefined
+    for (const r of view.current?.getInstance()?.getRenderedItems() ?? []) {
+      const root = linesRoot(r.element)
+      if (!root) continue
+      for (const n of root.querySelectorAll<HTMLElement>("[data-line]")) {
+        const y = n.getBoundingClientRect().top
+        if (y < top - 1 || y > bottom - 8) continue
+        const i = indexes.get(
+          lineKey(r.id, drawnSide(n), Number(n.dataset.line))
+        )
+        if (i === undefined) continue
+        const type = n.dataset.lineType ?? ""
+        if (type.includes("addition") || type.includes("deletion")) return i
+        plain ??= i
+      }
+    }
+    return plain
+  }
+  /** Brings line i to the middle of the view, opening its file when it is folded. */
+  function goToLine(i: number) {
+    const l = lines[i]
+    if (l.line === undefined) return
+    if (comments.some((c) => c.index === i)) cursor.current = i
+    focusLine.current = i
+    nav.current = undefined
+    const go = () =>
+      view.current?.scrollTo({
+        type: "line",
+        id: String(l.fileNo),
+        lineNumber: l.line ?? 0,
+        side: sideOf(l),
+        align: "center",
+      })
+    if (!folded(l.fileNo)) return go()
+    setOpened((o) => new Set(o).add(files[l.fileNo].name))
+    pending.current = go
+  }
+  function nextComment(dir: 1 | -1) {
+    const n = ordered.length
+    if (!n) return
+    const k = ordered.findIndex((c) => c.index === cursor.current)
+    let to: number
+    if (k >= 0 && inView(ordered[k].index)) to = (k + dir + n) % n
+    else {
+      // Gone elsewhere since: the first comment below the top, or the last above it.
+      const offsets = ordered.map((c) => offsetOf(c.index))
+      to = dir > 0 ? offsets.findIndex((o) => o > 4) : -1
+      if (dir < 0)
+        for (let j = n - 1; j >= 0 && to < 0; j--) if (offsets[j] < -4) to = j
+      if (to < 0) to = dir > 0 ? 0 : n - 1
+    }
+    goToLine(ordered[to].index)
+  }
+  const goToFile = (i: number) => {
+    nav.current = { file: i, at: performance.now() }
+    focusLine.current = firstChanged[i]
+    toItem(i)
+  }
+  const stepFile = (dir: 1 | -1) => {
+    const { file, into } = current()
+    if (dir > 0) {
+      if (into < 0) goToFile(0)
+      else if (file + 1 < files.length) goToFile(file + 1)
+    } else if (into > 8) goToFile(file)
+    else if (file > 0) goToFile(file - 1)
+  }
+  /** Marks the file being read viewed and goes to the next one that isn't. */
+  const markAndNext = () => {
+    if (!viewed) return
+    const { file, into } = current()
+    if (into < 0 || seen[file] === "viewed") {
+      const to = unviewedAfter(into < 0 ? -1 : file)
+      if (to !== undefined) goToFile(to)
+      return
+    }
+    const to = unviewedAfter(file, file)
+    mark(file, true)
+    if (to === undefined) return
+    nav.current = { file: to, at: performance.now() }
+    pending.current = () => goToFile(to)
+  }
+  /** Opens a comment on the line in focus: the one last gone to, or the first that shows. */
+  const commentHere = () => {
+    if (!onComment) return
+    const { file } = current()
+    let i = focusLine.current
+    const stays =
+      i !== undefined &&
+      (inView(i) || (lines[i].fileNo === file && folded(file)))
+    if (!stays) i = firstShown() ?? firstChanged[file]
+    if (i === undefined) return
+    const l = lines[i]
+    focusLine.current = i
+    open({ index: i })
+    if (!folded(l.fileNo)) return
+    setOpened((o) => new Set(o).add(files[l.fileNo].name))
+    pending.current = () => goToLine(i)
+  }
+  const onKey = useRef<(e: KeyboardEvent) => void>(undefined)
+  onKey.current = (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return
+    if (e.target instanceof Element && e.target.closest(typing)) return
+    // Kept behind another tab, it leaves the keys to what shows.
+    if (!box.current?.offsetHeight) return
+    const acts: Partial<Record<string, () => void>> = {
+      j: () => stepFile(1),
+      k: () => stepFile(-1),
+      n: () => nextComment(1),
+      p: () => nextComment(-1),
+      v: markAndNext,
+      c: commentHere,
+      "?": () => setKeysOpen(true),
+    }
+    const act = acts[e.key]
+    if (!act) return
+    e.preventDefault()
+    act()
+  }
+  useEffect(() => {
+    if (!keys) return
+    const on = (e: KeyboardEvent) => onKey.current?.(e)
+    document.addEventListener("keydown", on)
+    return () => document.removeEventListener("keydown", on)
+  }, [keys])
 
   const goTo = (p: DiffPlace) => {
     const i = files.findIndex((f) => f.name === p.file)
@@ -665,6 +911,7 @@ export default function DiffView({
               onPick={jumpToFile}
               seen={viewed ? seen : undefined}
               onMark={mark}
+              notes={perFile}
               className="hidden w-64 shrink-0 @3xl:grid"
             />
           )}
@@ -702,6 +949,7 @@ export default function DiffView({
                               onPick={jumpToFile}
                               seen={viewed ? seen : undefined}
                               onMark={mark}
+                              notes={perFile}
                               className="max-h-40 @3xl:hidden"
                             />
                           )}
@@ -808,6 +1056,7 @@ export default function DiffView({
                   if (!comment) return null
                   const where = commentWhere(lines, comment)
                   const l = lines[i]
+                  const nth = ordered.findIndex((c) => c.index === i) + 1
                   return (
                     <div
                       role="note"
@@ -821,13 +1070,18 @@ export default function DiffView({
                         title="Edit the comment"
                         onClick={() => open({ index: i, start: comment.start })}
                       >
-                        {(commentLabel || comment.start !== undefined) && (
+                        {(commentLabel ||
+                          comment.start !== undefined ||
+                          ordered.length > 1) && (
                           <span className="block text-caption text-muted-foreground">
                             {[
                               commentLabel,
                               comment.start !== undefined
                                 ? `lines ${lines[comment.start]?.line}–${l.line}`
                                 : `line ${l.line}`,
+                              ordered.length > 1
+                                ? `${nth} of ${ordered.length}`
+                                : undefined,
                             ]
                               .filter(Boolean)
                               .join(" · ")}
@@ -869,6 +1123,33 @@ export default function DiffView({
           </div>
         </div>
       </div>
+      {keys && (
+        <Dialog open={keysOpen} onOpenChange={setKeysOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Keys in a review</DialogTitle>
+              <DialogDescription>
+                While the diff shows and you aren't typing.
+              </DialogDescription>
+            </DialogHeader>
+            <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-2 text-xs">
+              {reviewKeys
+                .filter((k) => !k.comments || commentable)
+                .filter((k) => k.keys[0] !== "v" || !!viewed)
+                .map((k) => (
+                  <Fragment key={k.keys[0]}>
+                    <dt className="flex gap-1">
+                      {k.keys.map((key) => (
+                        <Kbd key={key}>{key}</Kbd>
+                      ))}
+                    </dt>
+                    <dd>{k.does}</dd>
+                  </Fragment>
+                ))}
+            </dl>
+          </DialogContent>
+        </Dialog>
+      )}
     </WorkerPoolContext.Provider>
   )
 }
@@ -879,6 +1160,7 @@ function FileOverview({
   onPick,
   seen,
   onMark,
+  notes,
   className,
 }: {
   files: FileDiffMetadata[]
@@ -886,6 +1168,8 @@ function FileOverview({
   /** Each file's viewed mark, when the diff offers them. */
   seen?: Seen[]
   onMark?: (fileNo: number, on: boolean) => void
+  /** How many comments each file has. */
+  notes?: number[]
   className?: string
 }) {
   const all = files.map(counts)
@@ -960,6 +1244,18 @@ function FileOverview({
                     {base}
                   </bdi>
                 </span>
+                {!!notes?.[i] && (
+                  <span
+                    title={plural(notes[i], "comment")}
+                    className="flex shrink-0 items-center gap-0.5 font-mono text-caption text-muted-foreground"
+                  >
+                    <ChatCircleTextIcon aria-hidden className="size-3" />
+                    <span aria-hidden>{notes[i]}</span>
+                    <span className="sr-only">
+                      {plural(notes[i], "comment")}
+                    </span>
+                  </span>
+                )}
                 {seen?.[i] === "changed" && (
                   <span
                     title="Changed since you viewed it"

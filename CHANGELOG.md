@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A review's comments sit in its bar instead of a Comments tab: **2 comments** lists them and
+  goes to one, and its arrows step through them. The note opens with **Add a note** beside
+  the decision, which says what goes with it (2 comments · no note) and how many files you
+  haven't viewed. Each comment says which it is (1 of 2), and the list of files shows how many
+  each has. With a keyboard, **j**/**k** go through the files, **n**/**p** through the
+  comments, **v** marks a file viewed and goes to the next, **c** comments on the line in
+  focus and **?** lists the keys.
 - Mark files viewed in a review. **Viewed** in a file's header or in the list of files folds
   it away, the bar counts them (2 / 3 viewed) and **Next unviewed** goes to the next one. The
   marks stay with the branch: when the agent pushes it again after a rejection, a viewed

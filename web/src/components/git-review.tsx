@@ -34,8 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CountPill } from "@/components/count-pill"
 import {
   ForgeReview,
   ForgeReviewSummary,
@@ -51,8 +49,10 @@ import type { DiffViewHandle } from "@/components/diff-view"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
+  CommentNav,
   DiffFrameText,
   FeedbackTargetSelect,
+  ReviewKeys,
   ReviewScroll,
   UnifiedDiff,
   ViewedCount,
@@ -74,7 +74,7 @@ import {
   type Approval,
   type GitDetail,
 } from "@/lib/api/client"
-import { approvalKind, gitSummary } from "@/lib/approval-kinds"
+import { approvalKind, gitSummary, plural } from "@/lib/approval-kinds"
 import { draftBase, useReviewDraft } from "@/lib/review-drafts"
 import { cn, formatAge } from "@/lib/utils"
 import { viewedScope } from "@/lib/viewed-files"
@@ -417,8 +417,6 @@ export function GitOutcome({ git }: { git: GitDetail }) {
   )
 }
 
-type Tab = "changes" | "comments"
-
 /**
  * The full review of a git approval, filling its parent. A push's diff is its one scroll
  * frame: the head and the push's facts scroll in above the first file, a bar picks one of its
@@ -466,10 +464,10 @@ function PushReview({
   const review = git?.review
   const proposal = review?.pullRequest
   const pending = approval.status === "pending"
-  // What the reader wrote, the tab and where they were in the diff outlive the review: another
-  // tab, a folded screen or a reload finds them again. Line comments sit on the diff's lines, so
-  // a diff that changed keeps only the note and where it goes.
-  const saved = useReviewDraft<PushDraft, Tab>(
+  // What the reader wrote and where they were in the diff outlive the review: another tab, a
+  // folded screen or a reload finds them again. Line comments sit on the diff's lines, so a diff
+  // that changed keeps only the note and where it goes.
+  const saved = useReviewDraft<PushDraft>(
     approval.id,
     () => ({
       note: "",
@@ -479,14 +477,12 @@ function PushReview({
     {
       base: draftBase(review?.diff),
       carry: (d, fresh) => ({ ...fresh, note: d.note, target: d.target }),
-      tab: "changes",
       off: !pending,
     }
   )
   const { note, comments, target } = saved.draft
-  // A decided review has only its changes.
-  const tab = pending ? (saved.tab ?? "changes") : "changes"
-  const setTab = saved.setTab
+  // The note opens under the decision when asked, and by itself when it has text.
+  const [noteOpen, setNoteOpen] = useState<boolean>()
   const setNote = (v: string) => saved.change({ note: v })
   const setComments = (v: LineComment[]) => saved.change({ comments: v })
   const setTarget = (v: FeedbackTarget) => saved.change({ target: v })
@@ -591,8 +587,7 @@ function PushReview({
   const where = (c: LineComment) => commentWhere(lines, c)
   const jump = (i: number) => {
     setCommit("")
-    setTab("changes")
-    // The panel shows on the next frame.
+    // The whole push shows again on the next frame.
     requestAnimationFrame(() => diffView.current?.scrollToLine(i))
   }
 
@@ -617,20 +612,20 @@ function PushReview({
 
   // Comments left on the push earlier, which the agent reads until a decision replaces them.
   const left = pending && !pr ? git.push.note : undefined
+  const leftField = left && (
+    <section
+      aria-label="Comments left for the agent"
+      className="grid max-h-32 gap-1 overflow-auto rounded-md bg-muted/50 px-2 py-1.5 text-xs"
+    >
+      <p className="text-muted-foreground">
+        Left for the agent · new comments replace these, and deciding without
+        any sends them along
+      </p>
+      <p className="break-words whitespace-pre-wrap">{left}</p>
+    </section>
+  )
   const noteField = (
     <div className="grid gap-2">
-      {left && (
-        <section
-          aria-label="Comments left for the agent"
-          className="grid gap-1 rounded-md bg-muted/50 px-2 py-1.5 text-xs"
-        >
-          <p className="text-muted-foreground">
-            Left for the agent · new comments replace these, and deciding
-            without any sends them along
-          </p>
-          <p className="break-words whitespace-pre-wrap">{left}</p>
-        </section>
-      )}
       <textarea
         aria-label="Note for the agent"
         placeholder={
@@ -638,9 +633,11 @@ function PushReview({
             ? "Note for the agent. Comment on a line of the diff with its button."
             : "Note for the agent"
         }
-        rows={rv ? 4 : 2}
+        rows={rv ? 3 : 2}
         maxLength={4000}
         value={note}
+        // Opened with Add a note, it takes the keys.
+        autoFocus={!!rv && noteOpen}
         onChange={(e) => setNote(e.target.value)}
         className={textareaClass}
       />
@@ -800,6 +797,10 @@ function PushReview({
     </>
   )
 
+  const picked = commit ? rv?.commits?.find((c) => c.sha === commit) : undefined
+  const showNote = noteOpen ?? !!note.trim()
+  const unviewed = progress ? progress.total - progress.viewed : 0
+
   // The decision, below the review: it stays in view as the review scrolls.
   const decision = (sticky: boolean) =>
     pending && (
@@ -849,7 +850,9 @@ function PushReview({
           </div>
         )}
         {(pr || (proposal && openPR)) && attributionField}
-        <div className="flex flex-wrap items-center gap-1.5">
+        {rv && leftField}
+        {rv && showNote && noteField}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="min-w-0 flex-1 basis-56 empty:hidden">
             {approval.sandboxId && (
               <FeedbackTargetSelect
@@ -861,6 +864,33 @@ function PushReview({
               />
             )}
           </div>
+          {rv && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                {comments.length
+                  ? plural(comments.length, "comment")
+                  : "No comments"}{" "}
+                · {note.trim() ? "a note" : "no note"}
+                <Button
+                  size="xs"
+                  variant="outline"
+                  aria-expanded={showNote}
+                  onClick={() => setNoteOpen(!showNote)}
+                >
+                  {showNote
+                    ? "Hide the note"
+                    : note.trim()
+                      ? "Edit the note"
+                      : "Add a note"}
+                </Button>
+              </span>
+              {!picked && unviewed > 0 && (
+                <span className="whitespace-nowrap">
+                  {plural(unviewed, "file")} not viewed
+                </span>
+              )}
+            </div>
+          )}
           <div className="ml-auto flex items-center gap-1.5">
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -955,151 +985,90 @@ function PushReview({
     return (
       <ReviewScroll>
         {facts}
+        {leftField}
         {pending && noteField}
         {decision(true)}
       </ReviewScroll>
     )
 
-  const picked = commit ? rv.commits?.find((c) => c.sha === commit) : undefined
   return (
     <div className={reviewPaneClass}>
-      <Tabs
-        value={tab}
-        onValueChange={(v: Tab) => setTab(v)}
-        className="min-h-0 min-w-0 flex-1"
-      >
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {pending && (
-            <TabsList>
-              <TabsTrigger value="changes">Changes</TabsTrigger>
-              <TabsTrigger value="comments">
-                Comments
-                <CountPill
-                  count={
-                    comments.length + (note.trim() ? 1 : 0) + (left ? 1 : 0)
-                  }
-                />
-              </TabsTrigger>
-            </TabsList>
-          )}
-          {tab === "changes" && (
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <CommitPicker
+          commits={rv.commits ?? []}
+          more={rv.moreCommits}
+          value={picked?.sha ?? ""}
+          onChange={setCommit}
+        />
+        {rv.diffTruncated && !picked && (
+          <Badge variant="outline">diff truncated</Badge>
+        )}
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {!picked && (
             <>
-              <CommitPicker
-                commits={rv.commits ?? []}
-                more={rv.moreCommits}
-                value={picked?.sha ?? ""}
-                onChange={setCommit}
+              <ViewedCount
+                progress={progress}
+                onNext={() => diffView.current?.nextUnviewed()}
               />
-              {rv.diffTruncated && !picked && (
-                <Badge variant="outline">diff truncated</Badge>
-              )}
-              <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                {!picked && (
-                  <ViewedCount
-                    progress={progress}
-                    onNext={() => diffView.current?.nextUnviewed()}
-                  />
-                )}
-                <DiffStyleSwitch />
-              </span>
+              <CommentNav
+                entries={[...comments]
+                  .sort((a, b) => a.index - b.index)
+                  .map((c) => ({
+                    key: String(c.index),
+                    where: where(c),
+                    text: c.text,
+                    onPick: () => jump(c.index),
+                  }))}
+                onStep={(dir) => diffView.current?.nextComment(dir)}
+              />
             </>
           )}
-        </div>
-        <TabsContent
-          value="changes"
-          keepMounted
-          className="flex min-h-0 min-w-0 flex-col"
-        >
-          {/* Kept while a commit shows, so the place and the comments being written stay. */}
-          <div
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col",
-              picked && "hidden"
-            )}
-          >
-            <UnifiedDiff
-              diff={rv.diff}
-              comments={comments}
-              onComment={pending ? setComments : undefined}
-              fill
-              header={facts}
-              place={saved.place}
-              onPlace={saved.onPlace}
-              viewed={viewedScope(
-                git.push.forgeName || git.push.forgeId,
-                git.push.owner,
-                git.push.repo,
-                git.push.ref
-              )}
-              onViewed={setProgress}
-              ref={diffView}
-            />
-          </div>
-          {picked && (
-            <CommitDiff
-              key={picked.sha}
-              env={approval.environmentId}
-              approvalId={approval.id}
-              commit={picked}
-              pending={pending}
-              onAll={() => setCommit("")}
-            />
-          )}
-        </TabsContent>
-        {pending && (
-          <TabsContent
-            value="comments"
-            keepMounted
-            className="flex min-h-0 min-w-0 flex-col"
-          >
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="grid gap-4">
-                {noteField}
-                <section className="grid gap-2">
-                  <SectionHeader
-                    title="Line comments"
-                    icon={ChatCircleTextIcon}
-                    area="git"
-                    count={comments.length}
-                  />
-                  {comments.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      None yet. In Changes, click a line's number to comment on
-                      it, or drag over several numbers to comment on them all.
-                    </p>
-                  ) : (
-                    <ul
-                      aria-label="Line comments"
-                      className="divide-y rounded-md text-xs ring-1 ring-foreground/10"
-                    >
-                      {[...comments]
-                        .sort((a, b) => a.index - b.index)
-                        .map((c) => (
-                          <li key={c.index}>
-                            <button
-                              type="button"
-                              title="Show the line"
-                              className="grid w-full gap-0.5 px-2 py-1.5 text-left hover:bg-muted/50"
-                              onClick={() => jump(c.index)}
-                            >
-                              <Ident className="text-muted-foreground">
-                                {where(c)}
-                              </Ident>
-                              <span className="break-words whitespace-pre-wrap">
-                                {c.text}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </section>
-              </div>
-            </ScrollArea>
-          </TabsContent>
+          <DiffStyleSwitch />
+        </span>
+      </div>
+      {/* Kept while a commit shows, so the place and the comments being written stay. */}
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          picked && "hidden"
         )}
-      </Tabs>
+      >
+        <UnifiedDiff
+          diff={rv.diff}
+          comments={comments}
+          onComment={pending ? setComments : undefined}
+          fill
+          header={facts}
+          place={saved.place}
+          onPlace={saved.onPlace}
+          viewed={viewedScope(
+            git.push.forgeName || git.push.forgeId,
+            git.push.owner,
+            git.push.repo,
+            git.push.ref
+          )}
+          onViewed={setProgress}
+          keys
+          ref={diffView}
+        />
+      </div>
+      {picked && (
+        <CommitDiff
+          key={picked.sha}
+          env={approval.environmentId}
+          approvalId={approval.id}
+          commit={picked}
+          pending={pending}
+          onAll={() => setCommit("")}
+        />
+      )}
       {decision(false)}
+      {!picked && (
+        <ReviewKeys
+          comments={pending}
+          onHelp={() => diffView.current?.showKeys()}
+        />
+      )}
     </div>
   )
 }

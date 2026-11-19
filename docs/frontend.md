@@ -291,7 +291,7 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   Files or Changes shows, every 30 otherwise, and when a request ends. Files keeps its `?file=`
   while another tab shows. Changes stays mounted once opened, hidden while another tab shows,
   like the terminals. A push or pull request review keeps what the reader wrote but hasn't
-  sent, the tab, and where in the diff they were (the file at the top of the view and how far
+  sent and where in the diff they were (the file at the top of the view and how far
   into it, reported by the diff view's `onPlace` a moment after scrolling stops) in
   localStorage under `studio.review.<approval ID>` (`lib/review-drafts.ts`), so a folded
   screen, another computer or a reload finds them again. Line comments sit on the diff's
@@ -304,7 +304,15 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   it" and counts as unviewed. The diff view folds a viewed file to its header (CodeView's
   `collapsed`), shows the mark in each header and in the list of files, and reports the count
   to the bar's `ViewedCount`; **Next unviewed** goes to the next file after the one at the
-  top. Branches untouched for two months, or past the newest two hundred, go.
+  top. Branches untouched for two months, or past the newest two hundred, go. There is no
+  Comments tab: the bar's `CommentNav` counts the line comments, lists them to jump to and
+  steps through them, the decision row says what goes with the decision and opens the note
+  (Add a note), and the diff view takes the review's keys while it shows (`keys`, a document
+  keydown that skips text fields, terminals, dialogs and menus): j/k files, n/p comments, v
+  mark viewed and go on, c comment on the line in focus, ? the list (`reviewKeys`). n and p go
+  on from the comment last gone to while it shows, and otherwise from the top of the view;
+  where a line is comes from the rows drawn in each file's shadow root, as CodeView has no
+  API for a line's position.
 
 The computer's ⋯ (`components/computer/computer-menu.tsx`) has its name and ID, template, size
 and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkpoint now,
