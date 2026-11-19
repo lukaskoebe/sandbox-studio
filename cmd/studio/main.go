@@ -84,7 +84,7 @@ var serverCommands = []cli.ServerCommand{
 	{Name: "quit", Summary: "Stop the running Studio, as Ctrl-C in its window does.",
 		Detail: "It waits until Studio has shut down. Sandboxes keep running, and their agents reconnect\nwhen Studio starts again."},
 	{Name: "restart", Summary: "Stop the running Studio and start this binary in its place.",
-		Detail: "It does nothing when Studio isn't running. Studio starts again as a service when it starts at\nlogin, and in the background otherwise, logging to logs/studio.log in its data directory.\nSandboxes keep running. The installer runs it, so that a new version takes over at once."},
+		Detail: "It does nothing when Studio isn't running. Studio starts again as a service when it starts at\nlogin, and in the background otherwise, logging to logs/studio.log in its data directory.\nSandboxes keep running; chats in the middle of a turn stop. It refuses a database from a\nnewer Studio than this binary, which couldn't open it. The installer runs it, so that a new version takes over at once."},
 	{Name: "uninstall", Args: "[-keep-data] [-keep-microsandbox] [-yes]", Summary: "Remove Sandbox Studio from this computer, with its data and sandboxes.",
 		Detail: "It lists what goes, and asks you to type uninstall. It stops Studio and removes its programs,\nthe start at login entry, the SSH Include line, the data directory and Studio's VMs, and\nmicrosandbox too unless it has sandboxes that aren't Studio's. -keep-data keeps the data, the\nsandboxes, stopped, and microsandbox, so that installing Studio again brings them back.\n-keep-microsandbox keeps microsandbox and its images."},
 	{Name: "doctor", Summary: "Check that this machine can run Studio, and say how to fix what can't.",

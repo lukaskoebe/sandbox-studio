@@ -17,6 +17,10 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- `studio restart` refuses to replace a Studio whose database is newer than the binary it
+  runs from, which couldn't open it, instead of stopping that Studio and leaving none. A
+  Studio that fails while starting ends the wait at once, instead of after three minutes,
+  and the restart says that chats in the middle of a turn stop.
 - Quitting or restarting Studio while you save something lets that save finish before Studio
   closes its database, instead of failing it or cutting it off halfway. Event streams and
   terminals still end at once.

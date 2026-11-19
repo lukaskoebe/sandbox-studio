@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -65,6 +66,32 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("resolve build worker lock path: %w", err)
 	}
 	return s, nil
+}
+
+// SchemaFits reports whether this binary can open the database at path, reading it only: an
+// error wrapping ErrNewerSchema means a newer Studio migrated it. A database that doesn't
+// exist yet fits.
+func SchemaFits(ctx context.Context, path string) error {
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var current int
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+		return err
+	}
+	names, err := fs.Glob(migrations, "migrations/*.sql")
+	if err != nil {
+		return err
+	}
+	if current > len(names) {
+		return fmt.Errorf("%w (schema %d; this one knows %d)", ErrNewerSchema, current, len(names))
+	}
+	return nil
 }
 
 // DB is the catalog connection, for packages that keep their own tables in it (memory).

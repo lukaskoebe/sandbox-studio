@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/launcher"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // defaultAddr is -addr's default, the only address the autostart entry serves on.
@@ -41,33 +43,54 @@ func runRestart(ctx context.Context, w io.Writer, addr string) int {
 		fmt.Fprintln(w, err)
 		return 1
 	}
-	fmt.Fprintln(w, "Stopping the running Studio; its sandboxes keep running.")
+	// This binary would refuse a database a newer Studio migrated, and leave none running.
+	if err := store.SchemaFits(ctx, p.DB()); errors.Is(err, store.ErrNewerSchema) {
+		fmt.Fprintf(w, "This Studio is older than the running one: %v. The running Studio keeps running; install a newer Studio.\n", err)
+		return 1
+	}
+	fmt.Fprintln(w, "Stopping the running Studio. Its sandboxes keep running; chats in the middle of a turn stop.")
 	if err := stopStudio(ctx, p, addr); err != nil {
 		fmt.Fprintln(w, err)
 		return 1
 	}
+	var exited <-chan error // started by the service manager, which logs to its journal
 	if !startService(ctx, addr) {
-		if _, err := launcher.StartServer(exe, addr); err != nil {
+		if exited, err = launcher.StartServer(exe, addr); err != nil {
 			fmt.Fprintf(w, "Studio stopped, but didn't start again: %v\n", err)
 			return 1
 		}
 	}
-	waited, cancel := context.WithTimeout(ctx, launcher.StartWait)
-	defer cancel()
-	serving := launcher.HTTPServing(addr)
-	for !serving(waited) {
-		select {
-		case <-waited.Done():
-			fmt.Fprintf(w, "Studio started, but doesn't answer on %s yet; see logs/studio.log in %s.\n", addr, p.Data)
-			return 1
-		case <-time.After(250 * time.Millisecond):
-		}
+	if !awaitServing(ctx, w, addr, p.Data, exited) {
+		return 1
 	}
 	fmt.Fprintf(w, "Studio restarted on http://%s.\n", addr)
 	if len(runningApps(appPaths(exe))) > 0 {
 		fmt.Fprintln(w, "The app that is open keeps its old version until you close it and run `studio app`.")
 	}
 	return 0
+}
+
+// awaitServing waits until the Studio just started answers on addr, and reports whether it did.
+// A Studio that exits first, as one refusing the data directory does, ends the wait at once.
+func awaitServing(ctx context.Context, w io.Writer, addr, data string, exited <-chan error) bool {
+	waited, cancel := context.WithTimeout(ctx, launcher.StartWait)
+	defer cancel()
+	serving := launcher.HTTPServing(addr)
+	for !serving(waited) {
+		select {
+		case err := <-exited:
+			if err == nil {
+				err = errors.New("it exited")
+			}
+			fmt.Fprintf(w, "Studio stopped while starting (%v); see logs/studio.log in %s.\n", err, data)
+			return false
+		case <-waited.Done():
+			fmt.Fprintf(w, "Studio started, but doesn't answer on %s yet; see logs/studio.log in %s.\n", addr, data)
+			return false
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return true
 }
 
 // startService starts Studio through the service manager when its login entry starts this

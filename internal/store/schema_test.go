@@ -51,3 +51,32 @@ func TestOpenRefusesANewerSchema(t *testing.T) {
 	}
 	st.Close()
 }
+
+// SchemaFits tells, reading only, whether a database is one this binary can open.
+func TestSchemaFits(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "studio.db")
+	if err := SchemaFits(ctx, path); err != nil {
+		t.Fatalf("a database not made yet: %v", err)
+	}
+	st, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var known int
+	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&known); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+	if err := SchemaFits(ctx, path); err != nil {
+		t.Fatalf("this binary's own database: %v", err)
+	}
+	db, _ := sql.Open("sqlite", "file:"+path)
+	defer db.Close()
+	if _, err := db.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(known+1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := SchemaFits(ctx, path); !errors.Is(err, ErrNewerSchema) {
+		t.Fatalf("a newer Studio's database: %v", err)
+	}
+}

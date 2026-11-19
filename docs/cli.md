@@ -63,7 +63,7 @@ These run without a Studio to talk to (`cmd/studio/quit.go`, `restart.go`, `unin
 | Command | Does |
 |---|---|
 | `quit` | stops the running Studio and waits until it let go of its data directory; sandboxes keep running. Settings > General > Shut down does the same (`POST /api/system/shutdown`) |
-| `restart` | stops the running Studio and starts this binary in its place: through the login entry when that starts this binary, else detached, logging to `logs/studio.log`. It does nothing when Studio isn't running. `install.sh` runs it, as a Studio keeps running its old binary until it stops |
+| `restart` | stops the running Studio and starts this binary in its place: through the login entry when that starts this binary, else detached, logging to `logs/studio.log`. It does nothing when Studio isn't running, and refuses, leaving that Studio running, when the database is from a newer Studio than this binary. Sandboxes keep running; chats in the middle of a turn stop. A Studio started detached that exits before it answers ends the wait at once. `install.sh` runs it, as a Studio keeps running its old binary until it stops |
 | `uninstall` | removes the programs next to this binary, the launcher entry, the login entry, the SSH Include line, the data directory, this Studio's VMs and checkpoints, and `~/.microsandbox` unless it has other VMs |
 
 `uninstall` lists what goes and asks for the word `uninstall`; without a terminal it needs `-yes`.
