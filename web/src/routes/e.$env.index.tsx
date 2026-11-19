@@ -24,6 +24,7 @@ import { SessionLines } from "@/components/session-lines"
 import { SetupCard } from "@/components/setup-card"
 import { OnboardingCard } from "@/components/onboarding-card"
 import { ColumnPage } from "@/components/column-page"
+import { ContinuePlaces } from "@/components/continue-places"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Approval, type Sandbox } from "@/lib/api/client"
@@ -87,6 +88,12 @@ function Home() {
         <GetStarted env={env} />
       ) : (
         <>
+          <ContinuePlaces
+            env={env}
+            teammates={teammates.data ?? undefined}
+            chats={chats.data ?? undefined}
+            sandboxes={sandboxes.data ?? undefined}
+          />
           <NeedsYou env={env} approvals={waiting} />
           <SessionLines
             env={env}

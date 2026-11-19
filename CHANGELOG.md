@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Home has **Continue where you left off**: the last three threads, teammates, computers or
+  reviews you had open in this browser, newest first, each opening on the tab you left it on,
+  such as a thread's Changes. A thread or computer that is gone drops out, and so does a place
+  left more than two weeks ago.
 - Studio opens in its app by default when the app is installed next to `studio`: a `studio`
   started in a terminal, a second start and the Windows tray's Open Studio start the app, and
   the browser opens only without it, without a display or when it fails to start. The app's

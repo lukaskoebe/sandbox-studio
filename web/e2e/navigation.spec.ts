@@ -386,3 +386,56 @@ test("the home's rim drags the screen out of its rail, over the page and back to
   await expect(page).toHaveURL(/[?&]fold=/)
   await expect(now).toBeVisible()
 })
+
+test("Home continues where you left off, on the tab it was left on, and leaves out a thread that is gone", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Back ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const deskId = await api.createSandbox(sandboxName("back"), id)
+  await api.guestReady(deskId)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${deskId}/chats`
+  ))!
+
+  // Nothing to continue in a browser that hasn't been anywhere yet.
+  await page.goto(`/e/${env}`)
+  const places = page.getByRole("region", {
+    name: "Continue where you left off",
+  })
+  await expect(page.getByRole("heading", { name: "Needs you" })).toBeVisible()
+  await expect(places).toHaveCount(0)
+
+  await page.goto(`/e/${env}/teammates/${id}?thread=${chat.id}&tab=details`)
+  await expect(
+    page.getByRole("tab", { name: "Details", selected: true })
+  ).toBeVisible()
+  await page
+    .locator('[data-slot="sidebar-menu-button"]')
+    .filter({ hasText: "Home" })
+    .click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
+  const row = places.getByRole("link").filter({ hasText: name })
+  await expect(row).toContainText("Details")
+  await expect(row).toContainText("just now")
+  await row.click()
+  await expect(page).toHaveURL(new RegExp(`thread=${chat.id}`))
+  await expect(page).toHaveURL(/[?&]tab=details/)
+
+  // A thread that is gone is left out, and forgotten.
+  await api.json("DELETE", `/api/environments/${env}/chats/${chat.id}`)
+  await page.goto(`/e/${env}`)
+  await expect(page.getByRole("heading", { name: "Needs you" })).toBeVisible()
+  await expect(places.getByRole("link").filter({ hasText: name })).toHaveCount(
+    0
+  )
+  expect(
+    await page.evaluate(
+      (key) => localStorage.getItem(key) ?? "",
+      `studio.places.${env}`
+    )
+  ).not.toContain(chat.id)
+})

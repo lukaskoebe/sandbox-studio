@@ -13,6 +13,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { WindowBar } from "@/components/window-bar"
 import { $api } from "@/lib/api/client"
 import { rememberEnvironment } from "@/lib/environment"
+import { useRecordPlaces } from "@/lib/places"
 import { setupOnFirstLoad } from "@/lib/setup"
 import { useVisualViewportHeight } from "@/hooks/use-visual-viewport-height"
 import { RouteError } from "@/components/route-error"
@@ -52,6 +53,8 @@ function EnvironmentLayout() {
     ? { height: viewportHeight, minHeight: viewportHeight }
     : undefined
   useEffect(() => rememberEnvironment(env), [env])
+  // Home offers to continue where you left off.
+  useRecordPlaces(env)
   // Both kept in this browser: how wide the sidebar is, and whether it is folded to its icons.
   const [width, setWidth] = useStoredSize(
     "studio.sidebar-width",

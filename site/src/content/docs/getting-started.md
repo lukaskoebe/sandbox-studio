@@ -92,7 +92,7 @@ Or install Studio as a web app: in Chrome or Edge, choose **Install Sandbox Stud
 
 ![Home: a network request that needs you above the computers' timelines](../../assets/screenshots/home.jpg)
 
-**Home** shows what needs you, such as a network request or a push to review, and below it a timeline of each computer: its chats, terminals, browser sessions and previews branch off its line as they open and rejoin it as they close. **Earlier** lists what happened before. The sidebar lists, from the top:
+**Home** opens with **Continue where you left off**: the last three threads, computers or reviews you had open in this browser, each on the tab you left it on. Below that it shows what needs you, such as a network request or a push to review, and below it a timeline of each computer: its chats, terminals, browser sessions and previews branch off its line as they open and rejoin it as they close. **Earlier** lists what happened before. The sidebar lists, from the top:
 
 - the environment you are in, which switches to [another](../environments/);
 - **Search** (⌘K or Ctrl+K), which finds teammates, computers, threads, settings and actions;
