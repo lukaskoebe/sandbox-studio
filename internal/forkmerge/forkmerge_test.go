@@ -312,6 +312,110 @@ func TestReplayRefusesWhatChangedSince(t *testing.T) {
 	}
 }
 
+// A replay that stopped halfway, on a file it couldn't write, is finished by running it again:
+// what it already did counts as unchanged. A disk too full for it fails it before it starts.
+func TestReplayRunsAgainAfterStoppingHalfway(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into read-only directories")
+	}
+	gitEnv(t)
+	root := t.TempDir()
+	source := newSandbox(t, filepath.Join(root, "source"))
+	source.write("workspace/app/a.txt", "a\n")
+	source.git("workspace/app", "init", "-q", "-b", "main")
+	source.git("workspace/app", "add", "-A")
+	source.git("workspace/app", "commit", "-q", "-m", "c0")
+	source.write("workspace/b.txt", "b\n")
+	source.write("workspace/z/late.txt", "late\n")
+	fork := source.fork(filepath.Join(root, "fork"))
+	if _, err := RecordBase(fork.cfg, StateBase, "fork-1"); err != nil {
+		t.Fatal(err)
+	}
+	fork.write("workspace/app/a.txt", "a fork\n")
+	fork.git("workspace/app", "commit", "-q", "-am", "c1")
+	fork.write("workspace/b.txt", "b fork\n")
+	fork.write("workspace/z/late.txt", "late fork\n")
+	scratch, rep := merge(t, source, fork, filepath.Join(root, "scratch"))
+	if rep.Conflicts != 0 {
+		t.Fatalf("merge: %+v", rep)
+	}
+	// The scratch sandbox's own commit moves main in the replay.
+	scratch.git("workspace/app", "reset", "-q", "--hard", "fork/fork-one/main")
+	var archive bytes.Buffer
+	if err := ExportReplay(scratch.cfg, &archive); err != nil {
+		t.Fatal(err)
+	}
+
+	real := diskFree
+	t.Cleanup(func() { diskFree = real })
+	diskFree = func(string) (uint64, [2]int32, error) { return 1 << 20, [2]int32{1}, nil }
+	if err := Replay(source.cfg, bytes.NewReader(archive.Bytes())); !errors.Is(err, ErrNoRoomToReplay) {
+		t.Fatalf("replay on a full disk = %v", err)
+	}
+	if source.read("workspace/b.txt") != "b\n" || source.exists("workspace/"+stagingDir) {
+		t.Fatal("a replay refused for room changed something")
+	}
+	diskFree = real
+
+	z := source.path("workspace/z")
+	if err := os.Chmod(z, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(z, 0o755) })
+	if err := Replay(source.cfg, bytes.NewReader(archive.Bytes())); err == nil || !strings.Contains(err.Error(), "z/late.txt") {
+		t.Fatalf("replay into a read-only directory = %v", err)
+	}
+	if source.read("workspace/b.txt") != "b fork\n" || source.read("workspace/z/late.txt") != "late\n" {
+		t.Fatal("the replay didn't stop halfway")
+	}
+	if err := os.Chmod(z, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Replay(source.cfg, bytes.NewReader(archive.Bytes())); err != nil {
+		t.Fatalf("replay run again = %v", err)
+	}
+	for _, p := range []string{"workspace/app/a.txt", "workspace/b.txt", "workspace/z/late.txt"} {
+		if source.read(p) != scratch.read(p) {
+			t.Errorf("%s differs after the replay ran again", p)
+		}
+	}
+	if got, want := source.git("workspace/app", "rev-parse", "main"), scratch.git("workspace/app", "rev-parse", "main"); got != want {
+		t.Errorf("main = %s, want %s", got, want)
+	}
+	if st := source.git("workspace/app", "status", "--porcelain"); st != "" {
+		t.Errorf("source status = %q", st)
+	}
+	// Run a third time, everything counts as taken and stays.
+	if err := Replay(source.cfg, bytes.NewReader(archive.Bytes())); err != nil {
+		t.Fatalf("replay run a third time = %v", err)
+	}
+}
+
+// A long file name still fits its temporary name.
+func TestTakeWritesALongFileName(t *testing.T) {
+	gitEnv(t)
+	root := t.TempDir()
+	source := newSandbox(t, filepath.Join(root, "source"))
+	long := "workspace/" + strings.Repeat("n", 250)
+	source.write(long, "a\n")
+	fork := source.fork(filepath.Join(root, "fork"))
+	if _, err := RecordBase(fork.cfg, StateBase, "fork-1"); err != nil {
+		t.Fatal(err)
+	}
+	fork.write(long, "a fork\n")
+	scratch, rep := merge(t, source, fork, filepath.Join(root, "scratch"))
+	if rep.Conflicts != 0 || scratch.read(long) != "a fork\n" {
+		t.Fatalf("merge: %+v", rep)
+	}
+	var archive bytes.Buffer
+	if err := ExportReplay(scratch.cfg, &archive); err != nil {
+		t.Fatal(err)
+	}
+	if err := Replay(source.cfg, &archive); err != nil || source.read(long) != "a fork\n" {
+		t.Fatalf("replay = %v", err)
+	}
+}
+
 func TestMergeWithoutBase(t *testing.T) {
 	gitEnv(t)
 	root := t.TempDir()

@@ -5,6 +5,8 @@ package forkmerge
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +19,9 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // ApplyOptions name the two sides in conflict markers and branch names.
@@ -111,7 +116,9 @@ func (e *ReplayConflictError) Error() string {
 
 // Replay applies the archive of a scratch sandbox's changes (merge-replay). It checks every
 // path and branch first, and changes nothing if one changed here since the scratch sandbox
-// was made: that is a *ReplayConflictError.
+// was made: that is a *ReplayConflictError. There is no checkpoint to go back to, so a replay
+// that stopped halfway (a full disk, a lost VM) is finished by running it again: a path, a
+// branch or HEAD already as the scratch sandbox has it counts as unchanged, and is left.
 func Replay(cfg Config, r io.Reader) error {
 	h, tr, err := readHeader(r)
 	if err != nil {
@@ -125,7 +132,7 @@ func Replay(cfg Config, r io.Reader) error {
 		}
 		tree, rel, _ := splitPath(c.Path)
 		cur, err := stat(abs, c.Path, nil)
-		if err != nil || checkParents(cfg.root(tree), rel) != nil || !same(cur, c.Base) {
+		if err != nil || checkParents(cfg.root(tree), rel) != nil || !same(cur, c.Base) && !same(cur, c.New) {
 			conflicts = append(conflicts, c.Path)
 		}
 	}
@@ -136,7 +143,9 @@ func Replay(cfg Config, r io.Reader) error {
 		}
 		_, gitErr := os.Lstat(filepath.Join(dir, ".git"))
 		if rc.New {
-			if gitErr == nil {
+			made := gitErr == nil && (len(rc.Branches) > 0 || cfg.head(dir) == rc.Head) &&
+				!slices.ContainsFunc(rc.Branches, func(bc BranchChange) bool { return cfg.refSHA(dir, bc.Ref) != bc.New })
+			if gitErr == nil && !made { // made counts: a replay that stopped later made it
 				conflicts = append(conflicts, rc.Path)
 			}
 			continue
@@ -146,16 +155,19 @@ func Replay(cfg Config, r io.Reader) error {
 			continue
 		}
 		for _, bc := range rc.Branches {
-			if cfg.refSHA(dir, bc.Ref) != bc.Old {
+			if sha := cfg.refSHA(dir, bc.Ref); sha != bc.Old && sha != bc.New {
 				conflicts = append(conflicts, rc.Path+": "+strings.TrimPrefix(bc.Ref, "refs/heads/"))
 			}
 		}
-		if rc.Head != rc.OldHead && cfg.head(dir) != rc.OldHead {
+		if head := cfg.head(dir); rc.Head != rc.OldHead && head != rc.OldHead && head != rc.Head {
 			conflicts = append(conflicts, rc.Path+": HEAD")
 		}
 	}
 	if len(conflicts) > 0 {
 		return &ReplayConflictError{Paths: conflicts}
+	}
+	if err := cfg.roomFor(h.Changes); err != nil {
+		return err
 	}
 	in, err := cfg.prepareStaging()
 	if err != nil {
@@ -175,17 +187,101 @@ func Replay(cfg Config, r io.Reader) error {
 	}
 	for _, rc := range h.Repos {
 		if err := cfg.replayRepo(rc, in); err != nil {
-			return err
+			return partway(err)
 		}
 	}
 	m := merger{cfg: cfg, in: in}
 	for _, c := range ordered(h.Changes) {
 		if err := m.take(c); err != nil {
-			return fmt.Errorf("%s: %w", c.Path, err)
+			return partway(fmt.Errorf("%s: %w", c.Path, err))
 		}
 	}
 	cfg.placeInstalls(installs)
 	return nil
+}
+
+// partway is a replay that stopped after changing some of what it copies.
+func partway(err error) error {
+	return fmt.Errorf("the merge stopped partway, accept again to finish it: %w", err)
+}
+
+// diskFree is the bytes free on the disk of dir, and which disk that is; a test changes it.
+var diskFree = func(dir string) (uint64, [2]int32, error) {
+	var st unix.Statfs_t
+	if err := unix.Statfs(dir, &st); err != nil {
+		return 0, [2]int32{}, err
+	}
+	return st.Bavail * uint64(st.Bsize), st.Fsid.Val, nil
+}
+
+// replayHeadroom is what a replay leaves free on a disk besides its files, for git, the
+// bundles and the directories it makes.
+const replayHeadroom = 16 << 20
+
+// ErrNoRoomToReplay is a disk that can't take a replay; nothing is changed yet.
+var ErrNoRoomToReplay = errors.New("not enough free space for the merge")
+
+// roomFor fails, before anything changes, when a disk can't take what a replay writes: the
+// archive unpacked under /workspace, what the files grow by, and the largest file replaced,
+// which is there twice until its copy takes its place.
+func (c Config) roomFor(changes []Change) error {
+	type disk struct {
+		dir           string
+		free          uint64
+		need, largest int64
+	}
+	disks := map[[2]int32]*disk{}
+	byTree := map[string]*disk{}
+	at := func(tree string) (*disk, error) {
+		if d := byTree[tree]; d != nil {
+			return d, nil
+		}
+		free, id, err := diskFree(c.root(tree))
+		if err != nil {
+			return nil, err
+		}
+		d := disks[id]
+		if d == nil {
+			d = &disk{dir: "/" + tree, free: free, need: replayHeadroom}
+			disks[id] = d
+		}
+		byTree[tree] = d
+		return d, nil
+	}
+	staging, err := at(TreeWorkspace)
+	if err != nil {
+		return err
+	}
+	for _, ch := range changes {
+		if ch.New == nil || ch.New.Type != 'f' {
+			continue
+		}
+		tree, _, _ := splitPath(ch.Path)
+		d, err := at(tree)
+		if err != nil {
+			return err
+		}
+		staging.need += ch.New.Size
+		grow := ch.New.Size
+		if ch.Base != nil && ch.Base.Type == 'f' {
+			grow -= ch.Base.Size
+			d.largest = max(d.largest, ch.Base.Size)
+		}
+		d.need += max(grow, 0)
+	}
+	for _, d := range disks {
+		if want := d.need + d.largest; uint64(want) > d.free {
+			return fmt.Errorf("%w: the disk of %s needs %d MiB free and has %d MiB; free some and accept again", ErrNoRoomToReplay, d.dir, (want+(1<<20)-1)>>20, d.free>>20)
+		}
+	}
+	return nil
+}
+
+// tempPath is where a file is written before it is renamed to abs: next to it, under a short
+// name, as a long file name with a prefix would be too long for the file system.
+func tempPath(abs string) string {
+	sum := sha256.Sum256([]byte(filepath.Base(abs)))
+	return filepath.Join(filepath.Dir(abs), ".studio-merge-"+hex.EncodeToString(sum[:6]))
 }
 
 // --- staging -------------------------------------------------------------------------------
@@ -230,7 +326,7 @@ func (c Config) extractArchive(tr *tar.Reader, h *Header, in string) ([]pendingI
 		if _, err := os.Lstat(abs); err == nil {
 			continue // this sandbox has it
 		}
-		installs = append(installs, pendingInstall{path: p, abs: abs, tmp: filepath.Join(filepath.Dir(abs), ".studio-merge-"+filepath.Base(abs))})
+		installs = append(installs, pendingInstall{path: p, abs: abs, tmp: tempPath(abs)})
 	}
 	for i := range installs {
 		byName["installs/"+installs[i].path] = &installs[i]
@@ -456,7 +552,7 @@ func (m merger) take(c Change) error {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
 	}
-	tmp := filepath.Join(filepath.Dir(abs), ".studio-merge-"+filepath.Base(abs))
+	tmp := tempPath(abs)
 	_ = os.Remove(tmp)
 	if c.New.Type == 'l' {
 		if err := os.Symlink(c.New.Target, tmp); err != nil {
@@ -464,6 +560,14 @@ func (m merger) take(c Change) error {
 		}
 	} else if err := copyFile(m.staged("new", c.Path), tmp, fs.FileMode(c.New.Mode)); err != nil {
 		return err
+	} else if c.New.Hash == "" && c.New.MTime != 0 {
+		// A file too large to hash gets the scratch sandbox's time, so that a replay run again
+		// knows it as taken. Others get the time they are written, which builds go by.
+		t := time.Unix(0, c.New.MTime)
+		if err := os.Chtimes(tmp, t, t); err != nil {
+			_ = os.Remove(tmp)
+			return err
+		}
 	}
 	if err := os.Rename(tmp, abs); err != nil {
 		_ = os.Remove(tmp)
@@ -493,7 +597,7 @@ var markerStart, markerEnd = regexp.MustCompile(`(?m)^<{7} `), regexp.MustCompil
 func hasMarkers(b []byte) bool { return markerStart.Match(b) && markerEnd.Match(b) }
 
 func writeAtomic(abs string, b []byte, mode fs.FileMode) error {
-	tmp := filepath.Join(filepath.Dir(abs), ".studio-merge-"+filepath.Base(abs))
+	tmp := tempPath(abs)
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
@@ -639,6 +743,9 @@ func (c Config) replayRepo(rc RepoChange, in string) error {
 	}
 	var specs []string
 	for _, bc := range rc.Branches {
+		if c.refSHA(dir, bc.Ref) == bc.New {
+			continue // a replay that stopped later moved it
+		}
 		if c.hasCommit(dir, bc.New) {
 			if _, err := c.git(dir, "update-ref", bc.Ref, bc.New, bc.Old); err != nil {
 				return err

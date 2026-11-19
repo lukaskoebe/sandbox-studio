@@ -17,6 +17,10 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- Accepting a fork merge that stopped partway, on a full disk or a lost VM, can be finished by
+  accepting again: the files and branches it already copied no longer count as changed in the
+  sandbox meanwhile. A disk without room for the merge refuses it before anything changes, and
+  a file with a long name no longer fails it.
 - Undo never writes a file from a saved copy that a crash damaged: it lists the file as not
   restored and leaves it as it is. A copy that a crash cut short is saved again on the next
   turn, and a turn's record that a crash broke no longer makes every later snapshot fail.

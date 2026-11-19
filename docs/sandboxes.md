@@ -478,8 +478,10 @@ and `internal/store/merges.go`.
   source. It takes no checkpoint first ([decisions](decisions.md)): one can't be restored while
   restore is off, and it costs about as much disk as the sandbox uses. If the
   source changed one of those paths in the meantime, nothing is copied, the merge stays open
-  and the answer names the paths. Otherwise Studio records a `merge` event and deletes the
-  scratch sandbox. The source must be running.
+  and the answer names the paths. A disk without room for the copy refuses it before anything
+  changes. A copy that stops partway leaves the merge open, and Accept again finishes it: what
+  it already copied counts as unchanged. Otherwise Studio records a `merge` event and deletes
+  the scratch sandbox. The source must be running.
 - **Abort** deletes the scratch sandbox; the source was never changed. Deleting the source,
   the fork or the scratch sandbox aborts an open merge; the scratch sandbox of one whose source
   or fork went stays, for what was done in it. A merge still preparing when Studio stopped

@@ -62,12 +62,21 @@ mtime only, and can't be merged three-way.
    user, or an agent in a chat on the scratch sandbox, resolves them there and can run the
    tests. **Check again** (`merge-status`) counts what is left: a text file is resolved once it
    has no conflict markers, any other once its `.theirs` file is deleted.
-4. **Accept.** Studio checkpoints the source, then `merge-replay-export` in the scratch sandbox
-   writes everything that changed there since step 1, compared against its starting state, and
-   `merge-replay` in the source applies it. A path the source changed since step 1 is a
-   conflict: the replay checks every path first and applies nothing if one conflicts. Branches
-   the scratch sandbox added or moved are bundled and set in the source's repository if the
-   source's branch is still where it was. Then the scratch sandbox is deleted.
+4. **Accept.** `merge-replay-export` in the scratch sandbox writes everything that changed
+   there since step 1, compared against its starting state, and `merge-replay` in the source
+   applies it. A path the source changed since step 1 is a conflict: the replay checks every
+   path first and applies nothing if one conflicts. Branches the scratch sandbox added or moved
+   are bundled and set in the source's repository if the source's branch is still where it
+   was. Then the scratch sandbox is deleted. There is no checkpoint to go back to
+   ([decisions](../decisions.md)) and no rollback: each file is renamed into place, so none is
+   left half written, but a replay that stops partway (a full disk, a lost VM) leaves the files
+   and branches it got to. Accept is then run again, and finishes it: a path, branch or HEAD
+   that is already as the scratch sandbox has it counts as unchanged. Before it changes
+   anything the replay checks that each disk has room for the unpacked archive, what the files
+   grow by, the largest file replaced and 16 MiB more, and refuses with how much it needs.
+   Files are written next to where they go, under `.studio-merge-` and a short hash of the
+   name, so a long name still fits. A file over 64 MiB, which isn't hashed, gets the scratch
+   sandbox's modification time, so that running Accept again knows it as taken.
 5. **Abort** deletes the scratch sandbox. The source was never touched.
 
 All the guest steps run as the agent user, never as root, so a symlink in a sandbox can't make
@@ -77,8 +86,8 @@ never stored there.
 ## Records
 
 A `merges` row tracks each merge: source, fork, scratch sandbox, state (`preparing`, `ready`,
-`conflicts`, `failed`, `accepted`, `aborted`), the report and the checkpoint taken before
-Accept. Accepting records a `merge` event in the source's lineage, naming the fork.
+`conflicts`, `failed`, `accepted`, `aborted`) and the report; versions that took a checkpoint
+before Accept recorded it too. Accepting records a `merge` event in the source's lineage, naming the fork.
 
 ## Later
 
