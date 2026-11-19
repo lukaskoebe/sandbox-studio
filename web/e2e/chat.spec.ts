@@ -34,6 +34,10 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   await expect(main).toContainText(greeting)
   await expect(main).toContainText(`${name} asks before going on`)
   await expect(main).toContainText(tool)
+  // The steps so far are a row that says it waits, open while it does.
+  await expect(
+    main.getByRole("button", { name: /^Waiting for you · \d+:\d\d · 1 step$/ })
+  ).toBeVisible()
   // The card shows what Allow runs, not only the agent's title for it.
   await expect(main.locator("pre", { hasText: command })).toBeVisible()
   // The agent waits for the answer.
@@ -64,7 +68,17 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   await expect(
     main.getByRole("button", { name: "Allow", exact: true })
   ).toHaveCount(0)
-  await expect(main).toContainText("Allowed")
+  // Once the agent writes again, its steps fold into a row that opens to them, the answer
+  // among them.
+  const steps = main.getByRole("button", {
+    name: /^Worked for \d+s · 2 steps$/,
+  })
+  await expect(steps).toBeVisible()
+  await expect(main).not.toContainText("Allowed")
+  await steps.click()
+  await expect(
+    main.getByRole("button", { name: `Allowed · ${tool}` })
+  ).toBeVisible()
 
   // The screenshot the message shows is copied out of the computer and shown, larger on a click.
   const shot = main.getByRole("img", {
@@ -514,6 +528,93 @@ test("a message's changes show each file's diff", async ({
   await expect(main.locator("diffs-container")).not.toContainText(
     "a/src/app.go"
   )
+})
+
+test("a request's steps fold into a row whose file chip opens the file's diff, unless every step shows", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const teammate = await addTeammate(api, env, "Folder")
+  const id = await api.createSandbox(sandboxName("folds"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const main = page.getByRole("main")
+  await main.getByRole("textbox", { name: "Message" }).fill("Edit the file")
+  await main.getByRole("button", { name: "Send" }).click()
+  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(main).toContainText(done)
+
+  // The scripted agent edits nothing, so its command comes as if it had edited a file, by its
+  // full path as agents give them, and the turn as if it had changed it.
+  const file = {
+    path: "src/app.go",
+    status: "modified",
+    added: 1,
+    removed: 1,
+  }
+  await page.route(/\/chats\/[^/]+(\?.*)?$/, async (route) => {
+    const r = await route.fetch()
+    const body = await r.json()
+    body.turns.at(-1).changes = { files: [file] }
+    for (const item of body.items)
+      if (item.kind === "tool")
+        item.tool.content = [
+          {
+            type: "diff",
+            path: "/home/agent/project/src/app.go",
+            oldText: "package main\nvar old = 1\n",
+            newText: "package main\nvar fresh = 2\n",
+          },
+        ]
+    await route.fulfill({ response: r, json: body })
+  })
+  await page.route(/\/turns\/[^/]+\/changes/, (route) =>
+    route.fulfill({
+      json: {
+        files: [
+          {
+            ...file,
+            diff: "--- a/src/app.go\n+++ b/src/app.go\n@@ -1,2 +1,2 @@\n package main\n-var old = 1\n+var fresh = 2\n",
+          },
+        ],
+      },
+    })
+  )
+  await page.reload()
+
+  // The row names the file with the lines added and removed; the steps stay folded.
+  await expect(
+    main.getByRole("button", { name: /^Worked for \d+s · 2 steps$/ })
+  ).toBeVisible()
+  await expect(main).not.toContainText("Allowed")
+  await main.getByRole("button", { name: "app.go +1 −1", exact: true }).click()
+  // It opens the request's changes at that file.
+  const line = main.locator("[data-line]")
+  await expect(line.filter({ hasText: "var fresh = 2" })).toBeVisible()
+  await expect(line).toHaveCount(3)
+
+  // Settings → General can show every step as its own card again, for everyone.
+  try {
+    await page.goto(`/e/${env}/settings/general`)
+    const every = page.getByRole("switch", { name: "Show every step" })
+    await expect(every).not.toBeChecked()
+    await every.click()
+    await expect(every).toBeChecked()
+    await page.goBack()
+    await expect(main).toContainText(done)
+    await expect(main.getByRole("button", { name: /^Worked for/ })).toHaveCount(
+      0
+    )
+    await expect(main).toContainText("Allowed")
+  } finally {
+    await api.json("PUT", "/api/system/chat-steps", { every: false })
+  }
 })
 
 // Typing to an agent whose computer is stopped starts it, and the message goes once it is up.

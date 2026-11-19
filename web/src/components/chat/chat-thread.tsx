@@ -24,6 +24,9 @@ import { PreviewSandbox } from "@/components/chat/markdown"
 import { OpenWorkspaceFile } from "@/components/chat/mention-picker"
 import { ModelPicker } from "@/components/chat/model-picker"
 import { PlanCard } from "@/components/chat/plan-card"
+import { StepRun } from "@/components/chat/step-run"
+import { foldSteps, type Entry } from "@/components/chat/step-runs"
+import { ToolCallCard } from "@/components/chat/tool-call-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
 import {
@@ -56,6 +59,7 @@ import {
   type QueuedPrompt,
   type useChat,
 } from "@/lib/chats"
+import { useChatStepsSetting } from "@/lib/chat-steps-setting"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { cn } from "@/lib/utils"
 
@@ -86,7 +90,8 @@ export function ChatThread({
   env: string
   chat: Chat
   log: ReturnType<typeof useChat>
-  onShowChanges: (turnId: string) => void
+  /** Shows a request's changes, at one of its files when given. */
+  onShowChanges: (turnId: string, file?: string) => void
   /** Opens a file a message mentions beside the chat; without, mentions link to the sandbox. */
   onOpenFile?: (path: string) => void
 }) {
@@ -134,14 +139,14 @@ function ChatLog({
   queued: QueuedPrompt[]
   teammateName: string
   label: (t: ChatTurn) => string
-  onShowChanges: (turnId: string) => void
+  onShowChanges: (turnId: string, file?: string) => void
   onOpenFile?: (path: string) => void
   /** The turns whose items aren't loaded yet. */
   earlier: ChatTurn[]
   loadingEarlier: boolean
   onLoadEarlier: () => Promise<void>
 }) {
-  const turnById = new Map(turns.map((t) => [t.id, t]))
+  const turnById = useMemo(() => new Map(turns.map((t) => [t.id, t])), [turns])
   // The turns that ran on another model than the one before them.
   const switchedTo = new Map<string, string>()
   turns.forEach((t, i) => {
@@ -157,6 +162,18 @@ function ChatLog({
   const openItems = open ? items.filter((i) => i.turnId === open.id) : []
   const liveId = openItems.at(-1)?.id
   const pinned = [...openItems].reverse().find((i) => i.kind === "plan")
+
+  // The steps between the agent's messages fold into a row each, unless every step is to
+  // show. A row the user opened or closed stays so; otherwise it is open while it works.
+  const { every } = useChatStepsSetting()
+  const entries = useMemo<Entry[]>(
+    () =>
+      every
+        ? items.map((item) => ({ kind: "item", item }))
+        : foldSteps(items, turnById, open?.id),
+    [every, items, turnById, open?.id]
+  )
+  const [opened, setOpened] = useState<Record<string, boolean>>({})
 
   // The message being sent shows until the log has it as a message or a queued prompt.
   const users = items.filter((i) => i.kind === "user").length
@@ -226,9 +243,14 @@ function ChatLog({
                       </Empty>
                     </MessageScrollerItem>
                   )}
-                  {items.map((item, i) => {
-                    const turn = turnById.get(item.turnId)
-                    const lastOfTurn = items.at(i + 1)?.turnId !== item.turnId
+                  {entries.map((entry, i) => {
+                    const first =
+                      entry.kind === "run" ? entry.items[0] : entry.item
+                    const turnOf = (e?: Entry) =>
+                      e && (e.kind === "run" ? e.turnId : e.item.turnId)
+                    const turn = turnById.get(first.turnId)
+                    const lastOfTurn =
+                      turnOf(entries.at(i + 1)) !== first.turnId
                     const footer =
                       lastOfTurn &&
                       turn?.endedAt &&
@@ -239,34 +261,57 @@ function ChatLog({
                     // stays readable.
                     const dim =
                       turn?.undoneAt &&
-                      !(item.kind === "marker" && item.marker?.kind === "undo")
-                    if (item.id === pinned?.id) return null
+                      !(
+                        entry.kind === "item" &&
+                        entry.item.kind === "marker" &&
+                        entry.item.marker?.kind === "undo"
+                      )
+                    if (entry.kind === "item" && entry.item.id === pinned?.id)
+                      return null
                     const switched =
-                      items.at(i - 1)?.turnId !== item.turnId
-                        ? switchedTo.get(item.turnId)
+                      turnOf(entries.at(i - 1)) !== first.turnId
+                        ? switchedTo.get(first.turnId)
                         : undefined
+                    const key = entry.kind === "run" ? entry.key : entry.item.id
                     return (
-                      <Fragment key={item.id}>
+                      <Fragment key={key}>
                         {switched && (
                           <MessageScrollerItem>
                             <ModelSwitch model={switched} />
                           </MessageScrollerItem>
                         )}
                         <MessageScrollerItem
-                          messageId={item.id}
-                          scrollAnchor={item.id === lastUser}
+                          messageId={key}
+                          scrollAnchor={key === lastUser}
                           className={cn(dim && "opacity-50")}
                           title={turn?.undoneAt ? "Undone" : undefined}
                         >
-                          <ChatItemView
-                            item={item}
-                            ctx={{
-                              env,
-                              chatId: chat.id,
-                              teammateName,
-                              live: item.id === liveId,
-                            }}
-                          />
+                          {entry.kind === "run" ? (
+                            <StepRun
+                              run={entry}
+                              turn={turn}
+                              open={opened[entry.key] ?? entry.live}
+                              onOpenChange={(o) =>
+                                setOpened((s) => ({ ...s, [entry.key]: o }))
+                              }
+                              ctx={{ env, chatId: chat.id, teammateName }}
+                              onShowFile={(path) =>
+                                onShowChanges(entry.turnId, path)
+                              }
+                            />
+                          ) : entry.ended && entry.item.tool ? (
+                            <ToolCallCard tool={entry.item.tool} defaultOpen />
+                          ) : (
+                            <ChatItemView
+                              item={entry.item}
+                              ctx={{
+                                env,
+                                chatId: chat.id,
+                                teammateName,
+                                live: entry.item.id === liveId,
+                              }}
+                            />
+                          )}
                         </MessageScrollerItem>
                         {footer && (
                           <MessageScrollerItem

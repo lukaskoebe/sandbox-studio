@@ -108,6 +108,9 @@ export function TeammatePage({
   )
 
   const [turnId, setTurnId] = useState<string>()
+  // The file a chip in the chat asked Changes to show, with when it asked, so asking again
+  // shows it again.
+  const [changeFile, setChangeFile] = useState<{ path: string; at: number }>()
   const wide = useWideScreen()
   // On narrow screens the screen is a strip that opens over the conversation. A link that
   // names a tab, such as a thread's Go to the terminal, opens it.
@@ -336,8 +339,9 @@ export function TeammatePage({
                 offScreen ? () => screen({ computer: offScreen.id }) : undefined
               }
               onBack={leaveThread}
-              onShowChanges={(turn) => {
+              onShowChanges={(turn, file) => {
                 setTurnId(turn)
+                setChangeFile(file ? { path: file, at: Date.now() } : undefined)
                 screen({
                   tab: "changes",
                   change: "thread",
@@ -428,7 +432,11 @@ export function TeammatePage({
                     turns: log.turns,
                     items: log.items,
                     turnId,
-                    onTurn: setTurnId,
+                    file: changeFile,
+                    onTurn: (t) => {
+                      setTurnId(t)
+                      setChangeFile(undefined)
+                    },
                   }
                 : undefined
             }

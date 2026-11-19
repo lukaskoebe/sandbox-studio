@@ -98,6 +98,8 @@ export function ComputerScreen({
     turns: ChatTurn[]
     items: ChatItem[]
     turnId?: string
+    /** A file of the turn's changes to open and scroll to. */
+    file?: { path: string; at: number }
     onTurn: (id: string) => void
   }
   /**

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import { CaretRightIcon, GitDiffIcon } from "@phosphor-icons/react"
 import { UnifiedDiff } from "@/components/review-feedback"
 import { Badge } from "@/components/ui/badge"
@@ -46,6 +47,7 @@ export function ChangesPanel({
   chatId,
   turns,
   turnId,
+  file,
   onTurnChange,
   label,
 }: {
@@ -54,6 +56,8 @@ export function ChangesPanel({
   /** The turns that changed files, newest first. */
   turns: ChatTurn[]
   turnId?: string
+  /** A file to open and scroll to: a path in the workspace, or under /workspace. */
+  file?: { path: string; at: number }
   onTurnChange: (id: string) => void
   /** A short name for a turn: its prompt. */
   label: (t: ChatTurn) => string
@@ -97,7 +101,13 @@ export function ChangesPanel({
           ))}
         </SelectContent>
       </Select>
-      <TurnChangesView key={turn.id} env={env} chatId={chatId} turn={turn} />
+      <TurnChangesView
+        key={turn.id}
+        env={env}
+        chatId={chatId}
+        turn={turn}
+        file={file}
+      />
     </div>
   )
 }
@@ -106,10 +116,12 @@ function TurnChangesView({
   env,
   chatId,
   turn,
+  file,
 }: {
   env: string
   chatId: string
   turn: ChatTurn
+  file?: { path: string; at: number }
 }) {
   const changes = $api.useQuery(
     "get",
@@ -146,7 +158,11 @@ function TurnChangesView({
       <ul className="grid min-w-0 gap-1.5">
         {files.map((f) => (
           <li key={f.path} className="min-w-0">
-            <FileChangeView file={f} loading={changes.isPending} />
+            <FileChangeView
+              file={f}
+              loading={changes.isPending}
+              wanted={file && samePath(f.path, file.path) ? file.at : undefined}
+            />
           </li>
         ))}
       </ul>
@@ -160,16 +176,43 @@ function TurnChangesView({
   )
 }
 
+/**
+ * Whether a changed file's path, relative to the workspace, names the same file as a path an
+ * agent's tool call gave, which is often absolute.
+ */
+function samePath(changed: string, given: string) {
+  return given === changed || given.endsWith(`/${changed}`)
+}
+
 function FileChangeView({
   file: f,
   loading,
+  wanted,
 }: {
   file: FileChange
   loading: boolean
+  /** When the chat last asked to show this file: it opens and scrolls into view. */
+  wanted?: number
 }) {
   const status = statuses[f.status]
+  const [open, setOpen] = useState(wanted !== undefined)
+  const [shown, setShown] = useState(wanted)
+  if (wanted !== shown) {
+    setShown(wanted)
+    if (wanted !== undefined) setOpen(true)
+  }
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (wanted !== undefined)
+      ref.current?.scrollIntoView({ block: "start", behavior: "smooth" })
+  }, [wanted])
   return (
-    <Collapsible className="group/file min-w-0 rounded-lg border bg-card">
+    <Collapsible
+      ref={ref}
+      open={open}
+      onOpenChange={setOpen}
+      className="group/file min-w-0 scroll-mt-2 rounded-lg border bg-card"
+    >
       <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
         <span className={cn("w-14 shrink-0 text-caption", status.cls)}>
           {status.label}

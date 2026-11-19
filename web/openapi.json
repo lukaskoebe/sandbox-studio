@@ -1099,6 +1099,19 @@
         ],
         "type": "object"
       },
+      "ChatStepsSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "every": {
+            "description": "Show every step as its own card, as before 2026-11-19, rather than folding each run of steps between the agent's messages into one row",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "every"
+        ],
+        "type": "object"
+      },
       "ChatTerminal": {
         "additionalProperties": false,
         "properties": {
@@ -24836,6 +24849,75 @@
           }
         },
         "summary": "Start Studio at login, or stop doing so",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/chat-steps": {
+      "get": {
+        "operationId": "getChatStepsSetting",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStepsSetting"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      },
+      "put": {
+        "operationId": "setChatStepsSetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatStepsSetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStepsSetting"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Show every step of an agent's work in chats, or fold each run of steps into one row",
         "tags": [
           "system"
         ]

@@ -3160,6 +3160,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/chat-steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getChatStepsSetting"];
+        /** Show every step of an agent's work in chats, or fold each run of steps into one row */
+        put: operations["setChatStepsSetting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/doctor": {
         parameters: {
             query?: never;
@@ -3827,6 +3844,10 @@ export interface components {
             title: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ChatStepsSetting: {
+            /** @description Show every step as its own card, as before 2026-11-19, rather than folding each run of steps between the agent's messages into one row */
+            every: boolean;
         };
         ChatTerminal: {
             /** @description The tmux session's name; attach to it like any agent session */
@@ -15576,6 +15597,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutostartStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getChatStepsSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatStepsSetting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setChatStepsSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatStepsSetting"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatStepsSetting"];
                 };
             };
             /** @description Error */

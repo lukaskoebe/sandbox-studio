@@ -62,7 +62,7 @@ export function TeammateThread({
   /** Shows its computer on the screen, which shows another. */
   onShowComputer?: () => void
   onBack: () => void
-  onShowChanges: (turnId: string) => void
+  onShowChanges: (turnId: string, file?: string) => void
   onOpenFile: (path: string) => void
   /** Shows the terminal session the thread was handed to. */
   onTerminal: (session: string) => void

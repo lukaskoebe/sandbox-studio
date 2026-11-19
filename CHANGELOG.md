@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- A chat folds the steps an agent takes between two of its messages into one row: how long it
+  worked, how many steps, a chip for each file it edited with the lines added and removed, and
+  how many steps failed. The row opens to the steps as quiet lines, each opening to its
+  details; a file's chip opens that file's diff in **Changes** once the request is done. While
+  the agent works the row is open, its newest step shows in full and the older ones merge into
+  one line; it closes when the agent writes again. The agent's messages in between, a question
+  or permission that waits for you and a failure that ended the request stay outside the row.
+  **Settings → General → Show every step** brings back a card for every step, for everyone
+  using this Studio.
 - A stopped computer says **Off** rather than *Stopped*, and on a teammate's home it has a
   green **Start** (**Resume** for a suspended one) where it says so; its **Terminal** and
   **Files** start it too and open once it is up. The composer adds *off, it starts as you

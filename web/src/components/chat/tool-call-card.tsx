@@ -64,19 +64,44 @@ const statuses: Record<
 
 /**
  * A tool call: kind icon, title and status, with the details (changes, output, files)
- * folded away. A running call's status keeps updating in place.
+ * folded away. A running call's status keeps updating in place. `line` draws it as one quiet
+ * line, as inside a fold of steps, where a finished call needs no badge: a failed one says so
+ * in red, and an edit says how many lines it added and removed.
  */
-export function ToolCallCard({ tool }: { tool: ToolBody }) {
+export function ToolCallCard({
+  tool,
+  line = false,
+  defaultOpen = false,
+}: {
+  tool: ToolBody
+  line?: boolean
+  defaultOpen?: boolean
+}) {
   const kind = toolKind(tool.kind)
   const status = statuses[tool.status ?? "pending"]
   const content = tool.content ?? []
   const locations = tool.locations ?? []
   const hasBody = content.length > 0 || locations.length > 0 || tool.truncated
+  const counts = useMemo(
+    () => (line ? diffCounts(content) : undefined),
+    [line, content]
+  )
   return (
-    <Collapsible className="group/tool min-w-0 rounded-lg border bg-card text-xs">
+    <Collapsible
+      defaultOpen={defaultOpen && !!hasBody}
+      className={cn(
+        "group/tool min-w-0 text-xs",
+        line ? "grid gap-1" : "rounded-lg border bg-card"
+      )}
+    >
       <CollapsibleTrigger
         disabled={!hasBody}
-        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-default"
+        className={cn(
+          "flex w-full min-w-0 items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-default",
+          line
+            ? "rounded-sm py-0.5 text-muted-foreground enabled:hover:text-foreground"
+            : "px-2.5 py-1.5"
+        )}
       >
         <kind.icon
           className="size-3.5 shrink-0 text-muted-foreground"
@@ -85,10 +110,30 @@ export function ToolCallCard({ tool }: { tool: ToolBody }) {
         <span className="min-w-0 flex-1 truncate" title={tool.title}>
           {tool.title || kind.label}
         </span>
-        <Badge variant={status.variant} className="shrink-0">
-          {tool.status === "in_progress" && <Spinner className="size-2.5" />}
-          {status.label}
-        </Badge>
+        {counts && (counts.added > 0 || counts.removed > 0) && (
+          <span className="flex shrink-0 gap-1 text-caption">
+            <LineCounts added={counts.added} removed={counts.removed} />
+          </span>
+        )}
+        {line ? (
+          tool.status === "in_progress" ? (
+            <Spinner className="size-3 shrink-0" aria-label="Working" />
+          ) : tool.status !== "completed" ? (
+            <span
+              className={cn(
+                "shrink-0",
+                tool.status === "failed" && "font-medium text-destructive"
+              )}
+            >
+              {status.label}
+            </span>
+          ) : null
+        ) : (
+          <Badge variant={status.variant} className="shrink-0">
+            {tool.status === "in_progress" && <Spinner className="size-2.5" />}
+            {status.label}
+          </Badge>
+        )}
         <CaretRightIcon
           className={cn(
             "size-3 shrink-0 text-muted-foreground transition-transform group-data-[open]/tool:rotate-90",
@@ -96,7 +141,9 @@ export function ToolCallCard({ tool }: { tool: ToolBody }) {
           )}
         />
       </CollapsibleTrigger>
-      <CollapsibleContent className="border-t">
+      <CollapsibleContent
+        className={line ? "rounded-lg border bg-card" : "border-t"}
+      >
         <ScrollArea className="min-h-0" viewportClassName="max-h-80">
           <div className="grid min-w-0 gap-2 p-2.5">
             {locations.length > 0 && <Locations list={locations} />}
@@ -113,6 +160,38 @@ export function ToolCallCard({ tool }: { tool: ToolBody }) {
       </CollapsibleContent>
     </Collapsible>
   )
+}
+
+/** Lines added and removed, as "+3 −2", leaving out a side with none. */
+export function LineCounts({
+  added,
+  removed,
+}: {
+  added: number
+  removed: number
+}) {
+  return (
+    <>
+      {added > 0 && (
+        <span className="text-emerald-600 dark:text-emerald-400">+{added}</span>
+      )}
+      {removed > 0 && <span className="text-destructive">−{removed}</span>}
+    </>
+  )
+}
+
+/** The lines a call's changes add and remove, over all its files. */
+function diffCounts(content: ToolContent[]) {
+  let added = 0
+  let removed = 0
+  for (const c of content) {
+    if (c.type !== "diff") continue
+    for (const r of diffLines(c.oldText ?? "", c.newText ?? "")) {
+      if (r.op === "+") added++
+      else if (r.op === "-") removed++
+    }
+  }
+  return { added, removed }
 }
 
 export function Locations({ list }: { list: Location[] }) {

@@ -162,3 +162,30 @@ func TestPreviewSettingIsOffWithANoticeOnce(t *testing.T) {
 		t.Fatalf("disabled: %+v", st)
 	}
 }
+
+// Chats fold the agent's steps until someone asks to see every one, and the choice is kept.
+func TestChatStepsSettingIsFoldedUntilChanged(t *testing.T) {
+	h, _ := newTestServer(t)
+	get := func() ChatStepsSetting {
+		t.Helper()
+		var st ChatStepsSetting
+		rec := do(h, "GET", "http://localhost:7878/api/system/chat-steps", "")
+		if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &st) != nil {
+			t.Fatalf("get: %d %s", rec.Code, rec.Body)
+		}
+		return st
+	}
+	if get().Every {
+		t.Fatal("every step shown before anyone chose it")
+	}
+	if rec := do(h, "PUT", "http://localhost:7878/api/system/chat-steps", `{"every":true}`); rec.Code != 200 {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body)
+	}
+	if !get().Every {
+		t.Fatal("the choice wasn't kept")
+	}
+	do(h, "PUT", "http://localhost:7878/api/system/chat-steps", `{"every":false}`)
+	if get().Every {
+		t.Fatal("folding again wasn't kept")
+	}
+}

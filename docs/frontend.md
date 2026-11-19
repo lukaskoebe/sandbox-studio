@@ -314,6 +314,22 @@ says so, and one already decided shows the outcome without the buttons. The chat
 the list doesn't know keeps a resizable side panel for its changes and files
 (`components/side-panel.tsx`), its width in local storage (`studio.panel.chat`).
 
+A chat's log folds each run of steps between the agent's messages (tool calls, thoughts, and
+permissions and questions once answered) into one row (`chat/step-runs.ts` groups them,
+`chat/step-run.tsx` draws them): how long it worked, from the item before it to its last step,
+its step count, a chip per file its tool calls' diffs touched with the lines added and removed,
+and how many failed. The row opens to the steps as lines (`ToolCallCard`'s `line`, a settled
+ask as a line opening to its card); a chip opens Changes at that file once the turn has ended
+(`onShowChanges(turn, file)` through the page to `ChangesPanel`'s `file`, which opens it and
+scrolls to it; an agent's absolute path matches a workspace path by its end). The run that is
+the open turn's latest work is open, with a ticking clock, its newest step as a card and all
+but the newest four merged into one line past five; the user's open or closed choice is kept
+per run in the log by its first item's ID. What stays outside: the agent's messages, plans,
+markers, an ask that waits, a run that is a single thought (which folds already), and a failed
+tool call that ended a finished turn with no message after it, shown open. **Show every step**
+in Settings → General (`/api/system/chat-steps`, Studio-wide, `lib/chat-steps-setting.ts`) turns
+the folding off.
+
 A composer keeps what was typed but not sent under its `draft` key (a chat, a new chat's
 sandbox, a teammate's home), so leaving and coming back finds it again: the text, mentions and
 files in memory (`lib/drafts.ts`), the text and mentions also in session storage for a reload.

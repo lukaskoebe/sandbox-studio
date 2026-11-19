@@ -35,7 +35,16 @@ Open the teammate's page and write in the box at the bottom of its home: what yo
 - The agent may give the chat a title as it goes. **All chats** lists every chat of the environment; the teammate's home lists its own as cards by day.
 - A card says whether its agent is working or waits for you, and is marked **New** while it has something you haven't seen yet, such as a finished reply or a chat that started while you were away, until you open it. What you have seen is remembered in this browser.
 
-The chat shows the agent's replies, what it is thinking, the tools it runs (expand a card to see details such as edits and output), and its plan as a checklist while it works. Under each finished request you see how many files it changed and, if the agent reports it, tokens, cost, and how full its memory is.
+The chat shows the agent's replies, its plan as a checklist while it works, and the steps it takes in between: what it thinks, the tools it runs and what you allowed or answered. Under each finished request you see how many files it changed and, if the agent reports it, tokens, cost, and how full its memory is.
+
+The steps between two of the agent's messages fold into one row, such as **Worked for 1m 52s · 14 steps**, with a chip for each file it edited (`total.ts +3 −2`) and how many steps failed:
+
+- Choose the row to see the steps, one line each; choose a line to see its details, such as an edit's diff or a command's output.
+- Choose a file's chip to open that file's changes on the **Changes** tab, once the request is done.
+- While the agent works, the row is open and shows its newest step in full. It closes when the agent writes again, unless you opened or closed it yourself.
+- A question or permission that waits for you, and a failed step that ended the request, stay outside the row.
+
+To see every step as its own card, as before, turn on **Show every step** in **Settings → General**. It applies to everyone using this Studio.
 
 ## Approve steps
 

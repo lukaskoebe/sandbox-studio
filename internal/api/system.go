@@ -211,6 +211,7 @@ func (s *Server) registerSystem(api huma.API) {
 		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
 	})
 	s.registerPreviewSetting(api)
+	s.registerChatStepsSetting(api)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "shutdown", Method: http.MethodPost, Path: "/api/system/shutdown", Tags: []string{"system"}, DefaultStatus: http.StatusAccepted,
@@ -291,6 +292,40 @@ func (s *Server) registerPreviewSetting(api huma.API) {
 			err = s.Store.SetSetting(ctx, settingPreviews, raw)
 		}
 		return &struct{ Body PreviewSetting }{st}, apiError(err)
+	})
+}
+
+// settingChatSteps stores how chats show the agent's steps. Absent means folded, the default.
+const settingChatSteps = "chat-steps.v1"
+
+// ChatStepsSetting is how the web's chats show the steps an agent takes between its messages.
+type ChatStepsSetting struct {
+	Every bool `json:"every" doc:"Show every step as its own card, as before 2026-11-19, rather than folding each run of steps between the agent's messages into one row"`
+}
+
+func (s *Server) registerChatStepsSetting(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "getChatStepsSetting", Method: http.MethodGet, Path: "/api/system/chat-steps", Tags: []string{"system"},
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body ChatStepsSetting }, error) {
+		var st ChatStepsSetting
+		raw, err := s.Store.Setting(ctx, settingChatSteps)
+		if errors.Is(err, store.ErrNotFound) {
+			err = nil
+		} else if err == nil {
+			err = json.Unmarshal(raw, &st)
+		}
+		return &struct{ Body ChatStepsSetting }{st}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "setChatStepsSetting", Method: http.MethodPut, Path: "/api/system/chat-steps", Tags: []string{"system"},
+		Summary: "Show every step of an agent's work in chats, or fold each run of steps into one row",
+	}, func(ctx context.Context, in *struct{ Body ChatStepsSetting }) (*struct{ Body ChatStepsSetting }, error) {
+		raw, err := json.Marshal(in.Body)
+		if err == nil {
+			err = s.Store.SetSetting(ctx, settingChatSteps, raw)
+		}
+		return &struct{ Body ChatStepsSetting }{in.Body}, apiError(err)
 	})
 }
 

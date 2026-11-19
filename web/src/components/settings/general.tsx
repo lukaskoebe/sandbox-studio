@@ -9,6 +9,7 @@ import {
   BroadcastIcon,
   DownloadSimpleIcon,
   ListChecksIcon,
+  ListDashesIcon,
   PaletteIcon,
   TextAaIcon,
   PencilSimpleIcon,
@@ -51,6 +52,7 @@ import {
   useConnectionNotices,
   useNotificationPermission,
 } from "@/lib/notifications"
+import { useChatStepsSetting } from "@/lib/chat-steps-setting"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { setupOver, useSetup } from "@/lib/setup"
 import { useOnboarding } from "@/lib/onboarding"
@@ -83,6 +85,7 @@ export function GeneralSettings({ env }: { env: string }) {
         <NotificationsSection />
         <PreviewsSection />
         <TerminalShellSection />
+        <ChatStepsSection />
         <SetupSection env={env} />
         <TipsSection env={env} />
         <ShutdownSection />
@@ -623,6 +626,26 @@ function TerminalShellSection() {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+      }
+    />
+  )
+}
+
+/** Whether chats fold the steps an agent takes between its messages. */
+function ChatStepsSection() {
+  const steps = useChatStepsSetting()
+  return (
+    <SettingRow
+      icon={ListDashesIcon}
+      title="Show every step"
+      description="Show each step an agent takes in a chat as its own card. Off, the steps between two of its messages fold into one row that says how long they took, which files they edited and what failed; a row opens to the steps."
+      control={
+        <Switch
+          aria-label="Show every step"
+          checked={steps.every}
+          disabled={!steps.loaded || steps.pending}
+          onCheckedChange={steps.setEvery}
+        />
       }
     />
   )

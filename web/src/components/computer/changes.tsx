@@ -58,6 +58,8 @@ export type ScreenThread = {
   turns: ChatTurn[]
   items: ChatItem[]
   turnId?: string
+  /** A file of the turn's changes to open and scroll to. */
+  file?: { path: string; at: number }
   onTurn: (id: string) => void
 }
 
@@ -350,6 +352,7 @@ export function ChangesView({
               chatId={thread.chat.id}
               turns={changedTurns}
               turnId={turn?.id}
+              file={thread.file}
               onTurnChange={thread.onTurn}
               label={(t) => requestLabel(thread.items, t)}
             />
