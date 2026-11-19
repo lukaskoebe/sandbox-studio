@@ -26,7 +26,11 @@ resumed.
   non-empty target. They reject absolute paths, `..`, duplicates, entries whose parent is
   not a directory from the archive, and hardlinks to anything but an earlier regular file.
   Symlinks are created but never followed. Parents are opened with `openat2` and
-  `RESOLVE_BENEATH`.
+  `RESOLVE_BENEATH`. An import ends with `syncfs` on the disk it wrote to, through a
+  descriptor opened before the copy, so it is done only once the copy is on that disk, and a
+  write that failed in the background (a full host disk under the VM's disk file, say) fails
+  it rather than passing unseen: the source may be removed right after. `tools-import` syncs
+  after its moves too, and `home-import` after its mark.
 - `studio-agent docker-export` and `docker-import` do the same for `/var/lib/docker`, which
   a disk resize copies, and a rebase or fork with `keepDocker` or `docker`. Docker's data is made of what a workspace archive leaves out:
   overlay whiteouts are character devices 0/0, an opaque directory is the

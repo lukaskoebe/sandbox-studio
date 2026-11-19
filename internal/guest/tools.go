@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"golang.org/x/sys/unix"
 )
 
 // MiseDir holds the toolchains and the global mise config of the agent user: the template's,
@@ -106,6 +107,12 @@ func ImportTools(dir string, r io.Reader, warn, progress io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("the new template has no %s: %w", dir, err)
 	}
+	// Opened first, so that its sync at the end reports a failed write of the moves too.
+	dirFD, err := unix.Open(dir, unix.O_DIRECTORY|unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dirFD)
 	staging := filepath.Join(dir, toolsStaging)
 	if err := os.RemoveAll(staging); err != nil {
 		return err
@@ -139,7 +146,7 @@ func ImportTools(dir string, r io.Reader, warn, progress io.Writer) error {
 	if moved > 0 || len(pins) > 0 {
 		reshim(dir, warn)
 	}
-	return nil
+	return syncDisk(dirFD, dir)
 }
 
 // moveMissing moves each entry of src that dst lacks into dst; with depth above 1 it merges

@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestWorkspaceExportImportRoundTrip(t *testing.T) {
@@ -187,6 +190,31 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A copy whose writes to its disk failed fails, though every write call succeeded: syncfs is
+// where a full host disk shows. Each import syncs the disk it wrote to.
+func TestImportFailsWhenItsDiskDoesNotTakeIt(t *testing.T) {
+	src := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(src, "a"), []byte("a"), 0o644))
+	var archive bytes.Buffer
+	must(t, ExportWorkspace(src, &archive, &bytes.Buffer{}))
+	synced := 0
+	syncfs = func(fd int) error { synced++; return unix.Syncfs(fd) }
+	t.Cleanup(func() { syncfs = unix.Syncfs })
+	must(t, ImportWorkspace(t.TempDir(), bytes.NewReader(archive.Bytes()), nil))
+	if synced != 1 {
+		t.Fatalf("synced %d times", synced)
+	}
+	syncfs = func(int) error { return unix.EIO }
+	err := ImportWorkspace(t.TempDir(), bytes.NewReader(archive.Bytes()), nil)
+	if !errors.Is(err, unix.EIO) || !strings.Contains(err.Error(), "to its disk") {
+		t.Fatalf("err = %v", err)
+	}
+	home := t.TempDir()
+	if err := ImportHome(home, bytes.NewReader(archive.Bytes()), nil); !errors.Is(err, unix.EIO) {
+		t.Fatalf("home: err = %v", err)
 	}
 }
 

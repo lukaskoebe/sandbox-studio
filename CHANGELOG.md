@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A rebase, fork, disk resize or import waits until the copy is on the new computer's disk
+  before it counts as done, and fails if the disk couldn't take it, instead of finishing while
+  the data was still in memory.
 - A stopped computer that a fork or an export started for its copy is stopped again when Studio
   next starts, if Studio stopped (or the stop failed) before it could. Before, a base could stay
   running in transfer mode, and every fork of it that copies Docker images was refused.

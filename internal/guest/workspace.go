@@ -440,7 +440,25 @@ func importTree(root string, r io.Reader, special bool, progress io.Writer) erro
 	if _, err := io.Copy(io.Discard, gz); err != nil {
 		return fmt.Errorf("read archive: %w", err)
 	}
-	return im.finishDirs()
+	if err := im.finishDirs(); err != nil {
+		return err
+	}
+	return syncDisk(rootFD, root)
+}
+
+// syncfs is unix.Syncfs; a test makes it fail.
+var syncfs = unix.Syncfs
+
+// syncDisk writes out what the file system of the open directory fd has cached, and fails if
+// any write to it failed since fd was opened: syncfs reports those (Linux 5.8 and later), the
+// writebacks of a copy don't. A copy is only done once it is on the disk: the VM it came from
+// may be removed next, and a disk that couldn't take it (a full host disk, say) only shows
+// when it is written out.
+func syncDisk(fd int, dir string) error {
+	if err := syncfs(fd); err != nil {
+		return fmt.Errorf("write %s to its disk: %w", dir, err)
+	}
+	return nil
 }
 
 // decompressor reads a gzip or a zstd archive, as its first bytes say.

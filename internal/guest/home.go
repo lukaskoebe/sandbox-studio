@@ -132,13 +132,21 @@ func ExportHomeAs(home string, w io.Writer, warn io.Writer, c Compression) error
 // profile block of templates built before /opt/mise, and marks the home so it is never
 // seeded. It reports progress as ImportWorkspace does.
 func ImportHome(home string, r io.Reader, progress io.Writer) error {
+	fd, err := unix.Open(home, unix.O_DIRECTORY|unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
 	if err := ImportWorkspace(home, r, progress); err != nil {
 		return err
 	}
 	if err := stripLegacyProfile(home); err != nil {
 		return err
 	}
-	return markHome(home)
+	if err := markHome(home); err != nil {
+		return err
+	}
+	return syncDisk(fd, home)
 }
 
 // markHome writes the seed mark, owned like the home itself.
