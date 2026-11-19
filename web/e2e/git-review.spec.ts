@@ -97,7 +97,7 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
   await expect(page).toHaveURL(new RegExp(`/e/${env}/git/reviews/`))
   await expect(page.getByRole("status")).toContainText("This was approved.")
   await expect(page.getByText("hello from the sandbox")).toBeVisible()
-  await page.getByRole("tab", { name: /^Commits/ }).click()
+  // Its one commit is named in the bar.
   await expect(page.getByText("Add a greeting")).toBeVisible()
   // A decided push has no comments to write.
   await expect(page.getByRole("tab", { name: /^Comments/ })).toHaveCount(0)
@@ -1194,7 +1194,9 @@ test("a review keeps its note, comments, tab and place across another tab and a 
     .toEqual([])
 })
 
-test("a push's commits open to their own changes", async ({
+// The push's diff is one scroll frame with its head above the first file, and a commit picked in
+// the bar narrows it to that commit's own diff, keeping the whole one behind it.
+test("a push's commits narrow its diff to one of them", async ({
   page,
   api,
   env,
@@ -1205,8 +1207,15 @@ test("a push's commits open to their own changes", async ({
   await api.guestReady(id)
   const pushed = await api.push(id, {
     url: forge.url,
+    earlier: [
+      {
+        file: "first.txt",
+        content: "from the first commit\n",
+        message: "Add the first file",
+      },
+    ],
     file: "hello.txt",
-    content: "hello from one commit\n",
+    content: "hello from the second commit\n",
     message: "Add a greeting",
   })
   expect(pushed.error, pushed.output).toBeUndefined()
@@ -1217,15 +1226,29 @@ test("a push's commits open to their own changes", async ({
     .getByRole("button", { name: "Review" })
     .click()
   const pane = page.getByTestId("git-review")
-  await pane.getByRole("tab", { name: /^Commits/ }).click()
-  const panel = pane.getByRole("tabpanel")
-  await panel
-    .getByRole("button", { name: /^Changes of .*: Add a greeting$/ })
-    .click()
-  await expect(panel).toContainText("1 file")
+  const line = (text: string) =>
+    pane.locator("[data-line]:visible").filter({ hasText: text })
+  await expect(line("from the first commit")).toBeVisible()
+  await expect(line("hello from the second commit")).toBeVisible()
+  // The head scrolls with the files, inside the diff's own scroll box.
   await expect(
-    panel.locator("[data-line]").filter({ hasText: "hello from one commit" })
+    pane.locator(".diff-view").getByRole("heading", { level: 2 })
   ).toBeVisible()
+
+  await pane.getByRole("combobox", { name: "Commits" }).click()
+  await page.getByRole("option", { name: /Add the first file/ }).click()
+  const commit = pane.getByRole("region", { name: /^Commit / })
+  await expect(commit).toContainText("Add the first file")
+  await expect(commit).toContainText("1 file")
+  await expect(line("from the first commit")).toBeVisible()
+  await expect(line("hello from the second commit")).toHaveCount(0)
+
+  await commit.getByRole("button", { name: "all its commits" }).click()
+  await expect(commit).toHaveCount(0)
+  await expect(line("hello from the second commit")).toBeVisible()
+  await expect(pane.getByRole("combobox", { name: "Commits" })).toContainText(
+    "All 2 commits"
+  )
 })
 
 // Changes holds its parts in sections that fold, per computer. A review link opens its section

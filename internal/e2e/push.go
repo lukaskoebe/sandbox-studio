@@ -27,12 +27,21 @@ import (
 // Push is what the guest pushes: one commit that writes File on top of Branch of the
 // repository at URL, usually https://git.studio.internal/<forge>/<path>.git. From starts a
 // new branch from another one, and Amend replaces the branch's last commit instead, which
-// makes the push a forced one.
+// makes the push a forced one. Earlier are commits made before that one, in order, for a
+// push of several.
 type Push struct {
-	URL     string `json:"url"`
-	Branch  string `json:"branch"`
-	From    string `json:"from"`
-	Amend   bool   `json:"amend"`
+	URL     string       `json:"url"`
+	Branch  string       `json:"branch"`
+	From    string       `json:"from"`
+	Amend   bool         `json:"amend"`
+	File    string       `json:"file"`
+	Content string       `json:"content"`
+	Message string       `json:"message"`
+	Earlier []PushCommit `json:"earlier"`
+}
+
+// PushCommit is one commit of a push that writes File.
+type PushCommit struct {
 	File    string `json:"file"`
 	Content string `json:"content"`
 	Message string `json:"message"`
@@ -92,24 +101,27 @@ func (g *Guest) Push(ctx context.Context, p Push) Pushed {
 			return fail(err)
 		}
 	}
-	f, err := wt.Filesystem.Create(p.File)
-	if err != nil {
-		return fail(err)
-	}
-	_, err = io.WriteString(f, p.Content)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return fail(err)
-	}
-	if _, err := wt.Add(p.File); err != nil {
-		return fail(err)
-	}
-	sig := &object.Signature{Name: "Iris", Email: "iris@sandbox.test", When: time.Now()}
-	commit, err := wt.Commit(p.Message, &git.CommitOptions{Author: sig, Committer: sig})
-	if err != nil {
-		return fail(err)
+	var commit plumbing.Hash
+	for _, c := range append(p.Earlier, PushCommit{File: p.File, Content: p.Content, Message: p.Message}) {
+		f, err := wt.Filesystem.Create(c.File)
+		if err != nil {
+			return fail(err)
+		}
+		_, err = io.WriteString(f, c.Content)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			return fail(err)
+		}
+		if _, err := wt.Add(c.File); err != nil {
+			return fail(err)
+		}
+		sig := &object.Signature{Name: "Iris", Email: "iris@sandbox.test", When: time.Now()}
+		commit, err = wt.Commit(c.Message, &git.CommitOptions{Author: sig, Committer: sig})
+		if err != nil {
+			return fail(err)
+		}
 	}
 	out.Commit = commit.String()
 	progress.Reset()

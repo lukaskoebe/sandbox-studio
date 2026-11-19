@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type Ref,
 } from "react"
 import {
@@ -23,22 +24,18 @@ import {
 } from "@pierre/diffs/react"
 import { getOrCreateWorkerPoolSingleton } from "@pierre/diffs/worker"
 import DiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker"
-import {
-  ChatCircleTextIcon,
-  ColumnsIcon,
-  RowsIcon,
-  XIcon,
-} from "@phosphor-icons/react"
+import { ChatCircleTextIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
   commentWhere,
+  DiffFrameText,
   parseDiff,
   type DiffLine,
   type LineComment,
 } from "@/components/review-feedback"
-import { setDiffStyle, useDiffStyle, type DiffStyle } from "@/lib/diff-style"
+import { useDiffStyle } from "@/lib/diff-style"
 import type { DiffPlace } from "@/lib/review-drafts"
 import { cn } from "@/lib/utils"
 import { useTextSize } from "@/lib/theme"
@@ -238,7 +235,16 @@ export type DiffViewProps = {
   diff: string
   comments: LineComment[]
   onComment?: (comments: LineComment[]) => void
+  /**
+   * Fills its parent's height as the review's one scroll frame: each file's name on it, the
+   * file overview beside it once there is room, and no switch of its own, as the review's bar
+   * holds it.
+   */
   fill?: boolean
+  /** What scrolls in above the first file, such as the review's head, when it fills. */
+  header?: ReactNode
+  /** What scrolls in after the last file, when it fills. */
+  after?: ReactNode
   commentLabel?: string
   /** Whether a comment can cover several lines, chosen by dragging over their numbers. */
   ranges?: boolean
@@ -258,6 +264,8 @@ export default function DiffView({
   comments,
   onComment,
   fill,
+  header,
+  after,
   commentLabel,
   ranges = true,
   layouts = fill,
@@ -451,8 +459,6 @@ export default function DiffView({
     view.current?.clearSelectedLines()
   }
   const jumpToFile = (fileNo: number) => {
-    // The diff's own box may be partly out of the page's view, as below the overview.
-    box.current?.scrollIntoView({ block: "nearest" })
     view.current?.scrollTo({
       type: "item",
       id: String(fileNo),
@@ -510,12 +516,10 @@ export default function DiffView({
         lo = mid + 1
       } else hi = mid - 1
     }
+    // Above the first file, in what scrolls in before it, the offset is less than 0.
     const p = {
       file: files[at].name,
-      offset: Math.max(
-        0,
-        Math.round(top - (viewer.getTopForItem(String(at)) ?? 0))
-      ),
+      offset: Math.round(top - (viewer.getTopForItem(String(at)) ?? 0)),
     }
     here.current = p
     if (!onPlace) return
@@ -525,27 +529,46 @@ export default function DiffView({
 
   // Nothing the library reads as a file, such as a diff that is only Studio's notes.
   if (!files.length)
-    return (
+    return fill ? (
+      <DiffFrameText header={header} after={after}>
+        <pre className="overflow-auto font-mono text-caption">{diff}</pre>
+      </DiffFrameText>
+    ) : (
       <pre className="overflow-auto rounded-md p-2 font-mono text-caption ring-1 ring-foreground/10">
         {diff}
       </pre>
     )
   return (
     <WorkerPoolContext.Provider value={pool()}>
-      <div className="@container min-w-0">
+      <div
+        className={cn(
+          "@container min-w-0",
+          fill && "flex min-h-0 flex-1 flex-col"
+        )}
+      >
         <div
-          className={cn(
-            "grid min-w-0 gap-2",
-            overview && "@3xl:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)]"
-          )}
+          className={cn("min-w-0 gap-2", fill ? "flex min-h-0 flex-1" : "grid")}
         >
-          {overview && <FileOverview files={files} onPick={jumpToFile} />}
-          <div className="grid min-w-0 content-start gap-1.5">
-            {layouts && <StyleSwitch style={style} />}
+          {/* Beside the diff once there is room; in a narrow one it scrolls in with the head. */}
+          {overview && (
+            <FileOverview
+              files={files}
+              onPick={jumpToFile}
+              className="hidden w-64 shrink-0 @3xl:grid"
+            />
+          )}
+          <div
+            className={cn(
+              "min-w-0 gap-1.5",
+              fill ? "flex min-h-0 flex-1 flex-col" : "grid content-start"
+            )}
+          >
+            {layouts && !fill && <DiffStyleSwitch />}
             <div
               ref={box}
               className={cn(
-                "diff-view min-w-0 overflow-hidden rounded-md ring-1 ring-foreground/10"
+                "diff-view min-w-0 overflow-hidden rounded-md ring-1 ring-foreground/10",
+                fill && "flex min-h-0 flex-1 flex-col"
               )}
             >
               <CodeView<Note, undefined>
@@ -554,9 +577,25 @@ export default function DiffView({
                 onScroll={track}
                 className={cn(
                   "overflow-auto",
-                  fill ? "max-h-[70dvh]" : "max-h-[60vh]"
+                  fill ? "min-h-0 flex-1" : "max-h-[60vh]"
                 )}
                 options={options}
+                renderCodeViewHeader={
+                  fill
+                    ? () => (
+                        <div className="grid min-w-0 gap-3 p-3 font-sans text-xs whitespace-normal">
+                          {header}
+                          {overview && (
+                            <FileOverview
+                              files={files}
+                              onPick={jumpToFile}
+                              className="max-h-40 @3xl:hidden"
+                            />
+                          )}
+                        </div>
+                      )
+                    : undefined
+                }
                 renderGutterUtility={
                   onComment
                     ? (hovered, item) => (
@@ -681,12 +720,17 @@ export default function DiffView({
                   )
                 }}
                 renderCodeViewFooter={
-                  footer.length
+                  footer.length || (fill && after)
                     ? () => (
-                        <div className="px-3 py-1.5 font-sans text-xs text-amber-600 dark:text-amber-400">
-                          {footer.map((text) => (
-                            <p key={text}>{text}</p>
-                          ))}
+                        <div className="grid min-w-0 gap-3 font-sans text-xs whitespace-normal">
+                          {footer.length > 0 && (
+                            <div className="px-3 py-1.5 text-amber-600 dark:text-amber-400">
+                              {footer.map((text) => (
+                                <p key={text}>{text}</p>
+                              ))}
+                            </div>
+                          )}
+                          {fill && after && <div className="p-3">{after}</div>}
                         </div>
                       )
                     : undefined
@@ -700,42 +744,15 @@ export default function DiffView({
   )
 }
 
-/** Stacked lines or old and new side by side, for every full-length diff in this browser. */
-function StyleSwitch({ style }: { style: DiffStyle }) {
-  return (
-    <ToggleGroup
-      aria-label="Diff layout"
-      variant="outline"
-      size="sm"
-      spacing={0}
-      className="justify-self-end"
-      value={[style]}
-      onValueChange={(v) => {
-        if (v[0] === "unified" || v[0] === "split") setDiffStyle(v[0])
-      }}
-    >
-      <ToggleGroupItem value="unified" title="Old and new lines in one column">
-        <RowsIcon />
-        Stacked
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value="split"
-        title="Old lines on the left, new on the right"
-      >
-        <ColumnsIcon />
-        Split
-      </ToggleGroupItem>
-    </ToggleGroup>
-  )
-}
-
 /** The diff's files with what happened to each and their lines, jumping to one on a click. */
 function FileOverview({
   files,
   onPick,
+  className,
 }: {
   files: FileDiffMetadata[]
   onPick: (fileNo: number) => void
+  className?: string
 }) {
   const all = files.map(counts)
   const added = all.reduce((n, c) => n + c.added, 0)
@@ -743,7 +760,10 @@ function FileOverview({
   return (
     <nav
       aria-label="Files in the diff"
-      className="grid max-h-40 min-w-0 content-start overflow-auto rounded-md py-1 ring-1 ring-foreground/10 @3xl:max-h-[70dvh]"
+      className={cn(
+        "grid min-w-0 content-start overflow-auto rounded-md py-1 ring-1 ring-foreground/10",
+        className
+      )}
     >
       <p className="flex h-6 items-center gap-2 px-2.5 section-label text-muted-foreground">
         Files

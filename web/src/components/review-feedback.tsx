@@ -1,4 +1,4 @@
-import { lazy, Suspense, type Ref } from "react"
+import { lazy, Suspense, type ReactNode, type Ref } from "react"
 import { toast } from "sonner"
 import type { DiffViewHandle } from "@/components/diff-view"
 import {
@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 import type { DiffPlace } from "@/lib/review-drafts"
@@ -146,6 +147,43 @@ export function composeNote(
 
 const DiffView = lazy(() => import("@/components/diff-view"))
 
+/** A review without a diff to fill it, or one still loading: it scrolls as a page. */
+export function ReviewScroll({ children }: { children: ReactNode }) {
+  return (
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
+      <div className="grid min-w-0 gap-3 text-xs">{children}</div>
+    </ScrollArea>
+  )
+}
+
+/** A review whose diff is its one scroll frame: a bar above it and the decision below. */
+export const reviewPaneClass =
+  "flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-3 text-xs md:p-4"
+
+/**
+ * A filling diff's head with a line in place of its files, as while the view loads or when
+ * there is nothing it can draw, so the head stays where it would scroll.
+ */
+export function DiffFrameText({
+  header,
+  after,
+  children,
+}: {
+  header?: ReactNode
+  after?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <ScrollArea className="min-h-0 flex-1 rounded-md ring-1 ring-foreground/10">
+      <div className="grid min-w-0 gap-3 p-3 text-xs">
+        {header}
+        {children}
+        {after}
+      </div>
+    </ScrollArea>
+  )
+}
+
 const noComments: LineComment[] = []
 
 /** A unified diff with comments under its lines; the view and its highlighter load when first shown. */
@@ -154,6 +192,8 @@ export function UnifiedDiff({
   comments = noComments,
   onComment,
   fill,
+  header,
+  after,
   commentLabel,
   ranges,
   layouts,
@@ -164,8 +204,11 @@ export function UnifiedDiff({
   diff: string
   comments?: LineComment[]
   onComment?: (comments: LineComment[]) => void
-  /** A taller view, with each file's name, for a panel of its own. */
+  /** Fills its parent's height as a review's one scroll frame, with each file's name. */
   fill?: boolean
+  /** What scrolls in above the first file and after the last, when it fills. */
+  header?: ReactNode
+  after?: ReactNode
   /** Who wrote the comments, above each one, such as "Ada's draft". */
   commentLabel?: string
   /** Whether a comment can cover several lines; on unless the comments go where it can't. */
@@ -178,19 +221,25 @@ export function UnifiedDiff({
   /** For a list of comments that jumps to them. */
   ref?: Ref<DiffViewHandle>
 }) {
-  if (!diff) return <p className="text-xs text-muted-foreground">No changes.</p>
+  const text = (line: string) =>
+    fill ? (
+      <DiffFrameText header={header} after={after}>
+        <p className="text-muted-foreground">{line}</p>
+      </DiffFrameText>
+    ) : (
+      <p className="text-xs text-muted-foreground">{line}</p>
+    )
+  if (!diff) return text("No changes.")
   return (
     <ErrorBoundary label="the changes" resetKey={diff} className="flex-none">
-      <Suspense
-        fallback={
-          <p className="text-xs text-muted-foreground">Loading the changes…</p>
-        }
-      >
+      <Suspense fallback={text("Loading the changes…")}>
         <DiffView
           diff={diff}
           comments={comments}
           onComment={onComment}
           fill={fill}
+          header={header}
+          after={after}
           commentLabel={commentLabel}
           ranges={ranges}
           layouts={layouts}

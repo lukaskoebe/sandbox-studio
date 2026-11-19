@@ -39,7 +39,7 @@ import {
   useElementWidth,
   useStoredSize,
 } from "@/components/resize-handle"
-import { GitReview, GitReviewHead } from "@/components/git-review"
+import { GitReview } from "@/components/git-review"
 import { pullRequestName } from "@/lib/approval-kinds"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -334,16 +334,17 @@ export function ChangesView({
   )
   if (approval)
     main = (
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
-        <section
-          aria-labelledby={`review-${approval.id}`}
-          data-testid="git-review"
-          className="grid gap-3 text-xs"
-        >
-          <GitReviewHead approval={approval} id={`review-${approval.id}`} />
-          <GitReview key={approval.id} approval={approval} />
-        </section>
-      </ScrollArea>
+      <section
+        aria-labelledby={`review-${approval.id}`}
+        data-testid="git-review"
+        className="flex min-h-0 min-w-0 flex-1 flex-col text-xs"
+      >
+        <GitReview
+          key={approval.id}
+          approval={approval}
+          headId={`review-${approval.id}`}
+        />
+      </section>
     )
   else if (shown === "thread" && thread)
     main = (

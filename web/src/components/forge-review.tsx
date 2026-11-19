@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -28,10 +28,13 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Ident } from "@/components/ident"
 import { StatusDot } from "@/components/status-dot"
 import { textareaClass } from "@/components/memory-dialogs"
+import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import {
   FeedbackTargetSelect,
+  ReviewScroll,
   UnifiedDiff,
   newChatTarget,
+  reviewPaneClass,
   parseDiff,
   useSendFeedback,
   type DiffLine,
@@ -218,7 +221,14 @@ type ForgeDraft = {
  * the line comments, all editable while it waits. Post review sends it as the user's account;
  * Discard drops it and tells the agent the note.
  */
-export function ForgeReview({ approval }: { approval: Approval }) {
+export function ForgeReview({
+  approval,
+  head,
+}: {
+  approval: Approval
+  /** The review's head, which scrolls in above the first file. */
+  head?: ReactNode
+}) {
   const detail = approval.forgeReview
   const draft = detail?.draft
   const lines = parseDiff(draft?.diff ?? "")
@@ -289,7 +299,7 @@ export function ForgeReview({ approval }: { approval: Approval }) {
     }
   )
   const feedback = useSendFeedback()
-  if (!detail || !draft) return null
+  if (!detail || !draft) return <ReviewScroll>{head}</ReviewScroll>
   const pr = draft.pullRequest
   const params = {
     params: { path: { env: approval.environmentId, id: approval.id } },
@@ -367,8 +377,9 @@ export function ForgeReview({ approval }: { approval: Approval }) {
   // The forge takes an approval without text; anything else needs a summary.
   const empty = !summary.trim() && verdict !== "approve"
 
-  return (
-    <div className="grid min-w-0 gap-4">
+  const facts = (
+    <>
+      {head}
       <header className="grid gap-1.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <Ident>{pullRequestName(draft)}</Ident>
@@ -480,64 +491,67 @@ export function ForgeReview({ approval }: { approval: Approval }) {
           </span>
         </label>
       </section>
+    </>
+  )
+  const outside = elsewhere.length > 0 && (
+    <ul
+      aria-label="Comments outside the diff shown"
+      className="divide-y rounded-md text-xs ring-1 ring-foreground/10"
+    >
+      {elsewhere.map((c, i) => (
+        <li
+          key={`${c.path}:${c.line}:${i}`}
+          className="flex items-start gap-2 px-2 py-1.5"
+        >
+          <ChatCircleTextIcon className="mt-0.5 shrink-0 text-muted-foreground" />
+          <span className="grid min-w-0 flex-1 gap-0.5">
+            <Ident className="text-muted-foreground">{`${c.path}:${c.line}`}</Ident>
+            <span className="break-words whitespace-pre-wrap">{c.body}</span>
+          </span>
+          {pending && (
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Remove the comment"
+              onClick={() => setElsewhere(elsewhere.filter((_, j) => j !== i))}
+            >
+              <XIcon />
+            </Button>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
 
-      <section aria-label="Changes" className="grid min-w-0 gap-2">
-        {draft.diffTruncated && (
-          <Badge variant="outline" className="justify-self-end">
-            diff truncated
-          </Badge>
-        )}
+  return (
+    <div className={reviewPaneClass}>
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        {draft.diffTruncated && <Badge variant="outline">diff truncated</Badge>}
+        <DiffStyleSwitch />
+      </div>
+      <section
+        aria-label="Changes"
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
+      >
         <UnifiedDiff
           diff={draft.diff}
           comments={comments}
           onComment={pending ? setComments : undefined}
           fill
+          header={facts}
+          after={outside}
           place={saved.place}
           onPlace={saved.onPlace}
           // A forge's comment is on one line here; a range would need its own fields.
           ranges={false}
           commentLabel={draft.teammate ? `${draft.teammate}'s draft` : "Draft"}
         />
-        {elsewhere.length > 0 && (
-          <ul
-            aria-label="Comments outside the diff shown"
-            className="divide-y rounded-md text-xs ring-1 ring-foreground/10"
-          >
-            {elsewhere.map((c, i) => (
-              <li
-                key={`${c.path}:${c.line}:${i}`}
-                className="flex items-start gap-2 px-2 py-1.5"
-              >
-                <ChatCircleTextIcon className="mt-0.5 shrink-0 text-muted-foreground" />
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <Ident className="text-muted-foreground">{`${c.path}:${c.line}`}</Ident>
-                  <span className="break-words whitespace-pre-wrap">
-                    {c.body}
-                  </span>
-                </span>
-                {pending && (
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="Remove the comment"
-                    onClick={() =>
-                      setElsewhere(elsewhere.filter((_, j) => j !== i))
-                    }
-                  >
-                    <XIcon />
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
-
       {pending && (
         <div
           role="group"
           aria-label="Decision"
-          className="sticky bottom-0 z-10 grid gap-2 rounded-lg border bg-background/95 p-2 shadow-md backdrop-blur"
+          className="grid gap-2 rounded-lg border bg-background/95 p-2"
         >
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="min-w-0 flex-1 basis-56 text-xs text-muted-foreground">

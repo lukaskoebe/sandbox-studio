@@ -71,7 +71,8 @@ var SetBase func(ctx context.Context, sandboxID, image, version string) error
 //	GET  /api/e2e/teammates/{id}/browser  the State of the teammate's browser VM's guest, with its
 //	                                    fake browser's sessions and live-view input
 //	POST /api/e2e/sandboxes/{id}/push     a Push: the guest clones through the gateway, commits one
-//	                                    file and pushes; answers with Pushed once git is done
+//	                                    file (after any earlier ones) and pushes; answers with
+//	                                    Pushed once git is done
 //	POST /api/e2e/requests                {"sandboxId", "host", "port", "method", "path", "navigation",
 //	                                    "site", "curated"}: decides one browser request, as the gateway
 //	                                    would, or with curated a sandbox's request on a connection the

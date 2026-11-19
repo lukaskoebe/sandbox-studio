@@ -34,7 +34,11 @@ binary embeds (`//go:embed`) and serves at `/`.
   colours are `var(--code-*)`, so a change of style or scheme needs no new highlight, and the
   rest of the style reaches it through the `--diffs-*` variables on `diffs-container` in
   `styles.css`. A line over 2000 characters stays plain here too. A full-length diff of several
-  files lists them (`FileOverview`), beside it from a container width of 48rem. Comments on a
+  files lists them (`FileOverview`), beside it from a container width of 48rem. In a review
+  (`fill`) the diff is the pane's one scroll frame: it fills the pane, the review's head and
+  facts come in as `header` (the library's `renderCodeViewHeader`) and scroll away above the
+  first file, the overview is a column beside it or, narrower, part of that header, and a push's
+  Commits menu swaps in one commit's diff rather than nesting it. Comments on a
   range use the library's line selection; the comment button, which lies over the numbers,
   drags a range itself, finding the line under the pointer in the diff's shadow root. `parseDiff` in
   `review-feedback.tsx` stays free of the library, since a comment's quote needs only the lines.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A review is one scrolling view: the diff fills the pane, the push's branch and change or the
+  pull request's summary scroll away above the first file, and the list of files sits beside
+  it. **Approve and push** and **Reject** stay below. The **Commits** tab gave way to a menu in
+  the bar, **All 3 commits**, that shows one commit's diff in place of the whole push's.
 - A review keeps your place. Switching to another tab, another computer, folding the screen
   or reloading brings a push or pull request review back to the file and line you were
   reading, with your unsent note, line comments, where they go and the tab you were on.

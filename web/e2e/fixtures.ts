@@ -159,6 +159,8 @@ export class Api {
       file: string
       content: string
       message: string
+      /** Commits made before that one, in order, for a push of several. */
+      earlier?: { file: string; content: string; message: string }[]
     }
   ) {
     return (await this.json<Pushed>(
