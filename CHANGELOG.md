@@ -24,6 +24,9 @@
   can't be revoked before, and the web app has no logout.
 - Studio's log says how long a teammate's browser took to wake, so a slow wake can be told
   from a slow page.
+- A large diff starts getting its colours as soon as it opens, rather than one file at a time
+  as each scrolls into view, so a fast first scroll through a review no longer shows screens
+  of uncoloured code for a moment.
 - The spike programs Studio was planned with are archived; their results stay in
   `docs/spikes.md`, which names the commit that still has the code.
 

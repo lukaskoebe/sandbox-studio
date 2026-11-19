@@ -1,4 +1,11 @@
-import { useImperativeHandle, useMemo, useRef, useState, type Ref } from "react"
+import {
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from "react"
 import {
   parsePatchFiles,
   registerCustomTheme,
@@ -113,6 +120,34 @@ const pool = () =>
       maxLineDiffLength: maxTokenLine,
     },
   })
+
+/** How much of a diff gets its colours before it scrolls into view: enough for a large review,
+ * while a huge one leaves the workers' cache of 100 files room for what's on screen. */
+const primeFiles = 60
+const primeLines = 20_000
+
+/**
+ * Starts colouring a diff's files as it opens, one at a time, so a file on screen waits for at
+ * most one of them. A file is drawn plain until its colours arrive, which on a first fast
+ * scroll through a large review left whole screens uncoloured for over a second.
+ */
+function usePrimedColors(files: FileDiffMetadata[]) {
+  useEffect(() => {
+    const workers = pool()
+    const done = new AbortController()
+    void (async () => {
+      let budget = primeLines
+      for (const file of files.slice(0, primeFiles)) {
+        budget -= file.unifiedLineCount
+        if (done.signal.aborted || budget < 0 || !workers.isWorkingPool())
+          return
+        // A failed file colours when it shows, as before.
+        await workers.primeDiffHighlightCache(file).catch(() => {})
+      }
+    })()
+    return () => done.abort()
+  }, [files])
+}
 
 /** What a line of a file holds below it. */
 type Note =
@@ -236,6 +271,7 @@ export default function DiffView({
     focused: boolean
   }>(null)
   const { files, notes, footer } = useMemo(() => readPatch(lines), [lines])
+  usePrimedColors(files)
   const indexes = useMemo(() => {
     const out = new Map<string, number>()
     lines.forEach((l, i) => {
