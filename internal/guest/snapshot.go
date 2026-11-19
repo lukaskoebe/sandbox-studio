@@ -256,6 +256,7 @@ type store struct {
 	fd        int
 	blobs     int
 	manifests int
+	wrote     int // blobs written since the store was opened
 }
 
 func (st *store) close() {
@@ -336,38 +337,64 @@ func (st *store) readManifest(id string) (*manifest, error) {
 	}
 	var m manifest
 	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, fmt.Errorf("snapshot %s: %w", id, err)
+		return nil, fmt.Errorf("snapshot %s: %w (%w)", id, errBadManifest, err)
 	}
 	return &m, nil
 }
 
+// errBadManifest is a snapshot's record that doesn't parse, as a crash may leave one that
+// never reached the disk whole. It is dropped rather than failing every snapshot after it.
+var errBadManifest = errors.New("the snapshot's record is damaged")
+
+// writeManifest writes snapshot id once the blobs it names are on the disk, so a crash
+// leaves a snapshot whole or not at all.
 func (st *store) writeManifest(id string, m *manifest) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	return writeAtomic(st.manifests, id+".json", b, 0o600)
+	if st.wrote > 0 {
+		if err := syncfs(st.blobs); err != nil {
+			return err
+		}
+		st.wrote = 0
+	}
+	return writeAtomic(st.manifests, id+".json", b, 0o600, true)
 }
 
 func blobName(hash string) string { return hash[:2] + "/" + hash }
 
-func (st *store) hasBlob(hash string) bool {
+// hasBlob reports whether the blob of hash is stored with its size: one a crash cut short
+// is not reused, and putBlob writes it again.
+func (st *store) hasBlob(hash string, size int64) bool {
 	var fs unix.Stat_t
-	return unix.Fstatat(st.blobs, blobName(hash), &fs, unix.AT_SYMLINK_NOFOLLOW) == nil
+	return unix.Fstatat(st.blobs, blobName(hash), &fs, unix.AT_SYMLINK_NOFOLLOW) == nil && fs.Size == size
 }
 
+// readBlob reads the blob of hash, and fails if it no longer has that hash.
 func (st *store) readBlob(hash string, max int64) ([]byte, error) {
-	return readAt(st.blobs, blobName(hash), max)
+	b, err := readAt(st.blobs, blobName(hash), max)
+	if err != nil {
+		return nil, err
+	}
+	if sum := sha256.Sum256(b); hex.EncodeToString(sum[:]) != hash {
+		return nil, errors.New("its saved copy is damaged")
+	}
+	return b, nil
 }
 
 func (st *store) putBlob(hash string, b []byte) error {
-	if st.hasBlob(hash) {
+	if st.hasBlob(hash, int64(len(b))) {
 		return nil
 	}
 	if err := unix.Mkdirat(st.blobs, hash[:2], 0o700); err != nil && !errors.Is(err, unix.EEXIST) {
 		return err
 	}
-	return writeAtomic(st.blobs, blobName(hash), b, 0o600)
+	if err := writeAtomic(st.blobs, blobName(hash), b, 0o600, false); err != nil {
+		return err
+	}
+	st.wrote++
+	return nil
 }
 
 // readAt reads a regular file below dir without following symlinks.
@@ -398,8 +425,9 @@ func readAt(dir int, name string, max int64) ([]byte, error) {
 	return b, err
 }
 
-// writeAtomic writes name in dir through a temporary file renamed over it.
-func writeAtomic(dir int, name string, b []byte, mode uint32) error {
+// writeAtomic writes name in dir through a temporary file renamed over it; with sync, the file
+// is on the disk before the rename.
+func writeAtomic(dir int, name string, b []byte, mode uint32, sync bool) error {
 	d, base := path.Split(name)
 	parent := dir
 	if d != "" {
@@ -417,6 +445,9 @@ func writeAtomic(dir int, name string, b []byte, mode uint32) error {
 	}
 	f := os.NewFile(uintptr(fd), tmp)
 	_, err = f.Write(b)
+	if err == nil && sync {
+		err = f.Sync()
+	}
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
@@ -521,6 +552,12 @@ func (st *store) collect() (int64, error) {
 	used := map[string]bool{}
 	for _, id := range ids {
 		m, err := st.readManifest(id)
+		if errors.Is(err, errBadManifest) {
+			if err := ignoreENOENT(unix.Unlinkat(st.manifests, id+".json", 0)); err != nil {
+				return 0, err
+			}
+			continue
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -713,7 +750,7 @@ func (w *walker) file(dir int, name string, e *mentry, st *store) error {
 	if e.Size > w.s.maxFile {
 		return nil // too large: recorded without content
 	}
-	if b, ok := w.base[e.Path]; ok && b.Type == 'f' && b.Hash != "" && b.Size == e.Size && b.MTime == e.MTime && (st == nil || st.hasBlob(b.Hash)) {
+	if b, ok := w.base[e.Path]; ok && b.Type == 'f' && b.Hash != "" && b.Size == e.Size && b.MTime == e.MTime && (st == nil || st.hasBlob(b.Hash, b.Size)) {
 		e.Hash = b.Hash
 		w.bytes += e.Size
 		return nil
@@ -749,7 +786,8 @@ func (s *snapshots) take(id, baseID string) (agentproto.SnapshotReply, error) {
 	defer st.close()
 	var base *manifest
 	if baseID != "" {
-		if base, err = st.readManifest(baseID); err != nil && !errors.Is(err, os.ErrNotExist) {
+		// A damaged base is as good as none: this snapshot reads every file.
+		if base, err = st.readManifest(baseID); err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, errBadManifest) {
 			return agentproto.SnapshotReply{}, err
 		}
 	}

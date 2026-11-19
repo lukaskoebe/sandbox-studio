@@ -3,6 +3,8 @@
 package guest
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -237,6 +239,46 @@ func TestSnapshotRestore(t *testing.T) {
 	// A second restore has nothing to do.
 	if r := take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"}); r.Restored != 0 || r.Removed != 0 {
 		t.Fatalf("restore again %+v", r)
+	}
+}
+
+// What a crash can leave of the store, a blob cut short or a record that doesn't parse, is
+// neither reused nor restored, and doesn't stop the next snapshot.
+func TestSnapshotSurvivesWhatACrashLeaves(t *testing.T) {
+	s, ws := newSnapshots(t)
+	put(t, ws, map[string]string{"a.txt": "one\n", "b.txt": "two\n"})
+	take(t, s, agentproto.SnapshotRequest{ID: "t1"})
+	blob := func(content string) string {
+		sum := sha256.Sum256([]byte(content))
+		h := hex.EncodeToString(sum[:])
+		return filepath.Join(s.store, "blobs", h[:2], h)
+	}
+
+	// a.txt's blob lost its content; the file didn't change, but its blob is written again.
+	must(t, os.Truncate(blob("one\n"), 0))
+	put(t, ws, map[string]string{"b.txt": "2\n"})
+	take(t, s, agentproto.SnapshotRequest{ID: "t2", Base: "t1"})
+	if read(t, blob("one\n")) != "one\n" {
+		t.Fatal("a blob cut short was reused")
+	}
+
+	// b.txt's blob from t1 changed; Undo says so rather than writing it.
+	must(t, os.WriteFile(blob("two\n"), []byte("TWO\n"), 0o600))
+	r := take(t, s, agentproto.SnapshotRequest{Op: agentproto.SnapshotRestore, ID: "t1"})
+	if len(r.Failed) != 1 || !strings.HasPrefix(r.Failed[0], "b.txt: ") || !strings.Contains(r.Failed[0], "damaged") {
+		t.Fatalf("restore %+v", r)
+	}
+	if read(t, filepath.Join(ws, "b.txt")) != "2\n" {
+		t.Fatal("a damaged blob was restored")
+	}
+
+	// A record that doesn't parse is as good as no base, and goes.
+	must(t, os.WriteFile(filepath.Join(s.store, "manifests", "t3.json"), []byte(`{"entries":[`), 0o600))
+	if got := take(t, s, agentproto.SnapshotRequest{ID: "t4", Base: "t3"}); got.Files == 0 {
+		t.Fatalf("snapshot after a damaged base: %+v", got)
+	}
+	if _, err := os.Stat(filepath.Join(s.store, "manifests", "t3.json")); !os.IsNotExist(err) {
+		t.Fatalf("damaged record kept: %v", err)
 	}
 }
 

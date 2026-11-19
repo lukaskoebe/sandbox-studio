@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- Undo never writes a file from a saved copy that a crash damaged: it lists the file as not
+  restored and leaves it as it is. A copy that a crash cut short is saved again on the next
+  turn, and a turn's record that a crash broke no longer makes every later snapshot fail.
 - A rebase, fork, disk resize or import waits until the copy is on the new computer's disk
   before it counts as done, and fails if the disk couldn't take it, instead of finishing while
   the data was still in memory.

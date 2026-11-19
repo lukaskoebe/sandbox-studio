@@ -552,8 +552,16 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
     - It stores blobs by SHA-256 in `/home/agent/.local/state/studio/snapshots/` (home disk,
       so disk checkpoints capture it), plus one manifest per turn. The manifest records
       path, mode, size, mtime and hash.
-    - Unchanged files are found by size and mtime and not reread. Typically this takes well
-      under a second.
+    - Unchanged files are found by size and mtime and not reread, if their blob is still
+      stored at that size. Typically this takes well under a second.
+    - A crash mustn't leave a snapshot that names blobs it hasn't got. So once a snapshot wrote
+      new blobs, the disk is synced (`syncfs`) before its manifest is written, and the
+      manifest is fsynced before its rename. On a laptop NVMe disk this cost nothing
+      measurable, even with 256 MiB unwritten on the disk; a VM's disk is untested. What a
+      crash can still leave is caught on reading: a blob of the wrong size is written again,
+      one whose hash no longer matches is never restored (Undo lists the file as failed and
+      leaves it), and a manifest that doesn't parse is dropped, a base like that counting as
+      none.
   - **After the turn** the guest takes a second snapshot, `<turn>-after`, based on the
     first, and Studio stores the difference in `chat_turns.changes`: added, modified and
     deleted paths with line counts. The next turn's snapshot reuses its hashes. The Changes
