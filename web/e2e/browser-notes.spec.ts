@@ -214,6 +214,8 @@ test("notes go as text alone to an agent that can't take images", async ({
   await expect(page.getByText("On button “Sign in”")).toBeVisible()
   await page.getByRole("textbox", { name: "Note 1" }).fill("Press this")
   await page.keyboard.press("Enter")
+  // A right-click on the note while it closes would land on it rather than the page.
+  await expect(page.getByRole("textbox", { name: /^Note/ })).toHaveCount(0)
   // A note whose lookup fails keeps its point alone.
   await page.route("**/browser/element?*", (route) => route.abort())
   await rightClick(page, 500, 360)
