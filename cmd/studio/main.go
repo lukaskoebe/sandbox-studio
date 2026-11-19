@@ -640,20 +640,22 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	// DevTools hosts carry their grant and pass auth to the broker's route (internal/browser/devtools.go).
 	handler := api.Guard(auth.Middleware(browser.DevToolsRoute(brw, preview.Route(mgr.DialPreviewTCP, mgr.CountPreview, previewLogins, mux))))
 
-	// Long-lived requests (event streams, terminals) end with the server instead of holding up
-	// the shutdown.
-	base, cancelRequests := context.WithCancel(context.Background())
-	defer cancelRequests()
-	srv := &http.Server{
-		Addr: addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second,
-		BaseContext: func(net.Listener) context.Context { return base },
-	}
-	srv.RegisterOnShutdown(cancelRequests)
+	// Long-lived reads (event streams, terminals) end with the server instead of holding up
+	// the shutdown, while a write runs to its end: run returns, and closes the databases, only
+	// once the shutdown is done, up to 5 seconds after it began.
+	streams, endStreams := context.WithCancel(context.Background())
+	defer endStreams()
+	srv := &http.Server{Addr: addr, Handler: endWithShutdown(streams, handler), ReadHeaderTimeout: 10 * time.Second}
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		<-ctx.Done()
+		endStreams()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(shutdown)
+		if err := srv.Shutdown(shutdown); err != nil {
+			log.Warn("requests still running when Studio stopped", "err", err)
+		}
 	}()
 
 	// Sandboxes are detached VMs: they keep running when Studio stops, and their agents
@@ -674,10 +676,27 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	<-shutdownDone
 	if restarting.Load() {
 		return &updateRestart{resume}
 	}
 	return nil
+}
+
+// endWithShutdown ends a read's context, a GET's or a HEAD's, once streams ends: event
+// streams, terminals and other long reads stop with the server instead of holding up its
+// shutdown. Other requests keep theirs, so a write that started finishes, and the shutdown
+// waits for it.
+func endWithShutdown(streams context.Context, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			ctx, cancel := context.WithCancel(r.Context())
+			defer cancel()
+			defer context.AfterFunc(streams, cancel)()
+			r = r.WithContext(ctx)
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // startingWait is how long a second start waits for the Studio holding the data directory

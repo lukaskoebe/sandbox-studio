@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- Quitting or restarting Studio while you save something lets that save finish before Studio
+  closes its database, instead of failing it or cutting it off halfway. Event streams and
+  terminals still end at once.
 - An update gets 15 minutes instead of two to start serving before Studio goes back to the
   old version, so a slow first start (a database migration, downloading msb) no longer undoes a
   good update. Stopping Studio while the new version starts, or another program holding its
