@@ -274,15 +274,16 @@ func (s *Service) decideCredential(ctx context.Context, a store.Approval, allow 
 	return err
 }
 
-// fieldPrint stands for what a field says about itself, to tell it from another under its ref:
-// a snapshot would renumber the refs. It reads no value, and a page that keeps these the same
-// keeps the print the same.
+// fieldPrint stands for what an element says about itself, to tell it from another under its
+// ref: a snapshot would renumber the refs. It reads no input's value (get text reads
+// innerText, which holds none), and a page that keeps these the same keeps the print the same.
 func (s *Service) fieldPrint(ctx context.Context, st *state, pg *page, ref string) string {
-	attrs := []string{"type", "name", "autocomplete", "placeholder", "aria-label"}
-	cmds := make([][]string, len(attrs))
+	attrs := []string{"type", "name", "autocomplete", "placeholder", "aria-label", "href"}
+	cmds := make([][]string, len(attrs), len(attrs)+1)
 	for i, attr := range attrs {
 		cmds[i] = []string{"get", "attr", "@" + ref, attr}
 	}
+	cmds = append(cmds, []string{"get", "text", "@" + ref})
 	items, err := s.batch(ctx, st, pg, cmds)
 	if err != nil {
 		return "unreadable"
@@ -290,12 +291,21 @@ func (s *Service) fieldPrint(ctx context.Context, st *state, pg *page, ref strin
 	values := make([]string, 0, len(items))
 	for _, item := range items {
 		if item.Success {
-			values = append(values, attrValue(item.Result))
+			values = append(values, attrValue(item.Result)+printText(item.Result))
 		} else {
 			values = append(values, "")
 		}
 	}
 	return textDigest(strings.Join(values, "\x00"))
+}
+
+// printText is the text a get text answered, or "".
+func printText(raw json.RawMessage) string {
+	var v struct {
+		Text string `json:"text"`
+	}
+	_ = json.Unmarshal(raw, &v)
+	return strings.TrimSpace(v.Text)
 }
 
 func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPayload) error {

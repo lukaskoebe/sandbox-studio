@@ -1397,3 +1397,94 @@ func TestSnapshotFollowsTheDenyRulesOfThePageItReads(t *testing.T) {
 		t.Fatalf("snapshot of a denied page: %v, %v", out, err)
 	}
 }
+
+// An approval is for the element its card showed, on the site it showed. A page can change
+// under a ref without changing its address: a grant for one element doesn't click another,
+// and an element or a site that changed while the user decided isn't acted on.
+func TestActionApprovalHoldsForItsElementAndSite(t *testing.T) {
+	f := newFixture(t)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	allow := func(a store.Approval) {
+		t.Helper()
+		for _, k := range f.svc.ApprovalKinds() {
+			if k.Kind == a.Kind {
+				if err := k.Decide(f.ctx, a, integrations.Decision{Action: integrations.Allow}); err != nil {
+					t.Error(err)
+				}
+			}
+		}
+	}
+	relabel := func(name string) {
+		f.fb.mu.Lock()
+		f.fb.fields[3].name = name
+		f.fb.mu.Unlock()
+	}
+	clicked := func() bool {
+		for _, c := range f.fb.allCommands() {
+			if c.Args[0] == "click" {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Allowed after the hold, but the button under e4 is another one by the retry.
+	f.svc.Hold = 100 * time.Millisecond
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e4"}`); err == nil || !strings.Contains(err.Error(), "call again") {
+		t.Fatalf("unanswered: %v", err)
+	}
+	allow(f.pending(KindAction))
+	relabel("Delete account")
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e4"}`); err == nil || !strings.Contains(err.Error(), "call again") {
+		t.Fatalf("a grant for another element: %v", err)
+	}
+	if clicked() {
+		t.Fatal("the grant clicked another element")
+	}
+	relabel("Sign in")
+	f.mustCall(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e4"}`) // the grant is for this one
+	list, err := f.st.Approvals(f.ctx, f.env, store.StatusPending, 50)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("pending: %v, %v", list, err)
+	}
+	if err := f.st.DecideApproval(f.ctx, f.env, list[0].ID, store.StatusDismissed, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// The element changes while the user decides.
+	f.svc.Hold = 5 * time.Second
+	go func() {
+		a := f.pending(KindAction)
+		relabel("Delete account")
+		allow(a)
+	}()
+	before := len(f.fb.allCommands())
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e4"}`); err == nil || !strings.Contains(err.Error(), "element changed") {
+		t.Fatalf("an element that changed meanwhile: %v", err)
+	}
+	for _, c := range f.fb.allCommands()[before:] {
+		if c.Args[0] == "click" {
+			t.Fatal("a click ran on an element that changed")
+		}
+	}
+
+	// The page goes to another site while the user decides.
+	relabel("Sign in")
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	go func() {
+		a := f.pending(KindAction)
+		f.fb.mu.Lock()
+		f.fb.url = "https://evil.example/login"
+		f.fb.mu.Unlock()
+		allow(a)
+	}()
+	before = len(f.fb.allCommands())
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e4"}`); err == nil || !strings.Contains(err.Error(), "went to https://evil.example") {
+		t.Fatalf("a page that went elsewhere meanwhile: %v", err)
+	}
+	for _, c := range f.fb.allCommands()[before:] {
+		if c.Args[0] == "click" {
+			t.Fatal("a click ran on another site")
+		}
+	}
+}

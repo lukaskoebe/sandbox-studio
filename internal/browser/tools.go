@@ -239,6 +239,15 @@ func (c *call) element(ref string) (string, refInfo, error) {
 
 // authorize applies the policy to an action, asking the user when it says so.
 func (c *call) authorize(ctx context.Context, r Request, url, text string) error {
+	return c.authorizeOn(ctx, r, url, text, false, "")
+}
+
+// authorizeOn is authorize for an action on the page as it is now, on element ref if there
+// is one. What the user approves is that element on that site: an approval or a grant made
+// for it covers only an element that still says the same about itself (fieldPrint), as a
+// page can change under a ref without changing its address, and once the user allowed it
+// the page must still be on the site.
+func (c *call) authorizeOn(ctx context.Context, r Request, url, text string, onPage bool, ref string) error {
 	r.Digest = textDigest(text)
 	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.teammate)
 	if err != nil {
@@ -251,6 +260,11 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 	case Deny:
 		c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(r.Role, r.Label), url: url, outcome: "denied", detail: reason})
 		return refuse("%s", reason)
+	}
+	print := ""
+	if ref != "" {
+		print = c.s.fieldPrint(ctx, c.st, c.pg, ref)
+		r.Digest = textDigest(text + "\x00" + print)
 	}
 	if c.s.takeGrant(c.st, c.pg.id, r) {
 		return nil
@@ -275,11 +289,30 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 	switch status {
 	case store.StatusApproved:
 		c.s.takeGrant(c.st, c.pg.id, r) // the approval is used now
+		if onPage {
+			return c.stillThere(ctx, r, ref, print)
+		}
 		return nil
 	case store.StatusPending:
 		return refuse("waiting for the user to approve %s on %s in Studio; call again in a minute to retry", r.Action, r.Origin)
 	}
 	return refuse("the user did not allow %s on %s", r.Action, r.Origin)
+}
+
+// stillThere checks, once the user allowed an action, that the page is still on the site the
+// user saw and the element still the one: the page may have changed while the user decided.
+func (c *call) stillThere(ctx context.Context, r Request, ref, print string) error {
+	url, err := c.currentURL(ctx)
+	if err != nil {
+		return err
+	}
+	if o := Origin(url); o != r.Origin {
+		return refuse("the user allowed %s on %s, but the page went to %s meanwhile: run `studio browser snapshot` and try again", r.Action, r.Origin, c.scrub(o))
+	}
+	if ref != "" && c.s.fieldPrint(ctx, c.st, c.pg, ref) != print {
+		return refuse("the user allowed %s on %s, but the element changed meanwhile: run `studio browser snapshot` and try again", r.Action, target(r.Role, r.Label))
+	}
+	return nil
 }
 
 // textDigest stands for what an action types, selects or presses, in full.
@@ -308,7 +341,7 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 	if r.Origin == "" {
 		return nil, refuse("the page is not a web page (%s); open one first with `studio browser open`", clip(url, 100))
 	}
-	if err := c.authorize(ctx, r, url, text); err != nil {
+	if err := c.authorizeOn(ctx, r, url, text, true, ref); err != nil {
 		return nil, err
 	}
 	c.s.mu.Lock()
@@ -652,7 +685,7 @@ func (c *call) getText(ctx context.Context, params json.RawMessage) (any, error)
 		return nil, err
 	}
 	url, _ := c.currentURL(ctx)
-	if err := c.authorize(ctx, Request{Action: "get_text", Origin: Origin(url), Role: info.Role, Label: info.Name}, url, ""); err != nil {
+	if err := c.authorizeOn(ctx, Request{Action: "get_text", Origin: Origin(url), Role: info.Role, Label: info.Name}, url, "", true, ref); err != nil {
 		return nil, err
 	}
 	// get text reads innerText, which holds no input values.

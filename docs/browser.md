@@ -244,10 +244,17 @@ Unknown actions are denied.
   calling tool waits up to 30 s for the decision. After that the agent gets a "waiting for
   approval" answer, and an approval granted later holds for 5 minutes for the same action
   on the same element with the same text or key. A retry with other arguments replaces the
-  card, so the card shows what an Allow runs (`Store.RequestExactApproval`). A credential's
-  card works the same way, and just before the fill Studio compares what the field says about
-  itself (type, name, autocomplete, placeholder, aria-label) with the request: a field that
-  changed while the user decided isn't filled. It can't tell two fields that say the same.
+  card, so the card shows what an Allow runs (`Store.RequestExactApproval`).
+  - The same element means one that says the same about itself (`fieldPrint`: type, name,
+    autocomplete, placeholder, aria-label, href and its text, never an input's value), as a
+    page can change under a ref without changing its address. A retry on an element that
+    changed gets a new card.
+  - Once the user allows a click, a fill or a read of an element, Studio checks the page again
+    before it runs: a page that went to another site, or an element that changed while the
+    user decided, is refused, and the agent takes a new snapshot.
+  - A credential's card works the same way, and just before the fill Studio compares the
+    field's print with the request: a field that changed while the user decided isn't
+    filled. It can't tell two elements that say the same.
 
 ## Redaction
 

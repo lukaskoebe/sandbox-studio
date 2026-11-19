@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A click or a fill you allowed in a teammate's browser runs only on the element the card was
+  for, on the site it named: a page that swapped the button under the same address, or went
+  to another site while you decided, is refused, and the teammate looks again.
 - A computer whose create or fork finished just as Studio stopped is no longer deleted when
   Studio starts again. Studio keeps a note while a create or fork runs and removes it at the
   end; if that removal didn't happen, the next start took the computer for one that failed

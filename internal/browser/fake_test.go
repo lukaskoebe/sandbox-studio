@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -112,7 +113,7 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 		case "attr":
 			for _, fl := range f.fields {
 				if "@"+fl.ref == args[2] {
-					v := map[string]string{"type": fl.typ, "autocomplete": fl.autocomplete}[args[3]]
+					v := map[string]string{"type": fl.typ, "autocomplete": fl.autocomplete, "aria-label": fl.name}[args[3]]
 					return map[string]any{"value": v, "origin": f.url}, nil
 				}
 			}
@@ -123,6 +124,7 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 			for _, v := range f.values {
 				parts = append(parts, v)
 			}
+			slices.Sort(parts)
 			return map[string]any{"text": "Welcome " + strings.Join(parts, " ")}, nil
 		}
 	case "open":
