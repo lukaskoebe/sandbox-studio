@@ -390,13 +390,18 @@ func (f *Forgejo) call(ctx context.Context, token, method, path string, in, out 
 	return err
 }
 
+// maxAnswer bounds one JSON answer of a forge's API. A page of 100 pull requests from GitHub,
+// each with its full head and base repositories, runs to a few MiB.
+const maxAnswer = 8 << 20
+
 // callJSON sends one API request with the given Authorization and decodes the JSON
 // answer into out. Errors carry the forge's message, never the token.
 func callJSON(ctx context.Context, client *http.Client, auth, token, method, url string, headers map[string]string, in, out any) (http.Header, error) {
-	return callJSONMax(ctx, client, auth, token, method, url, headers, in, out, 1<<20)
+	return callJSONMax(ctx, client, auth, token, method, url, headers, in, out, maxAnswer)
 }
 
-// callJSONMax is callJSON for answers of up to max bytes.
+// callJSONMax is callJSON for answers of up to max bytes. A longer answer fails, rather
+// than being read cut short.
 func callJSONMax(ctx context.Context, client *http.Client, auth, token, method, url string, headers map[string]string, in, out any, max int64) (http.Header, error) {
 	var body io.Reader
 	if in != nil {
@@ -423,7 +428,7 @@ func callJSONMax(ctx context.Context, client *http.Client, auth, token, method, 
 		return nil, errors.New(mask(err.Error(), token))
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, max))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
 	if err != nil {
 		return nil, err
 	}
@@ -448,6 +453,9 @@ func callJSONMax(ctx context.Context, client *http.Client, auth, token, method, 
 			msg = msg[:300] + "..."
 		}
 		return nil, fmt.Errorf("the forge answered %s: %s", resp.Status, mask(msg, token))
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("the forge's answer is larger than %d MiB", max>>20)
 	}
 	if out != nil {
 		if err := json.Unmarshal(data, out); err != nil {

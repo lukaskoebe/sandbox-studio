@@ -17,7 +17,7 @@ import (
 // a note with the summary, and "request changes" is a note that says so and the reviewer state.
 
 // gitlabMaxAnswer bounds one answer of GitLab's that carries diffs.
-const gitlabMaxAnswer = 8 << 20
+const gitlabMaxAnswer = maxAnswer
 
 func (g *GitLab) mr(owner, repo string, number int) string {
 	return "/projects/" + gitlabProject(owner, repo) + "/merge_requests/" + strconv.Itoa(number)

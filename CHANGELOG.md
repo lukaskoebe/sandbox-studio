@@ -17,6 +17,10 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- Listing the pull requests of a large GitHub repository (`studio pr list`, `~/forge`) no longer
+  fails with "unexpected end of JSON input": Studio read only the first MiB of a forge's answer,
+  and a page of 100 pull requests runs to a few. It reads up to 8 MiB now, and says so when an
+  answer is larger.
 - A push, pull request, review or comment you approved no longer stays "approved" for good when
   Studio stopped or the page closed in the middle of sending it: what it did is recorded, and
   one Studio didn't finish fails at the next start with what to do, so it can be pushed or opened
