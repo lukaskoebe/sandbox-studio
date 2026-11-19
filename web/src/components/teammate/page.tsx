@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useRouter } from "@tanstack/react-router"
 import {
   ArrowLineRightIcon,
   MonitorIcon,
@@ -185,12 +186,32 @@ export function TeammatePage({
   const backable = search.profile === "memory" || search.profile === "tasks"
   if (settingsBack !== undefined && !backable && search.profile !== "settings")
     setSettingsBack(undefined)
+  // Opening the settings is a step in the browser's history, so Back, Alt+← and a phone's back
+  // gesture leave them; moving between their rows, or to memory or tasks and back, is not.
   const profile = (view: ProfileView | undefined, section?: string) =>
-    onSearch({
-      profile: view,
-      open: view === "settings" || view === "memory" ? section : undefined,
-      from: view === "settings" ? search.from : undefined,
-    })
+    onSearch(
+      {
+        profile: view,
+        open: view === "settings" || view === "memory" ? section : undefined,
+        from: view === "settings" ? search.from : undefined,
+      },
+      view === "settings" && !search.profile && "quiet"
+    )
+  // Whether the settings were opened on this page, by a step in its history (every way in
+  // pushes one): leaving them goes back that step rather than adding another. Opened from a
+  // link or a reload, there is no step to go back to.
+  const router = useRouter()
+  const [lastProfile, setLastProfile] = useState(search.profile)
+  const [settingsPushed, setSettingsPushed] = useState(false)
+  if (lastProfile !== search.profile) {
+    setLastProfile(search.profile)
+    if (!lastProfile && search.profile === "settings") setSettingsPushed(true)
+    else if (!search.profile) setSettingsPushed(false)
+  }
+  const leaveSettings = () => {
+    if (settingsPushed) router.history.back()
+    else profile(undefined)
+  }
 
   // Esc steps back: a dialog or menu closes itself, then the profile, then the thread.
   useEffect(() => {
@@ -212,7 +233,8 @@ export function TeammatePage({
         )
       )
         return
-      if (search.profile) profile(undefined)
+      if (search.profile === "settings") leaveSettings()
+      else if (search.profile) profile(undefined)
       else if (!wide && overlay) setOverlay(false)
       else if (full) screen({ full: false })
       else if (search.thread) leaveThread()
@@ -265,6 +287,7 @@ export function TeammatePage({
           section={search.open}
           fromSetup={search.from === "setup"}
           onOpen={profile}
+          onBack={leaveSettings}
           onView={(v) => {
             setSettingsBack(v)
             profile(v)

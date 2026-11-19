@@ -1,10 +1,11 @@
 import { Fragment, useState } from "react"
-import { ArrowLeftIcon, ChatCircleIcon } from "@phosphor-icons/react"
+import { ArrowLeftIcon } from "@phosphor-icons/react"
 import { TeammateMemory } from "@/components/teammate/memory"
 import { TeammateSettings } from "@/components/teammate/settings"
 import { TeammateTasks } from "@/components/teammate/tasks"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
@@ -51,6 +52,7 @@ export function ProfileSettingsPage({
   section,
   fromSetup,
   onOpen,
+  onBack,
   onView,
 }: {
   env: string
@@ -58,6 +60,8 @@ export function ProfileSettingsPage({
   section?: string
   fromSetup?: boolean
   onOpen: Open
+  /** Leaves the settings for where they were opened from, as Esc does. */
+  onBack: () => void
   /** Opens the teammate's memory or tasks, from the row of that name. */
   onView: (view: "memory" | "tasks") => void
 }) {
@@ -70,8 +74,20 @@ export function ProfileSettingsPage({
       viewportClassName="px-4 pt-6 pb-10 md:px-8"
     >
       <div className="mx-auto grid w-full max-w-3xl min-w-0 gap-5">
-        <header className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-2">
-          <div className="grid min-w-0 flex-1 gap-1">
+        <header className="grid min-w-0 justify-items-start gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={`Back to ${teammate.name}`}
+            className="-ml-1.5 inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <ArrowLeftIcon className="size-3.5 shrink-0" />
+            <span className="truncate">{teammate.name}</span>
+            <Kbd aria-hidden className="ml-0.5">
+              Esc
+            </Kbd>
+          </button>
+          <div className="grid min-w-0 gap-1">
             <h1 className="flex min-w-0 items-center gap-2.5 text-title font-semibold">
               <TeammateAvatar
                 name={teammate.name}
@@ -82,10 +98,6 @@ export function ProfileSettingsPage({
             </h1>
             <Identity env={env} teammate={teammate} />
           </div>
-          <Button variant="outline" size="sm" onClick={() => onOpen(undefined)}>
-            <ChatCircleIcon />
-            Conversation
-          </Button>
         </header>
         <TeammateSettings
           env={env}

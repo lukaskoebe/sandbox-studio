@@ -21,17 +21,17 @@ The teammate's page starts on its home:
 
 The box at the bottom sends a **Thread**, a message that starts a thread on the computer named under it; a **Task**, which goes on its task list and which it starts on right away; or **Teach**, a fact for its memory without a thread. When the teammate offers more than one model, the box also picks the thread's model.
 
-Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). Open a thread to go on with it; the chat takes the home's place, and the button with the teammate's name at the top left, or Esc, returns to the home. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
+Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). Open a thread to go on with it; the chat takes the home's place, and the button with the teammate's name at the top left, its name in the bar at the top, or Esc, returns to the home. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
 
 ## A teammate's settings
 
-Choose the teammate's name in the bar at the top, then **Settings**, or search for *Iris's settings* with ⌘K. The settings are a list of rows, each saying what it is set to and opening to edit it:
+Choose the caret beside the teammate's name in the bar at the top, then **Settings**, or search for *Iris's settings* with ⌘K. The settings are a list of rows, each saying what it is set to and opening to edit it:
 
 - **Profile**: Identity, Agent (harness, provider and models), Git identity, Approvals and Soul.
 - **Knowledge**: [Memory](../memory/), with **Learn from its chats** and **Dream every night**, and Tasks.
 - **Routine and access**: Check-ins, New hosts (its [network level](../network/#security-levels)), Network rules, [Browser](../browser/), Secrets, and Copy to another environment.
 
-One **Save** keeps the changes of every row, **Conversation** goes back to the teammate, and **Delete Iris** is at the bottom. ⌘K also finds each row by what it holds, such as *stealth*, *soul* or *check-ins*.
+One **Save** keeps the changes of every row, and **Delete Iris** is at the bottom. **← Iris** above the title, Esc, or the browser's back button returns to where you opened the settings from, such as a thread. ⌘K also finds each row by what it holds, such as *stealth*, *soul* or *check-ins*.
 
 ![Ada's settings: Profile, Knowledge, and Routine and access](../../assets/screenshots/teammate-settings.jpg)
 

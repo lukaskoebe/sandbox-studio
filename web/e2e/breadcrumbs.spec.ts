@@ -111,6 +111,66 @@ test("the breadcrumb row says where a page is, and its parts open their neighbou
 })
 
 // The breadcrumb row and the sidebar's header are one band across the window.
+// The teammate's crumb is a link home with its switcher on the caret; its settings are a step in
+// the history, which their ← link, Esc and Back leave, whatever row is open.
+test("a teammate's crumb goes home, and its settings lead back", async ({
+  page,
+  api,
+  env,
+}) => {
+  const crumbs = page.getByRole("navigation", { name: "Where you are" })
+  const name = `Back ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const sb = await api.createSandbox(sandboxName("back"), id)
+  await api.guestReady(sb)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${sb}/chats`
+  ))!
+  const settings = page.getByRole("region", { name: `${name}'s settings` })
+  const openSettings = async () => {
+    await crumbs
+      .getByRole("button", { name: `Switch teammate: ${name}` })
+      .click()
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click()
+    await expect(settings).toBeVisible()
+  }
+
+  // From a thread, the name goes to the teammate's home.
+  await page.goto(`/e/${env}/teammates/${id}?thread=${chat.id}`)
+  await crumbs.getByRole("button", { name, exact: true }).click()
+  await expect(page).not.toHaveURL(/[?&]thread=/)
+  await expect(crumbs.getByRole("listitem")).toHaveText([
+    new RegExp(`${name}$`),
+  ])
+
+  // Back, after moving between rows, leaves the settings for where they were opened.
+  await page.goto(`/e/${env}/teammates/${id}?thread=${chat.id}`)
+  await openSettings()
+  await crumbs.getByRole("button", { name: "Switch section: Settings" }).click()
+  await page.getByRole("menuitem", { name: "Check-ins" }).click()
+  await expect(page).toHaveURL(/[?&]open=checkins/)
+  await page.goBack()
+  await expect(settings).toBeHidden()
+  await expect(page).toHaveURL(new RegExp(`[?&]thread=${chat.id}`))
+
+  // Its ← link goes back the same way, and so does Esc.
+  await openSettings()
+  await settings.getByRole("button", { name: `Back to ${name}` }).click()
+  await expect(settings).toBeHidden()
+  await expect(page).toHaveURL(new RegExp(`[?&]thread=${chat.id}`))
+  await openSettings()
+  await page.keyboard.press("Escape")
+  await expect(settings).toBeHidden()
+  await expect(page).toHaveURL(new RegExp(`[?&]thread=${chat.id}`))
+
+  // Opened from a link, the ← link goes to the teammate, without a step to go back to.
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings`)
+  await settings.getByRole("button", { name: `Back to ${name}` }).click()
+  await expect(settings).toBeHidden()
+  await expect(page).not.toHaveURL(/[?&]profile=/)
+})
+
 test("the breadcrumb row lines up with the sidebar's header", async ({
   page,
   env,

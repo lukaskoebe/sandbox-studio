@@ -77,7 +77,10 @@ type Crumb = {
   menu?: MenuEntry[]
   /** The menu button's name, which says what it switches rather than repeating the label. */
   switches?: string
-  /** Where the crumb goes, for one without a menu. */
+  /**
+   * Where the crumb goes. With a menu as well, the name goes there and the caret beside it opens
+   * the menu, unless the crumb is where you are.
+   */
   run?: () => void
 }
 
@@ -123,11 +126,12 @@ export function Breadcrumbs({ env }: { env: string }) {
   const allSandboxes = sandboxes.data ?? []
   const allChats = chats.data ?? []
 
-  const goTeammate = (id: string, s: TeammateSearch = {}) =>
+  const goTeammate = (id: string, s: TeammateSearch = {}, replace = false) =>
     void navigate({
       to: "/e/$env/teammates/$id",
       params: { env, id },
       search: s,
+      replace,
     })
   const goComputer = (sb: Sandbox) => {
     if (sb.teammateId && allTeammates.some((t) => t.id === sb.teammateId))
@@ -161,6 +165,7 @@ export function Breadcrumbs({ env }: { env: string }) {
     key: "teammate",
     switches: "Switch teammate",
     label: t.name,
+    run: () => goTeammate(t.id),
     lead: <TeammateAvatar name={t.name} avatar={t.avatar} className="size-4" />,
     menu: [
       { heading: "Teammates" },
@@ -319,7 +324,10 @@ export function Breadcrumbs({ env }: { env: string }) {
               ...g.rows.map(({ id, label }) => ({
                 label: id === "delete" ? `Delete ${t.name}` : label,
                 current: id === search.open,
-                run: () => goTeammate(t.id, { profile: "settings", open: id }),
+                // Moving between the settings' rows is no step in the history, as on the
+                // page: Back leaves the settings.
+                run: () =>
+                  goTeammate(t.id, { profile: "settings", open: id }, true),
               })),
             ]),
           },
@@ -488,7 +496,30 @@ export function Breadcrumbs({ env }: { env: string }) {
                 className="flex shrink-0"
                 aria-current={last ? "page" : undefined}
               >
-                {c.menu ? (
+                {c.menu && c.run && !last ? (
+                  <span className="inline-flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      onClick={c.run}
+                      className={cn(
+                        cls,
+                        "pr-1 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 [&>span]:underline-offset-2 hover:[&>span]:underline"
+                      )}
+                    >
+                      {inner}
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={`${c.switches}: ${c.label}`}
+                        title={c.switches}
+                        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-popup-open:bg-accent data-popup-open:text-foreground"
+                      >
+                        <CaretDownIcon className="size-2.5 opacity-70" />
+                      </DropdownMenuTrigger>
+                      <CrumbMenu entries={c.menu} />
+                    </DropdownMenu>
+                  </span>
+                ) : c.menu ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       aria-label={`${c.switches}: ${c.label}`}

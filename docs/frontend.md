@@ -153,7 +153,8 @@ Above every page a row of breadcrumbs (`components/breadcrumbs.tsx`) says where 
 Environment › a page, Settings › a section, Computers › a computer of the user's own, or a
 teammate › the open thread followed, on its desk and in a thread, by a chip for the computer it
 shows ("on ● docs-site"). Each part with a caret opens its neighbours; the chip's menu has the
-teammate's computers, Give it another computer and All computers. What the computer's tabs show
+teammate's computers, Give it another computer and All computers. The teammate's crumb is two
+buttons when it isn't the last part: its name goes to its home and its caret opens the menu. What the computer's tabs show
 is on the computer, not in the row.
 
 Environment › Computers (`components/computers-page.tsx`) lists every computer with its forks
@@ -218,8 +219,11 @@ Double-click resets the split; the arrows move it, and past either end fold or e
   terminal or delete it; then the chat and its composer. Its changes and terminal show on the
   screen.
 - The settings: **Settings** in the crumb's teammate menu opens them as a page, in place of the
-  home or the thread. Its header names the teammate with its role, agent, model and presence
-  word. Until 2026-11-17 a Profile card opened from the same menu, with the open tasks, what it
+  home or the thread, as a step in the history, so the browser's back, Esc and the "← name Esc"
+  link above the title return to the thread or home it was opened from; opened from a link,
+  the link goes to the home. Its sections replace that step rather than adding their own.
+  Until 2026-11-19 a Conversation button in the header went to the home. Its header names
+  the teammate with its role, agent, model and presence word. Until 2026-11-17 a Profile card opened from the same menu, with the open tasks, what it
   knows, its computers and the settings that matter day to day; everything on it but the
   identity line and New task was already here or on the home, so those two moved here and the
   card went. The page uses rows, an icon, the label, what it is
