@@ -190,10 +190,14 @@ func main() {
 		return
 	}
 
+	// A double-clicked studio.exe hands off to the app or the tray, which need no console.
+	if len(os.Args) == 1 && handOffConsole(*addr) {
+		return
+	}
 	prepareConsole()
 	log, logPath := serverLogger()
-	// Studio opens the login link itself when it runs in a terminal, as when studio.exe is
-	// double-clicked; not under a service manager or in tests.
+	// Studio opens itself when it runs in a terminal, as when studio.exe is double-clicked
+	// without the app or the tray beside it; not under a service manager or in tests.
 	open := !*noBrowser && term.IsTerminal(int(os.Stderr.Fd()))
 	err := run(*addr, *image, open, logPath, log)
 	var restart *updateRestart
@@ -670,8 +674,10 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	log.Info("open Studio with this one-time login link", "url", link)
 	printLoginBanner(link, logPath)
 	if open {
-		// A link of its own, so the banner's still works once the browser used this one.
-		openLogin(loginURL(addr, auth.IssueLogin()), log)
+		// A link of its own, so the banner's still works once the browser used this one. The
+		// app, which signs in by itself, starts beside the server rather than before it.
+		link := loginURL(addr, auth.IssueLogin())
+		go openStudio(addr, link, log)
 	}
 	if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
 		return err
@@ -726,7 +732,7 @@ func openRunning(ctx context.Context, addr, data string, open bool, logPath stri
 	}
 	log.Info("Studio is already running", "url", "http://"+addr, "data", data)
 	if open {
-		openLogin(link, log)
+		openStudio(addr, link, log)
 		return nil
 	}
 	log.Info("open Studio with this one-time login link", "url", link)
@@ -739,6 +745,30 @@ func openRunning(ctx context.Context, addr, data string, open bool, logPath stri
 func starting(err error) bool {
 	var op *net.OpError
 	return (errors.As(err, &op) && op.Op == "dial") || errors.Is(err, store.ErrNotFound)
+}
+
+// openStudio opens Studio in its app when one is installed next to studio and there is a
+// display for it, and otherwise, or when the app doesn't start, in the browser with link.
+func openStudio(addr, link string, log *slog.Logger) {
+	exe, err := os.Executable()
+	if err == nil {
+		exe, err = filepath.EvalSymlinks(exe)
+	}
+	app := ""
+	if err == nil {
+		app = appBinary(exe, goruntime.GOOS)
+	}
+	if _, err := browserCommand(goruntime.GOOS, "", os.Getenv); errors.Is(err, errNoDisplay) {
+		app = ""
+	}
+	if app != "" {
+		err := startApp(app, exe, addr)
+		if err == nil {
+			return
+		}
+		log.Warn("the Studio app didn't start; opening the browser instead", "err", err)
+	}
+	openLogin(link, log)
 }
 
 func openLogin(link string, log *slog.Logger) {

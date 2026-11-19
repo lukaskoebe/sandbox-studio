@@ -33,6 +33,22 @@ func StartServer(studio, addr string) (<-chan error, error) {
 	return exited, nil
 }
 
+// StartApp starts the Studio app (studio-app.exe) on its own, outside the caller's job: it
+// starts the server with studio if it must, and a second app shows the first one's window.
+func StartApp(app, studio, addr string) error {
+	cmd := exec.Command(app, "-addr", addr, "-studio", studio)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNewProcessGroup | createBreakawayFromJob}
+	if err := cmd.Start(); err != nil {
+		// A job that forbids breakaway.
+		cmd = exec.Command(app, "-addr", addr, "-studio", studio)
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNewProcessGroup}
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+	}
+	return cmd.Process.Release()
+}
+
 // RunStudio runs a short studio.exe command without a window and returns its output.
 func RunStudio(ctx context.Context, studio string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, studio, args...)

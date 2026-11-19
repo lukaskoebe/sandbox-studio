@@ -47,6 +47,11 @@ server is still the product, and the app is a window and a tray around it.
 The process logic (state, start, login links, quit) is `internal/launcher`, shared with the
 Windows tray launcher `studiow.exe`.
 
+The app is where Studio opens by default when it is installed: a `studio` started in a
+terminal, a second start, a double-clicked `studio.exe` or `studiow.exe`, and the tray's
+**Open Studio** start it, and fall back to the browser without it, without a display, or when it
+doesn't start. The app's **Open in browser** still opens the page in the browser.
+
 ## The page and the app
 
 Studio's UI knows when it runs in the app ([`web/src/lib/desktop.ts`](../web/src/lib/desktop.ts)):
@@ -142,4 +147,6 @@ an e2e Studio with its own `SANDBOX_STUDIO_HOME`. It reports the `studio-window`
 - WebView2's messages and macOS are built and self-tested in CI but untried by hand. A bare
   `studio-app` on macOS, as `make app` builds it, gets no notifications: the service doesn't
   start, the app runs without it, and the page keeps its own.
-- The autostart entry still starts `studio` (or `studiow.exe` on Windows), not the app.
+- The autostart entry still starts `studio` (or `studiow.exe` on Windows), not the app, and
+  opens nothing.
+- Opening in the app by default is untried on Windows and macOS by hand: CI builds it there.

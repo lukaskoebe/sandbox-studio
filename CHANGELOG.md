@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Studio opens in its app by default when the app is installed next to `studio`: a `studio`
+  started in a terminal, a second start and the Windows tray's Open Studio start the app, and
+  the browser opens only without it, without a display or when it fails to start. The app's
+  Open in browser still opens the page in the browser.
+- On Windows, a double-clicked `studio.exe` no longer leaves a console window open: it hands
+  off to the app, or else to the tray launcher, and its window closes. Without either, it runs
+  in the window as before. A double-clicked `studiow.exe` with the app installed starts the
+  app instead of a second tray icon. Started from a terminal, `studio.exe` runs there as it
+  always did.
 - A teammate's pull request no longer ends with "Pushed by … from sandbox … through Sandbox
   Studio." unless you tick it: the pull request goes up under your name. The push review
   shows the line with a checkbox, off by default and remembered per teammate in this

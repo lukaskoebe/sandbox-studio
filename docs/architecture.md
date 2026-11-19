@@ -225,20 +225,30 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI. Once it listens,
   Studio prints the login banner (the link as an OSC 8 hyperlink) and, when stderr is a terminal
-  and `-no-browser` is unset, opens a second link in the browser (`rundll32
-  url.dll,FileProtocolHandler`, `open`, or `xdg-open` with a display). On Windows it turns off
+  and `-no-browser` is unset, starts the Studio app next to it (`startApp`, which signs in by
+  itself), or without one, without a display or when it fails to start, opens a second link in
+  the browser (`rundll32 url.dll,FileProtocolHandler`, `open`, or `xdg-open` with a display). A
+  second start does the same for the running Studio. A `studio.exe` started with no arguments
+  in a console of its own (`GetConsoleWindow`, and `GetConsoleProcessList` counting only
+  itself: a double-click in Explorer) hides that window and hands off to `studio-app.exe`, or
+  else `studiow.exe`, and exits; without either it serves in the window. A shell's
+  `studio.exe` shares the shell's console, and the launcher's passes flags and has no window,
+  so neither hands off. On Windows it turns off
   the console's QuickEdit, whose selection blocks console writes, and logs to
   `logs/studio.log` (moved to `studio.log.1` past 10 MB at start), with only warnings on the
   console; the Windows autostart entry passes `-no-browser`.
 - The Windows tray launcher (`cmd/studiow`, `studiow.exe` next to `studio.exe`, built with
   `-H windowsgui` and without cgo) never serves itself. It starts `studio.exe -no-browser` with
   a console that has no window (`CREATE_NO_WINDOW`, outside the tray's job), tells Studio's
-  state from `GET /api/auth/status`, opens Studio with `studio login-url`, and Quit runs
+  state from `GET /api/auth/status`, opens Studio in `studio-app.exe` next to it
+  (`launcher.StartApp`), or without one with `studio login-url` in the browser, and Quit runs
   `studio quit`: `POST /api/auth/quit` with the control credential, then a wait until the data
   directory's lock is free. An update restarts `studio.exe` on its own, and replaces
   `studiow.exe` too when the archive has one; the running tray keeps its old binary until it
   starts again. A named mutex keeps one tray per user, and the autostart entry starts the tray
-  when it is there. The icon and menu are plain Win32 (`Shell_NotifyIconW`).
+  when it is there. Started by hand (without `-no-browser`) with the app beside it, it starts
+  the app and leaves: the app's own icon has the menu. The icon and menu are plain Win32
+  (`Shell_NotifyIconW`).
 - The Studio app (`cmd/studio-app`, `studio-app` next to `studio` or `Sandbox Studio.app` on
   macOS, a Wails v3 module of its own) is a window, a tray and the system's notifications around the running Studio, which it
   starts as the tray launcher does (`internal/launcher`, shared by both). `studio app` starts

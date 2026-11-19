@@ -54,9 +54,9 @@ Then start the app:
 studio
 ```
 
-Studio opens its local UI at `http://127.0.0.1:7878` in your browser, and prints a one-time link to it too. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`, or start `studio` again: a second start opens the running Studio. To only print the link, start it with `studio -no-browser`.
+Studio opens in the [Studio app](#studio-in-a-window-of-its-own) when it is installed next to `studio`, and otherwise in your browser at `http://127.0.0.1:7878`. It prints a one-time link too: open that link in a browser on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`, or start `studio` again: a second start opens the running Studio. To only print the link, start it with `studio -no-browser`.
 
-On Windows, double-click `studiow.exe` instead to run Studio without a console window. It starts `studio.exe` in the background, opens Studio in your browser and puts an icon in the notification area: click it to open Studio, or right-click it for **Logs**, **Start at login** and **Quit**. **Quit** stops Studio; your computers keep running. With `studiow.exe` next to `studio.exe`, **Start at login** in Settings starts the tray too.
+On Windows, double-click `studio.exe` or `studiow.exe`: either runs Studio in the background, without a console window, and opens it in the Studio app, whose icon in the notification area has the menu. Without the app, `studiow.exe` opens Studio in your browser and puts an icon of its own in the notification area: click it to open Studio, or right-click it for **Logs**, **Start at login** and **Quit**. **Quit** stops Studio; your computers keep running. With `studiow.exe` next to `studio.exe`, **Start at login** in Settings starts the tray too, and its icon opens the app when there is one. `studio.exe` started from a terminal runs in that terminal, as on Linux and macOS.
 
 This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add a provider in the environment first: an API key, or a Claude Pro/Max or ChatGPT subscription sign-in.
 

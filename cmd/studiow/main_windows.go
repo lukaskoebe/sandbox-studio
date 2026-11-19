@@ -52,6 +52,12 @@ func main() {
 		messageBox("studio.exe isn't next to studiow.exe in "+filepath.Dir(exe)+". Unpack the whole release into one folder.", true)
 		os.Exit(1)
 	}
+	// Studio opens in its app when one is installed next to studio.exe, as in the browser
+	// otherwise.
+	app := filepath.Join(filepath.Dir(exe), "studio-app.exe")
+	if !fileExists(app) {
+		app = ""
+	}
 	// One tray per user: a second start opens Studio and leaves.
 	name, _ := windows.UTF16PtrFromString(`Local\SandboxStudioTray`)
 	mutex, err := windows.CreateMutex(nil, false, name)
@@ -68,7 +74,7 @@ func main() {
 	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		ctx, cancel := context.WithTimeout(context.Background(), launcher.StartWait)
 		defer cancel()
-		if err := l.OpenStudio(ctx); err != nil {
+		if err := openStudio(ctx, l, app, studio, *addr); err != nil {
 			messageBox(err.Error(), true)
 		}
 		return
@@ -76,26 +82,40 @@ func main() {
 	if mutex != 0 {
 		defer func() { _ = windows.CloseHandle(mutex) }()
 	}
+	// Opened by hand with the app installed, the app is the tray: it starts Studio, and its
+	// own icon has the menu. The tray stays for a start at login, which opens nothing.
+	if !*noBrowser && app != "" && launcher.StartApp(app, studio, *addr) == nil {
+		return
+	}
 
 	t, err := newTray(studioIcon, tip(launcher.Starting, *addr))
 	if err != nil {
 		messageBox("Sandbox Studio can't add its icon to the taskbar: "+err.Error(), true)
 		os.Exit(1)
 	}
-	app := &trayApp{l: l, t: t, studio: studio, addr: *addr}
-	app.ctx, app.cancel = context.WithCancel(context.Background())
-	t.menu, t.choose, t.activate = app.menu, app.choose, func() { go app.openStudio() }
+	tray := &trayApp{l: l, t: t, studio: studio, app: app, addr: *addr}
+	tray.ctx, tray.cancel = context.WithCancel(context.Background())
+	t.menu, t.choose, t.activate = tray.menu, tray.choose, func() { go tray.openStudio() }
 
-	go app.watch()
+	go tray.watch()
 	go func() {
 		if *noBrowser {
-			app.ensure()
+			tray.ensure()
 		} else {
-			app.openStudio()
+			tray.openStudio()
 		}
 	}()
 	t.run()
-	app.cancel()
+	tray.cancel()
+}
+
+// openStudio opens Studio in its app, if there is one, which starts Studio itself, and
+// otherwise, or when it doesn't start, in the browser once Studio runs.
+func openStudio(ctx context.Context, l *launcher.Launcher, app, studio, addr string) error {
+	if app != "" && launcher.StartApp(app, studio, addr) == nil {
+		return nil
+	}
+	return l.OpenStudio(ctx)
 }
 
 // trayApp is the tray's state: what Studio does, and the action running, if any.
@@ -103,6 +123,7 @@ type trayApp struct {
 	l      *launcher.Launcher
 	t      *tray
 	studio string
+	app    string // studio-app.exe, or "" without one
 	addr   string
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -163,7 +184,7 @@ func (a *trayApp) ensure() {
 }
 
 func (a *trayApp) openStudio() {
-	a.action(launcher.Starting, func() error { return a.l.OpenStudio(a.ctx) })
+	a.action(launcher.Starting, func() error { return openStudio(a.ctx, a.l, a.app, a.studio, a.addr) })
 }
 
 func (a *trayApp) menu() []menuItem {
