@@ -411,16 +411,19 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	}
 	s.pullRequestFor(ctx, t.forge, &rv, base)
 
-	// A newer push to the same branch replaces any still waiting.
+	// A newer push to the same branch replaces any still waiting. One approved meanwhile is
+	// going upstream and finishes; this one waits beside it, and the forge refuses it if that
+	// one moved the branch first.
 	pending, err := s.Store.PendingGitPushes(ctx, t.sb.EnvironmentID, t.sb.ID, t.forge.ID, t.owner, t.repo, cmd.Name.String())
 	if err != nil {
 		return "", refusal("internal error")
 	}
 	for _, p := range pending {
-		if err := s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushSuperseded, "replaced by a later push", ""); err == nil {
-			if err := s.Store.DecideApproval(ctx, p.EnvironmentID, p.ApprovalID, store.StatusDismissed, ""); err != nil {
-				s.Log.Warn("git remote: dismiss a replaced push's approval", "approval", p.ApprovalID, "err", err)
-			}
+		switch err := s.Store.SupersedeGitPush(ctx, p.EnvironmentID, p.ID, p.ApprovalID); {
+		case err == nil:
+			s.publish(p.EnvironmentID, p.ApprovalID)
+		case !errors.Is(err, store.ErrNotFound):
+			s.Log.Warn("git remote: replace a waiting push", "push", p.ID, "err", err)
 		}
 	}
 

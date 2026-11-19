@@ -297,7 +297,8 @@ body is limited to 16 MiB.
      doesn't say which that is (no API, or the API failed), `main` and `master` are.
 3. An accepted update is kept under `refs/studio/push/<id>`, a `git.push` approval is
    raised (subject `<forge>/<path>:<branch>`, deduplicated; a newer push to the
-   same branch supersedes a pending one), and git prints
+   same branch supersedes a pending one, dismissing its approval in the same transaction,
+   while one approved meanwhile still pushes and the newer one waits beside it), and git prints
    `remote: Sandbox Studio: <branch> queued for review (approval <id>)`. The push
    "succeeds" from git's point of view; the upstream branch is unchanged.
 
@@ -333,6 +334,21 @@ it, so a client that doesn't know about rewrites can't approve one by accident.
   reason. Pushed, its pull request waits for a `git.pr` approval. 409 for a push that didn't
   fail. The review of a failed push shows the reason and a "Push again" button.
 - **Reject** (optionally with a note) or **ignore:** the push becomes `rejected`.
+- **A replaced push:** deciding a push that a later one replaced first dismisses its card and
+  answers 409 "a later push to the branch replaced this one; review that one"; a push
+  already decided another way answers 409 too, and nothing goes upstream.
+- **When Studio stops in the middle.** What a decision records after a forge call (the push's
+  state, its pull request, a review or comment posted) gets its own 10-second context (one
+  minute for the push and the pull request it then opens), so a client that hangs up doesn't
+  leave it unrecorded. Should Studio itself stop before that, its next start, before it serves
+  anything, fails what an approval left halfway: an approved push still `pending` becomes
+  `failed` with "Studio stopped before the push finished, so it may not have reached the
+  forge; push again" (**Push again** then pushes it, and a push that did arrive counts as
+  pushed, the forge being at the new commit), an approved pull request with no result gets
+  "failed: Studio stopped while opening it; check the forge, then open it again", and an
+  approved review or conversation comment with no outcome fails with "Studio stopped while
+  posting it, so it may not have reached the forge; check the pull request", so the agent's
+  `studio wait` ends.
 - A rejected or failed push is delivered to the sandbox on its next fetch of that
   repository: that fetch fails once with the reason and note, and the next one works.
 - The agent hears about it in its chat too. The next prompt of any chat in that sandbox
@@ -502,7 +518,8 @@ A comment on someone else's pull request is a review with the verdict `comment`.
   "awaiting approval" at once, with the approval's ID for `approval_status` and `studio wait`
   (docs/agent-cli.md#waiting-for-the-user). A newer draft for the same pull request from the
   same sandbox supersedes one still waiting, except a call with an `idempotency_key` the
-  sandbox already drafted with, which answers with that draft.
+  sandbox already drafted with, which answers with that draft. One approved meanwhile is
+  left to post; the newer draft waits beside it.
 - **The review** (`ForgeReview` in `web/src/components/forge-review.tsx`, on the same
   Changes tab and review page as a push) shows the pull request, a link to it on the forge, the
   verdict as a toggle, the summary, the diff with the draft's comments on their lines, and a

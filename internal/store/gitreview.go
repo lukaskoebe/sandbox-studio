@@ -574,8 +574,12 @@ func (s *Store) gitPushes(ctx context.Context, where string, args ...any) ([]Git
 // push rejected or failed, or one whose note changed, is told again: comments left while it
 // waited may have reached a prompt already, but not the outcome or the new note.
 func (s *Store) SettleGitPush(ctx context.Context, envID, id, from, to, result, note string) error {
+	return settleGitPush(ctx, s.db, envID, id, from, to, result, note)
+}
+
+func settleGitPush(ctx context.Context, x execer, envID, id, from, to, result, note string) error {
 	untold := to == PushRejected || to == PushFailed
-	res, err := s.db.ExecContext(ctx, `UPDATE git_pushes SET state = ?, result = ?, note = ?, updated_at = ?,
+	res, err := x.ExecContext(ctx, `UPDATE git_pushes SET state = ?, result = ?, note = ?, updated_at = ?,
 		notified_at = CASE WHEN ? OR note != ? THEN NULL ELSE notified_at END,
 		delivered_at = CASE WHEN ? AND state != ? THEN NULL ELSE delivered_at END
 		WHERE environment_id = ? AND id = ? AND state = ?`, to, result, note, now(), untold, note, untold, to, envID, id, from)
@@ -586,6 +590,38 @@ func (s *Store) SettleGitPush(ctx context.Context, envID, id, from, to, result, 
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SupersedeGitPush dismisses the approval of a push that waits and settles the push as
+// replaced by a later one, together. When the approval was decided already, as one approved
+// that is going upstream, it changes nothing and returns ErrNotFound: that push finishes, and
+// the later one waits beside it.
+func (s *Store) SupersedeGitPush(ctx context.Context, envID, id, approvalID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := DecideApprovalTx(ctx, tx, envID, approvalID, StatusDismissed, ""); err != nil {
+		return err
+	}
+	if err := settleGitPush(ctx, tx, envID, id, PushPending, PushSuperseded, "replaced by a later push", ""); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// StrandedGitPushes lists the pushes that were approved but never settled, across
+// environments: Studio stopped while it pushed them. Startup recovery fails them.
+func (s *Store) StrandedGitPushes(ctx context.Context) ([]GitPush, error) {
+	return s.gitPushes(ctx, `state = 'pending' AND approval_id IN (SELECT id FROM approvals WHERE status = 'approved')`)
+}
+
+// StrandedGitPullRequests lists the pushes whose git.pr approval was approved while the
+// outcome of opening the pull request was never recorded.
+func (s *Store) StrandedGitPullRequests(ctx context.Context) ([]GitPush, error) {
+	return s.gitPushes(ctx, `pr_approval_id <> '' AND pr_url = '' AND pr_result = ''
+		AND pr_approval_id IN (SELECT id FROM approvals WHERE status = 'approved')`)
 }
 
 // LeaveGitPushNote records the reviewer's comments on a push that still waits, for its agent

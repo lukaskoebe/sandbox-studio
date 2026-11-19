@@ -548,6 +548,27 @@ func (s *Store) DecideApproval(ctx context.Context, envID, id, status, ruleID st
 	return DecideApprovalTx(ctx, s.db, envID, id, status, ruleID)
 }
 
+// ApprovedWithoutState lists the approved approvals of a kind, across environments, whose
+// payload records no state: what they asked for was never done, or never recorded as done.
+func (s *Store) ApprovedWithoutState(ctx context.Context, kind string) ([]Approval, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+approvalCols+` FROM approvals
+		WHERE kind = ? AND status = 'approved' AND IFNULL(json_extract(CAST(payload AS TEXT), '$.state'), '') = ''
+		ORDER BY created_at, rowid`, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Approval{}
+	for rows.Next() {
+		a, err := scanApproval(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // DecideApprovalOnce moves a pending network request to status for its one connection: no
 // rule is involved, and the decision is recorded as once. It returns ErrNotFound if the
 // approval is not pending.

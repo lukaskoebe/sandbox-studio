@@ -263,7 +263,11 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 		return nil, err
 	}
 	for _, old := range pending {
-		if err := s.Store.DecideApproval(ctx, sb.EnvironmentID, old.ApprovalID, store.StatusDismissed, ""); err != nil && !errors.Is(err, store.ErrNotFound) {
+		err := s.Store.DecideApproval(ctx, sb.EnvironmentID, old.ApprovalID, store.StatusDismissed, "")
+		if errors.Is(err, store.ErrNotFound) {
+			continue // decided meanwhile: approved, it is being posted, and settles itself
+		}
+		if err != nil {
 			return nil, err
 		}
 		if err := s.Store.SettleGitReview(ctx, sb.EnvironmentID, old.ID, store.ReviewSuperseded, "", "replaced by a newer draft", ""); err != nil && !errors.Is(err, store.ErrNotFound) {
@@ -416,11 +420,13 @@ func (s *Service) decideReview(ctx context.Context, a store.Approval, d integrat
 		}
 	}
 	url, result, err := s.postDraft(ctx, r, draft)
+	sctx, scancel := settleCtx(ctx)
+	defer scancel()
 	if err != nil {
 		s.Log.Info("git remote: approved review failed", "approval", a.ID, "err", err)
-		return s.Store.SettleGitReview(ctx, a.EnvironmentID, r.ID, store.ReviewFailed, "", err.Error(), d.Note)
+		return s.Store.SettleGitReview(sctx, a.EnvironmentID, r.ID, store.ReviewFailed, "", err.Error(), d.Note)
 	}
-	return s.Store.SettleGitReview(ctx, a.EnvironmentID, r.ID, store.ReviewPosted, url, result, d.Note)
+	return s.Store.SettleGitReview(sctx, a.EnvironmentID, r.ID, store.ReviewPosted, url, result, d.Note)
 }
 
 // editDraft takes the user's edits into a draft, checking the comments against its diff.

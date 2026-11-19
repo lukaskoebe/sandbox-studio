@@ -137,6 +137,16 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	if err != nil {
 		return err
 	}
+	if p.State != store.PushPending {
+		// Replaced by a later push before the two were settled together: its card goes.
+		if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, store.StatusDismissed, ""); err == nil {
+			s.publish(a.EnvironmentID, a.ID)
+		}
+		if p.State == store.PushSuperseded {
+			return ErrReplaced
+		}
+		return store.ErrConflict
+	}
 	var rv PushReview
 	_ = json.Unmarshal(a.Payload, &rv)
 	if st == store.StatusApproved && !d.Force && rv.Forced {
@@ -163,15 +173,35 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	defer cancel()
 	update := rv.CheckedOut && (d.UpdateCheckedOut == nil || *d.UpdateCheckedOut)
 	result, err := s.pushApproved(ctx, p, update)
+	sctx, scancel := settleCtx(ctx)
+	defer scancel()
 	if err != nil {
 		s.Log.Info("git remote: approved push failed", "push", p.ID, "err", err)
-		return s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushFailed, err.Error(), d.Note)
+		return s.Store.SettleGitPush(sctx, p.EnvironmentID, p.ID, store.PushPending, store.PushFailed, err.Error(), d.Note)
 	}
-	if err := s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushPushed, result, d.Note); err != nil {
+	if err := s.Store.SettleGitPush(sctx, p.EnvironmentID, p.ID, store.PushPending, store.PushPushed, result, d.Note); err != nil {
 		return err
 	}
-	s.pullRequestAfterPush(ctx, p, a, d.PullRequest)
+	prCtx, prCancel := afterPushCtx(ctx)
+	defer prCancel()
+	s.pullRequestAfterPush(prCtx, p, a, d.PullRequest)
 	return nil
+}
+
+// ErrReplaced is a decision on a push that a later push to its branch replaced.
+var ErrReplaced = errors.New("a later push to the branch replaced this one; review that one")
+
+// settleCtx is for recording what came of a forge call once it returns. It has a few seconds
+// of its own, as the call may have used up the time it was given, and a record left unwritten
+// would show the push or post as under way for good.
+func settleCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+}
+
+// afterPushCtx is for the pull request of a push that went up: its own minute, however long
+// the push took.
+func afterPushCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 }
 
 // pushApproved pushes p upstream. updateCheckedOut, for a local forge, also updates the
@@ -260,19 +290,23 @@ func (s *Service) PushAgain(ctx context.Context, envID, approvalID string) (stor
 	var rv PushReview
 	_ = json.Unmarshal(a.Payload, &rv)
 	result, err := s.pushApproved(ctx, p, rv.CheckedOut)
+	sctx, scancel := settleCtx(ctx)
+	defer scancel()
 	if err != nil {
 		s.Log.Info("git remote: push again failed", "push", p.ID, "err", err)
-		if err := s.Store.SettleGitPush(ctx, envID, p.ID, store.PushFailed, store.PushFailed, err.Error(), p.Note); err != nil {
+		if err := s.Store.SettleGitPush(sctx, envID, p.ID, store.PushFailed, store.PushFailed, err.Error(), p.Note); err != nil {
 			return p, err
 		}
-		return s.Store.GitPush(ctx, envID, p.ID)
+		return s.Store.GitPush(sctx, envID, p.ID)
 	}
 	// A concurrent retry that pushed first leaves nothing to settle.
-	if err := s.Store.SettleGitPush(ctx, envID, p.ID, store.PushFailed, store.PushPushed, result, p.Note); err != nil {
+	if err := s.Store.SettleGitPush(sctx, envID, p.ID, store.PushFailed, store.PushPushed, result, p.Note); err != nil {
 		return p, err
 	}
-	s.pullRequestAfterPush(ctx, p, a, nil)
-	return s.Store.GitPush(ctx, envID, p.ID)
+	prCtx, prCancel := afterPushCtx(ctx)
+	defer prCancel()
+	s.pullRequestAfterPush(prCtx, p, a, nil)
+	return s.Store.GitPush(sctx, envID, p.ID)
 }
 
 // defaultBranch is the repository's default branch, or "" when the forge has no API or
@@ -386,7 +420,9 @@ func (s *Service) openPRNow(ctx context.Context, p store.GitPush, pr PullRequest
 	if openErr != nil {
 		p.PRURL, p.PRResult = "", "failed: "+openErr.Error()
 	}
-	if err := s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, "", p.PRURL, p.PRResult); err != nil {
+	sctx, cancel := settleCtx(ctx)
+	defer cancel()
+	if err := s.Store.SetGitPushPR(sctx, p.EnvironmentID, p.ID, "", p.PRURL, p.PRResult); err != nil {
 		s.Log.Error("git remote: record a pull request", "push", p.ID, "err", err)
 	}
 	return p, openErr
@@ -463,7 +499,9 @@ func (s *Service) OpenPullRequest(ctx context.Context, envID, approvalID, title 
 	// Someone may have opened it on the forge since the push.
 	if url := s.openPullRequestOf(ctx, p, rv.PullRequest.Head); url != "" {
 		p.PRApprovalID, p.PRURL, p.PRResult = "", url, PRUpdated
-		return p, s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, "", url, PRUpdated)
+		sctx, scancel := settleCtx(ctx)
+		defer scancel()
+		return p, s.Store.SetGitPushPR(sctx, p.EnvironmentID, p.ID, "", url, PRUpdated)
 	}
 	pr := *rv.PullRequest
 	if t := strings.TrimSpace(title); t != "" {
@@ -521,10 +559,12 @@ func (s *Service) decidePR(ctx context.Context, a store.Approval, d integrations
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer cancel()
 	url, err := s.openPR(ctx, p, pp.PullRequest)
+	sctx, scancel := settleCtx(ctx)
+	defer scancel()
 	if err != nil {
-		return s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, a.ID, "", "failed: "+err.Error())
+		return s.Store.SetGitPushPR(sctx, p.EnvironmentID, p.ID, a.ID, "", "failed: "+err.Error())
 	}
-	return s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, a.ID, url, "opened")
+	return s.Store.SetGitPushPR(sctx, p.EnvironmentID, p.ID, a.ID, url, "opened")
 }
 
 func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (string, error) {

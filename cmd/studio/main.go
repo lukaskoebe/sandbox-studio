@@ -542,6 +542,10 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	}
 	defer chats.Close()
 	integs = append(integs, chats) // settles chat.permission approvals; it serves no hosts
+	// Before a decision can be under way: a push or post Studio stopped in the middle of fails.
+	if err := gitRemote.Recover(ctx); err != nil {
+		log.Warn("git remote: recover", "err", err)
+	}
 	go integs.RunJobs(ctx, log)
 	if err := gitRemote.Sweep(ctx); err != nil {
 		log.Warn("git staging cleanup", "err", err)

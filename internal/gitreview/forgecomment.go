@@ -227,7 +227,9 @@ func (s *Service) decideComment(ctx context.Context, a store.Approval, d integra
 	if err != nil {
 		return err
 	}
-	return s.Store.SetApprovalPayload(ctx, a.EnvironmentID, a.ID, payload)
+	sctx, scancel := settleCtx(ctx)
+	defer scancel()
+	return s.Store.SetApprovalPayload(sctx, a.EnvironmentID, a.ID, payload)
 }
 
 // postComment posts a comment on the forge with the user's token.

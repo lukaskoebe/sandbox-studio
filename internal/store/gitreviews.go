@@ -94,6 +94,12 @@ func (s *Store) UnnotifiedGitReviews(ctx context.Context, envID, sandboxID strin
 		AND notified_at IS NULL`, envID, sandboxID)
 }
 
+// StrandedGitReviews lists the reviews that were approved but never settled, across
+// environments: Studio stopped while it posted them. Startup recovery fails them.
+func (s *Store) StrandedGitReviews(ctx context.Context) ([]GitReview, error) {
+	return s.gitReviews(ctx, `state = 'pending' AND approval_id IN (SELECT id FROM approvals WHERE status = 'approved')`)
+}
+
 func (s *Store) gitReviews(ctx context.Context, where string, args ...any) ([]GitReview, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT "+reviewCols+" FROM git_reviews WHERE "+where+" ORDER BY created_at, rowid", args...)
 	if err != nil {

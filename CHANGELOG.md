@@ -17,6 +17,11 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A push, pull request, review or comment you approved no longer stays "approved" for good when
+  Studio stopped or the page closed in the middle of sending it: what it did is recorded, and
+  one Studio didn't finish fails at the next start with what to do, so it can be pushed or opened
+  again and the teammate's wait ends. A later push to the branch no longer replaces one you
+  approved a moment before; approving one that a later push did replace says to review that one.
 - Accepting a fork merge that stopped partway, on a full disk or a lost VM, can be finished by
   accepting again: the files and branches it already copied no longer count as changed in the
   sandbox meanwhile. A disk without room for the merge refuses it before anything changes, and
