@@ -1,4 +1,11 @@
-import { createContext, useContext, type ReactNode } from "react"
+import {
+  createContext,
+  memo,
+  useContext,
+  useDeferredValue,
+  useMemo,
+  type ReactNode,
+} from "react"
 import { BroadcastIcon } from "@phosphor-icons/react"
 import { openPreviewTab, parseSandboxLocalLink } from "@/lib/previews"
 import { cn } from "@/lib/utils"
@@ -35,20 +42,26 @@ export const Pictures = createContext<
  * blocks, tables, rules, and inline code, bold, italics, links and pictures. It builds React elements and
  * never HTML, so agent text can't inject markup. Anything it doesn't know stays plain text.
  * Links to localhost:<port> open the sandbox's preview inside a PreviewSandbox.
+ *
+ * A chat renders again on every event its stream sends, so a message parses only when its own
+ * text changes, and the message being written parses behind what the user does, a frame late
+ * when it must. The contexts above reach the links and pictures without a parse.
  */
-export function Markdown({
+export const Markdown = memo(function MarkdownText({
   text,
   className,
 }: {
   text: string
   className?: string
 }) {
+  const shown = useDeferredValue(text)
+  const parsed = useMemo(() => blocks(shown), [shown])
   return (
     <div className={cn("grid min-w-0 gap-2 text-xs/relaxed", className)}>
-      {blocks(text)}
+      {parsed}
     </div>
   )
-}
+})
 
 type Block =
   | { kind: "code"; lang: string; text: string }
@@ -325,11 +338,19 @@ export function CodeBlock({
 // Inline code first, so markup inside backticks stays literal. A link to localhost comes before
 // other URLs, so http://localhost:5173 is one. A picture, last, is found as the chat service
 // finds it (internal/chat/images.go): ![alt](src), ![alt](<src with spaces>), either with a
-// "title"; its ! comes before the [ a link would start at.
+// "title"; its ! comes before the [ a link would start at. What a span holds is capped, at
+// 1000 characters for code and 500 for the rest, so that an opener nothing closes looks only
+// that far ahead: unbounded, each scanned to the paragraph's end, quadratic in its length.
+// A longer span shows its markers as written.
 const inlinePattern =
-  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\[\[([^[\]|\n]{1,128})(?:\|([^[\]\n]{1,200}))?\]\]|!\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^)\s]+))(?:\s+"[^"\n]*")?\)/
+  /(`+)([\s\S]{0,1000}?[^`])\1(?!`)|\*\*([\s\S]{1,500}?)\*\*|__([\s\S]{1,500}?)__|(?<![\w*])\*(?!\s)([\s\S]{1,500}?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]{1,500}?)(?<!\s)_(?!\w)|\[([^\]]{1,500})\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\[\[([^[\]|\n]{1,128})(?:\|([^[\]\n]{1,200}))?\]\]|!\[([^\]\n]{0,500})\]\((?:<([^>\n]+)>|([^)\s]+))(?:\s+"[^"\n]*")?\)/
+
+// Longer text stays plain: even linear, the pattern takes a while over it, and a paragraph that
+// long is a pasted log or file rather than prose.
+const inlineMax = 32 * 1024
 
 function inline(text: string): ReactNode[] {
+  if (text.length > inlineMax) return [text]
   const out: ReactNode[] = []
   let rest = text
   let key = 0

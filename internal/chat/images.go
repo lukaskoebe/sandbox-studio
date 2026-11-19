@@ -33,8 +33,9 @@ const MaxImage = 8 << 20
 // waiting on the stream window (docs/guest-agent.md).
 const smallRead = 180 << 10
 
-// imageRef finds ![alt](src), ![alt](<src with spaces>) and either with a "title".
-var imageRef = regexp.MustCompile(`!\[[^\]\n]*\]\((?:<([^>\n]+)>|([^)\s]+))(?:\s+"[^"\n]*")?\)`)
+// imageRef finds ![alt](src), ![alt](<src with spaces>) and either with a "title", the alt text
+// at most 500 characters as the chat shows it (web/src/components/chat/markdown.tsx).
+var imageRef = regexp.MustCompile(`!\[[^\]\n]{0,500}\]\((?:<([^>\n]+)>|([^)\s]+))(?:\s+"[^"\n]*")?\)`)
 
 // imageTypes are the pictures a message shows, with the extension each is kept under.
 var imageTypes = map[string]string{"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}

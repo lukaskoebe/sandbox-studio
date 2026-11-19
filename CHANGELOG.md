@@ -17,6 +17,11 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A long agent message with stray `*`, `_`, `[` or `![` no longer freezes the chat: one of
+  20 KB took a quarter of a second to show, and one of 256 KB would have taken about 40.
+  Bold, italics, links and inline code over 500 characters (1,000 for code) now show their
+  markers, and a paragraph over 32 KB shows as plain text. Each event of a running chat
+  now parses only the message it changed, instead of every message on screen.
 - Deleting a sandbox in `studio tui` waits until Studio has removed it, instead of failing
   with "context deadline exceeded" after 15 seconds while the delete goes on, which made a
   second try say the sandbox was busy.
