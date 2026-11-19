@@ -22,10 +22,12 @@ env:
 jobs:
   # The version the build carries: the tag, or the release branch's name without release/.
   # A branch run's images are pushed as <version>-candidate, so they never take the tag a
-  # release's images get.
+  # release's images get. A tag goes on only once ci passed on its commit, on the release
+  # branch, so a tag's run stops here before it pushes anything otherwise.
   meta:
     runs-on: ubuntu-24.04
-    permissions: {}
+    permissions:
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       image-tag: ${{ steps.version.outputs.image-tag }}
@@ -43,6 +45,17 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "image-tag=$image_tag" >> "$GITHUB_OUTPUT"
+      - name: ci passed on the tagged commit
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
+            --status success --json databaseId --jq length)
+          if [ "$passed" = 0 ]; then
+            echo "::error::ci hasn't passed on $GITHUB_SHA. Tag the release branch's head once its ci and release runs pass (docs/release.md); a re-run of this run starts again."
+            exit 1
+          fi
 
   # The base and browser images for both guest architectures, pushed and then referenced
   # by digest.
@@ -256,6 +269,31 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           Remove-Item $pfx
+
+      # What ships is what was tested: the signed binaries still run, name this version and
+      # its images, and on macOS the signed, stapled app starts Studio and passes Gatekeeper.
+      - name: the signed binaries run
+        run: |
+          out=$("dist/$NAME/$EXE" version)
+          echo "$out"
+          if [ "$out" != "$(printf 'studio %s\nbase image: %s' "$VERSION" "$BASE_IMAGE")" ]; then
+            echo "::error::dist/$NAME/$EXE doesn't name $VERSION and $BASE_IMAGE"
+            exit 1
+          fi
+          if [ "${{ matrix.goos }}" = darwin ]; then
+            export SANDBOX_STUDIO_HOME="$RUNNER_TEMP/selftest-home"
+            out=$("dist/$NAME/Sandbox Studio.app/Contents/MacOS/studio-app" -selftest -addr 127.0.0.1:7911 -studio "dist/$NAME/$EXE")
+            echo "$out"
+            if echo "$out" | grep -q '"error"' || ! echo "$out" | grep -q '"notifications": true'; then
+              cat "$SANDBOX_STUDIO_HOME"/logs/studio.log || true
+              echo "::error::Sandbox Studio.app didn't start as it should"
+              exit 1
+            fi
+            rm -rf "$SANDBOX_STUDIO_HOME"
+            if [ -n "$APPLE_CERTIFICATE_P12" ]; then
+              spctl --assess --type execute --verbose=2 "dist/$NAME/Sandbox Studio.app"
+            fi
+          fi
 
       - name: package
         run: |

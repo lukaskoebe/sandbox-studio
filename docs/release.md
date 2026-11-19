@@ -94,7 +94,9 @@ looked at isn't ready.
    A fix goes onto the branch (and into main); push it and wait again. A flake is re-run with
    `gh run rerun <id> --failed`, and noted to be fixed on main after the release, as above.
 
-3. Tag the head that passed and push the tag, which builds again and publishes:
+3. Tag the head that passed and push the tag, which builds again and publishes. A tag's run
+   first checks that ci passed on the tagged commit, and stops before it pushes an image if
+   not:
 
    ```sh
    git tag -a v0.6.0 -m v0.6.0 release/v0.6.0   # a tag with a hyphen (v0.6.0-rc.1) becomes a pre-release
@@ -127,7 +129,10 @@ Each run of the workflow:
    `internal/version.Version` to the version, and `internal/version.BaseImage` and
    `internal/version.BrowserImage` to the image digests.
 4. Signs and notarizes the macOS binary, and signs the Windows binary, when the secrets below
-   exist. Without them those steps are skipped and the binaries are unsigned.
+   exist. Without them those steps are skipped and the binaries are unsigned. Then it runs
+   what it signed: `studio version` must name the version and the base image's digest, and
+   on macOS `Sandbox Studio.app` runs its `-selftest` with the signed `studio`, and, when it
+   was signed, `spctl --assess` must accept the stapled app.
 5. Runs [`smoke.yml`](../.github/workflows/smoke.yml) with the pushed base image: on Linux,
    macOS and Windows runners, Studio built from the tag or branch creates a sandbox from that
    image and waits for its guest agent, Linux and Windows run the live browser tests
