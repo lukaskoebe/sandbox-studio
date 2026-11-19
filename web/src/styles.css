@@ -152,6 +152,8 @@
   --acc-chat: oklch(0.55 0.11 150);
   /* Status: its own fixed set, never used for an area. */
   --st-running: oklch(0.63 0.17 150);
+  /* Text on a running-green fill, such as an off computer's Start. */
+  --st-running-on: oklch(0.2 0.05 150);
   --st-waiting: oklch(0.78 0.15 86);
   /* Waiting as text: dark enough to read on the page. */
   --st-waiting-fg: oklch(0.5 0.11 80);
@@ -259,6 +261,7 @@
   --acc-memory: oklch(0.77 0.08 185);
   --acc-chat: oklch(0.76 0.12 150);
   --st-running: oklch(0.74 0.17 150);
+  --st-running-on: oklch(0.18 0.04 150);
   --st-waiting: oklch(0.84 0.14 88);
   --st-waiting-fg: oklch(0.84 0.14 88);
   --st-failed: oklch(0.7 0.18 25);

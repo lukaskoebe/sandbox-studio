@@ -28,6 +28,7 @@ import {
   lostVM,
   RepairButton,
   useSandboxLifecycle,
+  wakeAction,
 } from "@/components/sandbox-lifecycle"
 import { MoveDisksButton } from "@/components/move-disks"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
@@ -180,6 +181,7 @@ export function ComputerScreen({
         >
           <ArrowLineLeftIcon />
         </Button>
+        <FoldedStart env={env} sandbox={sb} />
         <span className="my-1 h-px w-6 bg-border" />
         {shown.map((t) => {
           const M = tabMeta[t]
@@ -590,6 +592,43 @@ function Power({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         "text-muted-foreground hover:text-foreground",
         !up && "text-(--st-running) hover:text-(--st-running)"
       )}
+      onClick={() => mutation.mutate(path)}
+    >
+      {mutation.isPending ? <Spinner /> : <PowerIcon />}
+    </Button>
+  )
+}
+
+/**
+ * The folded screen's power button, under Unfold while the computer is off: it starts the
+ * computer and leaves the screen folded. One that can't start by itself (a lost VM, disks in
+ * the old layout) gets none; unfolding shows why.
+ */
+function FoldedStart({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
+  const { path, start, resume, phase: p } = useSandboxLifecycle(env, sb)
+  const action = wakeAction(sb)
+  const mutation = action === "resume" ? resume : start
+  if (p === "booting")
+    return (
+      <span
+        role="status"
+        aria-label={`${sb.name} is starting`}
+        title={`${sb.name} is starting`}
+        className="grid size-6 place-items-center text-(--st-running)"
+      >
+        <Spinner />
+      </span>
+    )
+  if (!action || sb.oldDiskLayout || sb.status === "absent") return null
+  const label = `${action === "resume" ? "Resume" : "Start"} ${sb.name}`
+  return (
+    <Button
+      variant="outline"
+      size="icon-sm"
+      aria-label={label}
+      title={label}
+      disabled={mutation.isPending}
+      className="border-(--st-running) bg-(--st-running)/10 text-(--st-running) hover:bg-(--st-running)/20 hover:text-(--st-running)"
       onClick={() => mutation.mutate(path)}
     >
       {mutation.isPending ? <Spinner /> : <PowerIcon />}

@@ -125,6 +125,76 @@ test("a teammate without a computer is offered one, the screen's menu forks it a
   await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
 })
 
+// An off computer's card leads with Start, and its Terminal starts it too; the folded screen
+// has a Start of its own that leaves it folded.
+test("an off computer starts from its card, its Terminal, or the folded screen", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Off ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const sandbox = sandboxName("off")
+  const sb = await api.createSandbox(sandbox, id)
+  await api.guestReady(sb)
+  const base = `/api/environments/${env}/sandboxes/${sb}`
+  const status = async () =>
+    (await api.json<{ status: string }>("GET", base))!.status
+  const stop = async () => {
+    await api.json("POST", `${base}/stop`)
+    await expect.poll(status).toBe("stopped")
+  }
+  const started = () =>
+    page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().endsWith(`${base}/start`)
+    )
+  await stop()
+
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const card = page.getByTestId("computer-card").filter({ hasText: sandbox })
+  await expect(card).toContainText("Off", { timeout: 15_000 })
+  await expect(
+    card.getByRole("button", { name: `Browser of ${sandbox}` })
+  ).toHaveCount(0)
+  await expect(page.getByText("· off, it starts as you type")).toBeVisible()
+  let start = started()
+  await card.getByRole("button", { name: `Start ${sandbox}` }).click()
+  await start
+  await expect.poll(status).toBe("running")
+  await expect(card).toContainText("Running", { timeout: 15_000 })
+  await expect(
+    card.getByRole("button", { name: `Browser of ${sandbox}` })
+  ).toBeVisible()
+  await expect(page.getByText("· off, it starts as you type")).toBeHidden()
+
+  // Terminal starts it, and opens the screen, which shows it starting.
+  await stop()
+  await expect(card).toContainText("Off")
+  start = started()
+  await card.getByRole("button", { name: `Terminal of ${sandbox}` }).click()
+  await start
+  const screen = page.getByRole("region", { name: `${sandbox}'s screen` })
+  await expect(screen).toBeVisible()
+  await expect.poll(status).toBe("running")
+
+  // Folded, the screen's Start starts it and it stays folded.
+  await screen.getByRole("button", { name: "Fold the screen" }).click()
+  const folded = page.getByRole("region", { name: `${sandbox}, folded` })
+  await expect(folded).toBeVisible()
+  await expect(
+    folded.getByRole("button", { name: `Start ${sandbox}` })
+  ).toHaveCount(0)
+  await stop()
+  start = started()
+  await folded.getByRole("button", { name: `Start ${sandbox}` }).click()
+  await start
+  await expect.poll(status).toBe("running")
+  await expect(folded).toBeVisible()
+  await expect(
+    folded.getByRole("button", { name: `Start ${sandbox}` })
+  ).toHaveCount(0)
+})
+
 // A harness printing in a terminal counts as work, on the home's Now card and in the sidebar;
 // another program there leaves the teammate idle, with the program beside it.
 test("a teammate's status counts what runs in its terminals", async ({

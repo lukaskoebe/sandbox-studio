@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A stopped computer says **Off** rather than *Stopped*, and on a teammate's home it has a
+  green **Start** (**Resume** for a suspended one) where it says so; its **Terminal** and
+  **Files** start it too and open once it is up. The composer adds *off, it starts as you
+  type*, and with the screen folded to a strip, the strip has a power button that starts it.
 - A teammate's browser takes files from your computer while you drive: when the page asks for
   files, a card over the live view offers **Choose files…**, and files dropped on the page
   reach it where they land. Studio intercepts the page's file chooser over its debugging port

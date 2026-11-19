@@ -17,11 +17,11 @@ The teammate's page starts on its home:
 
 - **Now**: what waits for you, threads that are running, agents in its terminals, and its browser while it browses, with **Watch**.
 - Its threads as cards by day, marked **New** while one has something you haven't seen, with what it learned and its tasks between them.
-- Its computers, each with **Terminal**, **Browser** and **Files**, and **Give Iris another computer**.
+- Its computers, each with **Terminal**, **Browser** and **Files**, and **Give Iris another computer**. A computer that is off says **Off** and has **Start** (**Resume** for a suspended one); its **Terminal** and **Files** start it too and open once it is up.
 
 The box at the bottom sends a **Thread**, a message that starts a thread on the computer named under it; a **Task**, which goes on its task list and which it starts on right away; or **Teach**, a fact for its memory without a thread. When the teammate offers more than one model, the box also picks the thread's model.
 
-Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). Open a thread to go on with it; the chat takes the home's place, and the button with the teammate's name at the top left, or Esc, returns to the home.
+Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). Open a thread to go on with it; the chat takes the home's place, and the button with the teammate's name at the top left, or Esc, returns to the home. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
 
 ## A teammate's settings
 

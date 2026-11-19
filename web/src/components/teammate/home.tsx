@@ -15,6 +15,7 @@ import {
   FolderIcon,
   ListChecksIcon,
   PlusIcon,
+  PowerIcon,
   SparkleIcon,
   TerminalWindowIcon,
   type Icon,
@@ -22,7 +23,11 @@ import {
 import { BaseMark } from "@/components/base-dialog"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { phase, phaseDot } from "@/components/status-badge"
-import { useWakeOnType } from "@/components/sandbox-lifecycle"
+import {
+  useSandboxLifecycle,
+  useWakeOnType,
+  wakeAction,
+} from "@/components/sandbox-lifecycle"
 import { StatusDot } from "@/components/status-dot"
 import {
   ApprovalCardList,
@@ -663,83 +668,18 @@ function ComputerCards({
       <span className="section-label text-muted-foreground">
         {teammate.name}'s computers
       </span>
-      {computers.map((c, i) => {
-        const p = phase(c)
-        const here = chats
-          .filter((x) => x.sandboxId === c.id)
-          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        const waitingChat = here.find(
-          (x) => chatApprovals(x, asks, chats).length > 0
-        )
-        const shown =
-          here.find((x) => x.state === "running") ?? waitingChat ?? here.at(0)
-        const status = shown
-          ? chatStatus(shown, shown === waitingChat ? 1 : 0)
-          : undefined
-        return (
-          <div
-            key={c.id}
-            data-testid="computer-card"
-            className={cn(
-              "grid min-w-0 gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-xs",
-              i >= foldedCards && !all && "hidden @4xl:grid"
-            )}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <StatusDot {...phaseDot(p)} compact />
-              <span className="min-w-0 truncate font-mono text-sm font-medium">
-                {c.name}
-              </span>
-              {c.forkDefaults && <BaseMark />}
-              <span className="ml-auto shrink-0 text-caption text-muted-foreground">
-                {phaseDot(p).label}
-              </span>
-            </span>
-            <span className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
-              {shown && status ? (
-                <>
-                  <ThreadDot status={status} className="mt-1" />
-                  <span className="line-clamp-2 break-words">
-                    {chatTitle(shown)}
-                    {status === "working"
-                      ? " is running here"
-                      : status === "waiting"
-                        ? " waits for you here"
-                        : `, ${statusLabels[status]}`}
-                  </span>
-                </>
-              ) : c.forkOf && byName.has(c.forkOf) ? (
-                <span className="truncate">
-                  A fork of{" "}
-                  <span className="font-mono">{byName.get(c.forkOf)}</span>
-                </span>
-              ) : (
-                <span>No thread here yet</span>
-              )}
-            </span>
-            <span className="flex flex-wrap gap-1">
-              {(
-                [
-                  ["terminal", TerminalWindowIcon, "Terminal"],
-                  ["browser", BrowserIcon, "Browser"],
-                  ["files", FolderIcon, "Files"],
-                ] as const
-              ).map(([tab, I, label]) => (
-                <Button
-                  key={tab}
-                  size="xs"
-                  variant="outline"
-                  aria-label={`${label} of ${c.name}`}
-                  onClick={() => onOpen(c, tab)}
-                >
-                  <I />
-                  {label}
-                </Button>
-              ))}
-            </span>
-          </div>
-        )
-      })}
+      {computers.map((c, i) => (
+        <ComputerCard
+          key={c.id}
+          env={env}
+          computer={c}
+          chats={chats}
+          asks={asks}
+          forkOf={c.forkOf ? byName.get(c.forkOf) : undefined}
+          className={cn(i >= foldedCards && !all && "hidden @4xl:grid")}
+          onOpen={(tab) => onOpen(c, tab)}
+        />
+      ))}
       {computers.length > foldedCards && !all && (
         <Button
           size="xs"
@@ -759,6 +699,139 @@ function ComputerCards({
         Give {teammate.name} another computer
       </button>
       {give}
+    </div>
+  )
+}
+
+/**
+ * One of the teammate's computers: its state, what happens on it, and one click into its
+ * terminal, browser or files. One that is off leads with Start (Resume when suspended), and its
+ * Terminal and Files start it too, then open on the glass while it boots. Browser steps aside
+ * until it runs, to keep the card to three buttons; the screen's own tab still opens it.
+ */
+function ComputerCard({
+  env,
+  computer: c,
+  chats,
+  asks,
+  forkOf,
+  className,
+  onOpen,
+}: {
+  env: string
+  computer: Sandbox
+  chats: Chat[]
+  asks: Approval[]
+  /** The name of the computer it is a fork of, when that one is the teammate's too. */
+  forkOf?: string
+  className?: string
+  onOpen: (tab?: ScreenTab) => void
+}) {
+  const { path, start, resume, phase: p } = useSandboxLifecycle(env, c)
+  const action = wakeAction(c)
+  // One that can't start by itself (a lost VM, disks in the old layout) opens on the glass,
+  // which says why and offers the way out.
+  const startable = !!action && !c.oldDiskLayout && c.status !== "absent"
+  const mutation = action === "resume" ? resume : start
+  const starting = p === "booting" || mutation.isPending
+  const here = chats
+    .filter((x) => x.sandboxId === c.id)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const waitingChat = here.find((x) => chatApprovals(x, asks, chats).length > 0)
+  const shown =
+    here.find((x) => x.state === "running") ?? waitingChat ?? here.at(0)
+  const status = shown
+    ? chatStatus(shown, shown === waitingChat ? 1 : 0)
+    : undefined
+  const wake = () => {
+    if (startable && !mutation.isPending) mutation.mutate(path)
+  }
+  const tabs = (
+    [
+      ["terminal", TerminalWindowIcon, "Terminal"],
+      ["browser", BrowserIcon, "Browser"],
+      ["files", FolderIcon, "Files"],
+    ] as const
+  ).filter(([tab]) => tab !== "browser" || !(startable || starting))
+  return (
+    <div
+      data-testid="computer-card"
+      className={cn(
+        "grid min-w-0 gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-xs",
+        className
+      )}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <StatusDot
+          {...(starting ? phaseDot("booting") : phaseDot(p))}
+          compact
+        />
+        <span className="min-w-0 truncate font-mono text-sm font-medium">
+          {c.name}
+        </span>
+        {c.forkDefaults && <BaseMark />}
+        <span className="ml-auto shrink-0 text-caption text-muted-foreground">
+          {starting ? "Starting…" : phaseDot(p).label}
+        </span>
+      </span>
+      <span className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+        {starting ? (
+          <span>Its terminals open once it is up</span>
+        ) : shown && status ? (
+          <>
+            <ThreadDot status={status} className="mt-1" />
+            <span className="line-clamp-2 break-words">
+              {chatTitle(shown)}
+              {status === "working"
+                ? " is running here"
+                : status === "waiting"
+                  ? " waits for you here"
+                  : `, ${statusLabels[status]}`}
+            </span>
+          </>
+        ) : forkOf ? (
+          <span className="truncate">
+            A fork of <span className="font-mono">{forkOf}</span>
+          </span>
+        ) : startable ? (
+          <span>Its workspace, home and Docker images are kept</span>
+        ) : (
+          <span>No thread here yet</span>
+        )}
+      </span>
+      <span className="flex flex-wrap gap-1">
+        {(startable || starting) && (
+          <Button
+            size="xs"
+            aria-label={
+              starting
+                ? `${c.name} is starting`
+                : `${action === "resume" ? "Resume" : "Start"} ${c.name}`
+            }
+            disabled={starting}
+            className="border-transparent bg-(--st-running) text-(--st-running-on) hover:bg-(--st-running)/90 disabled:opacity-70"
+            onClick={wake}
+          >
+            {starting ? <Spinner /> : <PowerIcon />}
+            {starting ? "Starting" : action === "resume" ? "Resume" : "Start"}
+          </Button>
+        )}
+        {tabs.map(([tab, I, label]) => (
+          <Button
+            key={tab}
+            size="xs"
+            variant="outline"
+            aria-label={`${label} of ${c.name}`}
+            onClick={() => {
+              wake()
+              onOpen(tab)
+            }}
+          >
+            <I />
+            {label}
+          </Button>
+        ))}
+      </span>
     </div>
   )
 }
@@ -1546,6 +1619,14 @@ function NewThread({
           ? "Added to the tasks, then a new thread on"
           : "Starts a new thread on"
         : `${teammate.name} needs a computer first`
+  // The computer is off and typing starts it: the line says so before it happens.
+  const off =
+    mode !== "teach" &&
+    !!computer &&
+    (wake.waking ||
+      (!!wakeAction(computer) &&
+        !computer.oldDiskLayout &&
+        computer.status !== "absent"))
   const pick = mode !== "teach" && computer && (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger
@@ -1644,6 +1725,11 @@ function NewThread({
               </span>
             )}
             {pick}
+            {off && (
+              <span className="shrink-0 truncate text-muted-foreground @max-[30rem]/composer:hidden">
+                {wake.waking ? "· starting" : "· off, it starts as you type"}
+              </span>
+            )}
           </span>
         }
       />

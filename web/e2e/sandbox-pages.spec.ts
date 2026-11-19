@@ -421,7 +421,7 @@ test("the computer's Details show CPU and memory use while it runs", async ({
   await screen
     .getByRole("button", { name: `Stop ${name}; its disk is kept` })
     .click()
-  await expect(state).toContainText("Stopped")
+  await expect(state).toContainText("Off")
   await expect(state.getByText("Memory", { exact: true })).toHaveCount(0)
   const stopped = await api.request.get(
     `/api/environments/${env}/sandboxes/${id}/usage`

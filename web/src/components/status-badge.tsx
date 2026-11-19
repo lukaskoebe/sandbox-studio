@@ -45,7 +45,8 @@ const labels: Record<Phase, string> = {
   ready: "Running",
   booting: "Booting",
   suspended: "Suspended",
-  stopped: "Stopped",
+  // As the glass says it: "is off".
+  stopped: "Off",
   failed: "Failed",
 }
 

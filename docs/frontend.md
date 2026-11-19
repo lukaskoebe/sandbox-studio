@@ -206,8 +206,11 @@ Double-click resets the split; the arrows move it, and past either end fold or e
   computer on the screen (or another it picks), adds a task, or teaches a fact. Beside the
   threads on a wide page, above them on a narrow one, its computers as stacked cards: state, the
   thread there (two lines at most), and Terminal, Browser and Files, each opening the desk on
-  that tab; then a dashed Give X another computer. A narrow page shows the first two and All N
-  computers.
+  that tab; then a dashed Give X another computer. A computer that is off says Off and has a
+  green Start (Resume when suspended), and its Terminal and Files start it as they open; its
+  browser button waits until it runs. The composer's line says "off, it starts as you type".
+  The folded screen's rail has the same start as a power button (`FoldedStart`). A narrow
+  page shows the first two and All N computers.
 - The desk: the home in brief beside the open computer: what waits,
   the threads with their state, its agents in terminals, its computers, and the composer.
   Expand gives the home the page again, Fold leaves the computer the page.
