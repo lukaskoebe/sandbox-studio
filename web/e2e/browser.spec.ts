@@ -96,6 +96,9 @@ type FakeBrowser = {
       title: string
       viewport: [number, number]
       scale: number
+      files?: string[]
+      dropped?: string[]
+      dropAt?: [number, number]
     }[]
     inputs: {
       type: string
@@ -425,6 +428,111 @@ test("a click on the live view lands on the right page coordinates", async ({
   )!
   expect(Math.abs(press.x! - 120)).toBeLessThanOrEqual(2)
   expect(Math.abs(press.y! - 306)).toBeLessThanOrEqual(2)
+})
+
+// A page that asks for files gets the ones picked on this computer, from the card over the
+// live view, as paths in the browser's VM; files dropped on the frame reach the page where
+// they land; and neither happens while the teammate drives.
+test("the page asks for files, and files dropped on it reach it", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { name, tm } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("https://example.com/upload")
+  await address.press("Enter")
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
+  const canvas = page.getByLabel("Live view of the browser")
+  await expect(canvas).toBeVisible()
+  await page.waitForTimeout(300) // the frame of the new page
+  // Frames are 640x400 CSS pixels; the file input spans (40,110)-(240,146), and the drop
+  // zone (40,170)-(600,330).
+  const box = (await canvas.boundingBox())!
+  const at = (x: number, y: number) => ({
+    x: box.x + (x / 640) * box.width,
+    y: box.y + (y / 400) * box.height,
+  })
+  const session = async () =>
+    (await api.json<FakeBrowser>(
+      "GET",
+      `/api/e2e/teammates/${tm}/browser`
+    ))!.browser!.sessions.find((s) => s.slot === 0)!
+
+  const card = page.getByRole("dialog", { name: "The page asks for files" })
+  // Studio watches the page from when the view opens; a click before that goes unheard.
+  await expect(async () => {
+    const input = at(140, 128)
+    await page.mouse.click(input.x, input.y)
+    await expect(card).toBeVisible({ timeout: 1000 })
+  }).toPass()
+  await expect(card).toContainText(`to ${name}'s browser`)
+  const chooser = page.waitForEvent("filechooser")
+  await card.getByRole("button", { name: "Choose files…" }).click()
+  const picker = await chooser
+  expect(picker.isMultiple()).toBe(true)
+  await picker.setFiles([
+    { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hi") },
+    { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("png") },
+  ])
+  await expect(page.getByText("Gave the page 2 files")).toBeVisible()
+  await expect(card).toHaveCount(0)
+  await expect
+    .poll(async () => (await session()).files)
+    .toEqual(["/tmp/studio-pastes/notes.txt", "/tmp/studio-pastes/photo.png"])
+
+  // A click and Cancel: the page gets nothing, and the card goes.
+  const input = at(140, 128)
+  await page.mouse.click(input.x, input.y)
+  await expect(card).toBeVisible()
+  await card.getByRole("button", { name: "Cancel" }).click()
+  await expect(card).toHaveCount(0)
+
+  // Files dragged over the frame; dropped, they reach the page at that point.
+  const drag = async (types: string[]) => {
+    const point = at(300, 250)
+    await canvas.evaluate(
+      (el, ev) => {
+        const data = new DataTransfer()
+        data.items.add(
+          new File(["report"], "report.pdf", { type: "application/pdf" })
+        )
+        for (const type of ev.types)
+          el.dispatchEvent(
+            new DragEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              clientX: ev.point.x,
+              clientY: ev.point.y,
+              dataTransfer: data,
+            })
+          )
+      },
+      { point, types }
+    )
+  }
+  await drag(["dragenter", "dragover"])
+  await expect(
+    page.getByText(`Drop to give the page these files, in ${name}'s browser`)
+  ).toBeVisible()
+  await drag(["drop"])
+  await expect(page.getByText("Dropped report.pdf")).toBeVisible()
+  const dropped = await expect
+    .poll(async () => (await session()).dropped)
+    .toEqual(["/tmp/studio-pastes/report.pdf"])
+    .then(session)
+  expect(Math.abs(dropped.dropAt![0] - 300)).toBeLessThanOrEqual(2)
+  expect(Math.abs(dropped.dropAt![1] - 250)).toBeLessThanOrEqual(2)
+
+  // Handed back, the frame takes no files.
+  await page.getByRole("button", { name: `Hand back to ${name}` }).click()
+  await expect(page.getByTitle(`${name} isn't using the browser`)).toBeVisible()
+  await drag(["dragenter", "dragover"])
+  await expect(
+    page.getByText("Take the wheel to drop files on the page")
+  ).toBeVisible()
+  await drag(["drop"])
+  await expect(page.getByText("Dropped report.pdf")).toHaveCount(0)
 })
 
 test("the live view shows the page's cursor under the mouse while you drive", async ({

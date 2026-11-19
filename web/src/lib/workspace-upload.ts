@@ -122,6 +122,54 @@ export async function pasteFile(
   return (body as components["schemas"]["PastedFile"]).path
 }
 
+/**
+ * Uploads a file of the user's into the VM of a teammate's browser, for the page that asks for
+ * files or that it is dropped on, and returns its path there. The user must be driving.
+ */
+export async function pasteBrowserFile(
+  env: string,
+  teammate: string,
+  session: string,
+  file: File
+): Promise<string> {
+  const query = new URLSearchParams({ name: browserFileName(file) })
+  if (session) query.set("session", session)
+  const res = await fetch(
+    `/api/environments/${encodeURIComponent(env)}/teammates/${encodeURIComponent(teammate)}/browser/files?${query}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    }
+  )
+  if (res.status === 401) window.dispatchEvent(new Event("studio-auth-expired"))
+  const body: unknown = await res.json().catch(() => undefined)
+  if (res.status !== 201)
+    throw new Error(
+      body ? errorMessage(body) : `Sending ${file.name} failed (${res.status})`
+    )
+  return (body as components["schemas"]["PastedFile"]).path
+}
+
+/**
+ * A file's name in the browser's VM: the page shows it, so it stays as it was, less what
+ * can't be in one file name.
+ */
+function browserFileName(file: File) {
+  const name = file.name
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/\x00-\x1f\x7f]+/g, "-")
+    .replace(/^\.+/, "")
+  // A name is at most 255 bytes, and Studio may add “ (2)” to keep it free: the end of a long
+  // one goes, but not its extension.
+  const ext = /\.[^.]{1,16}$/.exec(name)?.[0] ?? ""
+  let base = [...name.slice(0, name.length - ext.length)]
+  const bytes = (s: string) => new TextEncoder().encode(s).length
+  while (base.length && bytes(base.join("") + ext) > 200)
+    base = base.slice(0, -1)
+  return base.length ? base.join("") + ext : pasteName(file)
+}
+
 const imageExtensions: Partial<Record<string, string>> = {
   "image/png": "png",
   "image/jpeg": "jpg",

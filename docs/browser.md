@@ -728,6 +728,39 @@ on request:
   copy asks the user first (`browser.action`, action `download`), every time and with no "always":
   the folder also holds what the user saved while driving, and Studio can't tell those apart.
 
+## Files from your computer
+
+The browser VM's headless Chromium has no file dialog, so a page's file input gets nothing by
+itself. While the user drives, Studio answers it from the live view, and takes files dropped
+on the frame:
+
+- **The page's request.** While a live view is open, Studio connects to the page it shows
+  through its debugging port (the [DevTools](#devtools) port, over `Runner.DialTCP`) and
+  turns on `Page.setInterceptFileChooserDialog`. A `Page.fileChooserOpened` while the user
+  drives goes to the view as `studio_file_chooser`, saying whether the input takes several
+  files, and the view shows a card with **Choose files…** and **Cancel**. One while the
+  teammate drives is dropped, and the input gets nothing, as before; an agent's own uploads
+  with `DOM.setFileInputFiles` are untouched. A request without the input's `backendNodeId`
+  can't be answered, and the card says to drop the files instead. The socket follows the view
+  to another tab; a change to the tabs that keeps the tab keeps the socket and the waiting
+  request. A guest older than the DevTools command gets no watch, and the card never shows.
+- **The files.** Each chosen or dropped file first goes to the browser VM:
+  `POST …/browser/files?session=&name=` (octet-stream, at most 100 MiB,
+  `agentproto.MaxPasteBytes`) puts it into `/tmp/studio-pastes`, owned by the user Chromium
+  runs as, under a free name. It refuses with 409 unless the user drives.
+- **The answer.** The view then sends the paths over the live socket:
+  `{"type":"studio_files","chooser":"<id>","paths":[…]}`, with none for **Cancel**, or
+  `{"type":"studio_files","drop":{"x":…,"y":…},"paths":[…]}`, the point in the page's CSS
+  pixels. Studio checks that the user still drives, that there are at most 32 paths and each
+  is a file directly in the pastes folder, that a request is answered once, and that an input
+  for one file gets one. It then calls `DOM.setFileInputFiles` on the input, or
+  `Input.dispatchDragEvent` with `dragEnter`, `dragOver` and `drop` at the point, carrying the
+  files. Its reply, `{"type":"studio_files","ok":…}`, says what became of them.
+- **Who sees what.** The teammate sees what the page shows of the files, as of any page. Each
+  give is in the action log as `give files`, with the names and whether they were chosen or
+  dropped, and the handback note says “They gave the page files from their computer: …”. The
+  files stay in the browser VM's `/tmp`, gone when it restarts.
+
 ## History
 
 - **Action log.** Each action is logged: actor, sandbox, action, target, URL, outcome and
@@ -831,6 +864,11 @@ What changes, all of it Chromium's own behavior rather than injected scripts:
     `devtools_test.go`);
   - the panel, the window and the end in `e2e/browser.spec.ts`, through the fake's debugging
     server.
+- files from the user's computer: the watch's commands, a request only while the user
+  drives, the paths' checks, an answer once, the drop's three events, the refusals after a
+  handback and the handback note (`internal/browser`, `files_test.go`); the upload's scope
+  (`TestPasteFile`); and the card, its file picker, Cancel and a drop in
+  `e2e/browser.spec.ts`, through the fake's debugging socket.
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -874,6 +912,14 @@ headless with `--remote-debugging-port`, sat behind the e2e fake's port
 (`STUDIO_E2E_DEVTOOLS`). Its own frontend loaded through the route, docked and in a window,
 and showed the page's elements, styles and console. Firefox 146 rendered the frontend blank.
 
+**Verified against a real Chromium (2026-11-19):** files from the user's computer. Against
+Playwright's headless Chromium 1248, by hand over CDP: with the chooser intercepted, a click
+on a file input sent `Page.fileChooserOpened` with its `backendNodeId`; `DOM.setFileInputFiles`
+with two paths fired the input's `change` with both; and `dragEnter`, `dragOver` and `drop`
+with a file gave the page's `drop` handler its contents at the point. Three clicks left
+unanswered asked three times, and another session's `DOM.setFileInputFiles` still worked
+while Studio intercepted.
+
 **Verified in WebKitGTK (2026-11-18):** DevTools. WebKitGTK 2.52.6, the engine of the Linux
 app, ran Studio's UI against the e2e Studio with the same real Chromium behind it. The
 browser's ⋯ menu opened DevTools docked under the page, through the route and its shim.
@@ -903,6 +949,9 @@ drew. macOS's WebKit wasn't tried.
 - The browser image and agent-browser's native binary on arm64.
 - Chromium's downloads into the folder with agent-browser 0.39's `--download-path` flag: a
   file the page saves should show in `browser_downloads`, and copy into `downloads/`.
+- Files from the user's computer in a browser VM: a page's file input and a drop, with
+  agent-browser 0.39 holding its own debugging connection, and the pasted files readable by
+  Chromium.
 - Stealth mode in a browser VM: Debian's `chromium --version` gives the user agent's major
   version, and switching restarts the browser with the live view still connected.
 - Snapshot details from a live Chromium:

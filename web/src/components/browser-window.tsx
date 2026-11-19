@@ -126,6 +126,7 @@ import {
   type SitePolicy,
 } from "@/lib/browser-sites"
 import { cn, formatAge } from "@/lib/utils"
+import { pasteBrowserFile } from "@/lib/workspace-upload"
 
 type BrowserStatus = components["schemas"]["BrowserStatus"]
 type BrowserSession = components["schemas"]["BrowserSession"]
@@ -258,6 +259,16 @@ export function BrowserWindow({
         }
       )
       return data?.tag === "input" && data.type?.toLowerCase() === "password"
+    },
+    [env, teammate, sessionID]
+  )
+  // Files of the user's for the page: each goes to the browser's VM, in turn.
+  const giveFiles = useCallback(
+    async (files: File[]) => {
+      const paths: string[] = []
+      for (const file of files)
+        paths.push(await pasteBrowserFile(env, teammate, sessionID, file))
+      return paths
     },
     [env, teammate, sessionID]
   )
@@ -883,6 +894,7 @@ export function BrowserWindow({
               passwordField={passwordField}
               onPassword={offerPassword}
               cursorAt={cursorAt}
+              onFiles={giveFiles}
             />
             {!noting && (
               <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-caption text-background opacity-0 shadow-sm transition group-hover:opacity-100">
@@ -1545,6 +1557,7 @@ const stepVerbs: Partial<Record<string, [done: string, asked: string]>> = {
   takeover: ["took the wheel", "take the wheel"],
   handback: ["handed the wheel back", "hand the wheel back"],
   "send download": ["sent the download", "send the download"],
+  "give files": ["gave the page", "give the page"],
 }
 
 /** An element of the log, `button "Sign in"`, as its name: “Sign in”; or its role alone. */
@@ -1586,7 +1599,9 @@ export function stepWords(a: BrowserAction, name: string) {
             ? (a.detail ?? "")
             : a.action === "send download"
               ? (a.target ?? "")
-              : el
+              : a.action === "give files"
+                ? `${a.target ?? ""}${a.detail === "dropped" ? ", dropped" : ""}`
+                : el
   const verb =
     a.outcome === "pending"
       ? `asked to ${verbs[1]}`

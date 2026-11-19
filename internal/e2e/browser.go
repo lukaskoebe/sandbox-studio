@@ -58,8 +58,8 @@ type element struct {
 	rect                               image.Rectangle
 }
 
-// Pages: every http(s) page is a sign-in form, except /welcome, where signing in leads; its
-// link signs out to /login.
+// Pages: every http(s) page is a sign-in form, except /welcome, where signing in leads (its
+// link signs out to /login), and /upload, with a file input and a place to drop files.
 var (
 	loginPage = []element{
 		{"e1", "textbox", "Email", "email", "username", image.Rect(40, 110, 600, 146)},
@@ -70,7 +70,14 @@ var (
 	welcomePage = []element{
 		{"e1", "link", "Sign out", "", "", image.Rect(40, 110, 200, 140)},
 	}
+	uploadPage = []element{
+		{"e1", "button", "Choose files", "file", "", image.Rect(40, 110, 240, 146)},
+		{"e2", "region", "Drop files here", "drop", "", image.Rect(40, 170, 600, 330)},
+	}
 )
+
+// fileInputNode is the upload page's file input, as the debugging protocol names it.
+const fileInputNode = 101
 
 // browserVM is the browser of one boot of a browser VM.
 type browserVM struct {
@@ -102,10 +109,18 @@ type tab struct {
 	resized bool
 	// scale is the device pixels per CSS pixel set viewport gave: the frames have as many.
 	scale float64
+	// choosers are the DevTools sockets that intercept the page's file chooser, told when the
+	// page asks for files; files are what the file input was given, and dropped what was
+	// dropped on the page, where.
+	choosers map[chan struct{}]struct{}
+	files    []string
+	dropped  []string
+	dropAt   *[2]float64
 }
 
 func newTab() *tab {
-	return &tab{history: []string{"about:blank"}, values: map[string]string{}, watchers: map[chan struct{}]struct{}{}, w: viewW, h: viewH, scale: 1}
+	return &tab{history: []string{"about:blank"}, values: map[string]string{}, watchers: map[chan struct{}]struct{}{},
+		choosers: map[chan struct{}]struct{}{}, w: viewW, h: viewH, scale: 1}
 }
 
 func (t *tab) url() string { return t.history[t.at] }
@@ -117,6 +132,8 @@ func (t *tab) elements() []element {
 		return nil
 	case u.Path == "/welcome":
 		return welcomePage
+	case u.Path == "/upload":
+		return uploadPage
 	}
 	return loginPage
 }
@@ -136,6 +153,9 @@ func (t *tab) title() string {
 	}
 	if u.Path == "/welcome" {
 		return "Welcome · " + u.Hostname()
+	}
+	if u.Path == "/upload" {
+		return "Upload · " + u.Hostname()
 	}
 	return "Sign in · " + u.Hostname()
 }
@@ -202,6 +222,7 @@ func (t *tab) open(u string) {
 	t.history = append(t.history[:t.at+1], u)
 	t.at = len(t.history) - 1
 	t.values, t.focus = map[string]string{}, ""
+	t.files, t.dropped, t.dropAt = nil, nil, nil
 	if pu, err := url.Parse(u); err == nil && localhost(pu) && t.fetch != nil {
 		if body, ok := t.fetch(pu); ok {
 			if t.served == nil {
@@ -232,10 +253,20 @@ func (t *tab) move(by int) {
 	}
 }
 
-// activate follows a link or submits the form, as clicking it would.
+// activate follows a link, submits the form or asks for files, as clicking it would.
 func (t *tab) activate(e element) {
 	u, err := url.Parse(t.url())
 	if err != nil {
+		return
+	}
+	if e.typ == "file" {
+		// Headless Chromium shows no dialog: only a socket that intercepts hears of it.
+		for ch := range t.choosers {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
 		return
 	}
 	switch e.role {
@@ -425,6 +456,17 @@ func (t *tab) render() []byte {
 		}
 		draw.Draw(img, e.rect, image.NewUniform(border), image.Point{}, draw.Src)
 		draw.Draw(img, e.rect.Inset(2), image.NewUniform(fill), image.Point{}, draw.Src)
+		if e.typ == "file" || e.typ == "drop" {
+			// A green mark for each file the input was given, or that was dropped.
+			given := t.files
+			if e.typ == "drop" {
+				given = t.dropped
+			}
+			for i := range min(len(given), 8) {
+				x := e.rect.Min.X + 10 + 20*i
+				draw.Draw(img, image.Rect(x, e.rect.Max.Y-24, x+14, e.rect.Max.Y-10), image.NewUniform(color.RGBA{22, 163, 74, 255}), image.Point{}, draw.Src)
+			}
+		}
 		for i := range min(len([]rune(t.values[e.ref])), (e.rect.Dx()-20)/10) {
 			x := e.rect.Min.X + 10 + 10*i
 			draw.Draw(img, image.Rect(x, e.rect.Min.Y+12, x+6, e.rect.Max.Y-12), image.NewUniform(color.RGBA{30, 30, 30, 255}), image.Point{}, draw.Src)
@@ -820,6 +862,11 @@ type BrowserSession struct {
 	Watchers int               `json:"watchers"`
 	Viewport [2]int            `json:"viewport"` // width, height
 	Scale    float64           `json:"scale"`    // device pixels per CSS pixel
+	// Files is what the page's file input was given, Dropped what was dropped on the page and
+	// DropAt where, in CSS pixels.
+	Files   []string    `json:"files,omitempty"`
+	Dropped []string    `json:"dropped,omitempty"`
+	DropAt  *[2]float64 `json:"dropAt,omitempty"`
 }
 
 // BrowserState reports the guest's browser; ok is false before its first browser stream.
@@ -843,7 +890,7 @@ func (g *Guest) BrowserState() (BrowserState, bool) {
 		}
 		out.Sessions = append(out.Sessions, BrowserSession{Slot: slot, URL: t.url(), Title: t.title(),
 			History: append([]string{}, t.history...), At: t.at, Values: values, Focus: t.focus, Watchers: len(t.watchers),
-			Viewport: [2]int{t.w, t.h}, Scale: t.scale})
+			Viewport: [2]int{t.w, t.h}, Scale: t.scale, Files: t.files, Dropped: t.dropped, DropAt: t.dropAt})
 	}
 	return out, true
 }

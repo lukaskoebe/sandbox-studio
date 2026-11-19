@@ -23357,6 +23357,87 @@
         ]
       }
     },
+    "/api/environments/{env}/teammates/{teammate}/browser/files": {
+      "post": {
+        "description": "Writes the body as the file name in /tmp/studio-pastes of the teammate's browser VM, for the live view to give a page: it sends the path back over its socket, for the input that asked for files or for a drop on the page (docs/browser.md). The user must be driving the session (409 otherwise). A taken name is kept as \"name (2).ext\". A file is at most 100 MiB.",
+        "operationId": "pasteBrowserFile",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The file's name",
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastedFile"
+                }
+              }
+            },
+            "description": "The file was written"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload a file for a page of the teammate's browser",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
     "/api/environments/{env}/teammates/{teammate}/browser/go": {
       "post": {
         "description": "Goes back, forward or reloads the page while the user has taken over, like a browser's toolbar.",

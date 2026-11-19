@@ -16,6 +16,8 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/browser"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // uploadTimeout bounds one upload. A file can be as large as the workspace's disk; closing the
@@ -41,6 +43,7 @@ type PastedFile struct {
 func (s *Server) registerUploads(api huma.API, mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/environments/{env}/sandboxes/{id}/files", s.uploadFile)
 	mux.HandleFunc("POST /api/environments/{env}/sandboxes/{id}/pastes", s.pasteFile)
+	mux.HandleFunc("POST /api/environments/{env}/teammates/{teammate}/browser/files", s.pasteBrowserFile)
 
 	binary := map[string]*huma.MediaType{exportMediaType: {Schema: &huma.Schema{Type: "string", Format: "binary"}}}
 	problem := &huma.Response{Description: "Error", Content: map[string]*huma.MediaType{
@@ -95,6 +98,28 @@ func (s *Server) registerUploads(api huma.API, mux *http.ServeMux) {
 			"default": problem,
 		},
 	})
+	api.OpenAPI().AddOperation(&huma.Operation{
+		OperationID: "pasteBrowserFile", Method: http.MethodPost,
+		Path: "/api/environments/{env}/teammates/{teammate}/browser/files", Tags: []string{"browser"},
+		Summary: "Upload a file for a page of the teammate's browser",
+		Description: "Writes the body as the file name in " + agentproto.PasteDir + " of the teammate's browser VM, for the live view to give a page: " +
+			"it sends the path back over its socket, for the input that asked for files or for a drop on the page (docs/browser.md). " +
+			"The user must be driving the session (409 otherwise). A taken name is kept as \"name (2).ext\". " +
+			fmt.Sprintf("A file is at most %d MiB.", agentproto.MaxPasteBytes>>20),
+		Parameters: []*huma.Param{
+			param("env", "path", "Environment ID", true),
+			param("teammate", "path", "Teammate ID", true),
+			param("session", "query", "An ephemeral session's ID; empty for the persistent profile", false),
+			param("name", "query", "The file's name", true),
+		},
+		RequestBody: &huma.RequestBody{Required: true, Content: binary},
+		Responses: map[string]*huma.Response{
+			"201": {Description: "The file was written", Content: map[string]*huma.MediaType{
+				"application/json": {Schema: api.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(PastedFile{}), true, "")},
+			}},
+			"default": problem,
+		},
+	})
 }
 
 func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +134,47 @@ func (s *Server) pasteFile(w http.ResponseWriter, r *http.Request) {
 	req := agentproto.UploadRequest{Name: r.URL.Query().Get("name"), Conflict: agentproto.ConflictKeep, Paste: true}
 	if reply, ok := s.upload(w, r, req); ok {
 		writeCreated(w, PastedFile{Path: path.Join(agentproto.PasteDir, reply.Name), Size: reply.Size})
+	}
+}
+
+// pasteBrowserFile writes a file the user gives a page of the teammate's browser into its VM.
+func (s *Server) pasteBrowserFile(w http.ResponseWriter, r *http.Request) {
+	if s.Browser == nil {
+		s.writeProblem(w, "", huma.Error503ServiceUnavailable("the browser broker is not running"))
+		return
+	}
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	q := r.URL.Query()
+	switch {
+	case mediaType != exportMediaType:
+		s.writeProblem(w, "", huma.Error415UnsupportedMediaType("the body must be "+exportMediaType))
+		return
+	case r.ContentLength < 0:
+		s.writeProblem(w, "", huma.NewError(http.StatusLengthRequired, "the upload needs a Content-Length"))
+		return
+	case r.ContentLength > agentproto.MaxPasteBytes:
+		s.writeProblem(w, "", huma.NewError(http.StatusRequestEntityTooLarge, fmt.Sprintf("a file for a page is at most %d MiB", agentproto.MaxPasteBytes>>20)))
+		return
+	case len(q.Get("session")) > 32:
+		s.writeProblem(w, "", huma.Error422UnprocessableEntity("session is at most 32 characters"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), uploadTimeout)
+	defer cancel()
+	p, err := s.Browser.PasteFile(ctx, r.PathValue("env"), r.PathValue("teammate"), q.Get("session"), q.Get("name"), r.ContentLength, r.Body)
+	var taken agentchan.NameTakenError
+	switch {
+	case err == nil:
+		writeCreated(w, PastedFile{Path: p, Size: r.ContentLength})
+	case errors.As(err, &taken):
+		s.writeProblem(w, "", huma.Error409Conflict(err.Error()))
+	case errors.Is(err, agentchan.ErrNotConnected), errors.Is(err, store.ErrNotFound), ctx.Err() != nil:
+		s.writeProblem(w, "upload failed", apiError(err))
+	case errors.Is(err, browser.ErrFilesNeedTakeover), errors.Is(err, browser.ErrNoSession), errors.Is(err, browser.ErrNotLive):
+		s.writeProblem(w, "", s.browserError(err))
+	default:
+		// The guest's refusal: a name that isn't one file name.
+		s.writeProblem(w, "", huma.Error422UnprocessableEntity(err.Error()))
 	}
 }
 

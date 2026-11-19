@@ -8,6 +8,13 @@ import {
   type RefObject,
 } from "react"
 import { GlobeSimpleIcon } from "@phosphor-icons/react"
+import {
+  DropOverlay,
+  FileRequestCard,
+  filesLabel,
+  type FileRequest,
+  type FilesState,
+} from "@/components/browser-files"
 import { PasteWarning, pasteAllowed } from "@/components/browser-paste"
 import { cn } from "@/lib/utils"
 import {
@@ -120,6 +127,7 @@ export function BrowserLive({
   passwordField,
   onPassword,
   cursorAt,
+  onFiles,
   className,
 }: {
   url: string
@@ -160,6 +168,11 @@ export function BrowserLive({
   onPassword?: (typed: TypedPassword) => void
   /** The cursor the page shows at a point, which the frame shows while the user drives. */
   cursorAt?: CursorLookup
+  /**
+   * Puts files of the user's into the browser's VM and returns their paths there, for the page
+   * that asks for files or that they are dropped on. Without it the page gets no files.
+   */
+  onFiles?: (files: File[]) => Promise<string[]>
   className?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -227,6 +240,17 @@ export function BrowserLive({
   // The page's size in CSS pixels, from the frames, and their device pixels per CSS pixel.
   const [frameSize, setFrameSize] = useState<PageSize>()
   const canDrive = driving && inputEnabled && !frozen
+  // The page's request for files, files on their way to it, and files dragged over the frame.
+  const [fileRequest, setFileRequest] = useState<FileRequest>()
+  const [files, setFiles] = useState<FilesState>()
+  const [dragging, setDragging] = useState(false)
+  // What the files on their way are called, for Studio's answer.
+  const givingLabel = useRef("the files")
+  useEffect(() => {
+    if (files?.state !== "given") return
+    const t = setTimeout(() => setFiles(undefined), 4000)
+    return () => clearTimeout(t)
+  }, [files])
   // A wheel over the page scrolls the page in the VM, not this one. React's wheel listener
   // is passive and can't keep the event from scrolling the view around it; on a Mac that
   // view, which can't scroll, bounces with every turn of the wheel, and a sideways swipe
@@ -417,6 +441,35 @@ export function BrowserLive({
         }
         if (!isRecord(parsed) || typeof parsed.type !== "string") return
         const type = parsed.type
+        if (type === "studio_file_chooser") {
+          setFiles(undefined)
+          setFileRequest({
+            id: typeof parsed.id === "string" ? parsed.id : undefined,
+            multiple: parsed.multiple === true,
+          })
+          return
+        }
+        if (type === "studio_files") {
+          // A cancelled request is answered with no files: nothing to say.
+          const given = parsed.given === 0 ? undefined : givingLabel.current
+          setFiles(
+            given === undefined
+              ? undefined
+              : parsed.ok === true
+                ? {
+                    state: "given",
+                    text: `${parsed.dropped === true ? "Dropped" : "Gave the page"} ${given}`,
+                  }
+                : {
+                    state: "failed",
+                    text:
+                      typeof parsed.error === "string"
+                        ? parsed.error
+                        : "The page didn't get the files",
+                  }
+          )
+          return
+        }
         if (type === "url") {
           updatePageURL(parsed.url)
           return
@@ -505,6 +558,7 @@ export function BrowserLive({
         setKeyboardShown(false)
         setControlPressed(false)
         onControlsOpenRef.current?.(false)
+        setFileRequest(undefined)
         setState("closed")
         setNotice(ev.reason || "The live view disconnected")
         if (!stopped) retry = setTimeout(connect, 3000)
@@ -1046,6 +1100,66 @@ export function BrowserLive({
     input.addEventListener("beforeinput", handleBeforeInput)
     return () => input.removeEventListener("beforeinput", handleBeforeInput)
   }, [])
+  // Files go to the browser's VM first, then their paths to the page over the live view's
+  // socket: for the page's request, or dropped where the pointer let go.
+  const giveFiles = async (
+    chosen: File[],
+    to: { chooser: string } | { drop: { x: number; y: number } }
+  ) => {
+    if (!onFiles) return
+    const text = filesLabel(chosen)
+    givingLabel.current = text
+    setFiles({ state: "sending", text: `Sending ${text}…` })
+    try {
+      const paths = await onFiles(chosen)
+      const ws = socket.current
+      if (!ws || ws.readyState !== WebSocket.OPEN)
+        throw new Error("The live view disconnected before the files went")
+      ws.send(JSON.stringify({ type: "studio_files", ...to, paths }))
+    } catch (err) {
+      setFiles({
+        state: "failed",
+        text: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  const answerRequest = (chosen: File[]) => {
+    const id = fileRequest?.id
+    setFileRequest(undefined)
+    if (id) void giveFiles(chosen, { chooser: id })
+  }
+  const cancelRequest = () => {
+    const id = fileRequest?.id
+    setFileRequest(undefined)
+    const ws = socket.current
+    if (id && ws?.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({ type: "studio_files", chooser: id, paths: [] }))
+  }
+  const dragsFiles = (e: React.DragEvent) =>
+    !!onFiles && state === "live" && e.dataTransfer.types.includes("Files")
+  const dragOver = (e: React.DragEvent) => {
+    if (!dragsFiles(e)) return
+    // Taken either way: a file dropped on Studio would otherwise open in its tab.
+    e.preventDefault()
+    e.dataTransfer.dropEffect = canDrive ? "copy" : "none"
+    setDragging(true)
+  }
+  const drop = (e: React.DragEvent) => {
+    if (!dragsFiles(e)) return
+    e.preventDefault()
+    setDragging(false)
+    const c = canvas.current
+    const frame = drawnFrame.current
+    const dropped = [...e.dataTransfer.files]
+    if (!canDrive || !c || !frame || !dropped.length) return
+    const at = pointerToPage(
+      { x: e.clientX, y: e.clientY },
+      c.getBoundingClientRect(),
+      frame,
+      true
+    )
+    if (at) void giveFiles(dropped, { drop: at })
+  }
 
   // A right-click on the frame pins a note on its spot. The handler is on the frame's box, as
   // the canvas takes no pointer events while the user only watches; the notes' own popups,
@@ -1087,7 +1201,17 @@ export function BrowserLive({
           scrolling: as wide as the browser window's body (cqw), or as its height (cqh) less
           the controls under the frame allows, and no wider than --live-max. Until the first
           frame, the canvas has the shape of a browser VM's page. */}
-      <div className="relative w-fit" onContextMenu={note}>
+      <div
+        className="relative w-fit"
+        onContextMenu={note}
+        onDragEnter={dragOver}
+        onDragOver={dragOver}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+            setDragging(false)
+        }}
+        onDrop={drop}
+      >
         <canvas
           ref={(el) => {
             canvas.current = el
@@ -1156,6 +1280,17 @@ export function BrowserLive({
           />
         )}
         {overlay}
+        {dragging && <DropOverlay name={name} driving={canDrive} />}
+        {canDrive && (
+          <FileRequestCard
+            name={name}
+            request={fileRequest}
+            files={files}
+            onChoose={answerRequest}
+            onCancel={cancelRequest}
+            onDismiss={() => setFiles(undefined)}
+          />
+        )}
       </div>
       <PasteWarning
         name={name}

@@ -47,7 +47,7 @@ func (s *Server) browserError(err error) error {
 		errors.Is(err, browser.ErrBadPoint), errors.Is(err, browser.ErrBadViewport):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover), errors.Is(err, browser.ErrHidden),
-		errors.Is(err, browser.ErrBusy), errors.Is(err, browser.ErrNoDevTools):
+		errors.Is(err, browser.ErrBusy), errors.Is(err, browser.ErrNoDevTools), errors.Is(err, browser.ErrFilesNeedTakeover):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, browser.ErrNoSession), errors.Is(err, browser.ErrNoElement):
 		return huma.Error404NotFound(err.Error())

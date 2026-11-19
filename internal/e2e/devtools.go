@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -98,21 +99,7 @@ func (g *Guest) serveDevTools(st net.Conn, br *bufio.Reader, b *browserVM, t *ta
 				return
 			}
 			defer c.CloseNow()
-			for {
-				_, msg, err := c.Read(r.Context())
-				if err != nil {
-					return
-				}
-				var call struct {
-					ID int `json:"id"`
-				}
-				json.Unmarshal(msg, &call)
-				u, title := page()
-				reply, _ := json.Marshal(map[string]any{"id": call.ID, "result": map[string]string{"url": u, "title": title}})
-				if c.Write(r.Context(), websocket.MessageText, reply) != nil {
-					return
-				}
-			}
+			b.devToolsSocket(r.Context(), c, t, page)
 		case strings.HasPrefix(r.URL.Path, "/json"), strings.HasPrefix(r.URL.Path, "/devtools/browser"):
 			// What Studio must never pass on.
 			http.Error(w, "the fake's browser-wide endpoints were reached", http.StatusTeapot)
@@ -123,6 +110,96 @@ func (g *Guest) serveDevTools(st net.Conn, br *bufio.Reader, b *browserVM, t *ta
 	srv.Serve(&oneListener{conn: conn})
 	<-conn.closed
 	return nil
+}
+
+// devToolsSocket answers a tab's debugging socket: the file chooser's interception, setting a
+// file input's files and dropping files, as Chromium does for Studio's live view, and any
+// other call with the page's URL and title, for the fake frontend.
+func (b *browserVM) devToolsSocket(ctx context.Context, c *websocket.Conn, t *tab, page func() (string, string)) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	chooser := make(chan struct{}, 1)
+	defer func() {
+		b.mu.Lock()
+		delete(t.choosers, chooser)
+		b.mu.Unlock()
+	}()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-chooser:
+				ev, _ := json.Marshal(map[string]any{"method": "Page.fileChooserOpened",
+					"params": map[string]any{"frameId": "E2EFRAME", "mode": "selectMultiple", "backendNodeId": fileInputNode}})
+				if c.Write(ctx, websocket.MessageText, ev) != nil {
+					return
+				}
+			}
+		}
+	}()
+	for {
+		_, msg, err := c.Read(ctx)
+		if err != nil {
+			return
+		}
+		var call struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+			Params struct {
+				Enabled       bool     `json:"enabled"`
+				Files         []string `json:"files"`
+				BackendNodeID int      `json:"backendNodeId"`
+				Type          string   `json:"type"`
+				X             float64  `json:"x"`
+				Y             float64  `json:"y"`
+				Data          struct {
+					Files []string `json:"files"`
+				} `json:"data"`
+			} `json:"params"`
+		}
+		json.Unmarshal(msg, &call)
+		// Any call the fake doesn't know is answered with the page, for the fake frontend.
+		// (page takes the lock itself.)
+		u, title := page()
+		var result any = map[string]string{"url": u, "title": title}
+		var failure string
+		b.mu.Lock()
+		switch call.Method {
+		case "Page.enable":
+			result = map[string]any{}
+		case "Page.setInterceptFileChooserDialog":
+			result = map[string]any{}
+			if call.Params.Enabled {
+				t.choosers[chooser] = struct{}{}
+			} else {
+				delete(t.choosers, chooser)
+			}
+		case "DOM.setFileInputFiles":
+			result = map[string]any{}
+			if call.Params.BackendNodeID != fileInputNode {
+				failure = "No node with given id found"
+				break
+			}
+			t.files = call.Params.Files
+			t.changed()
+		case "Input.dispatchDragEvent":
+			result = map[string]any{}
+			if call.Params.Type == "drop" {
+				t.dropped, t.dropAt = call.Params.Data.Files, &[2]float64{call.Params.X, call.Params.Y}
+				t.changed()
+			}
+		}
+		b.mu.Unlock()
+		reply := map[string]any{"id": call.ID, "result": result}
+		if failure != "" {
+			reply = map[string]any{"id": call.ID, "error": map[string]any{"code": -32000, "message": failure}}
+		}
+		out, _ := json.Marshal(reply)
+		if c.Write(ctx, websocket.MessageText, out) != nil {
+			return
+		}
+	}
 }
 
 // fakeFrontend stands in for Chromium's DevTools frontend: it connects to the socket its ws

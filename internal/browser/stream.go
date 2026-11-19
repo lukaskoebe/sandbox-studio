@@ -76,11 +76,16 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 	client.SetReadLimit(maxClientMessage)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	files := newViewFiles()
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		nudge(ctx, guest)
+	}()
+	go func() {
+		defer wg.Done()
+		s.watchFiles(ctx, st, pg, envID, sb, streamSession, client, files)
 	}()
 	go func() {
 		defer wg.Done()
@@ -95,8 +100,12 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 			if typ != websocket.MessageText {
 				continue
 			}
-			if !s.syncStreamURL(st, pg, envID, sb, streamSession, data) {
+			kind, ok := s.syncStream(st, pg, envID, sb, streamSession, data)
+			if !ok {
 				return
+			}
+			if kind == "tabs" {
+				files.tabsChanged()
 			}
 			if client.Write(ctx, websocket.MessageText, data) != nil {
 				return
@@ -133,6 +142,10 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 				st.lastUsed, pg.used = s.now(), s.now()
 			}
 			s.mu.Unlock()
+			if m, ok := parseFilesMessage(data); ok {
+				go s.giveFiles(ctx, st, pg, envID, sb, streamSession, client, files, m)
+				continue
+			}
 			if msg := FilterInput(data, driving); msg != nil {
 				if guest.Write(ctx, websocket.MessageText, msg) != nil {
 					return
@@ -348,11 +361,18 @@ func (s *Service) streamCurrentLocked(st *state, pg *page, envID, vmID, sessionI
 }
 
 func (s *Service) syncStreamURL(st *state, pg *page, envID, vmID, sessionID string, data []byte) bool {
+	_, ok := s.syncStream(st, pg, envID, vmID, sessionID, data)
+	return ok
+}
+
+// syncStream keeps the page's frame and address from a message of its stream, and returns
+// the message's type; ok is false once the stream is no longer the session's.
+func (s *Service) syncStream(st *state, pg *page, envID, vmID, sessionID string, data []byte) (string, bool) {
 	typ, url, ok := parseStream(data)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.streamCurrentLocked(st, pg, envID, vmID, sessionID) {
-		return false
+		return typ, false
 	}
 	if typ == "frame" {
 		pg.frame, pg.frameAt = data, s.now()
@@ -364,12 +384,18 @@ func (s *Service) syncStreamURL(st *state, pg *page, envID, vmID, sessionID stri
 		pg.observedURL(url)
 		st.lastUsed = s.now()
 	}
-	return true
+	return typ, true
 }
 
 // dialStream opens a session's screencast WebSocket in the VM through its channel. It
 // sends no Origin header, which agent-browser's origin check accepts.
 func (s *Service) dialStream(ctx context.Context, vm string, port int) (*websocket.Conn, error) {
+	return s.dialWS(ctx, vm, port, "/")
+}
+
+// dialWS opens a WebSocket on a port of the VM through its channel, as from the VM's own
+// loopback and with no Origin: Chromium's debugging server takes nothing else.
+func (s *Service) dialWS(ctx context.Context, vm string, port int, path string) (*websocket.Conn, error) {
 	conn, err := s.Runner.DialTCP(ctx, vm, port)
 	if err != nil {
 		return nil, err
@@ -386,7 +412,7 @@ func (s *Service) dialStream(ctx context.Context, vm string, port int) (*websock
 	hc := &http.Client{Transport: &http.Transport{DialContext: dial, DisableKeepAlives: true}}
 	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(dctx, "ws://127.0.0.1:"+strconv.Itoa(port)+"/", &websocket.DialOptions{HTTPClient: hc})
+	ws, _, err := websocket.Dial(dctx, "ws://127.0.0.1:"+strconv.Itoa(port)+path, &websocket.DialOptions{HTTPClient: hc})
 	if err != nil {
 		conn.Close()
 		return nil, err

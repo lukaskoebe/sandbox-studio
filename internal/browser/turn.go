@@ -7,17 +7,19 @@ import (
 	"time"
 )
 
-// maxTurnItems caps the pages and downloads a userTurn remembers.
+// maxTurnItems caps the pages, downloads and files a userTurn remembers.
 const maxTurnItems = 10
 
 // userTurn is what Studio saw of the user's takeover of a session: when it started, the
-// pages the browser was on and the downloads the user sent to a sandbox. Clicks and typing
-// reach the page as raw input and are not kept, as they may be a password.
+// pages the browser was on, the downloads the user sent to a sandbox and the files they gave
+// the page. Clicks and typing reach the page as raw input and are not kept, as they may be a
+// password.
 type userTurn struct {
 	since     time.Time
 	pages     []string // in order, without repeats; the first is where the agent left off
 	more      int      // pages past maxTurnItems
 	downloads []string
+	files     []string
 }
 
 // saw notes that the browser is on url. A nil turn (no takeover) ignores it.
@@ -59,6 +61,9 @@ func (t *userTurn) note(now time.Time, at string, pages bool) string {
 	}
 	if len(t.downloads) > 0 {
 		b.WriteString(" They sent downloads: " + strings.Join(t.downloads, "; ") + ".")
+	}
+	if len(t.files) > 0 {
+		b.WriteString(" They gave the page files from their computer: " + strings.Join(t.files, "; ") + ".")
 	}
 	if at != "" {
 		b.WriteString(" The page is now " + at + ".")

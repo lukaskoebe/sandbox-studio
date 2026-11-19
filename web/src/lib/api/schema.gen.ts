@@ -2754,6 +2754,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file for a page of the teammate's browser
+         * @description Writes the body as the file name in /tmp/studio-pastes of the teammate's browser VM, for the live view to give a page: it sends the path back over its socket, for the input that asked for files or for a drop on the page (docs/browser.md). The user must be driving the session (409 otherwise). A taken name is kept as "name (2).ext". A file is at most 100 MiB.
+         */
+        post: operations["pasteBrowserFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/go": {
         parameters: {
             query?: never;
@@ -14586,6 +14606,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Element"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    pasteBrowserFile: {
+        parameters: {
+            query: {
+                /** @description An ephemeral session's ID; empty for the persistent profile */
+                session?: string;
+                /** @description The file's name */
+                name: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The file was written */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PastedFile"];
                 };
             };
             /** @description Error */

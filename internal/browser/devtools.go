@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
@@ -82,27 +81,14 @@ func (s *Service) OpenDevTools(ctx context.Context, envID, teammateID, session s
 	}
 	ctx, cancel := context.WithTimeout(ctx, devToolsWait)
 	defer cancel()
-	data, _, err := s.exec(ctx, st, pg, agentproto.BrowserCommand{Args: []string{agentproto.BrowserDevToolsPort}})
-	switch {
-	case err == nil:
-	case errors.Is(err, ErrNotLive), ctx.Err() != nil:
+	port, err := s.devToolsPort(ctx, st, pg)
+	if err != nil {
 		return DevTools{}, err
-	case strings.Contains(err.Error(), "is not allowed"):
-		// A VM started before this Studio runs the guest agent it started with.
-		return DevTools{}, fmt.Errorf("%w: the browser runs an older guest agent; stop it and open it again", ErrNoDevTools)
-	default:
-		return DevTools{}, fmt.Errorf("%w: %v", ErrNoDevTools, err)
-	}
-	var reply struct {
-		Port int `json:"port"`
-	}
-	if json.Unmarshal(data, &reply) != nil || reply.Port < 1 || reply.Port > 65535 {
-		return DevTools{}, errors.New("the browser's debugging port was not understood")
 	}
 	s.mu.Lock()
 	want := pg.url
 	s.mu.Unlock()
-	target, err := s.devToolsTarget(ctx, t.vm, reply.Port, want)
+	target, err := s.devToolsTarget(ctx, t.vm, port, want)
 	if err != nil {
 		return DevTools{}, fmt.Errorf("%w: %v", ErrNoDevTools, err)
 	}
@@ -117,7 +103,7 @@ func (s *Service) OpenDevTools(ctx context.Context, envID, teammateID, session s
 	now := s.now()
 	open := DevTools{Target: target.ID, Title: target.Title, URL: target.URL}
 	for token, g := range s.devtools {
-		if g.st == st && g.pg == pg && g.vm == t.vm && g.session == t.session && g.port == reply.Port &&
+		if g.st == st && g.pg == pg && g.vm == t.vm && g.session == t.session && g.port == port &&
 			g.target == target.ID && now.Sub(g.created) < devToolsTTL/2 {
 			open.Token = token
 			return open, nil
@@ -133,7 +119,7 @@ func (s *Service) OpenDevTools(ctx context.Context, envID, teammateID, session s
 		s.devtools = map[string]*devGrant{}
 	}
 	s.devtools[open.Token] = &devGrant{env: envID, teammate: teammateID, st: st, pg: pg, vm: t.vm, session: t.session,
-		port: reply.Port, target: target.ID, created: now}
+		port: port, target: target.ID, created: now}
 	return open, nil
 }
 

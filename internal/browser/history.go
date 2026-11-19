@@ -43,6 +43,9 @@ func (s *Service) record(ctx context.Context, st *state, pg *page, e entry) {
 	if e.actor == "user" && e.action == "send download" && e.outcome == "ok" && pg.turn != nil && len(pg.turn.downloads) < maxTurnItems {
 		pg.turn.downloads = append(pg.turn.downloads, e.target+" ("+e.detail+")")
 	}
+	if e.actor == "user" && e.action == "give files" && e.outcome == "ok" && pg.turn != nil && len(pg.turn.files) < maxTurnItems {
+		pg.turn.files = append(pg.turn.files, e.target+" ("+e.detail+")")
+	}
 	if pg.id != "" {
 		session = pg.id
 	}

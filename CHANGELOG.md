@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A teammate's browser takes files from your computer while you drive: when the page asks for
+  files, a card over the live view offers **Choose files…**, and files dropped on the page
+  reach it where they land. Studio intercepts the page's file chooser over its debugging port
+  and gives the input the files it put into the browser VM's pastes (`POST …/browser/files`),
+  only while you drive; the action log and the handback note name them.
 - Home has **Continue where you left off**: the last three threads, teammates, computers or
   reviews you had open in this browser, newest first, each opening on the tab you left it on,
   such as a thread's Changes. A thread or computer that is gone drops out, and so does a place
