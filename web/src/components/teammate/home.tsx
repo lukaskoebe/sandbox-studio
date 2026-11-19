@@ -22,6 +22,7 @@ import {
 import { BaseMark } from "@/components/base-dialog"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { phase, phaseDot } from "@/components/status-badge"
+import { useWakeOnType } from "@/components/sandbox-lifecycle"
 import { StatusDot } from "@/components/status-dot"
 import {
   ApprovalCardList,
@@ -1448,6 +1449,8 @@ function NewThread({
   const queryClient = useQueryClient()
   const [picked, setPicked] = useState<string>()
   const computer = computers.find((c) => c.id === picked) ?? shown
+  // Typing a message or a task to a stopped computer starts it, and the thread waits for it.
+  const wake = useWakeOnType(env, computer)
   const [mode, setMode] = useState<Mode>("message")
   const [problem, setProblem] = useState<string>()
   // The model a new thread starts on: "" for the teammate's default.
@@ -1468,6 +1471,7 @@ function NewThread({
       throw new Error(
         `${teammate.name} has no computer yet: give it one on the right.`
       )
+    await wake.ready()
     const { data, error } = await fetchClient.POST(
       "/api/environments/{env}/sandboxes/{id}/chats",
       {
@@ -1575,6 +1579,7 @@ function NewThread({
         error={problem}
         placeholder={placeholder}
         draft={`teammate:${teammate.id}`}
+        onInput={mode === "teach" ? undefined : wake.wake}
         attachments={mode === "message"}
         mentionsIn={
           mode === "message" && computer

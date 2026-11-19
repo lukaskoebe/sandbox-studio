@@ -26,7 +26,10 @@ import { ModelPicker } from "@/components/chat/model-picker"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
-import { SandboxStateBanner } from "@/components/sandbox-lifecycle"
+import {
+  SandboxStateBanner,
+  useWakeOnType,
+} from "@/components/sandbox-lifecycle"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -513,6 +516,8 @@ function ChatComposer({
     { params: { path: { env, id: chat.sandboxId } } },
     { refetchInterval: 5000 }
   )
+  // Typing to a stopped computer starts it, and the message waits for it.
+  const wake = useWakeOnType(env, sandbox.data)
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
@@ -559,6 +564,7 @@ function ChatComposer({
     setError(undefined)
     onSending(prompt)
     try {
+      await wake.ready()
       const res = await fetchClient.POST(
         "/api/environments/{env}/chats/{chat}/queue",
         {
@@ -586,7 +592,11 @@ function ChatComposer({
 
   return (
     <>
-      <SandboxStateBanner env={env} sandbox={sandbox.data} />
+      <SandboxStateBanner
+        env={env}
+        sandbox={sandbox.data}
+        waking={wake.waking}
+      />
       <QueuedPrompts
         env={env}
         chatId={chat.id}
@@ -603,6 +613,7 @@ function ChatComposer({
         insert={insert}
         mentionsIn={{ env, sandbox: chat.sandboxId }}
         draft={`chat:${chat.id}`}
+        onInput={wake.wake}
         hint={
           teammate && (
             <ModelPicker

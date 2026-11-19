@@ -10,6 +10,9 @@
 - Settings → General → This browser has a text size, from 90% to 150%, that scales the
   whole page with it, terminals and diffs included. In the desktop app, Ctrl and + or −
   change it too, and Ctrl and 0 sets it back.
+- Typing a message to a teammate whose computer is stopped or suspended starts it, and the
+  message goes once it's up. The chat says the computer is starting, or why it couldn't.
+  Before, the chat asked you to start it first, and a message sent meanwhile failed.
 - A teammate can no longer read a page its browser rules block by clicking its way there from
   an allowed one: `studio browser snapshot` now checks the rules of the page it reads, as every
   other way of reading a page did. The site's Blocked setting says so.

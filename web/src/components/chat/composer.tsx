@@ -75,6 +75,7 @@ export function Composer({
   insert,
   mentionsIn,
   draft,
+  onInput,
   className,
 }: {
   /**
@@ -104,6 +105,8 @@ export function Composer({
    * a chat's ID: navigating back brings them back.
    */
   draft?: string
+  /** Called as the user types, such as to start the computer the message is for. */
+  onInput?: () => void
   className?: string
 }) {
   const [text, setText] = useState(() => loadDraft(draft).text)
@@ -381,6 +384,7 @@ export function Composer({
             onChange={(e) => {
               setText(e.target.value)
               setCaret(e.target.selectionStart)
+              if (e.target.value.trim()) onInput?.()
             }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onScroll={(e) => {

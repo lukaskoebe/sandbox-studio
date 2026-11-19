@@ -1,3 +1,4 @@
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { PlayIcon, WrenchIcon } from "@phosphor-icons/react"
@@ -6,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { MoveDisksButton } from "@/components/move-disks"
-import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
+import { $api, errorMessage, fetchClient, type Sandbox } from "@/lib/api/client"
 
 /** Refetches the sandbox and the list after a change to it. */
 export function useInvalidateSandboxes() {
@@ -70,6 +71,58 @@ export function wakeAction(sb: Sandbox): "start" | "resume" | undefined {
   if (p === "suspended") return "resume"
   if (p === "stopped" || sb.status === "crashed") return "start"
   return undefined
+}
+
+/**
+ * Starts a stopped sandbox, or resumes a suspended one, as soon as the user types to its agent,
+ * so that it is up, or nearly, by the time the message goes: wake() on input, once per
+ * sandbox until it fails, and ready() before sending, which waits for the start it began.
+ * One that can't start by itself (a lost VM, disks in the old layout) is left to its banner.
+ */
+export function useWakeOnType(env: string, sandbox?: Sandbox) {
+  const invalidate = useInvalidateSandboxes()
+  const waking = useRef<{ id: string; done: Promise<void> }>(undefined)
+  const [wakingId, setWakingId] = useState<string>()
+  const wake = () => {
+    if (!sandbox || waking.current?.id === sandbox.id) return
+    const action = wakeAction(sandbox)
+    if (!action || sandbox.oldDiskLayout || sandbox.status === "absent") return
+    const id = sandbox.id
+    const name = sandbox.name
+    const params = { params: { path: { env, id } } }
+    const done = (
+      action === "resume"
+        ? fetchClient.POST(
+            "/api/environments/{env}/sandboxes/{id}/resume",
+            params
+          )
+        : fetchClient.POST(
+            "/api/environments/{env}/sandboxes/{id}/start",
+            params
+          )
+    )
+      .then(({ error }) => {
+        if (error) throw error
+      })
+      .catch((err: unknown) => {
+        toast.error(`Could not ${action} ${name}`, {
+          description: errorMessage(err),
+        })
+        // Typing again tries again.
+        if (waking.current?.done === done) waking.current = undefined
+      })
+      .finally(() => {
+        setWakingId((w) => (w === id ? undefined : w))
+        invalidate()
+      })
+    waking.current = { id, done }
+    setWakingId(id)
+  }
+  const ready = () =>
+    waking.current && waking.current.id === sandbox?.id
+      ? waking.current.done
+      : undefined
+  return { wake, ready, waking: !!sandbox && wakingId === sandbox.id }
 }
 
 /**
@@ -155,11 +208,29 @@ export function WakeButton({
 export function SandboxStateBanner({
   env,
   sandbox,
+  waking,
 }: {
   env: string
   sandbox?: Sandbox
+  /** The composer below started it as the user typed (useWakeOnType). */
+  waking?: boolean
 }) {
   if (!sandbox) return null
+  if (waking)
+    return (
+      <div
+        role="status"
+        className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5 text-xs"
+      >
+        <Spinner className="size-3" />
+        <span className="min-w-0 flex-1">
+          Starting <span className="font-mono">{sandbox.name}</span>{" "}
+          <span className="text-muted-foreground">
+            for your message; it goes once the computer is up.
+          </span>
+        </span>
+      </div>
+    )
   const action = wakeAction(sandbox)
   const p = phase(sandbox)
   if (sandbox.status === "absent")
@@ -214,7 +285,7 @@ export function SandboxStateBanner({
       <span className="min-w-0 flex-1">
         <span className="font-mono">{sandbox.name}</span> {what}.{" "}
         <span className="text-muted-foreground">
-          {action === "resume" ? "Resume" : "Start"} it to send a message.
+          Typing a message {action === "resume" ? "resumes" : "starts"} it.
         </span>
       </span>
       <WakeButton env={env} sandbox={sandbox} size="sm" />

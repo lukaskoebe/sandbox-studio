@@ -515,3 +515,42 @@ test("a message's changes show each file's diff", async ({
     "a/src/app.go"
   )
 })
+
+// Typing to an agent whose computer is stopped starts it, and the message goes once it is up.
+test("typing in a stopped computer's chat starts it, and the message waits for it", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const teammate = await addTeammate(api, env, sandboxName("Waker"))
+  const name = sandboxName("asleep")
+  const id = await api.createSandbox(name, teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  const base = `/api/environments/${env}/sandboxes/${id}`
+  await api.json("POST", `${base}/stop`)
+  await expect
+    .poll(async () => (await api.json<{ status: string }>("GET", base))!.status)
+    .toBe("stopped")
+
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const main = page.getByRole("main")
+  await expect(main.getByText("Typing a message starts it.")).toBeVisible()
+  const started = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`${base}/start`)
+  )
+  const box = main.getByRole("textbox", { name: "Message" })
+  await box.fill("Please run the tests")
+  await started
+  await box.press("Enter")
+  await expect
+    .poll(async () => (await api.json<{ status: string }>("GET", base))!.status)
+    .toBe("running")
+  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(main.getByText(done)).toHaveCount(1)
+  await expect(main.getByText("Typing a message starts it.")).toBeHidden()
+})
