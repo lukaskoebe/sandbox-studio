@@ -54,7 +54,8 @@ teammate stay behind.
 the same `home-export` and `workspace-export` used by rebase and fork ([rebase.md](rebase.md)).
 
 - A stopped sandbox is started in transfer mode, without guest services, and stopped again
-  afterwards.
+  afterwards, at Studio's next start if it stopped first (see
+  [forks](rebase.md#fork)).
 - A running sandbox is exported live. There is no freeze. Files written during the export
   may be captured half-written or not at all. Stop the sandbox first for a consistent copy.
 - If the export fails after the response started, the connection is aborted, so a

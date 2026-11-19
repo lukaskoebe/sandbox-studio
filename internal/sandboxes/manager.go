@@ -230,6 +230,7 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	for _, op := range rebases {
 		pendingRebases[op.SandboxID] = op
 	}
+	m.recoverCopyStarts(ctx, all, pendingRebases)
 	failedCreates := m.recoverProgress(ctx, all)
 	seen := make(map[string]bool, len(all))
 	for _, sb := range all {

@@ -252,14 +252,11 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 	// A sandbox without a home disk exports an empty home section. Its home lives on the
 	// template's root layer, which an export does not carry.
 	if status == runtime.StatusStopped {
-		if _, err := m.Egress.Attach(sb); err != nil {
+		if err := m.startForCopy(ctx, rt, sb); err != nil {
 			return err
 		}
-		if err := rt.StartForTransfer(ctx, VMName(sb)); err != nil {
-			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
-		}
 		defer func() {
-			if stopErr := m.stopQuietly(ctx, VMName(sb)); stopErr != nil {
+			if stopErr := m.stopAfterCopy(ctx, sb); stopErr != nil {
 				m.Log.Warn("stopping exported sandbox", "sandbox", sb.ID, "err", stopErr)
 			}
 		}()

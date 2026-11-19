@@ -258,7 +258,10 @@ The fork gets a new ID and egress identity, with the same template and resources
 workspace is copied from the source, and its home too if the source has a home disk. A fork
 of a sandbox without one has none, as before. A running source keeps running, so the copy
 may be inconsistent. A stopped source is started in transfer mode for the copy and then
-stopped again. The fork is booted. The request returns before the copy and boot finish:
+stopped again. While it runs for the copy, a setting `sandbox.copy-start.<id>` holds when it
+was started; should Studio stop first, or the stop fail, the next start stops the source
+(unless it was started since) and drops the setting. An export of a stopped sandbox does the
+same. The fork is booted. The request returns before the copy and boot finish:
 the fork is in state `creating` until it runs, and `failed` if a step fails. A failed fork
 keeps its record until it is deleted; see [creation progress](sandboxes.md#creation-progress).
 The source keeps its chats; the fork starts without any.

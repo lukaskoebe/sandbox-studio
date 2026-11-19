@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	goruntime "runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -796,7 +797,62 @@ func TestForkCopiesWorkspaceAndHomeIntoNewSandbox(t *testing.T) {
 			if running && tf.countCall("stop:"+source) != 0 {
 				t.Fatal("a running source was stopped")
 			}
+			if marks, _ := f.store.SettingsWithPrefix(f.ctx, copyStartPrefix); len(marks) != 0 {
+				t.Fatalf("marks left = %v", marks)
+			}
 		})
+	}
+}
+
+// A stopped source a fork started for its copy and couldn't stop again (or Studio stopped
+// first) is stopped at the next start, unless it was started since.
+func TestRestartStopsASourceStartedForACopy(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	tf.guestBoots = true
+	source := VMName(f.sandbox)
+	tf.setWorkspace(source, "files")
+	tf.fail("stop:"+source, errors.New("injected"))
+	answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy", ForkOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.manager.Wait(f.ctx, answered.ID)
+	if status, _ := tf.Status(f.ctx, source); status != runtime.StatusRunning {
+		t.Fatalf("source is %s; the test wants it left running", status)
+	}
+	if marks, _ := f.store.SettingsWithPrefix(f.ctx, copyStartPrefix); len(marks) != 1 {
+		t.Fatalf("marks = %v", marks)
+	}
+	tf.clearFailure("stop:" + source)
+	if err := f.manager.Reconcile(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := tf.Status(f.ctx, source); status != runtime.StatusStopped {
+		t.Fatalf("after the restart the source is %s", status)
+	}
+	if marks, _ := f.store.SettingsWithPrefix(f.ctx, copyStartPrefix); len(marks) != 0 {
+		t.Fatalf("marks left = %v", marks)
+	}
+
+	// A mark older than the sandbox's last start is the user's start, not the copy's.
+	hourAgo := strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10)
+	if err := f.store.SetSetting(f.ctx, copyStartPrefix+f.sandbox.ID, []byte(hourAgo)); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.MarkSandboxStarted(f.ctx, f.env.ID, f.sandbox.ID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	tf.setStatus(source, runtime.StatusRunning)
+	stops := tf.countCall("stop:" + source)
+	if err := f.manager.Reconcile(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := tf.Status(f.ctx, source); status != runtime.StatusRunning || tf.countCall("stop:"+source) != stops {
+		t.Fatalf("a sandbox the user started was stopped: %s", status)
+	}
+	if marks, _ := f.store.SettingsWithPrefix(f.ctx, copyStartPrefix); len(marks) != 0 {
+		t.Fatalf("marks left = %v", marks)
 	}
 }
 

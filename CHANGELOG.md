@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A stopped computer that a fork or an export started for its copy is stopped again when Studio
+  next starts, if Studio stopped (or the stop failed) before it could. Before, a base could stay
+  running in transfer mode, and every fork of it that copies Docker images was refused.
 - A failed import whose half-made computer couldn't be removed then no longer leaves it in the
   list for good: Studio tries again at its next start.
 - A git name with a no-break space or a joined emoji (a teammate named after its display name,

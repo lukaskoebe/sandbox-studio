@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -324,16 +327,13 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	}
 	m.advance(rec.ID, StepCopy)
 	if !sourceRunning {
-		if _, err := m.Egress.Attach(sb); err != nil {
+		if err := m.startForCopy(ctx, rt, sb); err != nil {
 			return err
-		}
-		if err := rt.StartForTransfer(ctx, VMName(sb)); err != nil {
-			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 		}
 	}
 	err = m.copyFork(ctx, rt, ownedVM(sb), rec, opts)
 	if !sourceRunning {
-		err = errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
+		err = errors.Join(err, m.stopAfterCopy(ctx, sb))
 	}
 	if err != nil {
 		return err
@@ -401,6 +401,77 @@ func (m *Manager) copyFork(ctx context.Context, rt transferRuntime, src runtime.
 }
 
 // stopQuietly stops a VM even when ctx has ended.
+// copyStartPrefix names the settings a fork or an export keeps while it runs a stopped sandbox
+// for its copy, valued with when it started it. Should Studio stop before it stops the sandbox
+// again, the next start does (recoverCopyStarts), so the sandbox doesn't stay running in
+// transfer mode: a base would then refuse every fork that copies Docker images.
+const copyStartPrefix = "sandbox.copy-start."
+
+// startForCopy starts the stopped sandbox sb in transfer mode for a fork's or an export's copy.
+// stopAfterCopy stops it again.
+func (m *Manager) startForCopy(ctx context.Context, rt transferRuntime, sb store.Sandbox) error {
+	if _, err := m.Egress.Attach(sb); err != nil {
+		return err
+	}
+	if err := m.Store.SetSetting(ctx, copyStartPrefix+sb.ID, []byte(strconv.FormatInt(time.Now().Unix(), 10))); err != nil {
+		return err
+	}
+	if err := rt.StartForTransfer(ctx, VMName(sb)); err != nil {
+		return errors.Join(err, m.stopAfterCopy(ctx, sb))
+	}
+	return nil
+}
+
+// stopAfterCopy stops a sandbox startForCopy started. Only once it stopped does the setting go,
+// so a restart tries again when the stop failed.
+func (m *Manager) stopAfterCopy(ctx context.Context, sb store.Sandbox) error {
+	if err := m.stopQuietly(ctx, VMName(sb)); err != nil {
+		return err
+	}
+	ctx, cancel := cleanupContext(ctx)
+	defer cancel()
+	if err := m.Store.DeleteSetting(ctx, copyStartPrefix+sb.ID); err != nil {
+		m.Log.Warn("forgetting a sandbox started for a copy", "sandbox", sb.ID, "err", err)
+	}
+	return nil
+}
+
+// recoverCopyStarts stops the sandboxes a fork or an export started for its copy when the Studio
+// that ran it stopped first. A sandbox started since (its start time is later), one a rebase
+// has in hand, or one that is gone is left as it is.
+func (m *Manager) recoverCopyStarts(ctx context.Context, all []store.Sandbox, rebasing map[string]store.RebaseOperation) {
+	started, err := m.Store.SettingsWithPrefix(ctx, copyStartPrefix)
+	if err != nil {
+		m.Log.Warn("copy recovery", "err", err)
+		return
+	}
+	byID := make(map[string]store.Sandbox, len(all))
+	for _, sb := range all {
+		byID[sb.ID] = sb
+	}
+	for key, value := range started {
+		id := strings.TrimPrefix(key, copyStartPrefix)
+		sb, ok := byID[id]
+		_, rebase := rebasing[id]
+		at, parseErr := strconv.ParseInt(string(value), 10, 64)
+		if ok && !rebase && parseErr == nil && (sb.StartedAt == nil || sb.StartedAt.Unix() <= at) {
+			status, err := m.Runtime.Status(ctx, VMName(sb))
+			if err == nil && status == runtime.StatusRunning {
+				if err = m.Runtime.Stop(ctx, VMName(sb)); err == nil {
+					m.Log.Info("stopped a sandbox that a fork or export had started for its copy", "sandbox", sb.ID)
+				}
+			}
+			if err != nil {
+				m.Log.Warn("copy recovery: the sandbox started for a copy may still run", "sandbox", sb.ID, "err", err)
+				continue
+			}
+		}
+		if err := m.Store.DeleteSetting(ctx, key); err != nil {
+			m.Log.Warn("copy recovery", "sandbox", id, "err", err)
+		}
+	}
+}
+
 func (m *Manager) stopQuietly(ctx context.Context, name string) error {
 	stopCtx, cancel := cleanupContext(ctx)
 	defer cancel()

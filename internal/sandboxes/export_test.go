@@ -75,6 +75,9 @@ func TestExportWritesHeaderAndWorkspace(t *testing.T) {
 			if running != (tf.countCall("start-transfer:"+source) == 0) {
 				t.Fatalf("start-transfer calls = %d", tf.countCall("start-transfer:"+source))
 			}
+			if marks, _ := f.store.SettingsWithPrefix(f.ctx, copyStartPrefix); len(marks) != 0 {
+				t.Fatalf("marks left = %v", marks)
+			}
 		})
 	}
 }
