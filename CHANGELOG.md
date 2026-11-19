@@ -29,6 +29,17 @@
 - A note you send with a push review's decision reaches its chat or terminal even if the
   review closed before the decision was in, as when a slow push left the list or you picked
   another change. It went nowhere before. The same holds for a pull request review.
+- Allow all and Deny all on a card of several hosts, and on a sandbox's count of waiting
+  requests, no longer spin forever when Studio stops answering partway, as while it
+  restarts. They answer the hosts they can and say they couldn't answer every host.
+- A card that just moved into place under your pointer, because you answered the one there,
+  ignores clicks for half a second. The card you answered stays disabled until it's gone. So
+  a quick second click no longer answers a request you haven't read. The count's Allow all
+  and Deny all wait the same half second after a host joins the list.
+- A network card says what its Allow or Deny decides while its Options are folded, for
+  example "Each host gets a lasting rule for every sandbox in Default".
+- A sandbox's count of waiting requests closes once you've answered them, so the next request
+  no longer opens it by itself.
 - Deleting a sandbox in `studio tui` waits until Studio has removed it, instead of failing
   with "context deadline exceeded" after 15 seconds while the delete goes on, which made a
   second try say the sandbox was busy.

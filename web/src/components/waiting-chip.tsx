@@ -23,11 +23,12 @@ import {
   waitingConnections,
 } from "@/lib/connection-holds"
 import { useNotificationPermission } from "@/lib/notifications"
+import { useSettled } from "@/lib/settled"
 
 /**
  * How many of a sandbox's connections wait for an answer, on its screen. Nothing opens by itself:
- * the count opens the hosts, to answer them together or to review them in Connections. While it
- * shows, the floating stack leaves them out.
+ * the count opens the hosts, to answer them together or to review them in Connections, and
+ * closes once they're answered. While it shows, the floating stack leaves them out.
  */
 export function WaitingChip({
   env,
@@ -41,8 +42,13 @@ export function WaitingChip({
   useClaimApprovals(waiting.map((a) => a.id))
   const now = useHoldClock(waiting)
   const [open, setOpen] = useState(false)
+  // Answering them all empties the list: the next request starts the chip again, closed.
+  if (open && waiting.length === 0) setOpen(false)
   const [reviewing, setReviewing] = useState(false)
   const { working, answer } = useAnswerConnections()
+  // A host that just joined the list waits a moment before Allow all can answer it unseen.
+  const settled = useSettled(waiting.map((a) => a.id).join(" "))
+  const busy = working !== undefined || !settled
   const { permission, request } = useNotificationPermission()
   const anyHeld = waiting.some((a) => heldFor(a, now) !== undefined)
   const words = anyHeld
@@ -115,7 +121,7 @@ export function WaitingChip({
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               <Button
                 size="xs"
-                disabled={working !== undefined}
+                disabled={busy}
                 onClick={() => void answer("allow", waiting, "allow", choice)}
               >
                 {working === "allow" && <Spinner className="size-3" />}
@@ -124,7 +130,7 @@ export function WaitingChip({
               <Button
                 variant="outline"
                 size="xs"
-                disabled={working !== undefined}
+                disabled={busy}
                 onClick={() => void answer("deny", waiting, "deny", choice)}
               >
                 {working === "deny" && <Spinner className="size-3" />}

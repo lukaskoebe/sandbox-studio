@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/card"
 import { $api, type Approval } from "@/lib/api/client"
 import { useClaimedApprovals } from "@/lib/approval-claims"
+import { useSettled } from "@/lib/settled"
 import { ruleClass } from "@/lib/accents"
 import {
   approvalCards,
@@ -277,7 +278,10 @@ export function useApprovalReview(): {
 
 /**
  * Approval cards, up to max, then a link to the page that lists the rest. The stack shows them
- * floating; Home lists its environment's in its column.
+ * floating; Home lists its environment's in its column. For half a second after the cards
+ * change they ignore clicks, so that one meant for a card that just left, or moved, doesn't
+ * answer the one that took its place. settleKey is what counts as a change, by default the
+ * approvals these cards show; a page that lists its cards apart gives all of theirs.
  */
 export function ApprovalCardList({
   cards,
@@ -285,13 +289,16 @@ export function ApprovalCardList({
   envName,
   onReview,
   onSplit,
+  settleKey,
 }: {
   cards: ApprovalCard[]
   max: number
   envName: (a: Approval) => string | undefined
   onReview: (a: Approval) => void
   onSplit: (ids: string[]) => void
+  settleKey?: string
 }) {
+  const settled = useSettled(settleKey ?? approvalIds(cards))
   return (
     <>
       {cards.slice(0, max).map((card) => (
@@ -301,6 +308,7 @@ export function ApprovalCardList({
           envName={envName}
           onReview={onReview}
           onSplit={onSplit}
+          inert={!settled}
         />
       ))}
       {cards.length > max && (
@@ -313,17 +321,27 @@ export function ApprovalCardList({
   )
 }
 
+/** The IDs of every approval the cards show, in order, as one key. */
+export function approvalIds(cards: ApprovalCard[]) {
+  return cards
+    .flatMap((c) => (c.kind === "single" ? [c.approval] : c.approvals))
+    .map((a) => a.id)
+    .join(" ")
+}
+
 /** One card of the stack: a single approval, or the network requests of one sandbox together. */
 function StackCard({
   card,
   envName,
   onReview,
   onSplit,
+  inert,
 }: {
   card: ApprovalCard
   envName: (a: Approval) => string | undefined
   onReview: (a: Approval) => void
   onSplit: (ids: string[]) => void
+  inert: boolean
 }) {
   if (card.kind === "single") {
     return (
@@ -331,6 +349,7 @@ function StackCard({
         approval={card.approval}
         envName={envName(card.approval)}
         onReview={() => onReview(card.approval)}
+        inert={inert}
       />
     )
   }
@@ -339,6 +358,7 @@ function StackCard({
       approvals={card.approvals}
       envName={envName(card.approvals[0])}
       onReview={() => onSplit(card.approvals.map((a) => a.id))}
+      inert={inert}
     />
   )
 }
@@ -368,10 +388,12 @@ function ApprovalCard({
   approval,
   envName,
   onReview,
+  inert,
 }: {
   approval: Approval
   envName?: string
   onReview: () => void
+  inert: boolean
 }) {
   const kind = approvalKind(approval)
   const details = [
@@ -396,6 +418,7 @@ function ApprovalCard({
       size="sm"
       className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
       data-testid="approval-card"
+      inert={inert}
     >
       {tip && (
         <ApprovalTip env={approval.environmentId} feature={tip} anchor={card} />
@@ -529,7 +552,7 @@ function useNotifications(data: Approval[] | null | undefined) {
           host: a.network?.host,
         })
       ).then((failure) => {
-        refreshDecisions(queryClient)
+        void refreshDecisions(queryClient)
         if (failure) {
           toast.error("Could not allow every host", { description: failure })
         }

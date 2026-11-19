@@ -119,6 +119,10 @@ test("requests that arrive together from one sandbox are one card; Allow all mak
   await expect(group).toContainText("wants 3 hosts")
   for (const host of hosts) await expect(group).toContainText(host)
   await expect(approvals(page).getByTestId("approval-card")).toHaveCount(0)
+  // With Options folded, the card still says who its rules cover.
+  await expect(group).toContainText(
+    /Each host gets a lasting rule for every sandbox in \S/
+  )
 
   await group.getByRole("button", { name: "Allow all", exact: true }).click()
   await expect(group).toBeHidden()
@@ -130,6 +134,39 @@ test("requests that arrive together from one sandbox are one card; Allow all mak
       page.getByRole("cell", { name: host, exact: true })
     ).toBeVisible()
   }
+})
+
+test("Allow all that loses a request on the way says so, and answers the rest", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("lost"))
+  const hosts = [freshHost("lost"), freshHost("kept")]
+
+  await page.goto(`/e/${env}`)
+  for (const host of hosts) await api.connect(id, host)
+  const group = approvals(page).getByTestId("approval-group")
+  await expect(group).toContainText("wants 2 hosts")
+
+  // The first answer doesn't get through, as while Studio restarts.
+  let lost = false
+  await page.route("**/approvals/*/decide", (route) => {
+    if (lost) return route.continue()
+    lost = true
+    return route.abort("connectionreset")
+  })
+  await group.getByRole("button", { name: "Allow all", exact: true }).click()
+  await expect(page.getByText("Could not allow every host")).toBeVisible()
+  // One host is left to answer, and its card answers again.
+  const card = approvals(page).getByTestId("approval-card")
+  await expect(card).toHaveCount(1)
+  await expect(
+    card.getByRole("button", { name: "Allow", exact: true })
+  ).toBeEnabled()
+  await page.unroute("**/approvals/*/decide")
+  await api.dismissApprovals()
 })
 
 test("Review individually turns a group into the cards of its hosts", async ({

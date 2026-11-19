@@ -105,15 +105,20 @@ function defaultPorts(port: number) {
   return port === 80 || port === 443 ? "ports 80 and 443" : `port ${port}`
 }
 
-/** Refetches what a decision changes: the approvals, and the rules a decision may create. */
+/**
+ * Refetches what a decision changes: the approvals, and the rules a decision may create. It
+ * resolves once the lists are back, so a card stays busy until it leaves them.
+ */
 export function refreshDecisions(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
-  queryClient.invalidateQueries({
-    queryKey: ["get", "/api/environments/{env}/approvals"],
-  })
-  queryClient.invalidateQueries({
-    queryKey: ["get", "/api/environments/{env}/rules"],
-  })
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] }),
+    queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/approvals"],
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/rules"],
+    }),
+  ])
 }
 
 /** The level of a host pattern the server suggests: the wildcard of a domain, or the host itself. */
@@ -230,7 +235,8 @@ export function decisionBody(
 /** The label of the allow or deny button for a lifetime, such as "Allow for 1 hour". */
 /**
  * Answers the approvals in turn. A host that an earlier rule of this run already covers answers
- * 409 and is skipped. Gives the first failure, if there is one.
+ * 409 and is skipped. Gives the first failure, if there is one, and never throws: a request
+ * that doesn't get through, as while Studio restarts, is a failure, and the rest still go.
  */
 export async function decideEach(
   approvals: Approval[],
@@ -238,16 +244,72 @@ export async function decideEach(
 ): Promise<string | undefined> {
   let failure: string | undefined
   for (const a of approvals) {
-    const { error, response } = await fetchClient.POST(
-      "/api/environments/{env}/approvals/{id}/decide",
-      {
-        params: { path: { env: a.environmentId, id: a.id } },
-        body: body(a),
-      }
-    )
-    if (error && response.status !== 409) failure ??= errorMessage(error)
+    try {
+      const { error, response } = await fetchClient.POST(
+        "/api/environments/{env}/approvals/{id}/decide",
+        {
+          params: { path: { env: a.environmentId, id: a.id } },
+          body: body(a),
+        }
+      )
+      if (error && response.status !== 409) failure ??= errorMessage(error)
+    } catch (e) {
+      failure ??= errorMessage(e)
+    }
   }
   return failure
+}
+
+/**
+ * What an Allow or Deny decides that its label doesn't say, who the rule covers and for how
+ * long, as the line a card shows while its Options are folded. many is for a card of several
+ * hosts, which gives each its own rule.
+ */
+export function ruleSummary({
+  lifetime,
+  scope,
+  reach,
+  browser,
+  sandboxName,
+  owner,
+  envName,
+  many = false,
+}: {
+  lifetime: Lifetime
+  scope: DecisionScope
+  reach: BrowserReach
+  browser: boolean
+  sandboxName?: string
+  owner?: string
+  envName?: string
+  many?: boolean
+}) {
+  if (lifetime === "once")
+    return many
+      ? "Only these requests, with no rule."
+      : "Only this request, with no rule."
+  if (lifetime === "session")
+    return many
+      ? "Each host for this browser session, with no lasting rule."
+      : "For this browser session, with no lasting rule."
+  const env = envName ?? "this environment"
+  const who = browser
+    ? reach === "browser"
+      ? owner
+        ? `${owner}'s browser`
+        : "this browser"
+      : reach === "browsers"
+        ? `every browser in ${env}`
+        : `every browser and sandbox in ${env}`
+    : scope === "environment"
+      ? `every sandbox in ${env}`
+      : scope === "teammate" && owner
+        ? `${owner}'s sandboxes`
+        : (sandboxName ?? "this sandbox")
+  const rule = lifetime === "hour" ? "a rule for 1 hour" : "a lasting rule"
+  return many
+    ? `Each host gets ${rule} for ${who}.`
+    : `${rule.charAt(0).toUpperCase()}${rule.slice(1)} for ${who}.`
 }
 
 export function decisionLabel(
@@ -507,6 +569,7 @@ export function ApprovalDecision({
   const [note, setNote] = useState("")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
+  const envs = $api.useQuery("get", "/api/environments")
   const [chosen, setChosen] = useState<string>()
   const busy = (choice: string) => decide.isPending && chosen === choice
   // A folded choice that differs from the default still shows on the Options button.
@@ -596,6 +659,20 @@ export function ApprovalDecision({
             </ToggleGroupItem>
           )}
         </ToggleGroup>
+      )}
+      {compact && !optionsOpen && (
+        <p className="text-caption text-muted-foreground">
+          {ruleSummary({
+            lifetime,
+            scope,
+            reach,
+            browser,
+            sandboxName: net?.sandboxName,
+            owner: owner?.name,
+            envName: envs.data?.find((e) => e.id === approval.environmentId)
+              ?.name,
+          })}
+        </p>
       )}
       {(!compact || optionsOpen) && (
         <>

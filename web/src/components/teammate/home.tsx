@@ -25,6 +25,7 @@ import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import {
   ApprovalCardList,
+  approvalIds,
   useApprovalReview,
 } from "@/components/approval-stack"
 import { BrowsingCard, useBrowsing } from "@/components/browser-browsing"
@@ -1301,6 +1302,8 @@ function Waiting({
   const envs = $api.useQuery("get", "/api/environments")
   const { sheet, review } = useApprovalReview()
   const cards = approvalCards(approvals, split)
+  // Each opened card is a list of its own; all of them settle when any card comes or goes.
+  const settleKey = approvalIds(cards)
   const toggle = (key: string) =>
     setOpen((prev) => {
       const next = new Set(prev)
@@ -1340,6 +1343,7 @@ function Waiting({
             <ApprovalCardList
               cards={[card]}
               max={1}
+              settleKey={settleKey}
               envName={() => envs.data?.find((e) => e.id === env)?.name}
               onReview={(r) => (isGitApproval(r) ? onReview(r) : review(r))}
               onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}

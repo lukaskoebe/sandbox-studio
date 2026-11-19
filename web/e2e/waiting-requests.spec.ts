@@ -80,6 +80,34 @@ test("a sandbox's held connections show as a count, answered there and in Connec
   ).toHaveCount(0)
 })
 
+test("the count's Allow all answers them, and the next request finds it closed", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("wait"))
+  const hosts = [freshHost("first"), freshHost("second")]
+
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  for (const host of hosts) await api.connect(id, host)
+  await page.getByRole("button", { name: "2 requests waiting" }).click()
+  const popover = page.getByTestId("waiting-popover")
+  await expect(popover).toContainText("Each host gets a lasting rule")
+  await popover.getByRole("button", { name: "Allow all" }).click()
+  await expect(
+    page.getByRole("button", { name: /requests? waiting/ })
+  ).toHaveCount(0)
+
+  // Nothing opens by itself: the next request is a count again, closed.
+  await api.connect(id, freshHost("later"))
+  await expect(
+    page.getByRole("button", { name: "1 request waiting" })
+  ).toBeVisible()
+  await expect(popover).toBeHidden()
+  await api.dismissApprovals()
+})
+
 test("another page still floats a sandbox's request, with how long it is held", async ({
   page,
   api,

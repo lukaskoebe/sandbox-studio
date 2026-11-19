@@ -49,11 +49,11 @@ export function useAnswerConnections() {
             host: a.network?.host,
           })
     )
-    setWorking(undefined)
-    refreshDecisions(queryClient)
     if (failure) {
       toast.error(`Could not ${action} every host`, { description: failure })
     }
+    await refreshDecisions(queryClient)
+    setWorking(undefined)
   }
   return { working, answer }
 }

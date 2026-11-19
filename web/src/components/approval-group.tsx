@@ -8,6 +8,7 @@ import {
   decideEach,
   decisionBody,
   decisionLabel,
+  ruleSummary,
   defaultReach,
   isBrowserRequest,
   LifetimeToggle,
@@ -47,10 +48,13 @@ export function NetworkGroupCard({
   approvals,
   envName,
   onReview,
+  inert,
 }: {
   approvals: Approval[]
   envName?: string
   onReview: () => void
+  /** Ignores clicks, as for a moment after the list it's in changed. */
+  inert?: boolean
 }) {
   const queryClient = useQueryClient()
   const first = approvals[0]
@@ -91,11 +95,11 @@ export function NetworkGroupCard({
         host: a.network?.host,
       })
     )
-    setWorking(undefined)
-    refreshDecisions(queryClient)
     if (failure) {
       toast.error(`Could not ${action} every host`, { description: failure })
     }
+    await refreshDecisions(queryClient)
+    setWorking(undefined)
   }
 
   return (
@@ -104,6 +108,7 @@ export function NetworkGroupCard({
       size="sm"
       className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
       data-testid="approval-group"
+      inert={inert}
     >
       <ApprovalTip env={first.environmentId} feature="network" anchor={card} />
       <CardHeader>
@@ -130,6 +135,20 @@ export function NetworkGroupCard({
             ))}
           </ul>
         </ScrollArea>
+        {!optionsOpen && (
+          <p className="text-caption text-muted-foreground">
+            {ruleSummary({
+              lifetime,
+              scope,
+              reach,
+              browser,
+              sandboxName: first.network?.sandboxName,
+              owner: owner?.name,
+              envName,
+              many: true,
+            })}
+          </p>
+        )}
         {optionsOpen && (
           <>
             {browser ? (
