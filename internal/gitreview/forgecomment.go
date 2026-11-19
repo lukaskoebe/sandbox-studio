@@ -96,6 +96,11 @@ func (s *Service) toolPullRequestComment(ctx context.Context, sb store.Sandbox, 
 	if err := checkComment(body); err != nil {
 		return nil, integrations.ToolError("%s", err)
 	}
+	forge, repository, err := s.pullRequestsOf(ctx, sb, in.Forge, in.Repository)
+	if err != nil {
+		return nil, err
+	}
+	in.Forge, in.Repository = forge, repository
 	f, rv, err := s.reviewForge(ctx, sb.EnvironmentID, in.Forge)
 	if err != nil {
 		return nil, err

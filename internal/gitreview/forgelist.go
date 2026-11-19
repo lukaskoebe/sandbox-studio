@@ -121,6 +121,11 @@ func (s *Service) toolPullRequestList(ctx context.Context, sb store.Sandbox, par
 	if in.Limit <= 0 || in.Limit > maxPullRequests {
 		in.Limit = defaultPullRequests
 	}
+	forge, repository, err := s.pullRequestsOf(ctx, sb, in.Forge, in.Repository)
+	if err != nil {
+		return nil, err
+	}
+	in.Forge, in.Repository = forge, repository
 	f, rv, err := s.reviewForge(ctx, sb.EnvironmentID, in.Forge)
 	if err != nil {
 		return nil, err

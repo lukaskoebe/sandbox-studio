@@ -93,17 +93,29 @@ func (s *Service) toolPullRequestStatus(ctx context.Context, sb store.Sandbox, p
 	}
 	// The newest push of the branch that matches, and the newest pull request proposed for it.
 	var newest, proposed *store.GitPush
-	for i := range ps {
-		p := &ps[i]
-		if (in.Forge != "" && p.ForgeName != in.Forge) || (in.Repository != "" && repoPath(*p) != in.Repository) {
-			continue
+	find := func(forge, repository string) {
+		for i := range ps {
+			p := &ps[i]
+			if (forge != "" && p.ForgeName != forge) || (repository != "" && repoPath(*p) != repository) {
+				continue
+			}
+			if newest == nil {
+				newest = p
+			}
+			if proposed == nil && (p.PRApprovalID != "" || p.PRResult != "") && p.ForgeName == newest.ForgeName && repoPath(*p) == repoPath(*newest) {
+				proposed = p
+			}
 		}
-		if newest == nil {
-			newest = p
+	}
+	find(in.Forge, in.Repository)
+	if newest == nil {
+		// Not pushed to a forge without pull requests, such as the folder it was cloned from:
+		// perhaps to where its pull requests are.
+		forge, repository, err := s.pullRequestsOf(ctx, sb, in.Forge, in.Repository)
+		if err != nil {
+			return nil, err
 		}
-		if proposed == nil && (p.PRApprovalID != "" || p.PRResult != "") && p.ForgeName == newest.ForgeName && repoPath(*p) == repoPath(*newest) {
-			proposed = p
-		}
+		find(forge, repository)
 	}
 	if newest == nil {
 		return nil, integrations.ToolError("you have not pushed %s%s", branch, pushedTo(in.Forge, in.Repository))
@@ -135,6 +147,13 @@ func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, p
 	if branch == "" || title == "" {
 		return nil, integrations.ToolError("give the branch you pushed and the pull request's title")
 	}
+	// A forge without pull requests, such as the folder the repository was cloned from, gives way
+	// to where its pull requests are.
+	forge, repository, err := s.pullRequestsOf(ctx, sb, in.Forge, in.Repository)
+	if err != nil {
+		return nil, err
+	}
+	in.Forge, in.Repository = forge, repository
 	ps, err := s.Store.SandboxGitPushes(ctx, sb.EnvironmentID, sb.ID, "refs/heads/"+branch, 100)
 	if err != nil {
 		return nil, err

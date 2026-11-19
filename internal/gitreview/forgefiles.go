@@ -79,7 +79,8 @@ type forgeFiles struct {
 	checkLogs *checkLogCache
 	wake      chan struct{}
 	now       func() time.Time
-	running   bool // RunForgeFiles runs
+	running   bool       // RunForgeFiles runs
+	guest     ForgeGuest // what it runs with, for the tools that ask the guest (sandboxClones)
 }
 
 type forgeSandbox struct {
@@ -226,7 +227,7 @@ func (s *Service) toolForgeSync(ctx context.Context, sb store.Sandbox, params js
 func (s *Service) RunForgeFiles(ctx context.Context, g ForgeGuest) {
 	f := s.forgeState()
 	f.mu.Lock()
-	f.running = true
+	f.running, f.guest = true, g
 	f.mu.Unlock()
 	t := time.NewTicker(forgeTick)
 	defer t.Stop()
@@ -401,6 +402,32 @@ func (s *Service) forgeRepos(ctx context.Context, g ForgeGuest, sb store.Sandbox
 	}
 	for _, k := range reads {
 		add(k.forge, k.repo, "")
+	}
+	// A repository on a forge without pull requests, such as a folder on the user's computer,
+	// gives way to where its pull requests are (prHomes), with its branches.
+	forges, err := s.Store.Forges(ctx, sb.EnvironmentID)
+	if err != nil {
+		return repos, branches
+	}
+	for _, r := range slices.Clone(repos) {
+		i := slices.IndexFunc(forges, func(f store.Forge) bool { return f.Name == r.forgeName })
+		if i < 0 || HasAPI(forges[i]) {
+			continue
+		}
+		homes := prHomes(ctx, forges[i], r.repo, reply.Repos, forges)
+		if len(homes) == 0 {
+			continue
+		}
+		key := r.forgeName + " " + r.repo
+		repos = slices.DeleteFunc(repos, func(o *forgeRepo) bool { return o == r })
+		delete(seen, key)
+		for _, h := range homes {
+			add(h.forge.Name, h.repo, "")
+			for b := range branches[key] {
+				add(h.forge.Name, h.repo, b)
+			}
+		}
+		delete(branches, key)
 	}
 	return repos, branches
 }

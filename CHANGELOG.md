@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A repository cloned from a folder on your computer gets its pull requests from the forge it
+  pushes to. `~/forge` and the `studio pr` commands used to stop at the folder, which has
+  none, when it was the clone's origin. Now they go to the forge where the pull requests are:
+  one the clone also has as a remote, or one the folder's repository pushes to, if that forge
+  is set up in the environment.
 - A review's comments sit in its bar instead of a Comments tab: **2 comments** lists them and
   goes to one, and its arrows step through them. The note opens with **Add a note** beside
   the decision, which says what goes with it (2 comments · no note) and how many files you

@@ -839,6 +839,18 @@ func TestPushOpensItsPullRequestWhenChosen(t *testing.T) {
 	if pr := res.(map[string]any)["pullRequest"].(map[string]any); err != nil || pr["status"] != "opened" || pr["url"] != p.PRURL {
 		t.Fatalf("status = %+v, %v", res, err)
 	}
+
+	// Asked about the folder on the user's computer the repository was cloned from, as `studio`
+	// asks about origin's forge, it answers for the forge that folder pushes to.
+	localWithRemote(t, h.st, h.env.ID, map[string]string{"origin": h.forge.srv.URL + "/owner/repo.git"})
+	res, err = h.svc.toolPullRequestStatus(h.ctx, g.sb, json.RawMessage(`{"branch":"feature","forge":"local","repository":"lukas/web"}`))
+	if err != nil || res.(map[string]any)["forge"] != "forge" || res.(map[string]any)["repository"] != "owner/repo" {
+		t.Fatalf("status by the folder = %+v, %v", res, err)
+	}
+	res, err = h.svc.toolPullRequestCreate(h.ctx, g.sb, json.RawMessage(`{"branch":"feature","title":"Again","forge":"local","repository":"lukas/web"}`))
+	if err != nil || res.(map[string]any)["forge"] != "forge" || res.(map[string]any)["pullRequest"].(map[string]any)["url"] != p.PRURL {
+		t.Fatalf("create by the folder = %+v, %v", res, err)
+	}
 }
 
 func TestPushWithoutItsPullRequestCanOpenItLater(t *testing.T) {

@@ -38,7 +38,13 @@ work:
     line), which can be repeated.
 - **Taken from the checkout.** In a checkout, a pull request command fills in what it was not
   given: `forge` and `repository` come from a remote on `git.studio.internal` (`origin`
-  first, otherwise the only such remote), and `branch` from `HEAD`.
+  first, otherwise the only such remote), and `branch` from `HEAD`. A forge without pull
+  requests, such as a folder on the user's computer as origin, gives way on Studio's side
+  (`gitreview.pullRequestsOf`) to where the repository's pull requests are: the forge with
+  them that another remote of the sandbox's clones of it points at, or, for a local forge, one
+  that the folder's repository has as a remote (`git remote -v` on the host, matched to the
+  environment's forges by host, port and base path). Several such forges ask for `--forge`.
+  `pr status` looks for a push to the forge as named first.
 - **`studio call <tool> '<json>'`** (or `-` to read stdin) runs any tool by its MCP name, with
   no flag parsing. It refuses names that are not tools, such as `credential` or `hook`.
 - **Help.** `studio --help` lists the commands, `studio browser --help` (or `studio help
@@ -166,7 +172,9 @@ at once, as for `~/memory` (`agentproto.HomeDir`).
 - **Which repositories.** Those the workspace has a remote for through `git.studio.internal`
   (the guest's `git-remotes` files op, with the branch checked out), those the sandbox pushed
   to, and those of a pull request it read. A guest older than the op is covered by its pushes.
-  At most 20 repositories.
+  At most 20 repositories. One on a forge without pull requests, such as a folder on the
+  user's computer, gives way to where its pull requests are, as the commands find them, with
+  its branches; without one it stays as a line saying why it has none.
 - **Which pull requests in full.** One whose head is a branch the sandbox has checked out or
   pushed, and one the agent read with `pr read` (`git_pull_request_read`). At most 25; the
   rest are lines in `pulls.md`.

@@ -152,6 +152,11 @@ func (s *Service) toolPullRequestRead(ctx context.Context, sb store.Sandbox, par
 	if err := decodeArgs(params, &in); err != nil {
 		return nil, err
 	}
+	forge, repository, err := s.pullRequestsOf(ctx, sb, in.Forge, in.Repository)
+	if err != nil {
+		return nil, err
+	}
+	in.Forge, in.Repository = forge, repository
 	f, rv, err := s.reviewForge(ctx, sb.EnvironmentID, in.Forge)
 	if err != nil {
 		return nil, err
@@ -204,6 +209,11 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 			return nil, err
 		}
 	}
+	forge, repository, err := s.pullRequestsOf(ctx, sb, in.Forge, in.Repository)
+	if err != nil {
+		return nil, err
+	}
+	in.Forge, in.Repository = forge, repository
 	f, rv, err := s.reviewForge(ctx, sb.EnvironmentID, in.Forge)
 	if err != nil {
 		return nil, err
