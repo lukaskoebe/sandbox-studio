@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
@@ -25,6 +27,24 @@ type updateRestart struct{ resume updates.Resume }
 func (*updateRestart) Error() string { return "restarting for an update" }
 
 // updatesDir holds the downloads, the database backup and the install record.
+// rollsBack says whether a start that stopped with err before serving counts against the
+// new binary. It doesn't when a signal stopped it (Ctrl-C, a closed terminal, a service
+// manager's stop), which signal.NotifyContext records as ctx's cause, or when another program
+// holds its address. Either way the start still counts as one of its attempts.
+func rollsBack(ctx context.Context, err error) bool {
+	if cause := context.Cause(ctx); cause != nil && cause != context.Canceled {
+		return false
+	}
+	return !addrInUse(err)
+}
+
+// addrInUse says whether err is a listen on an address something else holds: EADDRINUSE, or
+// Windows's WSAEADDRINUSE.
+func addrInUse(err error) bool {
+	var errno syscall.Errno
+	return errors.Is(err, syscall.EADDRINUSE) || errors.As(err, &errno) && errno == 10048
+}
+
 func updatesDir(p paths.Paths) string { return filepath.Join(p.Data, "updates") }
 
 // newInstaller returns the installer of automatic updates, or nil and why where Studio can't

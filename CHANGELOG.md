@@ -17,6 +17,11 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- An update gets 15 minutes instead of two to start serving before Studio goes back to the
+  old version, so a slow first start (a database migration, downloading msb) no longer undoes a
+  good update. Stopping Studio while the new version starts, or another program holding its
+  port, no longer undoes it either, nor, on Windows, opening Studio from the tray while it
+  updates.
 - Continuing in chat after the terminal no longer repeats the chat's turns as terminal turns,
   or drops their undo, when you sent a message while one of them ran.
 - A chat is no longer lost for good when its agent fails to reopen it for a moment: only an

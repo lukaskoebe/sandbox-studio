@@ -50,7 +50,10 @@ const (
 	maxBinary    = 512 << 20
 	maxChecksums = 64 << 10
 	// healthWait is how long a new binary has to serve requests before the old one comes back.
-	healthWait = 2 * time.Minute
+	// A start migrates the database, checks and backs up msb's, may download msb, and finds
+	// every sandbox, which takes minutes on a slow disk or link: a binary that crashes is
+	// rolled back at once anyway, so this only bounds one that hangs.
+	healthWait = 15 * time.Minute
 	// maxAttempts is how often a supervised new binary may start without serving.
 	maxAttempts = 3
 	// retryFailed is how long a release whose install failed is left alone.

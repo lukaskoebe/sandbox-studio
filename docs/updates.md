@@ -75,14 +75,24 @@ binary and the downloads of earlier installs; the backup of this install stays.
 It is rolled back, meaning the old binary moves back, the new one stays as `studio.failed`,
 the backup replaces the database and its WAL is dropped, when:
 
-- it exits before serving, or doesn't serve within two minutes, while the old process watches
-  it (`RestartUnsupervised`, Windows); the old process then starts the old binary;
+- it exits before serving, or doesn't serve within 15 minutes, while the old process watches
+  it (`RestartUnsupervised`, Windows); the old process then starts the old binary. An exit
+  without an error is a start that found another Studio on the same data, such as one the
+  tray started on the new binary too: the old process waits for that one to serve instead;
 - it took the old process's place and can't run, stops with an error before serving
-  (`StoppedBeforeServing`), doesn't serve within two minutes (`Watchdog`) or starts a fourth
+  (`StoppedBeforeServing`; not when Ctrl-C, a closed terminal or a service manager stopped
+  it, nor when another program holds its address), doesn't serve within 15 minutes (`Watchdog`) or starts a fourth
   time without having served; the process becomes the old binary again;
-- under systemd, it hasn't served two minutes after starting (`Watchdog`), or starts a fourth
+- under systemd, it hasn't served 15 minutes after starting (`Watchdog`), or starts a fourth
   time without having served; it exits with 75 and systemd starts the old binary;
 - the old binary starts while the record still says the new one hasn't served.
+
+A rollback reads the record first and leaves it alone once it no longer says the new binary
+waits to serve, such as one another Studio marked installed meanwhile.
+
+The 15 minutes leave room for a slow first start: it migrates the database, checks and backs
+up msb's, may download msb and finds every sandbox before it serves. A binary that crashes
+is rolled back as soon as it exits, so the wait only bounds one that hangs.
 
 `store.Open` refuses a database with a newer schema than the binary knows, which is why a
 rollback restores the backup instead of running the old binary on the migrated database.

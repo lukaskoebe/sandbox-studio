@@ -385,6 +385,88 @@ func TestRestartUnsupervisedRollsBack(t *testing.T) {
 	}
 }
 
+// A new binary that exits cleanly before serving found another Studio on the same data, such
+// as one the tray started on the new binary too: the watcher waits for that one to serve, and
+// leaves the update installed rather than rolling back over it.
+func TestRestartUnsupervisedLeavesAnotherStudioServing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the binaries are shell scripts")
+	}
+	dir := t.TempDir()
+	marker, exited := filepath.Join(dir, "old-started"), filepath.Join(dir, "new-exited")
+	p := Pending{Dir: filepath.Join(dir, "updates"), From: "v1.0.0", To: "v1.1.0", Exe: filepath.Join(dir, "studio"), Old: filepath.Join(dir, "studio.old"),
+		Backup: filepath.Join(dir, "updates", "v1.1.0", "studio-v1.0.0.db"), DB: filepath.Join(dir, "studio.db"), State: StateSwapped}
+	if err := os.MkdirAll(filepath.Dir(p.Backup), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		p.Exe: "#!/bin/sh\ntouch " + exited + "\nexit 0\n", p.Old: "#!/bin/sh\ntouch " + marker + "\n", p.Backup: "old schema", p.DB: "new schema",
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writePending(p.Dir, p); err != nil {
+		t.Fatal(err)
+	}
+	// The other Studio serves a moment after this one gave way to it.
+	go func() {
+		for {
+			if _, err := os.Stat(exited); err == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		time.Sleep(700 * time.Millisecond)
+		q := p
+		q.State = StateInstalled
+		_ = writePending(p.Dir, q)
+	}()
+	done := make(chan error, 1)
+	go func() { done <- RestartUnsupervised(p.Dir, []string{"-no-browser"}, slog.New(slog.DiscardHandler)) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the watcher didn't see the other Studio serve")
+	}
+	q, _, _ := readPending(p.Dir)
+	if q.State != StateInstalled || read(t, p.DB) != "new schema" {
+		t.Errorf("record %+v, database %q", q, read(t, p.DB))
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the old binary started")
+	}
+}
+
+// A rollback reads the record first: one another Studio marked installed stays as it is.
+func TestRollbackLeavesAnInstalledUpdate(t *testing.T) {
+	dir := t.TempDir()
+	p := Pending{Dir: filepath.Join(dir, "updates"), From: "v1.0.0", To: "v1.1.0", Exe: filepath.Join(dir, "studio"), Old: filepath.Join(dir, "studio.old"),
+		Backup: filepath.Join(dir, "updates", "v1.1.0", "studio-v1.0.0.db"), DB: filepath.Join(dir, "studio.db"), State: StateSwapped}
+	if err := os.MkdirAll(filepath.Dir(p.Backup), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{p.Exe: "new", p.Old: "old", p.Backup: "old schema", p.DB: "new schema"} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	installed := p
+	installed.State = StateInstalled
+	if err := writePending(p.Dir, installed); err != nil {
+		t.Fatal(err)
+	}
+	if q, ok := rollback(p, "too slow", slog.New(slog.DiscardHandler)); ok || q.State != StateInstalled {
+		t.Fatalf("rolled back: %v, record %+v", ok, q)
+	}
+	if read(t, p.Exe) != "new" || read(t, p.DB) != "new schema" {
+		t.Errorf("binary %q, database %q", read(t, p.Exe), read(t, p.DB))
+	}
+}
+
 // Only the process systemd started counts as supervised: a Studio started in a terminal that
 // a systemd service runs inherits INVOCATION_ID, and nothing would start it again.
 func TestUnderSystemd(t *testing.T) {

@@ -146,7 +146,7 @@ func ResumeInstall(dir, version string, log *slog.Logger) (Resume, error) {
 	case version == p.To:
 		p.Attempts++
 		if (p.Supervised || p.InPlace) && p.Attempts > maxAttempts {
-			p = rollback(p, fmt.Sprintf("Studio %s started %d times without serving", p.To, maxAttempts), log)
+			p, _ = rollback(p, fmt.Sprintf("Studio %s started %d times without serving", p.To, maxAttempts), log)
 			r.Exit, r.Exe = true, p.Exe
 			break
 		}
@@ -155,7 +155,7 @@ func ResumeInstall(dir, version string, log *slog.Logger) (Resume, error) {
 		}
 		r.waiting = &p
 	case version == p.From:
-		p = rollback(p, fmt.Sprintf("Studio %s started again before %s served", p.From, p.To), log)
+		p, _ = rollback(p, fmt.Sprintf("Studio %s started again before %s served", p.From, p.To), log)
 	default:
 		return r, os.Remove(filepath.Join(dir, pendingFile))
 	}
@@ -203,7 +203,10 @@ func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) {
 		select {
 		case <-served:
 		case <-time.After(healthWait):
-			p = rollback(p, fmt.Sprintf("Studio %s didn't serve within %s", p.To, healthWait), log)
+			p, ok := rollback(p, fmt.Sprintf("Studio %s didn't serve within %d minutes", p.To, int(healthWait.Minutes())), log)
+			if !ok {
+				return
+			}
 			if p.InPlace {
 				err := startOldInPlace(p, os.Args[1:], log)
 				log.Error("the old Studio didn't start again", "err", err)
@@ -225,12 +228,21 @@ func (r Resume) StoppedBeforeServing(cause error, log *slog.Logger) (Resume, boo
 	if err != nil || !ok || p.State != StateSwapped || p.To != r.waiting.To {
 		return r, false
 	}
-	p = rollback(p, fmt.Sprintf("Studio %s stopped before serving: %v", p.To, cause), log)
+	p, ok = rollback(p, fmt.Sprintf("Studio %s stopped before serving: %v", p.To, cause), log)
+	if !ok {
+		return r, false
+	}
 	return Resume{Progress: p.progress(), Exit: true, Exe: p.Exe, dir: r.dir}, true
 }
 
-// rollback puts the old binary and the database backup back and records why.
-func rollback(p Pending, reason string, log *slog.Logger) Pending {
+// rollback puts the old binary and the database backup back and records why. It reads the
+// record first and does nothing when it no longer says p.To waits to serve, such as one
+// another Studio marked installed meanwhile: it returns that record and false.
+func rollback(p Pending, reason string, log *slog.Logger) (Pending, bool) {
+	if q, ok, err := readPending(p.Dir); err == nil && ok && (q.State != StateSwapped || q.To != p.To) {
+		log.Info("not rolling back the Studio update: its record moved on", "to", q.To, "state", q.State, "reason", reason)
+		return q, false
+	}
 	log.Warn("rolling back the Studio update", "from", p.From, "to", p.To, "reason", reason)
 	p.State, p.Error, p.At = StateRolledBack, reason, time.Now().UTC()
 	if _, err := os.Stat(p.Old); err == nil {
@@ -244,7 +256,7 @@ func rollback(p Pending, reason string, log *slog.Logger) Pending {
 	if err := writePending(p.Dir, p); err != nil {
 		log.Warn("record the rollback", "err", err)
 	}
-	return p
+	return p, true
 }
 
 // restoreDB copies the backup over the database and drops its WAL, so the old binary opens
@@ -287,28 +299,45 @@ func RestartUnsupervised(dir string, args []string, log *slog.Logger) error {
 	}
 	cmd, err := startDetached(p.Exe, args)
 	if err != nil {
-		p = rollback(p, "starting the new binary failed: "+err.Error(), log)
-		return restartOld(p, args, log)
+		if p, ok := rollback(p, "starting the new binary failed: "+err.Error(), log); ok {
+			return restartOld(p, args, log)
+		}
+		return nil
 	}
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
 	deadline := time.After(healthWait)
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
+	running := true
 	for {
 		select {
 		case err := <-exited:
-			p = rollback(p, fmt.Sprintf("Studio %s exited before serving: %v", p.To, err), log)
-			return restartOld(p, args, log)
+			if err == nil {
+				// It found another Studio on the same data, such as one the tray started, and
+				// left it to serve: that one runs the new binary too, so wait for it.
+				running, exited = false, nil
+				continue
+			}
+			if p, ok := rollback(p, fmt.Sprintf("Studio %s exited before serving: %v", p.To, err), log); ok {
+				return restartOld(p, args, log)
+			}
+			return nil
 		case <-deadline:
-			_ = cmd.Process.Kill()
-			<-exited
-			p = rollback(p, fmt.Sprintf("Studio %s didn't serve within %s", p.To, healthWait), log)
-			return restartOld(p, args, log)
+			if running {
+				_ = cmd.Process.Kill()
+				<-exited
+			}
+			if p, ok := rollback(p, fmt.Sprintf("Studio %s didn't serve within %d minutes", p.To, int(healthWait.Minutes())), log); ok {
+				return restartOld(p, args, log)
+			}
+			return nil
 		case <-tick.C:
 			if q, ok, err := readPending(dir); err == nil && ok && q.State == StateInstalled {
 				// The terminal gets its prompt back while Studio goes on, so say where it went.
-				log.Info("Studio "+p.To+" runs on in the background; `studio quit` stops it", "pid", cmd.Process.Pid)
+				if running {
+					log.Info("Studio "+p.To+" runs on in the background; `studio quit` stops it", "pid", cmd.Process.Pid)
+				}
 				_ = cmd.Process.Release()
 				return nil
 			}
@@ -335,7 +364,7 @@ func Restart(dir string, args []string, log *slog.Logger) error {
 	}
 	log.Info("restarting into Studio " + p.To + " in this terminal")
 	err = execInPlace(p.Exe, args)
-	p = rollback(p, "starting the new binary failed: "+err.Error()+nixLdHint(err), log)
+	p, _ = rollback(p, "starting the new binary failed: "+err.Error()+nixLdHint(err), log)
 	return startOldInPlace(p, args, log)
 }
 

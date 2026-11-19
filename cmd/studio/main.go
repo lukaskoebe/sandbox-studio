@@ -322,10 +322,11 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		return &updateRestart{resume}
 	}
 	// A new binary that took the old one's place in this process and stops before serving
-	// rolls back, and the old binary takes its place again.
+	// rolls back, and the old binary takes its place again, unless it was stopped or its
+	// address was taken (rollsBack).
 	defer func() {
 		var restart *updateRestart
-		if err != nil && !errors.As(err, &restart) {
+		if err != nil && !errors.As(err, &restart) && rollsBack(ctx, err) {
 			if back, ok := resume.StoppedBeforeServing(err, log); ok {
 				err = &updateRestart{back}
 			}
