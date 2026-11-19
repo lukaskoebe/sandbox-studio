@@ -13,23 +13,24 @@ export function GitCredentialDecision({ approval }: { approval: Approval }) {
   const cred = approval.gitCredential
   const navigate = useNavigate()
   const decide = useDecideApproval()
-  const send = (action: "allow" | "dismiss") =>
-    decide.mutate(
-      {
+  // Awaited rather than in mutate's onSuccess: deciding refreshes the approvals, which takes
+  // this card away, and mutate's own callbacks never run for a card that is gone.
+  const send = async (action: "allow" | "dismiss") => {
+    try {
+      await decide.mutateAsync({
         params: { path: { env: approval.environmentId, id: approval.id } },
         body: { action, scope: "environment", remember: false },
-      },
-      {
-        onSuccess: () => {
-          if (action === "allow" && cred)
-            void navigate({
-              to: "/e/$env/settings/forges",
-              params: { env: approval.environmentId },
-              search: { add: cred.url },
-            })
-        },
-      }
-    )
+      })
+    } catch {
+      return // the hook says why
+    }
+    if (action === "allow" && cred)
+      void navigate({
+        to: "/e/$env/settings/forges",
+        params: { env: approval.environmentId },
+        search: { add: cred.url },
+      })
+  }
   return (
     <div className="grid gap-2">
       {cred && (
@@ -47,7 +48,7 @@ export function GitCredentialDecision({ approval }: { approval: Approval }) {
           variant="ghost"
           size="xs"
           disabled={decide.isPending}
-          onClick={() => send("dismiss")}
+          onClick={() => void send("dismiss")}
         >
           Not now
         </Button>
@@ -55,7 +56,7 @@ export function GitCredentialDecision({ approval }: { approval: Approval }) {
           size="sm"
           className="ml-auto"
           disabled={decide.isPending || !cred}
-          onClick={() => send("allow")}
+          onClick={() => void send("allow")}
         >
           {decide.isPending && <Spinner />}
           Add forge
