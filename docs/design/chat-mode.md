@@ -258,6 +258,9 @@ the turn `interrupted`.
   calls `session/resume`. A turn that was running is marked `interrupted`, with a marker.
 - **`session/load` only for reconciling**, after the session was used in the terminal
   (section 4). Studio matches the replay's turns to its own in order, by their prompts.
+  A message added to a running turn (steered in, or a prompt OpenCode joined) is a user
+  message of its own in the replay: it belongs to its turn there too, unless that replay
+  message is rather the next turn's prompt, which a short steer such as "ok" can look like.
   Matched turns keep the chat's own items, which also hold what the replay lacks
   (permissions, questions, markers). Every replay turn from the first unmatched one on is
   added with `origin = terminal`. Chat turns the replay no longer has (the TUI ran

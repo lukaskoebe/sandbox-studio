@@ -211,3 +211,78 @@ func TestTerminalStartFailureUnlocksChat(t *testing.T) {
 		t.Fatalf("open after the failure: %v", err)
 	}
 }
+
+// A message added to a running turn, steered in (Codex, Claude's adapter) or joined as a
+// second prompt (OpenCode), is a user message of its own in the replay. It belongs to its
+// turn there too, whether the agent replays it apart or in the turn's first message, and a
+// short one the replay lacks doesn't take the next turn's prompt.
+func TestMatchReplayTakesAddedMessages(t *testing.T) {
+	stored := []store.ChatTurn{{ID: "t1"}, {ID: "t2"}}
+	replay := func(users ...string) []replayTurn {
+		var out []replayTurn
+		for _, u := range users {
+			out = append(out, replayTurn{user: u})
+		}
+		return out
+	}
+	for _, c := range []struct {
+		name          string
+		prompts       map[string][]string
+		replay        []replayTurn
+		matched, next int
+	}{
+		{"steered, replayed apart", map[string][]string{"t1": {"one", "also this"}, "t2": {"two"}},
+			replay("one", "also this", "two", "from the TUI"), 2, 3},
+		{"joined into the first message", map[string][]string{"t1": {"one", "also this"}, "t2": {"two"}},
+			replay("one\n\nalso this", "two"), 2, 2},
+		{"a short one the replay lacks", map[string][]string{"t1": {"one", "ok"}, "t2": {"look at the docs"}},
+			replay("one", "look at the docs"), 2, 2},
+		{"a short one the replay has", map[string][]string{"t1": {"one", "ok"}, "t2": {"look"}},
+			replay("one", "ok", "look"), 2, 3},
+		{"the same text next", map[string][]string{"t1": {"one", "ok"}, "t2": {"ok"}},
+			replay("one", "ok", "ok"), 2, 3},
+		{"a rewritten history", map[string][]string{"t1": {"one", "also this"}, "t2": {"two"}},
+			replay("one", "also this", "other"), 1, 2},
+	} {
+		if m, n := matchReplay(stored, c.prompts, c.replay); m != c.matched || n != c.next {
+			t.Errorf("%s: matched %d next %d, want %d %d", c.name, m, n, c.matched, c.next)
+		}
+	}
+}
+
+// Back from the terminal, a chat whose turn took a steered message keeps its turns, and
+// their undo, and adds only what the TUI did.
+func TestTerminalReplayWithASteeredMessage(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	for _, p := range []string{"one", "two"} {
+		f.wait(t, f.send(t, p).ID)
+	}
+	turns, _ := f.s.Store.ChatTurns(ctx, f.chat.ID)
+	for _, tr := range turns {
+		if _, err := f.s.Store.SetChatTurnSnapshot(ctx, f.chat.ID, tr.ID, tr.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.s.Store.AddChatItem(ctx, store.ChatItem{ChatID: f.chat.ID, TurnID: turns[0].ID, Kind: KindUser, Body: encodeBody(&UserBody{Text: "also this"})}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.s.OpenInTerminal(ctx, env, f.chat.ID, f.launch()); err != nil {
+		t.Fatal(err)
+	}
+	f.agent.History = history(chunk(userChunk, "one"), chunk(agentChunk, "ok"), chunk(userChunk, "also this"), chunk(agentChunk, "done"),
+		chunk(userChunk, "two"), chunk(agentChunk, "ok"), chunk(userChunk, "from the TUI"), chunk(agentChunk, "there"))
+	if err := f.s.ReturnToChat(ctx, env, f.chat.ID, f.launch()); err != nil {
+		t.Fatal(err)
+	}
+	turns, _ = f.s.Store.ChatTurns(ctx, f.chat.ID)
+	if len(turns) != 3 || turns[2].Origin != store.OriginTerminal {
+		t.Fatalf("turns %+v", turns)
+	}
+	for _, tr := range turns[:2] {
+		if tr.Snapshot == "" {
+			t.Fatalf("turn %d lost its snapshot", tr.Seq)
+		}
+	}
+}

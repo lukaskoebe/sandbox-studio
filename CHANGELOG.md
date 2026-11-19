@@ -17,6 +17,8 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- Continuing in chat after the terminal no longer repeats the chat's turns as terminal turns,
+  or drops their undo, when you sent a message while one of them ran.
 - A chat is no longer lost for good when its agent fails to reopen it for a moment: only an
   agent that says it no longer has the chat's session ends it. Any other failure says to try
   again, and a chat coming back from the terminal stays in the terminal until it can.

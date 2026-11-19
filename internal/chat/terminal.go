@@ -167,8 +167,8 @@ func splitReplay(f *folder) []replayTurn {
 }
 
 // reconcile adds the turns the replay has beyond the chat's own, with origin terminal.
-// The replay's turns are matched to the chat's in order by their prompts; the chat's
-// items of matched turns stay as they are, since they also hold what the replay lacks
+// The replay's turns are matched to the chat's in order by their prompts (matchReplay); the
+// chat's items of matched turns stay as they are, since they also hold what the replay lacks
 // (permissions, questions, markers). From the first replay turn that doesn't match, every
 // replay turn is new. If some of the chat's turns don't match, the TUI changed the
 // history (/clear, /compact, a rewind) and undo is no longer offered for them. An agent
@@ -185,22 +185,17 @@ func (s *Service) reconcile(ctx context.Context, c store.Chat, l *live, replay *
 	if err != nil {
 		return err
 	}
-	prompts := map[string]string{}
+	prompts := map[string][]string{}
 	for _, it := range items {
 		if it.Kind != KindUser {
 			continue
 		}
-		if _, ok := prompts[it.TurnID]; !ok {
-			if v := ItemView(it); v.User != nil {
-				prompts[it.TurnID] = v.User.Text
-			}
+		if v := ItemView(it); v.User != nil {
+			prompts[it.TurnID] = append(prompts[it.TurnID], v.User.Text)
 		}
 	}
 	turns := splitReplay(replay)
-	matched := 0
-	for matched < len(stored) && matched < len(turns) && samePrompt(prompts[stored[matched].ID], turns[matched].user) {
-		matched++
-	}
+	matched, next := matchReplay(stored, prompts, turns)
 	if matched < len(stored) {
 		for _, t := range stored {
 			if t.Snapshot != "" {
@@ -210,7 +205,7 @@ func (s *Service) reconcile(ctx context.Context, c store.Chat, l *live, replay *
 			}
 		}
 	}
-	for i, rt := range turns[matched:] {
+	for i, rt := range turns[next:] {
 		marker := ""
 		if i == 0 {
 			marker = "Continued in the terminal"
@@ -222,6 +217,38 @@ func (s *Service) reconcile(ctx context.Context, c store.Chat, l *live, replay *
 	s.retitle(c, replay.title)
 	s.changed(c.EnvironmentID, c.ID, false)
 	return nil
+}
+
+// matchReplay matches the chat's turns to the replay's in order. It returns how many of the
+// chat's turns matched and the first replay turn after them. A turn matches when its prompt
+// is the next replay turn's. A message the user added while it ran (a steer, or a prompt
+// OpenCode joined to it) is a user message in the replay too, where splitReplay cut a turn
+// of its own: it takes that replay turn as well when it is that message, unless the replay
+// turn is rather the chat's next prompt, since samePrompt only asks the stored text to be in
+// the replayed one and a short "ok" is in most.
+func matchReplay(stored []store.ChatTurn, prompts map[string][]string, turns []replayTurn) (matched, next int) {
+	first := func(i int) string {
+		if p := prompts[stored[i].ID]; len(p) > 0 {
+			return p[0]
+		}
+		return ""
+	}
+	for matched < len(stored) && next < len(turns) && samePrompt(first(matched), turns[next].user) {
+		next++
+		texts := prompts[stored[matched].ID]
+		for i := 1; i < len(texts) && next < len(turns); i++ {
+			if !samePrompt(texts[i], turns[next].user) {
+				continue
+			}
+			if matched+1 < len(stored) && samePrompt(first(matched+1), turns[next].user) &&
+				(next+1 >= len(turns) || !samePrompt(first(matched+1), turns[next+1].user)) {
+				continue
+			}
+			next++
+		}
+		matched++
+	}
+	return matched, next
 }
 
 // terminalTurn stores a turn made in the TUI: a marker, if any, and the replay's entries.
