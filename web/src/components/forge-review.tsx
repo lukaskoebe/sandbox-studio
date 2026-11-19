@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -29,10 +29,12 @@ import { Ident } from "@/components/ident"
 import { StatusDot } from "@/components/status-dot"
 import { textareaClass } from "@/components/memory-dialogs"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
+import type { DiffViewHandle } from "@/components/diff-view"
 import {
   FeedbackTargetSelect,
   ReviewScroll,
   UnifiedDiff,
+  ViewedCount,
   newChatTarget,
   reviewPaneClass,
   parseDiff,
@@ -40,6 +42,7 @@ import {
   type DiffLine,
   type FeedbackTarget,
   type LineComment,
+  type ViewedProgress,
 } from "@/components/review-feedback"
 import {
   $api,
@@ -49,6 +52,7 @@ import {
 } from "@/lib/api/client"
 import { plural, pullRequestName, verdictLabels } from "@/lib/approval-kinds"
 import { draftBase, useReviewDraft } from "@/lib/review-drafts"
+import { viewedScope } from "@/lib/viewed-files"
 
 type Detail = NonNullable<Approval["forgeReview"]>
 type Draft = Detail["draft"]
@@ -279,6 +283,8 @@ export function ForgeReview({
   const [attribution, setAttribution] = useState(
     () => !!draft?.attribution || (!!who && rememberedAttribution(who))
   )
+  const diffView = useRef<DiffViewHandle>(null)
+  const [progress, setProgress] = useState<ViewedProgress>()
   const queryClient = useQueryClient()
   const decide = $api.useMutation(
     "post",
@@ -527,6 +533,10 @@ export function ForgeReview({
     <div className={reviewPaneClass}>
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         {draft.diffTruncated && <Badge variant="outline">diff truncated</Badge>}
+        <ViewedCount
+          progress={progress}
+          onNext={() => diffView.current?.nextUnviewed()}
+        />
         <DiffStyleSwitch />
       </div>
       <section
@@ -542,6 +552,14 @@ export function ForgeReview({
           after={outside}
           place={saved.place}
           onPlace={saved.onPlace}
+          viewed={viewedScope(
+            draft.forge,
+            draft.owner,
+            draft.repo,
+            draft.pullRequest.head.ref
+          )}
+          onViewed={setProgress}
+          ref={diffView}
           // A forge's comment is on one line here; a range would need its own fields.
           ranges={false}
           commentLabel={draft.teammate ? `${draft.teammate}'s draft` : "Draft"}

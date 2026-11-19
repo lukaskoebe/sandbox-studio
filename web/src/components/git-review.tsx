@@ -55,6 +55,7 @@ import {
   FeedbackTargetSelect,
   ReviewScroll,
   UnifiedDiff,
+  ViewedCount,
   reviewPaneClass,
   commentWhere,
   composeNote,
@@ -64,6 +65,7 @@ import {
   useSendFeedback,
   type FeedbackTarget,
   type LineComment,
+  type ViewedProgress,
 } from "@/components/review-feedback"
 import {
   $api,
@@ -75,6 +77,7 @@ import {
 import { approvalKind, gitSummary } from "@/lib/approval-kinds"
 import { draftBase, useReviewDraft } from "@/lib/review-drafts"
 import { cn, formatAge } from "@/lib/utils"
+import { viewedScope } from "@/lib/viewed-files"
 
 type Action = "allow" | "deny" | "dismiss"
 
@@ -502,6 +505,7 @@ function PushReview({
   const [updateCheckedOut, setUpdateCheckedOut] = useState(true)
   // A commit picked in the bar narrows the diff to it; none shows the whole push.
   const [commit, setCommit] = useState("")
+  const [progress, setProgress] = useState<ViewedProgress>()
   const decide = useDecideGit()
   const openLater = useOpenPullRequest()
   const pushAgain = usePushAgain()
@@ -989,7 +993,15 @@ function PushReview({
               {rv.diffTruncated && !picked && (
                 <Badge variant="outline">diff truncated</Badge>
               )}
-              <DiffStyleSwitch className="ml-auto" />
+              <span className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                {!picked && (
+                  <ViewedCount
+                    progress={progress}
+                    onNext={() => diffView.current?.nextUnviewed()}
+                  />
+                )}
+                <DiffStyleSwitch />
+              </span>
             </>
           )}
         </div>
@@ -1013,6 +1025,13 @@ function PushReview({
               header={facts}
               place={saved.place}
               onPlace={saved.onPlace}
+              viewed={viewedScope(
+                git.push.forgeName || git.push.forgeId,
+                git.push.owner,
+                git.push.repo,
+                git.push.ref
+              )}
+              onViewed={setProgress}
               ref={diffView}
             />
           </div>

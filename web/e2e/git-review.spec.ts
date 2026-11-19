@@ -1251,6 +1251,109 @@ test("a push's commits narrow its diff to one of them", async ({
   )
 })
 
+// A file marked viewed folds to its name, and the mark is kept for the branch: the next push
+// of it finds the files that didn't change still viewed, and says which one changed since.
+test("viewed files fold and stay viewed on the branch's next push until they change", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const id = await api.createSandbox(sandboxName("viewed"))
+  await api.guestReady(id)
+  const push = (bravo: string) =>
+    api.push(id, {
+      url: forge.url,
+      branch: "fix/viewed",
+      from: "main",
+      earlier: [
+        { file: "a.txt", content: "alpha\n", message: "Add a" },
+        { file: "b.txt", content: bravo, message: "Add b" },
+      ],
+      file: "c.txt",
+      content: "charlie\n",
+      message: "Add c",
+    })
+  const open = async () => {
+    await page.goto(`/e/${env}`)
+    await approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: "team/app" })
+      .getByRole("button", { name: "Review" })
+      .click()
+  }
+  const pane = page.getByTestId("git-review")
+  // The file headers' marks, and the list of files beside the diff or above its first file.
+  const diff = pane.locator(".diff-view").getByTestId("viewed-mark")
+  const files = pane.getByRole("navigation", { name: "Files in the diff" })
+  const line = (text: string) =>
+    pane.locator("[data-line]:visible").filter({ hasText: text })
+  const count = (text: string) =>
+    expect(pane.getByText(text, { exact: true })).toBeVisible()
+
+  const first = await push("bravo\n")
+  expect(first.error, first.output).toBeUndefined()
+  await open()
+  await expect(line("alpha")).toBeVisible()
+  await count("0 / 3 viewed")
+
+  // From the file's header: it folds to its name, and opens again without losing the mark.
+  await diff.getByRole("checkbox", { name: "Viewed a.txt" }).click()
+  await expect(line("alpha")).toHaveCount(0)
+  await count("1 / 3 viewed")
+  await diff.getByRole("button", { name: "Show a.txt" }).click()
+  await expect(line("alpha")).toBeVisible()
+  await expect(
+    diff.getByRole("checkbox", { name: "Viewed a.txt" })
+  ).toBeChecked()
+  await diff.getByRole("button", { name: "Fold a.txt" }).click()
+  await expect(line("alpha")).toHaveCount(0)
+
+  // From the list of files, and all of them: Next unviewed goes once none is left.
+  await files.getByRole("checkbox", { name: "Viewed b.txt" }).click()
+  await count("2 / 3 viewed")
+  await expect(
+    pane.getByRole("button", { name: "Next unviewed" })
+  ).toBeVisible()
+  await files.getByRole("checkbox", { name: "Viewed c.txt" }).click()
+  await count("3 / 3 viewed")
+  await expect(pane.getByRole("button", { name: "Next unviewed" })).toHaveCount(
+    0
+  )
+  await files.getByRole("checkbox", { name: "Viewed c.txt" }).click()
+  await count("2 / 3 viewed")
+  await expect(line("charlie")).toBeVisible()
+
+  // Kept in this browser: a reload finds them.
+  await page.reload()
+  await open()
+  await count("2 / 3 viewed")
+  await expect(line("charlie")).toBeVisible()
+  await expect(line("alpha")).toHaveCount(0)
+  await expect(line("bravo")).toHaveCount(0)
+
+  await pane.getByRole("button", { name: "Reject" }).click()
+  await expect(pane).toBeHidden()
+
+  // The branch again, with b.txt changed: a.txt stays viewed, b.txt says it changed.
+  // The sandbox's next fetch after the rejection fails once, with its reason.
+  expect((await push("bravo, changed\n")).error).toContain("409")
+  const again = await push("bravo, changed\n")
+  expect(again.error, again.output).toBeUndefined()
+  await open()
+  await count("1 / 3 viewed")
+  await expect(line("alpha")).toHaveCount(0)
+  await expect(line("bravo, changed")).toBeVisible()
+  await expect(diff.getByText("Changed since you viewed it")).toBeVisible()
+  await expect(
+    diff.getByRole("checkbox", { name: "Viewed b.txt" })
+  ).not.toBeChecked()
+  await diff.getByRole("checkbox", { name: "Viewed b.txt" }).click()
+  await count("2 / 3 viewed")
+  await expect(diff.getByText("Changed since you viewed it")).toHaveCount(0)
+})
+
 // Changes holds its parts in sections that fold, per computer. A review link opens its section
 // where it was folded and leaves the others; an allowed push moves to Pushed for a day.
 test("a review link opens Changes on its section, and the allowed push moves to Pushed", async ({

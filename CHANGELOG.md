@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Mark files viewed in a review. **Viewed** in a file's header or in the list of files folds
+  it away, the bar counts them (2 / 3 viewed) and **Next unviewed** goes to the next one. The
+  marks stay with the branch: when the agent pushes it again after a rejection, a viewed
+  file stays viewed unless it changed, and then says **Changed since you viewed it**.
 - A review is one scrolling view: the diff fills the pane, the push's branch and change or the
   pull request's summary scroll away above the first file, and the list of files sits beside
   it. **Approve and push** and **Reject** stay below. The **Commits** tab gave way to a menu in

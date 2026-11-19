@@ -26,6 +26,7 @@ import { getOrCreateWorkerPoolSingleton } from "@pierre/diffs/worker"
 import DiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker"
 import { ChatCircleTextIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
@@ -34,11 +35,13 @@ import {
   parseDiff,
   type DiffLine,
   type LineComment,
+  type ViewedProgress,
 } from "@/components/review-feedback"
 import { useDiffStyle } from "@/lib/diff-style"
 import type { DiffPlace } from "@/lib/review-drafts"
 import { cn } from "@/lib/utils"
 import { useTextSize } from "@/lib/theme"
+import { setViewed, useViewedFiles } from "@/lib/viewed-files"
 
 /**
  * Token colors as Studio's own variables, so they follow the style and the scheme without
@@ -167,6 +170,26 @@ function hash(text: string) {
   return (h >>> 0).toString(36)
 }
 
+/** A fingerprint of each file's patch, which a viewed mark holds until the file changes. */
+function patchHashes(lines: DiffLine[], count: number) {
+  const out = new Array<number>(count).fill(0x811c9dc5)
+  for (const l of lines) {
+    if (l.fileNo < 0 || l.fileNo >= count) continue
+    let h = out[l.fileNo]
+    for (let i = 0; i < l.text.length; i++) {
+      h ^= l.text.charCodeAt(i)
+      h = Math.imul(h, 0x01000193)
+    }
+    h ^= 0x0a
+    out[l.fileNo] = Math.imul(h, 0x01000193)
+  }
+  return out.map((h) => (h >>> 0).toString(36))
+}
+
+/** Where a file stands with the reader: not marked, marked at this patch, or marked before
+ * it changed. */
+type Seen = "unviewed" | "viewed" | "changed"
+
 /**
  * The patch the library reads and what it leaves out: notes Studio writes in a diff, such as
  * a file too large to show. A diff from a chat's snapshot starts at its --- line, which the
@@ -229,6 +252,8 @@ type Editing = { index: number; start?: number }
 export type DiffViewHandle = {
   /** Brings line i of the diff into view. */
   scrollToLine: (i: number) => void
+  /** Brings the next file not marked viewed into view, after the one being read. */
+  nextUnviewed: () => void
 }
 
 export type DiffViewProps = {
@@ -254,6 +279,13 @@ export type DiffViewProps = {
   place?: DiffPlace
   /** Says where the reader is as they scroll, a moment after they stop. */
   onPlace?: (place: DiffPlace) => void
+  /**
+   * Offers a Viewed mark on each file, kept for a branch (viewedScope): a viewed file folds to
+   * its name, and one whose patch changed since its mark says so and counts as not viewed.
+   */
+  viewed?: string
+  /** How many of the files are viewed, as that changes. */
+  onViewed?: (progress: ViewedProgress) => void
   ref?: Ref<DiffViewHandle>
 }
 
@@ -271,6 +303,8 @@ export default function DiffView({
   layouts = fill,
   place,
   onPlace,
+  viewed,
+  onViewed,
   ref,
 }: DiffViewProps) {
   const lines = parseDiff(diff)
@@ -292,6 +326,34 @@ export default function DiffView({
   }>(null)
   const { files, notes, footer } = useMemo(() => readPatch(lines), [lines])
   usePrimedColors(files)
+  const patches = useMemo(
+    () => patchHashes(lines, files.length),
+    [lines, files.length]
+  )
+  const marks = useViewedFiles(viewed)
+  const seen = useMemo(
+    () =>
+      files.map((f, i): Seen => {
+        const m = marks[f.name]
+        if (m === undefined) return "unviewed"
+        return m === patches[i] ? "viewed" : "changed"
+      }),
+    [files, marks, patches]
+  )
+  // Viewed files the reader opened again, which stay marked.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
+  const folded = (i: number) =>
+    seen[i] === "viewed" && !opened.has(files[i].name)
+  const progress = useMemo(
+    () => ({
+      viewed: seen.filter((s) => s === "viewed").length,
+      total: seen.length,
+    }),
+    [seen]
+  )
+  useEffect(() => {
+    if (viewed) onViewed?.(progress)
+  }, [viewed, onViewed, progress])
   const indexes = useMemo(() => {
     const out = new Map<string, number>()
     lines.forEach((l, i) => {
@@ -331,9 +393,13 @@ export default function DiffView({
     }
     return files.map((fileDiff, fileNo): CodeViewDiffItem<Note> => {
       const annotations = byFile.get(fileNo)
+      const collapsed = seen[fileNo] === "viewed" && !opened.has(fileDiff.name)
+      // The header's mark is drawn from the item, so a new mark is a new version.
       const key =
         diffKey +
         ":" +
+        seen[fileNo] +
+        (collapsed ? ":folded:" : ":") +
         (annotations ?? [])
           .map((a) => `${a.side}${a.lineNumber}`)
           .sort()
@@ -347,9 +413,10 @@ export default function DiffView({
         fileDiff,
         annotations,
         version,
+        collapsed,
       }
     })
-  }, [diffKey, files, notes, comments, editing, lines])
+  }, [diffKey, files, notes, comments, editing, lines, seen, opened])
 
   useImperativeHandle(
     ref,
@@ -367,8 +434,19 @@ export default function DiffView({
           align: "center",
         })
       },
+      nextUnviewed: () => {
+        const at = here.current
+          ? files.findIndex((f) => f.name === here.current?.file)
+          : -1
+        // Above the first file, the first is next; in a file, the one after it.
+        const from = here.current && here.current.offset >= 0 ? at + 1 : 0
+        for (let k = 0; k < files.length; k++) {
+          const i = (from + k) % files.length
+          if (seen[i] !== "viewed") return jumpToFile(i)
+        }
+      },
     }),
-    [lines]
+    [lines, files, seen]
   )
 
   const commentable = !!onComment
@@ -458,11 +536,42 @@ export default function DiffView({
     setEditing(undefined)
     view.current?.clearSelectedLines()
   }
-  const jumpToFile = (fileNo: number) => {
+  function jumpToFile(fileNo: number) {
+    // A folded file opens where it is picked, and keeps its mark.
+    if (folded(fileNo)) setOpened((o) => new Set(o).add(files[fileNo].name))
     view.current?.scrollTo({
       type: "item",
       id: String(fileNo),
       align: "start",
+    })
+  }
+  // A file marked from inside it folds with the view at its name, the next file below.
+  const refold = useRef<number>(undefined)
+  useEffect(() => {
+    const i = refold.current
+    if (i === undefined) return
+    refold.current = undefined
+    view.current?.scrollTo({ type: "item", id: String(i), align: "start" })
+  }, [items])
+  const mark = (fileNo: number, on: boolean) => {
+    if (!viewed) return
+    const name = files[fileNo].name
+    setViewed(viewed, name, on ? patches[fileNo] : undefined)
+    setOpened((o) => {
+      if (!o.has(name)) return o
+      const next = new Set(o)
+      next.delete(name)
+      return next
+    })
+    if (on && here.current?.file === name && here.current.offset > 0)
+      refold.current = fileNo
+  }
+  const toggleFold = (fileNo: number) => {
+    const name = files[fileNo].name
+    setOpened((o) => {
+      const next = new Set(o)
+      if (!next.delete(name)) next.add(name)
+      return next
     })
   }
   const overview = fill && files.length > 1
@@ -554,6 +663,8 @@ export default function DiffView({
             <FileOverview
               files={files}
               onPick={jumpToFile}
+              seen={viewed ? seen : undefined}
+              onMark={mark}
               className="hidden w-64 shrink-0 @3xl:grid"
             />
           )}
@@ -589,11 +700,29 @@ export default function DiffView({
                             <FileOverview
                               files={files}
                               onPick={jumpToFile}
+                              seen={viewed ? seen : undefined}
+                              onMark={mark}
                               className="max-h-40 @3xl:hidden"
                             />
                           )}
                         </div>
                       )
+                    : undefined
+                }
+                renderHeaderMetadata={
+                  viewed
+                    ? (item) => {
+                        const i = Number(item.id)
+                        return (
+                          <ViewedMark
+                            name={files[i].name}
+                            seen={seen[i]}
+                            folded={folded(i)}
+                            onMark={(on) => mark(i, on)}
+                            onFold={() => toggleFold(i)}
+                          />
+                        )
+                      }
                     : undefined
                 }
                 renderGutterUtility={
@@ -748,10 +877,15 @@ export default function DiffView({
 function FileOverview({
   files,
   onPick,
+  seen,
+  onMark,
   className,
 }: {
   files: FileDiffMetadata[]
   onPick: (fileNo: number) => void
+  /** Each file's viewed mark, when the diff offers them. */
+  seen?: Seen[]
+  onMark?: (fileNo: number, on: boolean) => void
   className?: string
 }) {
   const all = files.map(counts)
@@ -783,11 +917,28 @@ function FileOverview({
             : ""
           const base = f.name.slice(dir.length)
           return (
-            <li key={i} className="min-w-0">
+            <li
+              key={i}
+              className={cn(
+                "flex min-w-0 items-center hover:bg-muted",
+                seen && "pl-2.5"
+              )}
+            >
+              {seen && (
+                <Checkbox
+                  aria-label={`Viewed ${f.name}`}
+                  checked={seen[i] === "viewed"}
+                  onCheckedChange={(on) => onMark?.(i, on)}
+                  className="size-3.5"
+                />
+              )}
               <button
                 type="button"
                 title={f.prevName ? `${f.prevName} → ${f.name}` : f.name}
-                className="flex min-h-6 w-full min-w-0 items-center gap-2 px-2.5 py-0.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                className={cn(
+                  "flex min-h-6 w-full min-w-0 items-center gap-2 px-2.5 py-0.5 text-left focus-visible:bg-muted focus-visible:outline-none",
+                  seen?.[i] === "viewed" && "opacity-60"
+                )}
                 onClick={() => onPick(i)}
               >
                 <span
@@ -809,6 +960,14 @@ function FileOverview({
                     {base}
                   </bdi>
                 </span>
+                {seen?.[i] === "changed" && (
+                  <span
+                    title="Changed since you viewed it"
+                    className="size-1.5 shrink-0 rounded-full bg-amber-500"
+                  >
+                    <span className="sr-only">Changed since you viewed it</span>
+                  </span>
+                )}
                 <span className="shrink-0 font-mono text-caption">
                   {all[i].added > 0 && (
                     <span className="text-emerald-600 dark:text-emerald-400">
@@ -825,6 +984,54 @@ function FileOverview({
         })}
       </ul>
     </nav>
+  )
+}
+
+/** A file header's Viewed mark, and the way to open a viewed file again without unmarking it. */
+function ViewedMark({
+  name,
+  seen,
+  folded,
+  onMark,
+  onFold,
+}: {
+  name: string
+  seen: Seen
+  folded: boolean
+  onMark: (on: boolean) => void
+  onFold: () => void
+}) {
+  return (
+    <span
+      data-testid="viewed-mark"
+      className="flex items-center gap-3 font-sans text-xs whitespace-nowrap text-muted-foreground"
+    >
+      {seen === "changed" && (
+        <span className="text-amber-600 dark:text-amber-400">
+          <span className="@lg:hidden">Changed</span>
+          <span className="hidden @lg:inline">Changed since you viewed it</span>
+        </span>
+      )}
+      {seen === "viewed" && (
+        <button
+          type="button"
+          className="hover:text-foreground"
+          aria-label={`${folded ? "Show" : "Fold"} ${name}`}
+          onClick={onFold}
+        >
+          {folded ? "Show" : "Fold"}
+        </button>
+      )}
+      <label className="flex cursor-pointer items-center gap-1.5 hover:text-foreground">
+        <Checkbox
+          aria-label={`Viewed ${name}`}
+          checked={seen === "viewed"}
+          onCheckedChange={onMark}
+          className="size-3.5"
+        />
+        Viewed
+      </label>
+    </span>
   )
 }
 

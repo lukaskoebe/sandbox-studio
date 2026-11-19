@@ -297,7 +297,14 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   screen, another computer or a reload finds them again. Line comments sit on the diff's
   lines, so a draft saved against a different diff keeps only the note and where it goes.
   Deciding drops the entry; nothing is saved for a decided review, and entries older than a
-  month, or past the newest hundred, go.
+  month, or past the newest hundred, go. The files the reader marked viewed are kept per
+  branch rather than per review, under `studio.viewed.<forge>/<owner>/<repo>#<branch>`
+  (`lib/viewed-files.ts`), each path with an FNV hash of its patch's lines, so the branch's
+  next push finds them: a file whose patch hashes differently says "Changed since you viewed
+  it" and counts as unviewed. The diff view folds a viewed file to its header (CodeView's
+  `collapsed`), shows the mark in each header and in the list of files, and reports the count
+  to the bar's `ViewedCount`; **Next unviewed** goes to the next file after the one at the
+  top. Branches untouched for two months, or past the newest two hundred, go.
 
 The computer's ⋯ (`components/computer/computer-menu.tsx`) has its name and ID, template, size
 and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkpoint now,

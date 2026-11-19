@@ -9,6 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 import type { DiffPlace } from "@/lib/review-drafts"
@@ -147,6 +149,38 @@ export function composeNote(
 
 const DiffView = lazy(() => import("@/components/diff-view"))
 
+/** How many of a diff's files the reader marked viewed. */
+export type ViewedProgress = { viewed: number; total: number }
+
+/** How many of a review's files are viewed, and the way to the next one that isn't. */
+export function ViewedCount({
+  progress,
+  onNext,
+}: {
+  progress: ViewedProgress | undefined
+  onNext: () => void
+}) {
+  if (!progress?.total) return null
+  const done = progress.viewed === progress.total
+  return (
+    <span className="flex items-center gap-2">
+      <span
+        className={cn(
+          "font-mono text-caption whitespace-nowrap text-muted-foreground",
+          done && "text-emerald-600 dark:text-emerald-400"
+        )}
+      >
+        {progress.viewed} / {progress.total} viewed
+      </span>
+      {!done && progress.total > 1 && (
+        <Button size="xs" variant="outline" onClick={onNext}>
+          Next unviewed
+        </Button>
+      )}
+    </span>
+  )
+}
+
 /** A review without a diff to fill it, or one still loading: it scrolls as a page. */
 export function ReviewScroll({ children }: { children: ReactNode }) {
   return (
@@ -199,6 +233,8 @@ export function UnifiedDiff({
   layouts,
   place,
   onPlace,
+  viewed,
+  onViewed,
   ref,
 }: {
   diff: string
@@ -218,6 +254,9 @@ export function UnifiedDiff({
   /** Where the reader was, to open there, and where they are as they scroll. */
   place?: DiffPlace
   onPlace?: (place: DiffPlace) => void
+  /** The branch whose viewed marks it offers (viewedScope), and how many are viewed. */
+  viewed?: string
+  onViewed?: (progress: ViewedProgress) => void
   /** For a list of comments that jumps to them. */
   ref?: Ref<DiffViewHandle>
 }) {
@@ -245,6 +284,8 @@ export function UnifiedDiff({
           layouts={layouts}
           place={place}
           onPlace={onPlace}
+          viewed={viewed}
+          onViewed={onViewed}
           ref={ref}
         />
       </Suspense>
