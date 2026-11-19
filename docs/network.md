@@ -269,6 +269,13 @@ approval stack, with Allow all, Review individually and Deny all (see
 to instead: one sandbox's pending requests to one top-level site are one card, titled with the
 site. A navigation keeps its own card, since it needs the site decision.
 
+A sandbox has at most 100 network cards waiting (`store.MaxWaitingNetwork`, `network` and
+`network.request` together). A sandbox reaches new hosts as fast as it likes, and each would be a
+card of its own, so past the cap a request to a host it hasn't asked about yet is refused at once,
+without a card: "Sandbox Studio didn't ask the user about …: 100 of this sandbox's requests
+already wait for approval." The Connections list keeps it as undecided. A host that already has a
+card still counts an attempt, other sandboxes are not held back, and each answer makes room.
+
 A browser VM's HTTPS is held differently. Its connections are terminated first, with no hold
 (see [interception](#interception-and-secrets)), and each request that no rule covers is held
 as a `network.request` approval. That approval names the request: method and path (never the
@@ -430,6 +437,10 @@ uses: of the teammates whose provider has a utility model, the one that has had 
 - **How often:** a question is asked once per sandbox, task and host:port for the session. Connections
   that arrive while a question is open wait for its answer. A new prompt is a new task, so the
   host is asked about again.
+- **Budget:** a sandbox may put 60 questions to the reviewer in an hour (`reviewBudget`, a rolling
+  hour, in memory), unanswered ones included. Past that, its new hosts are asked about as at
+  `ask` until the hour frees one up, and the log says so once. A busy or hostile sandbox can't run
+  up the model's bill.
 - **Costs:** the calls go to the provider, and are not counted in the memory extraction budget.
 - **Tests** use a fake model. Nothing calls a real API in them.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -115,6 +116,58 @@ func TestRunningHeartbeatsCountsOnlyHeartbeatTurns(t *testing.T) {
 	}
 	if c, err := s.Chat(ctx, work.ID, user.ID); err != nil || c.Heartbeat {
 		t.Fatalf("a user chat is marked: %+v (%v)", c, err)
+	}
+}
+
+// A sandbox has at most MaxWaitingNetwork network cards waiting. Past it a new host is refused,
+// while one it already asked about counts an attempt; another sandbox, and other kinds of card,
+// are not held back. An answered card makes room.
+func TestWaitingNetworkCardsAreCapped(t *testing.T) {
+	ctx := context.Background()
+	s, work, _ := openTeammateStore(t)
+	sb, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: work.ID, Name: "busy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: work.ID, Name: "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ask := func(sandboxID, kind, subject string) (Approval, error) {
+		a, _, err := s.RequestApproval(ctx, Approval{EnvironmentID: work.ID, SandboxID: sandboxID, Kind: kind, Subject: subject, Payload: json.RawMessage(`{}`)})
+		return a, err
+	}
+	var first Approval
+	for i := range MaxWaitingNetwork {
+		kind := "network"
+		if i%2 == 1 {
+			kind = "network.request"
+		}
+		a, err := ask(sb.ID, kind, fmt.Sprintf("host%d.example:443", i))
+		if err != nil {
+			t.Fatalf("card %d: %v", i, err)
+		}
+		if i == 0 {
+			first = a
+		}
+	}
+	if _, err := ask(sb.ID, "network", "one-more.example:443"); !errors.Is(err, ErrTooManyAsks) {
+		t.Fatalf("past the cap: %v", err)
+	}
+	if a, err := ask(sb.ID, "network", "host0.example:443"); err != nil || a.Attempts != 2 {
+		t.Fatalf("a host it already asked about: %+v (%v)", a, err)
+	}
+	if _, err := ask(other.ID, "network", "one-more.example:443"); err != nil {
+		t.Fatalf("another sandbox: %v", err)
+	}
+	if _, err := ask(sb.ID, "browser.action", "click"); err != nil {
+		t.Fatalf("another kind: %v", err)
+	}
+	if err := s.DecideApproval(ctx, work.ID, first.ID, StatusDismissed, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ask(sb.ID, "network", "one-more.example:443"); err != nil {
+		t.Fatalf("after an answer: %v", err)
 	}
 }
 

@@ -253,6 +253,10 @@ func (g *Gateway) handle(c net.Conn) {
 		verdict, problem = VerdictDenied, "tracker"
 		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("%s is on the tracker list that Sandbox Studio blocks in browsers. A network rule that allows it lets the browser through.", host))
 		return
+	case errors.Is(err, store.ErrTooManyAsks):
+		verdict, problem = VerdictUndecided, "too many requests wait for approval"
+		g.refuse(c, br, sb.EnvironmentID, host, proto, tooManyAsks(fmt.Sprintf("connecting to %s:%d", host, port)))
+		return
 	case err != nil:
 		problem = err.Error()
 		g.Log.Error("network policy", "sandbox", sb.ID, "host", host, "err", err)

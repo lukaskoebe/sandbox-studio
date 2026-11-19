@@ -41,9 +41,17 @@ func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host str
 		return fmt.Sprintf("%s is on the tracker list that Sandbox Studio blocks in browsers.", host)
 	case errors.Is(err, policy.ErrChromium):
 		return fmt.Sprintf("Sandbox Studio blocks %s %s on %s: Chromium calls it for itself, and no page needs it.", info.Method, info.Path, where)
+	case errors.Is(err, store.ErrTooManyAsks):
+		return tooManyAsks("requests to " + where)
 	}
 	g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
 	return fmt.Sprintf("Sandbox Studio could not decide the request to %s: %v", where, err)
+}
+
+// tooManyAsks is the refusal of a request Studio didn't ask the user about, because the sandbox
+// already has store.MaxWaitingNetwork requests waiting for an answer.
+func tooManyAsks(what string) string {
+	return fmt.Sprintf("Sandbox Studio didn't ask the user about %s: %d of this sandbox's requests already wait for approval. Retry once the user has answered some of them.", what, store.MaxWaitingNetwork)
 }
 
 // carriesPlaceholder reports whether a request holds the placeholder of a secret that host isn't
@@ -97,6 +105,8 @@ func (g *Gateway) ruleRequest(r *http.Request, decider store.Sandbox, host strin
 		return ""
 	case errors.Is(err, policy.ErrDenied), errors.Is(err, policy.ErrDismissed):
 		return fmt.Sprintf("The user turned down %s.", what)
+	case errors.Is(err, store.ErrTooManyAsks):
+		return tooManyAsks(what)
 	}
 	g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
 	return fmt.Sprintf("Sandbox Studio could not check the request %s: %v", what, err)

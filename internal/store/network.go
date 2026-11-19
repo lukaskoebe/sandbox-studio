@@ -436,6 +436,15 @@ type approvalQuerier interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
+// MaxWaitingNetwork is how many network cards one sandbox may have waiting at once.
+const MaxWaitingNetwork = 100
+
+// ErrTooManyAsks refuses a new network card while the sandbox has MaxWaitingNetwork waiting. A
+// sandbox reaches new hosts as fast as it likes, and each one would be a card of its own: past
+// the cap its requests to new hosts are refused until the user answers some. One it already
+// asked about still counts an attempt.
+var ErrTooManyAsks = errors.New("too many network requests are waiting for approval")
+
 func requestApprovalTx(ctx context.Context, tx approvalQuerier, a Approval) (out Approval, created bool, err error) {
 	t := now()
 	const match = "environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind = ? AND subject = ? AND status = 'pending'"
@@ -445,6 +454,17 @@ func requestApprovalTx(ctx context.Context, tx approvalQuerier, a Approval) (out
 		return a, false, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
+		if networkKinds[a.Kind] && a.SandboxID != "" {
+			// Counted over the pending-subject index: the environment, the sandbox and the kind.
+			var waiting int
+			if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM approvals WHERE environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind IN ('network', 'network.request') AND status = 'pending'",
+				a.EnvironmentID, a.SandboxID).Scan(&waiting); err != nil {
+				return a, false, err
+			}
+			if waiting >= MaxWaitingNetwork {
+				return a, false, ErrTooManyAsks
+			}
+		}
 		_, err = tx.ExecContext(ctx, "INSERT INTO approvals (id, environment_id, sandbox_id, kind, subject, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			NewID(), a.EnvironmentID, nullable(a.SandboxID), a.Kind, a.Subject, string(a.Payload), t, t)
 		if err != nil {

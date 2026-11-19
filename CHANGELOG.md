@@ -17,6 +17,11 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A sandbox has at most 100 network requests waiting for you. Past that, a request to a new host
+  is refused at once and says why, instead of adding a card, until you answer some.
+- At the assisted level, the AI reviewer answers at most 60 questions per sandbox an hour; past
+  that, the sandbox's new hosts are asked about as at the ask level, so a sandbox can't run up
+  the model's bill.
 - An app in the preview panel can no longer send Studio's page to another address: the frame
   may run the app, its forms, popups and downloads, but not navigate the window it sits in. A
   link of the app's own that targets the whole window opens in the panel.

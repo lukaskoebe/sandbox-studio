@@ -182,7 +182,11 @@ type Engine struct {
 	holds map[string]*held         // the connections held right now, by approval ID
 
 	reviewMu sync.Mutex
-	reviews  map[string]*question // the reviewer's questions this session, by reviewKey
+	reviews  map[string]*question   // the reviewer's questions this session, by reviewKey
+	asked    map[string][]time.Time // when each sandbox's questions of the last hour were asked
+	spent    map[string]bool        // the sandboxes whose budget ran out, noted in the log once
+	// reviewBudget is how many questions a sandbox may ask in an hour; 0 uses reviewBudget.
+	reviewBudget int
 }
 
 // held is what is holding an approval's request open: its connections, and when the last of

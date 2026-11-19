@@ -65,6 +65,10 @@ const (
 	reviewTaskRunes = 500
 	// maxReviews bounds the answers kept for a session; past it they are forgotten.
 	maxReviews = 10000
+	// reviewBudget is how many questions one sandbox's requests may put to the reviewer in an
+	// hour. Each costs a model call, and a sandbox can reach new hosts as fast as it likes; past
+	// the budget its requests go to the user, as at the ask level.
+	reviewBudget = 60
 )
 
 // question is one question to the reviewer, shared by the connections that arrive while it is open,
@@ -96,6 +100,10 @@ func (e *Engine) reviewWith(ctx context.Context, req Request, teammate, host str
 		e.reviews = map[string]*question{}
 	}
 	rv, seen := e.reviews[key]
+	if !seen && !e.spendReview(req.SandboxID) {
+		e.reviewMu.Unlock()
+		return store.Rule{}, false, nil
+	}
 	if !seen {
 		rv = &question{done: make(chan struct{})}
 		e.reviews[key] = rv
@@ -123,6 +131,35 @@ func (e *Engine) reviewWith(ctx context.Context, req Request, teammate, host str
 	}
 	close(rv.done)
 	return rule, rule.ID != "", nil
+}
+
+// spendReview takes one of the sandbox's questions for the hour, or reports false when it asked
+// its budget's worth in the last hour. Questions that went unanswered count too: they were asked.
+// The caller holds reviewMu.
+func (e *Engine) spendReview(sandboxID string) bool {
+	budget := e.reviewBudget
+	if budget <= 0 {
+		budget = reviewBudget
+	}
+	t := e.now()
+	recent := e.asked[sandboxID]
+	for len(recent) > 0 && t.Sub(recent[0]) >= time.Hour {
+		recent = recent[1:]
+	}
+	if len(recent) >= budget {
+		e.asked[sandboxID] = recent
+		if !e.spent[sandboxID] {
+			e.spent[sandboxID] = true
+			e.log().Info("network reviewer: the sandbox asked its hourly budget's worth; the user decides its new hosts for now", "sandbox", sandboxID, "budget", budget)
+		}
+		return false
+	}
+	if e.asked == nil {
+		e.asked, e.spent = map[string][]time.Time{}, map[string]bool{}
+	}
+	e.asked[sandboxID] = append(recent, t)
+	delete(e.spent, sandboxID)
+	return true
 }
 
 // liveRule returns the rule that decides req now, if there is one, for a connection that waited on

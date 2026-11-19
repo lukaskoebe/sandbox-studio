@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -303,5 +304,42 @@ func TestReviewerAsksOncePerHostWhileAnswering(t *testing.T) {
 	}
 	if rv.calls() != 1 {
 		t.Errorf("%d questions for one host", rv.calls())
+	}
+}
+
+// A sandbox puts a budget's worth of questions to the reviewer in an hour; past it, its new hosts
+// go to the user, and another sandbox still has its own. The budget comes back as the hour passes.
+func TestReviewerHasAnHourlyBudgetPerSandbox(t *testing.T) {
+	e, env, sb, rv, now := reviewerEngine(t)
+	e.reviewBudget = 3
+	for i := range 3 {
+		if _, err := decideAt(e, sb, fmt.Sprintf("host%d.example.org", i), 443); !errors.Is(err, ErrUndecided) {
+			t.Fatalf("question %d: %v", i, err)
+		}
+		*now = now.Add(time.Minute)
+	}
+	if _, err := decideAt(e, sb, "host3.example.org", 443); !errors.Is(err, ErrUndecided) || rv.calls() != 3 {
+		t.Fatalf("past the budget: %v, %d questions; want the user to decide without a question", err, rv.calls())
+	}
+	if pending, _ := e.Store.Approvals(context.Background(), env.ID, store.StatusPending, 10); len(pending) != 4 {
+		t.Errorf("%d cards wait, want 4: the reviewer's asks and the one past the budget", len(pending))
+	}
+
+	other, err := e.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "other", CPUs: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	setPrompt(t, e.Store, env.ID, other.ID, "install the project's dependencies")
+	if _, err := decideAt(e, other, "host4.example.org", 443); !errors.Is(err, ErrUndecided) || rv.calls() != 4 {
+		t.Fatalf("another sandbox: %v, %d questions; it has a budget of its own", err, rv.calls())
+	}
+
+	// An hour after the first question, one comes back.
+	*now = now.Add(57 * time.Minute)
+	if _, err := decideAt(e, sb, "host5.example.org", 443); !errors.Is(err, ErrUndecided) || rv.calls() != 5 {
+		t.Fatalf("an hour later: %v, %d questions", err, rv.calls())
+	}
+	if _, err := decideAt(e, sb, "host6.example.org", 443); !errors.Is(err, ErrUndecided) || rv.calls() != 5 {
+		t.Fatalf("only one came back: %v, %d questions", err, rv.calls())
 	}
 }

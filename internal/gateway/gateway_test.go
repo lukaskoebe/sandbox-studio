@@ -238,6 +238,28 @@ func TestHTTPRefusals(t *testing.T) {
 	}
 }
 
+// A connection Studio didn't ask about, because the sandbox has too many cards waiting, is
+// refused with why, and the log keeps it as undecided.
+func TestHTTPRefusalWhenTooManyWait(t *testing.T) {
+	h := newHarness(t, "")
+	h.policy.errs = map[string]error{"busy.example": store.ErrTooManyAsks}
+	c, err := h.dial(t, Password([]byte("key"), "sb1"), "192.0.2.1:80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Write([]byte("GET / HTTP/1.1\r\nHost: busy.example:80\r\nUser-Agent: test\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := io.ReadAll(c)
+	c.Close()
+	if want := "100 of this sandbox's requests already wait for approval"; !strings.HasPrefix(string(resp), "HTTP/1.1 403 ") || !strings.Contains(string(resp), want) {
+		t.Errorf("got %q", resp)
+	}
+	if log := h.gw.Conns.List("sb1"); len(log) != 1 || log[0].Verdict != VerdictUndecided {
+		t.Fatalf("connection log: %+v", log)
+	}
+}
+
 func TestIPWithoutNameAndDomainTargets(t *testing.T) {
 	h := newHarness(t, "hi")
 	c, err := h.dial(t, Password([]byte("key"), "sb1"), "203.0.113.9:5432")
