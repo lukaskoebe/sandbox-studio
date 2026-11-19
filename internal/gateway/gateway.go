@@ -100,6 +100,48 @@ type Gateway struct {
 
 	refusedMu  sync.Mutex
 	refusedLog map[string]time.Time // when a refused lookup was last logged, by sandbox and name
+
+	// MaxConns is how many connections one sandbox may have open through the gateway; 0 uses
+	// maxConns. It is read under connsMu.
+	MaxConns int
+	connsMu  sync.Mutex
+	open     map[string]int       // each sandbox's open connections
+	full     map[string]time.Time // when a sandbox at MaxConns was last noted in the log
+}
+
+// maxConns is how many connections one sandbox may have open at once. Each takes two of
+// Studio's file descriptors, so a sandbox that opens connections and never closes them would
+// otherwise run Studio out of them, for every sandbox. A busy build stays far below it.
+const maxConns = 2048
+
+// admit counts a connection of the sandbox as open, unless it has its limit open already. The
+// returned function closes it.
+func (g *Gateway) admit(sandboxID string) (release func(), ok bool) {
+	g.connsMu.Lock()
+	defer g.connsMu.Unlock()
+	limit := g.MaxConns
+	if limit <= 0 {
+		limit = maxConns
+	}
+	if g.open == nil {
+		g.open, g.full = map[string]int{}, map[string]time.Time{}
+	}
+	if g.open[sandboxID] >= limit {
+		if time.Since(g.full[sandboxID]) >= time.Minute {
+			g.full[sandboxID] = time.Now()
+			g.Log.Warn("gateway: the sandbox has its limit of connections open; refusing more until some close", "sandbox", sandboxID, "limit", limit) // at most once a minute
+		}
+		return nil, false
+	}
+	g.open[sandboxID]++
+	return func() {
+		g.connsMu.Lock()
+		defer g.connsMu.Unlock()
+		if g.open[sandboxID]--; g.open[sandboxID] <= 0 {
+			delete(g.open, sandboxID)
+			delete(g.full, sandboxID)
+		}
+	}, true
 }
 
 // ErrNoNetwork is returned for sandboxes created before Studio routed their traffic.
@@ -146,19 +188,40 @@ func Password(key []byte, sandboxID string) string {
 // started.
 func PasswordEnv(sandboxID string) string { return "STUDIO_GW_" + strings.ToUpper(sandboxID) }
 
-// Serve accepts connections until l is closed.
+// Serve accepts connections until l is closed. Any other failure to accept, such as running out
+// of file descriptors, is waited out as net/http does: from 5 ms, doubling up to a second, and
+// logged once per streak, so the gateway never stops for good while Studio runs.
 func (g *Gateway) Serve(l net.Listener) error {
+	var delay time.Duration
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			return err
+			if delay == 0 {
+				delay = 5 * time.Millisecond
+				g.Log.Warn("gateway: accepting a connection failed; trying again", "err", err)
+			} else {
+				delay = min(2*delay, time.Second)
+			}
+			time.Sleep(delay)
+			continue
+		}
+		if delay != 0 {
+			g.Log.Info("gateway: accepting connections again")
+			delay = 0
 		}
 		go g.handle(c)
 	}
 }
+
+// socksOpen and socksFailed are the replies to a CONNECT: the connection is open, or the
+// gateway can't take it (a general failure).
+var (
+	socksOpen   = []byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}
+	socksFailed = []byte{5, 1, 0, 1, 0, 0, 0, 0, 0, 0}
+)
 
 // Sniff timeouts: web ports always speak first; on other ports a server may speak first
 // (SSH, SMTP), so wait only briefly, and barely at all when DNS already gave a name.
@@ -175,6 +238,21 @@ func (g *Gateway) handle(c net.Conn) {
 	sb, target, err := g.handshake(c, br)
 	if err != nil {
 		g.Log.Debug("socks handshake", "remote", c.RemoteAddr(), "err", err)
+		return
+	}
+	release, ok := g.admit(sb.ID)
+	if !ok {
+		_, _ = c.Write(socksFailed)
+		host := target.domain
+		if host == "" {
+			host = target.addr.String()
+		}
+		entry := g.Conns.add(sb.ID, Conn{Host: host, Port: int(target.port), Address: target.String(), Source: "socks"})
+		g.Conns.finish(entry, VerdictFailed, "", "too many connections open", 0, 0)
+		return
+	}
+	defer release()
+	if _, err := c.Write(socksOpen); err != nil {
 		return
 	}
 	c.SetDeadline(time.Time{})
@@ -447,8 +525,8 @@ func (t socksTarget) String() string {
 
 var errAuth = errors.New("authentication failed")
 
-// handshake authenticates the sandbox and reads its CONNECT request. On success the
-// client has been told the connection is open, so it starts sending.
+// handshake authenticates the sandbox and reads its CONNECT request. On success the client
+// waits for the reply to the CONNECT, which handle sends: socksOpen once it may start sending.
 func (g *Gateway) handshake(c net.Conn, br *bufio.Reader) (store.Sandbox, socksTarget, error) {
 	var sb store.Sandbox
 	var t socksTarget
@@ -526,8 +604,7 @@ func (g *Gateway) handshake(c net.Conn, br *bufio.Reader) (store.Sandbox, socksT
 		return sb, t, err
 	}
 	t.port = binary.BigEndian.Uint16(port)
-	_, err = c.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0})
-	return sb, t, err
+	return sb, t, nil
 }
 
 func readCredentials(br *bufio.Reader) (user, pass string, err error) {

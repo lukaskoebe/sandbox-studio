@@ -48,10 +48,16 @@ failing), and software that refuses private addresses by itself may count `198.1
 
 ## Gateway pipeline
 
-Per connection (`gateway.go`):
+Per connection (`gateway.go`). A failure to accept one (out of file descriptors, say) never
+stops the gateway: it tries again after 5 ms, doubling up to a second, and logs once per streak.
 
 1. Identify the sandbox from its SOCKS5 user (the sandbox ID) and password (derived from
-   the gateway key, which only Studio and microsandbox know).
+   the gateway key, which only Studio and microsandbox know). A sandbox has at most 2048
+   connections open through the gateway (`maxConns`): each takes two of Studio's file
+   descriptors, and one sandbox shouldn't run Studio out of them for all. Past that the CONNECT
+   gets a general failure, the Connections list shows it failed with "too many connections
+   open", and the log says so at most once a minute. Only then does the client hear that the
+   connection is open.
 2. Name the destination: the SOCKS domain if the client sent one, else the sandbox's DNS
    map, else sniff TLS SNI or the HTTP Host header. Sniffing waits up to 5 s on ports 80 and
    443, 300 ms when the name is already known, 1 s otherwise, because some protocols (SSH)

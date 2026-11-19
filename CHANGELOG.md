@@ -17,6 +17,10 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A sandbox has at most 2048 connections open through Studio, so one that opens connections
+  and never closes them can't run Studio out of file descriptors for every sandbox. If
+  accepting a connection fails anyway, Studio keeps trying instead of cutting every sandbox's
+  network off until it restarts.
 - A sandbox has at most 100 network requests waiting for you. Past that, a request to a new host
   is refused at once and says why, instead of adding a card, until you answer some.
 - At the assisted level, the AI reviewer answers at most 60 questions per sandbox an hour; past

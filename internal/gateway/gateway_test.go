@@ -260,6 +260,87 @@ func TestHTTPRefusalWhenTooManyWait(t *testing.T) {
 	}
 }
 
+// A sandbox has at most MaxConns connections open: the next one fails at the SOCKS reply and is
+// logged, and once one closes there is room again.
+func TestASandboxHasAtMostMaxConnsOpen(t *testing.T) {
+	h := newHarness(t, "hi")
+	h.gw.connsMu.Lock()
+	h.gw.MaxConns = 2
+	h.gw.connsMu.Unlock()
+	open := func() (net.Conn, error) {
+		// A named target waits only briefly for the client to speak first.
+		c, err := h.dial(t, Password([]byte("key"), "sb1"), "github.com:9418")
+		if err != nil {
+			return nil, err
+		}
+		buf := make([]byte, 2)
+		if _, err := io.ReadFull(c, buf); err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}
+	first, err := open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	if c, err := open(); err == nil {
+		c.Close()
+		t.Fatal("a third connection opened past the limit of 2")
+	}
+	if log := h.gw.Conns.List("sb1"); len(log) != 3 || log[0].Verdict != VerdictFailed || log[0].Error != "too many connections open" {
+		t.Fatalf("connection log: %+v", log)
+	}
+	first.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		c, err := open()
+		if err == nil {
+			c.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no room after a connection closed: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// failingListener fails to accept a number of times, then says it is closed.
+type failingListener struct {
+	net.Listener
+	failures, calls int
+}
+
+func (l *failingListener) Accept() (net.Conn, error) {
+	l.calls++
+	if l.calls <= l.failures {
+		return nil, errors.New("accept: too many open files")
+	}
+	return nil, net.ErrClosed
+}
+
+// Serve waits out failures to accept, backing off, and stops only when its listener closes.
+func TestServeWaitsOutAcceptFailures(t *testing.T) {
+	g := &Gateway{Log: slog.New(slog.DiscardHandler)}
+	l := &failingListener{failures: 3}
+	start := time.Now()
+	if err := g.Serve(l); err != nil {
+		t.Fatalf("Serve: %v", err)
+	}
+	if l.calls != 4 {
+		t.Fatalf("%d accepts, want 3 failures and the close", l.calls)
+	}
+	if d := time.Since(start); d < 35*time.Millisecond {
+		t.Fatalf("retried after %v; want 5, 10 and 20 ms of backoff", d)
+	}
+}
+
 func TestIPWithoutNameAndDomainTargets(t *testing.T) {
 	h := newHarness(t, "hi")
 	c, err := h.dial(t, Password([]byte("key"), "sb1"), "203.0.113.9:5432")
