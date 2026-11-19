@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/acp/acptest"
@@ -512,5 +513,48 @@ func TestRecoverDismissesPermissions(t *testing.T) {
 	}
 	if got, _ := f.s.Store.ChatItem(ctx, f.chat.ID, question.ID); got.Status != StatusCancelled || ItemView(got).Question.Action != acp.ElicitCancel {
 		t.Fatalf("question %+v", got)
+	}
+}
+
+// A permission request shows what it would run: the command, which a title written by the
+// model may not tell, or else the input. It says so when the command was too long to show.
+func TestChatPermissionShowsTheCommand(t *testing.T) {
+	long := strings.Repeat("é", maxPermissionInput)
+	for _, c := range []struct{ name, input, want string }{
+		{"command", `{"command":"rm -rf build","description":"Clean the build"}`, "rm -rf build"},
+		{"argv", `{"command":["git","push","--force"]}`, "git push --force"},
+		{"json", `{"url": "https://example.com", "n": 2}`, `{"url":"https://example.com","n":2}`},
+		{"none", ``, ""},
+		{"long", `{"command":"` + long + `"}`, long},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			raw := ""
+			if c.input != "" {
+				raw = `,"rawInput":` + c.input
+			}
+			step := `{"toolCall":{"toolCallId":"t1","title":"Clean up","kind":"execute"` + raw + `},
+				"options":[{"optionId":"a1","name":"Allow","kind":"allow_once"}]}`
+			agent := &acptest.Agent{Turns: []acptest.Turn{{Steps: []acptest.Step{{Permission: json.RawMessage(step)}}}}}
+			f := newFixture(t, agent)
+			turn := f.send(t, "clean")
+			a := f.pendingApproval(t)
+			var p PermissionPayload
+			if err := json.Unmarshal(a.Payload, &p); err != nil {
+				t.Fatal(err)
+			}
+			clipped := c.name == "long"
+			if (clipped && (!p.InputClipped || len(p.Input) > maxPermissionInput || !utf8.ValidString(p.Input) || !strings.HasPrefix(c.want, p.Input))) ||
+				(!clipped && (p.Input != c.want || p.InputClipped)) {
+				t.Fatalf("payload input %q (%d bytes), clipped %v", p.Input, len(p.Input), p.InputClipped)
+			}
+			k, _ := integrations.Set{f.s}.Kind(ApprovalKind)
+			if err := k.Decide(context.Background(), a, integrations.Decision{Action: integrations.Allow}); err != nil {
+				t.Fatal(err)
+			}
+			_, log := f.wait(t, turn.ID)
+			if it := log.Items[1]; it.Permission == nil || it.Permission.Input != p.Input || it.Permission.InputClipped != p.InputClipped {
+				t.Fatalf("item %+v", it.Permission)
+			}
+		})
 	}
 }

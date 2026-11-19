@@ -17,6 +17,8 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A teammate's request to run a command shows the command itself, not only the agent's title
+  for it, in the chat and in the requests stack. A very long one says it was cut short.
 - A click or a fill you allowed in a teammate's browser runs only on the element the card was
   for, on the site it named: a page that swapped the button under the same address, or went
   to another site while you decided, is refused, and the teammate looks again.

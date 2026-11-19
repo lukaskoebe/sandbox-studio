@@ -5751,6 +5751,8 @@ export interface components {
             size: number;
         };
         PermissionBody: {
+            input?: string;
+            inputClipped?: boolean;
             options: components["schemas"]["PermissionOption"][] | null;
             outcome?: string;
             toolCall: components["schemas"]["ToolCallUpdate"];
@@ -5764,6 +5766,9 @@ export interface components {
             chatId: string;
             chatTitle: string;
             diffs?: components["schemas"]["DiffSummary"][] | null;
+            /** @description What the tool call would run: its command, or its input as JSON, clipped to 4 KB */
+            input?: string;
+            inputClipped?: boolean;
             itemId: string;
             locations?: components["schemas"]["ToolCallLocation"][] | null;
             options: components["schemas"]["PermissionOption"][] | null;

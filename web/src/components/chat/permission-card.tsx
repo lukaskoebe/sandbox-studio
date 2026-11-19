@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ShieldCheckIcon } from "@phosphor-icons/react"
 import { useDecideApproval } from "@/components/approval-decision"
+import { CodeBlock } from "@/components/chat/markdown"
 import { Diff, Locations, toolKind } from "@/components/chat/tool-call-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -95,6 +96,43 @@ const outcomes: Record<string, string> = {
   cancelled: "No longer needed",
 }
 
+/**
+ * What a permission request would run: its command, or else its input. The title is the
+ * agent's own words, and only this says what Allow runs. It wraps rather than scrolls
+ * sideways, so the end of a long command can't hide off screen.
+ */
+export function PermissionInput({
+  input,
+  clipped,
+  kind,
+}: {
+  input?: string
+  clipped?: boolean
+  kind?: string
+}) {
+  if (!input) {
+    if (kind !== "execute") return null
+    return (
+      <p className="text-muted-foreground">
+        The agent didn't say which command it would run.
+      </p>
+    )
+  }
+  return (
+    <div className="grid min-w-0 gap-1">
+      <CodeBlock
+        text={input}
+        className="max-h-40 overflow-y-auto break-all whitespace-pre-wrap"
+      />
+      {clipped && (
+        <p className="text-caption text-muted-foreground">
+          Only the first 4 KB is shown. Allow runs all of it.
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** A permission request inside the chat: what the agent wants to do, and the decision. */
 export function PermissionCard({
   env,
@@ -135,6 +173,11 @@ export function PermissionCard({
           </Badge>
         )}
       </div>
+      <PermissionInput
+        input={p.input}
+        clipped={p.inputClipped}
+        kind={tc.kind}
+      />
       {(diffs.length > 0 || (tc.locations?.length ?? 0) > 0) && (
         <ScrollArea className="min-h-0" viewportClassName="max-h-60">
           <div className="grid min-w-0 gap-2">

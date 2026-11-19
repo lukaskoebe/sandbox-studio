@@ -6801,6 +6801,12 @@
       "PermissionBody": {
         "additionalProperties": false,
         "properties": {
+          "input": {
+            "type": "string"
+          },
+          "inputClipped": {
+            "type": "boolean"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/PermissionOption"
@@ -6860,6 +6866,13 @@
               "array",
               "null"
             ]
+          },
+          "input": {
+            "description": "What the tool call would run: its command, or its input as JSON, clipped to 4 KB",
+            "type": "string"
+          },
+          "inputClipped": {
+            "type": "boolean"
           },
           "itemId": {
             "type": "string"

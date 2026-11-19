@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -57,7 +59,54 @@ type PermissionPayload struct {
 	ToolKind     string                 `json:"toolKind,omitempty"`
 	Locations    []acp.ToolCallLocation `json:"locations,omitempty"`
 	Diffs        []DiffSummary          `json:"diffs,omitempty"`
+	Input        string                 `json:"input,omitempty" doc:"What the tool call would run: its command, or its input as JSON, clipped to 4 KB"`
+	InputClipped bool                   `json:"inputClipped,omitempty"`
 	Options      []acp.PermissionOption `json:"options"`
+}
+
+// maxPermissionInput is the most of a tool call's input a permission request shows.
+const maxPermissionInput = 4 << 10
+
+// permissionInput is what tool call tc would run, as the user sees it: its command when the
+// input names one (a string, or argv joined by spaces), else the input as compact JSON. A
+// call that shows its changes as diffs shows no JSON: that would repeat the file bodies.
+func permissionInput(tc acp.ToolCallUpdate) (string, bool) {
+	raw := tc.RawInput
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", false
+	}
+	var in struct {
+		Command json.RawMessage `json:"command"`
+	}
+	text := ""
+	if json.Unmarshal(raw, &in) == nil && len(in.Command) > 0 {
+		var s string
+		var argv []string
+		switch {
+		case json.Unmarshal(in.Command, &s) == nil:
+			text = s
+		case json.Unmarshal(in.Command, &argv) == nil:
+			text = strings.Join(argv, " ")
+		}
+	}
+	if text == "" && slices.ContainsFunc(tc.Content, func(c acp.ToolCallContent) bool { return c.Type == "diff" }) {
+		return "", false
+	}
+	if text == "" {
+		var b bytes.Buffer
+		if json.Compact(&b, raw) != nil {
+			return "", false
+		}
+		text = b.String()
+	}
+	if len(text) <= maxPermissionInput {
+		return text, false
+	}
+	cut := maxPermissionInput
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut], true
 }
 
 // DiffSummary is one file a tool call would change.
@@ -98,6 +147,7 @@ func (s *Service) notifyApprovals(envID string) {
 // agent is blocked, not a client that gives up.
 func (l *live) RequestPermission(ctx context.Context, req acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	tc := req.ToolCall
+	input, clipped := permissionInput(tc)
 	tc.RawInput = nil
 	if !validOptions(req.Options) || !permissionBodyWithinLimit(tc, req.Options) {
 		l.s.log().Warn("chat: invalid or oversized permission request", "chat", l.chatID)
@@ -109,7 +159,7 @@ func (l *live) RequestPermission(ctx context.Context, req acp.RequestPermissionR
 		l.mu.Unlock()
 		return acp.Cancelled(), nil
 	}
-	e, ch := r.f.add(KindPermission, &PermissionBody{ToolCall: tc, Options: req.Options})
+	e, ch := r.f.add(KindPermission, &PermissionBody{ToolCall: tc, Input: input, InputClipped: clipped, Options: req.Options})
 	e.status = StatusPending
 	l.write(r, ch)
 	a := &ask{r: r, e: e, perm: make(chan acp.RequestPermissionResponse, 1)}
@@ -161,6 +211,7 @@ func (s *Service) raise(ctx context.Context, l *live, r *run, e *entry, req acp.
 	}
 	p := PermissionPayload{ChatID: c.ID, ChatTitle: c.Title, ItemID: e.id, Title: req.ToolCall.Title,
 		ToolKind: req.ToolCall.Kind, Locations: req.ToolCall.Locations, Options: req.Options}
+	p.Input, p.InputClipped = permissionInput(req.ToolCall)
 	if sb, err := s.Store.Sandbox(ctx, c.EnvironmentID, c.SandboxID); err == nil {
 		p.SandboxName = sb.Name
 	}

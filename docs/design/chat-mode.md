@@ -270,6 +270,13 @@ the turn `interrupted`.
   - Its payload: chat ID and title, sandbox and teammate name, the tool call's title, kind
     and locations, a diff summary (paths and line counts, never file bodies), and the
     offered options (`optionId`, `name`, `kind`).
+  - It also carries what the call would run, as `input` (`permissionInput`): its command
+    when the raw input names one (a string, or argv joined by spaces), else the input as
+    compact JSON, which a call with diffs leaves out. It's clipped to 4 KB, with
+    `inputClipped` set. The title is the model's own words (Claude's Bash puts its
+    description first), so both cards show the command in a wrapping code block, and an
+    `execute` call without one says the agent didn't say. The chat's permission item keeps
+    the same two fields; Studio keeps no raw input.
   - `approvalView` decodes it into `ApprovalView.ChatPermission`, and `approval-kinds.ts`
     gets `"chat.permission"`:
     - Title: "Agent permission".

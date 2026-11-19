@@ -4,6 +4,7 @@ import { addTeammate, expect, sandboxName, test } from "./fixtures"
 // (internal/e2e/acp.go) instead of the harness's adapter. Every prompt plays the same turn.
 const greeting = "Hello from the scripted agent. I need to run the tests first."
 const tool = "Run make test"
+const command = "make test 2>&1 | tee test.log"
 const done = "The tests passed."
 
 test("a chat's agent answers, asks for a permission and goes on once allowed", async ({
@@ -33,6 +34,8 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   await expect(main).toContainText(greeting)
   await expect(main).toContainText(`${name} asks before going on`)
   await expect(main).toContainText(tool)
+  // The card shows what Allow runs, not only the agent's title for it.
+  await expect(main.locator("pre", { hasText: command })).toBeVisible()
   // The agent waits for the answer.
   await expect(main).not.toContainText(done)
 

@@ -18,7 +18,9 @@ import (
 const (
 	ACPGreeting = "Hello from the scripted agent. I need to run the tests first."
 	ACPTool     = "Run make test"
-	ACPDone     = "The tests passed."
+	// ACPCommand is what the tool call would run, which its permission card shows.
+	ACPCommand = "make test 2>&1 | tee test.log"
+	ACPDone    = "The tests passed."
 	// ACPTable follows ACPDone in the same message: a markdown table, with a pipe in a code span.
 	ACPTable = "\n\n| Package | Result |\n| --- | :---: |\n| `./... | tee` | ok |\n"
 	// ACPPreview ends the message with a link to a server in the sandbox, as agents write them.
@@ -49,7 +51,7 @@ func acpTurns(n int) []acptest.Turn {
 			{Update: text(ACPGreeting)},
 			{Update: raw(map[string]any{"sessionUpdate": "tool_call", "toolCallId": id, "title": ACPTool, "kind": "execute", "status": "pending"})},
 			{Permission: raw(map[string]any{
-				"toolCall": map[string]any{"toolCallId": id, "title": ACPTool, "kind": "execute"},
+				"toolCall": map[string]any{"toolCallId": id, "title": ACPTool, "kind": "execute", "rawInput": map[string]any{"command": ACPCommand}},
 				"options": []map[string]string{
 					{"optionId": "allow", "name": "Allow", "kind": "allow_once"},
 					{"optionId": "reject", "name": "Reject", "kind": "reject_once"},

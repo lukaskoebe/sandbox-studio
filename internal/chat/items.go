@@ -82,8 +82,11 @@ type PlanBody struct {
 
 // PermissionBody is a tool call the agent asks to run; it is also an approval.
 type PermissionBody struct {
-	ToolCall acp.ToolCallUpdate     `json:"toolCall"`
-	Options  []acp.PermissionOption `json:"options"`
+	ToolCall acp.ToolCallUpdate `json:"toolCall"`
+	// Input is what the tool call would run (PermissionPayload.Input): Studio keeps no raw input.
+	Input        string                 `json:"input,omitempty"`
+	InputClipped bool                   `json:"inputClipped,omitempty"`
+	Options      []acp.PermissionOption `json:"options"`
 	// Outcome is the option chosen, empty while pending or when cancelled.
 	Outcome string `json:"outcome,omitempty"`
 }

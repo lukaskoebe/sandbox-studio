@@ -36,7 +36,10 @@ import { GitCredentialDecision } from "@/components/git-credential"
 import { SecretRejectedDecision } from "@/components/secret-rejected"
 import { CredentialIssueDecision } from "@/components/credential-issue"
 import { MemoryShareDecision } from "@/components/memory-sessions"
-import { PermissionDecision } from "@/components/chat/permission-card"
+import {
+  PermissionDecision,
+  PermissionInput,
+} from "@/components/chat/permission-card"
 import { Ident } from "@/components/ident"
 import { ApprovalTip } from "@/components/feature-tip"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
@@ -451,7 +454,12 @@ function ChatPermissionSummary({ approval }: { approval: Approval }) {
   if (!p) return null
   const env = approval.environmentId
   return (
-    <div className="grid gap-2 text-xs">
+    <div className="grid min-w-0 gap-2 text-xs">
+      <PermissionInput
+        input={p.input}
+        clipped={p.inputClipped}
+        kind={p.toolKind}
+      />
       {p.diffs && p.diffs.length > 0 && (
         <ul className="grid gap-0.5 font-mono text-caption text-muted-foreground">
           {p.diffs.slice(0, 3).map((d) => (
