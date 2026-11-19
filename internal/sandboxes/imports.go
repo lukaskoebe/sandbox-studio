@@ -482,9 +482,14 @@ func (m *Manager) recoverImports(ctx context.Context) {
 		if err := m.Store.FinishSandboxImport(ctx, imp.EnvironmentID, imp.ID, store.ImportFailed, "Studio restarted during this import"); err != nil {
 			m.Log.Warn("import recovery", "import", imp.ID, "err", err)
 		}
-		if imp.SandboxID == "" {
-			continue
-		}
+	}
+	// The imports just failed, and earlier ones whose cleanup failed when they did, or at an
+	// earlier start: until removed, a half-made sandbox lists as an ordinary stopped one.
+	stranded, err := m.Store.StrandedSandboxImports(ctx)
+	if err != nil {
+		m.Log.Warn("import recovery", "err", err)
+	}
+	for _, imp := range stranded {
 		sb, err := m.Store.Sandbox(ctx, imp.EnvironmentID, imp.SandboxID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue

@@ -541,6 +541,58 @@ func TestReconcileFailsInterruptedImports(t *testing.T) {
 	}
 }
 
+// A half-made sandbox whose removal failed when its import did stays known as half-made: the
+// next start removes it, and the import's row isn't pruned before that.
+func TestReconcileRetriesStrandedImports(t *testing.T) {
+	f, tf, _ := newImportFixture(t)
+	imp, err := f.store.CreateSandboxImport(f.ctx, f.env.ID, "stranded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range [][2]string{{store.ImportUploading, store.ImportBuilding}, {store.ImportBuilding, store.ImportCreating}} {
+		if err := f.store.AdvanceSandboxImport(f.ctx, f.env.ID, imp.ID, step[0], step[1], ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sb, err := f.store.CreateImportedSandbox(f.ctx, imp.ID, store.Sandbox{EnvironmentID: f.env.ID, Name: "stranded",
+		CPUs: 1, MemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf.setStatus(VMName(sb), runtime.StatusStopped)
+	tf.fail("remove:"+VMName(sb), errors.New("the VM is busy"))
+
+	if err := f.manager.Reconcile(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.Sandbox(f.ctx, f.env.ID, sb.ID); err != nil {
+		t.Fatalf("the sandbox went without its VM: %v", err)
+	}
+	if err := f.store.PruneSandboxImports(f.ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.store.SandboxImport(f.ctx, f.env.ID, imp.ID); err != nil || got.State != store.ImportFailed || got.SandboxID != sb.ID {
+		t.Fatalf("stranded import = %+v, %v", got, err)
+	}
+
+	tf.clearFailure("remove:" + VMName(sb))
+	if err := f.manager.Reconcile(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.Sandbox(f.ctx, f.env.ID, sb.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("half-made sandbox remains: %v", err)
+	}
+	if tf.hasVM(VMName(sb)) {
+		t.Fatal("its VM remains")
+	}
+	if err := f.store.PruneSandboxImports(f.ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.SandboxImport(f.ctx, f.env.ID, imp.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the import's row outlived its cleanup: %v", err)
+	}
+}
+
 func TestImportNameSuffix(t *testing.T) {
 	long := strings.Repeat("a", 39) + "b"
 	for _, tc := range []struct {

@@ -68,7 +68,18 @@ func (s *Store) SandboxImport(ctx context.Context, envID, id string) (SandboxImp
 // ActiveSandboxImports lists imports in a non-terminal state, across environments, for
 // startup recovery.
 func (s *Store) ActiveSandboxImports(ctx context.Context) ([]SandboxImport, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+sandboxImportCols+" FROM sandbox_imports WHERE state NOT IN (?, ?) ORDER BY created_at, id", ImportReady, ImportFailed)
+	return s.sandboxImports(ctx, "state NOT IN (?, ?)", ImportReady, ImportFailed)
+}
+
+// StrandedSandboxImports lists failed imports that still name their sandbox. Removing a
+// failed import's half-made sandbox clears the link (ON DELETE SET NULL), so these are the
+// ones whose cleanup failed; startup recovery tries again.
+func (s *Store) StrandedSandboxImports(ctx context.Context) ([]SandboxImport, error) {
+	return s.sandboxImports(ctx, "state = ? AND sandbox_id IS NOT NULL", ImportFailed)
+}
+
+func (s *Store) sandboxImports(ctx context.Context, where string, args ...any) ([]SandboxImport, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+sandboxImportCols+" FROM sandbox_imports WHERE "+where+" ORDER BY created_at, id", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +162,11 @@ func (s *Store) FinishSandboxImport(ctx context.Context, envID, id, state, messa
 	return exactlyOneRow(res)
 }
 
-// PruneSandboxImports deletes finished imports last updated before cutoff.
+// PruneSandboxImports deletes finished imports last updated before cutoff. A failed import
+// that still names its sandbox stays until recovery has removed that sandbox, since the row
+// is the only sign the sandbox is half-made.
 func (s *Store) PruneSandboxImports(ctx context.Context, cutoff time.Time) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM sandbox_imports WHERE state IN (?, ?) AND updated_at < ?", ImportReady, ImportFailed, cutoff.Unix())
+	_, err := s.db.ExecContext(ctx, "DELETE FROM sandbox_imports WHERE (state = ? OR (state = ? AND sandbox_id IS NULL)) AND updated_at < ?", ImportReady, ImportFailed, cutoff.Unix())
 	return err
 }
 

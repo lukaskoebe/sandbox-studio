@@ -85,8 +85,11 @@ The states are `uploading`, `building`, `creating`, `importing`, `ready` (with
 
 The staged file is deleted on success and failure. A failure removes the half-made
 sandbox. Error messages never contain host paths. At startup, imports still in progress
-are marked failed, their sandboxes are removed and the staging directory is emptied.
-Statuses older than 7 days are pruned.
+are marked failed, their sandboxes are removed and the staging directory is emptied. A
+half-made sandbox whose removal failed (when its import failed, or at an earlier start) is
+removed then too: a failed import keeps naming its sandbox until it is gone, so it is found
+again. Statuses older than 7 days are pruned, except a failed one that still names its
+sandbox.
 
 ## Environments
 
