@@ -75,14 +75,14 @@ func TestHostGitIdentityForTeammates(t *testing.T) {
 		t.Fatal("no git config")
 		return ""
 	}
-	if got := gitConfig(); !strings.Contains(got, "name = \"Lukas\"\n\temail = lukas@example.com\n") {
+	if got := gitConfig(); !strings.Contains(got, "name = \"Lukas\"\n\temail = \"lukas@example.com\"\n") {
 		t.Fatalf("host identity not used:\n%s", got)
 	}
 
 	// A host without an identity, or with one git config can't hold, leaves the teammate's.
 	for _, id := range []GitIdentity{{Name: "Lukas"}, {Name: `Lukas "the" user`, Email: "lukas@example.com"}} {
 		host = id
-		if got := gitConfig(); !strings.Contains(got, "name = \"Ada L\"\n\temail = ada@agents.invalid\n") {
+		if got := gitConfig(); !strings.Contains(got, "name = \"Ada L\"\n\temail = \"ada@agents.invalid\"\n") {
 			t.Fatalf("host %+v: teammate identity not used:\n%s", id, got)
 		}
 	}
@@ -122,7 +122,7 @@ func TestASandboxWithoutATeammateGetsGitsSetup(t *testing.T) {
 	if f.Path != ".config/git/config" || !f.Block || f.Comment != "# " ||
 		!strings.HasPrefix(f.Content, "# "+agentproto.BlockBegin+"\n") ||
 		!strings.HasSuffix(f.Content, "# "+agentproto.BlockEnd+"\n") ||
-		!strings.Contains(f.Content, "name = \"Lukas\"\n\temail = lukas@example.com\n") ||
+		!strings.Contains(f.Content, "name = \"Lukas\"\n\temail = \"lukas@example.com\"\n") ||
 		!strings.Contains(f.Content, "helper = "+harness.AgentPath+" git-credential") {
 		t.Fatalf("git config = %+v", f)
 	}

@@ -157,7 +157,7 @@ The user sees your task list in the Tasks tab. The `studio` MCP server has tools
 # Managed by Sandbox Studio: rewritten when a session starts.
 [user]
 	name = "Ada Lovelace"
-	email = ada@example.com
+	email = "ada@example.com"
 [credential]
 	helper = /opt/studio/bin/studio-agent git-credential
 	useHttpPath = true

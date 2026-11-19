@@ -197,8 +197,7 @@ func GitConfig(p Teammate, rewrites []GitRewrite) GuestFile {
 	var b strings.Builder
 	b.WriteString("# Managed by Sandbox Studio: rewritten when a session starts.\n")
 	if p.GitName != "" && p.GitEmail != "" {
-		// teammates.CheckGitName and CheckGitEmail refuse quotes, backslashes and newlines.
-		fmt.Fprintf(&b, "[user]\n\tname = %q\n\temail = %s\n", p.GitName, p.GitEmail)
+		fmt.Fprintf(&b, "[user]\n\tname = %s\n\temail = %s\n", gitQuote(p.GitName), gitQuote(p.GitEmail))
 	}
 	// Sandboxes hold no forge credentials. When git wants some, the helper tells Studio, which
 	// offers the user to add a forge for the host (docs/git-review.md); it never answers.
@@ -226,6 +225,32 @@ func GitBlock(p Teammate, rewrites []GitRewrite) GuestFile {
 	f.Content = comment + agentproto.BlockBegin + "\n" + f.Content + comment + agentproto.BlockEnd + "\n"
 	f.Block, f.Comment = true, comment
 	return f
+}
+
+// gitQuote is s as a quoted git config value. Between double quotes git takes any UTF-8 and
+// knows only the escapes \\, \", \n, \t and \b: Go's %q, which writes a no-break space as
+// \u00a0 and the joiner inside an emoji as \u200d, makes a file git refuses to read, and every
+// git command in the sandbox fails with it. Unquoted, a # or ; in an email starts a comment.
+// Other control characters, which the teammate checks refuse anyway, are left out.
+func gitQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '\\' || r == '"':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r < 0x20 || r == 0x7f:
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // plainValue reports whether s can be written between double quotes in a git config file

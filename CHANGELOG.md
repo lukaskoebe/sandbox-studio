@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- A git name with a no-break space or a joined emoji (a teammate named after its display name,
+  or your own name on a computer without a teammate) no longer breaks every git command in the
+  sandbox, and an email with # or ; in it is no longer cut short.
 - A sandbox has at most 2048 connections open through Studio, so one that opens connections
   and never closes them can't run Studio out of file descriptors for every sandbox. If
   accepting a connection fails anyway, Studio keeps trying instead of cutting every sandbox's

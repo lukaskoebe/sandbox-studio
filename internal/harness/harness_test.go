@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -252,6 +253,34 @@ func TestGitConfig(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("rewrites without an identity wrote no git config")
+	}
+}
+
+// git reads back the identity as it was given: a no-break space, a joined emoji, a quote and a
+// backslash in the name, and a # in the email, which unquoted would start a comment.
+func TestGitConfigIdentityReadsBackInGit(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git")
+	}
+	for _, id := range []Teammate{
+		{GitName: "Ada\u00a0Lovelace \U0001F469\u200d\U0001F4BB", GitEmail: "ada#1@example.com"},
+		{GitName: `Ada "the" \ Lovelace`, GitEmail: "ada@example.com"},
+		{GitName: "Ada", GitEmail: "ada;x@example.com"},
+	} {
+		path := filepath.Join(t.TempDir(), "config")
+		if err := os.WriteFile(path, []byte(GitConfig(id, nil).Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for key, want := range map[string]string{"user.name": id.GitName, "user.email": id.GitEmail} {
+			out, err := exec.Command(git, "config", "-f", path, key).Output()
+			if err != nil {
+				t.Fatalf("git can't read %s of %q: %v", key, id.GitName, err)
+			}
+			if got := strings.TrimSuffix(string(out), "\n"); got != want {
+				t.Errorf("%s = %q, want %q", key, got, want)
+			}
+		}
 	}
 }
 
