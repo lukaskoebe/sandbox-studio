@@ -97,6 +97,12 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     connections with the driving sandbox's rules. Domain approvals name that sandbox.
   - While the user drives (takeover), the browser VM's own rules apply: its teammate's rules
     plus the environment's.
+  - A connection is decided once, by whoever drives when it opens, and a browser keeps its
+    connections open. So when that changes (another agent drives, the user takes over or
+    hands back), the gateway's `Turns` hook ends the connections opened before: each one's
+    next request is refused with a 421 and `Connection: close` (a GOAWAY on HTTP/2), and
+    the browser sends it again on a new connection. A login the user's turn sent never
+    rides on into the agent's.
   - The tracker list applies to the VM's requests before any approval (see
     [network](network.md#trackers)). The environment's security level decides the requests no
     rule covers after that, and never allows a request that carries a placeholder (see

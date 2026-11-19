@@ -134,9 +134,12 @@ type state struct {
 	env, teammate string
 	run           chan struct{} // one command at a time, in any of the VM's sessions
 
-	vm       string // the browser sandbox's ID, once known
-	session  string // groups the action log of one run of the VM
-	driver   store.Sandbox
+	vm      string // the browser sandbox's ID, once known
+	session string // groups the action log of one run of the VM
+	driver  store.Sandbox
+	// turns counts changes of who drives: an agent taking the seat from another, the user
+	// taking over or handing back. The gateway ends connections opened before one.
+	turns    uint64
 	fwdFrom  string // the agent sandbox whose ports the VM forwards to, and those ports
 	fwdPorts []int
 	lastUsed time.Time
@@ -256,6 +259,20 @@ func (s *Service) Driver(ctx context.Context, sb store.Sandbox) store.Sandbox {
 		return sb
 	}
 	return cur
+}
+
+// Turns is gateway.Gateway.Turns: a count that changes whenever who drives browser VM sb
+// changes, so connections decided by the one before can end.
+func (s *Service) Turns(sb store.Sandbox) uint64 {
+	if sb.Kind != store.SandboxKindBrowser {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if st := s.states[sb.TeammateID]; st != nil {
+		return st.turns
+	}
+	return 0
 }
 
 // pageFor finds a session: "" is the profile, else an ephemeral session or nil.

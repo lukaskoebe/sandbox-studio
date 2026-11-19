@@ -315,3 +315,69 @@ func TestBrowserLoginsAreSentAsBasicCredentials(t *testing.T) {
 		t.Errorf("a subresource was reported: %v", asks[n:])
 	}
 }
+
+// A browser keeps its connections open. One opened while the user drove, which sends the
+// user's logins and follows the teammate's rules, ends once an agent takes the seat: its next
+// request is refused with a 421, which a browser sends again on a new connection, and that
+// one is the agent's.
+func TestABrowserConnectionEndsWhenWhoDrivesChanges(t *testing.T) {
+	h := newBrowserHarness(t)
+	agent := h.gw.Sandbox
+	h.gw.Sandbox = func(ctx context.Context, id string) (store.Sandbox, error) {
+		if id == "vm1" {
+			return store.Sandbox{ID: "vm1", EnvironmentID: h.envID, Name: "browser-dev", Kind: store.SandboxKindBrowser, TeammateID: "tm1"}, nil
+		}
+		return agent(ctx, id)
+	}
+	var mu sync.Mutex
+	var driving bool
+	var turns uint64
+	h.gw.Driver = func(_ context.Context, sb store.Sandbox) store.Sandbox {
+		mu.Lock()
+		defer mu.Unlock()
+		if driving {
+			return store.Sandbox{ID: "sb1", EnvironmentID: h.envID, Name: "dev"}
+		}
+		return sb
+	}
+	h.gw.Turns = func(store.Sandbox) uint64 {
+		mu.Lock()
+		defer mu.Unlock()
+		return turns
+	}
+	h.gw.BrowserLogins = func(context.Context, string, string) ([]secrets.BrowserLogin, error) {
+		return []secrets.BrowserLogin{{Name: "STAGING", Hosts: []string{"splice.example"}, Username: "ada", Value: []byte("correct-horse")}}, nil
+	}
+	c := h.clientAs(t, "vm1", h.envCA)
+	get(t, c, "https://splice.example/a")
+	if got := h.lastSeen(t).Header.Get("Authorization"); got == "" {
+		t.Fatal("the user's page went without the login")
+	}
+	get(t, c, "https://splice.example/b") // the same connection, as long as nobody else drives
+	if n := len(h.gw.Conns.List("vm1")); n != 1 {
+		t.Fatalf("%d connections", n)
+	}
+
+	mu.Lock()
+	driving, turns = true, turns+1
+	mu.Unlock()
+	before := h.requests()
+	resp, body := get(t, c, "https://splice.example/c")
+	if resp.StatusCode != http.StatusMisdirectedRequest || !strings.Contains(body, "Who drives this browser changed") {
+		t.Fatalf("the old connection: %d %s", resp.StatusCode, body)
+	}
+	if h.requests() != before {
+		t.Fatal("a request on the old connection reached the upstream")
+	}
+	// The browser's retry: a new connection, decided by the agent, without the login.
+	waitFor(t, func() bool {
+		resp, _ := get(t, c, "https://splice.example/d")
+		return resp.StatusCode == 200
+	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("vm1")) })
+	if got := h.lastSeen(t).Header.Get("Authorization"); got != "" {
+		t.Errorf("the agent's connection sent %q", got)
+	}
+	if n := len(h.gw.Conns.List("vm1")); n < 2 {
+		t.Errorf("%d connections", n)
+	}
+}

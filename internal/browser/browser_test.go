@@ -266,13 +266,36 @@ func TestIdentityFromChannel(t *testing.T) {
 		t.Error("a call from an unknown sandbox")
 	}
 
-	// The gateway decides the browser's connections with the driving agent's sandbox.
+	// The gateway decides the browser's connections with the driving agent's sandbox, and
+	// ends the ones another driver opened: the count changes with who drives, not each call.
 	if d := f.svc.Driver(f.ctx, adaVM); d.ID != f.sbAda.ID {
 		t.Errorf("driver %s, want ada-dev", d.Name)
+	}
+	turns := f.svc.Turns(adaVM)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	if f.svc.Turns(adaVM) != turns {
+		t.Error("the same driver's next call changed the count")
 	}
 	f.mustCall(f.sbAda2, agentproto.MethodBrowserSnapshot, `{}`)
 	if d := f.svc.Driver(f.ctx, adaVM); d.ID != f.sbAda2.ID {
 		t.Errorf("driver %s, want ada-two", d.Name)
+	}
+	if f.svc.Turns(adaVM) == turns {
+		t.Error("a new driver kept the count")
+	}
+	turns = f.svc.Turns(adaVM)
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if f.svc.Turns(adaVM) == turns {
+		t.Error("a takeover kept the count")
+	}
+	turns = f.svc.Turns(adaVM)
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if f.svc.Turns(adaVM) == turns {
+		t.Error("a handback kept the count")
 	}
 	if d := f.svc.Driver(f.ctx, f.sbBob); d.ID != f.sbBob.ID {
 		t.Error("Driver changed an agent sandbox")

@@ -79,6 +79,10 @@ type Gateway struct {
 	// teammate's browser VM is decided by the agent sandbox driving it, or by its teammate
 	// while the user drives (internal/browser).
 	Driver func(ctx context.Context, sb store.Sandbox) store.Sandbox
+	// Turns, if set, changes whenever who drives browser VM sb changes. A browser keeps its
+	// connections open, so one opened before is refused at its next request: the browser
+	// opens a new one, decided by the new driver and sending its logins (internal/browser).
+	Turns func(sb store.Sandbox) uint64
 	// Rejected, if set, is told when an upstream answers 401 to a request whose secrets the
 	// gateway swapped in, with the names of those secrets. sb is the sandbox the secrets are
 	// the scope of.
@@ -210,6 +214,10 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 
+	var turn uint64
+	if g.Turns != nil {
+		turn = g.Turns(sb) // before the decider: a change in between ends the connection early, never late
+	}
 	decider := g.decider(sb)
 	// A browser VM's HTTPS is always terminated, whatever rule allows it: the browser trusts the
 	// environment's CA, and its requests are checked one by one (docs/network.md).
@@ -312,7 +320,11 @@ func (g *Gateway) handle(c net.Conn) {
 		if browserTLS && caddy == nil {
 			auth = g.browserAuth(sb, decider, host)
 		}
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, rejected, auth, recordTo{g.Records, sb.ID, entry.ID})
+		var stale func() bool
+		if browserTLS && g.Turns != nil {
+			stale = func() bool { return g.Turns(sb) != turn }
+		}
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, stale, rejected, auth, recordTo{g.Records, sb.ID, entry.ID})
 		return
 	}
 

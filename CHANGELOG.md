@@ -13,6 +13,10 @@
   computer's public address: it reaches this computer only through `host.studio.internal`.
   A site you serve from this computer at its public address is reached the same way, and a
   rule naming one of the computer's public addresses says so.
+- A teammate's browser no longer keeps your browser logins, and your rules, after you hand it
+  back: the connections it opened while you drove end at their next request, and the browser
+  opens new ones that follow the agent's rules. The same happens when another agent starts
+  driving.
 - A computer whose create or fork finished just as Studio stopped is no longer deleted when
   Studio starts again. Studio keeps a note while a create or fork runs and removes it at the
   end; if that removal didn't happen, the next start took the computer for one that failed

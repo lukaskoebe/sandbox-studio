@@ -215,6 +215,7 @@ func (s *Service) Remove(ctx context.Context, envID, teammateID string) error {
 	s.mu.Lock()
 	st.reset()
 	st.vm, st.driver = "", store.Sandbox{}
+	st.turns++
 	s.mu.Unlock()
 	return nil
 }
@@ -261,6 +262,7 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session st
 		was := pg.takeover
 		if !was {
 			pg.takeover, pg.resumed = true, make(chan struct{})
+			st.turns++
 			pg.turn, pg.handback = &userTurn{since: s.now(), pages: []string{pg.url}}, ""
 		}
 		st.lastUsed, pg.used = s.now(), s.now()
@@ -284,7 +286,7 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session st
 		return ctx.Err()
 	}
 	defer func() { <-st.run }()
-	if !s.endTakeover(pg) {
+	if !s.endTakeover(st, pg) {
 		return nil
 	}
 	s.settleControl(ctx, envID, pg, store.StatusApproved)
@@ -301,13 +303,14 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session st
 }
 
 // endTakeover ends the user's turn in a session; it reports whether there was one.
-func (s *Service) endTakeover(pg *page) bool {
+func (s *Service) endTakeover(st *state, pg *page) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !pg.takeover {
 		return false
 	}
 	pg.takeover = false
+	st.turns++
 	close(pg.resumed)
 	// What the user did is unknown to the broker: refs are stale and a credential the
 	// user typed may show.
@@ -327,7 +330,7 @@ func (s *Service) endTakeovers(st *state) {
 	}
 	s.mu.Unlock()
 	for _, pg := range pages {
-		s.endTakeover(pg)
+		s.endTakeover(st, pg)
 		s.settleControl(context.Background(), st.env, pg, store.StatusDismissed)
 	}
 }

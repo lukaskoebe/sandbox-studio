@@ -53,6 +53,7 @@ type interception struct {
 	caddy      bool                       // requests go through a caddy rule
 	broken     string                     // why every request is refused
 	gate       func(*http.Request) string // decides each request before it is rewritten; "" lets it on
+	stale      func() bool                // true once the connection's decider no longer drives the browser
 	proxy      *httputil.ReverseProxy
 	log        *slog.Logger
 	rejected   func(names []string)  // told when the upstream refuses a request that carried secrets
@@ -147,11 +148,11 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
-func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, rejected func(names []string), auth *browserAuth, record recordTo) (sent, received int64, problem string) {
+func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, stale func() bool, rejected func(names []string), auth *browserAuth, record recordTo) (sent, received int64, problem string) {
 	// Requests go to the rule's upstream, which is the host unless the rule names another. The
 	// secrets are bound to the upstream, since that is what receives them.
 	upstream, upPort := upstreamOf(rule.Config.Upstream, host, port)
-	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log, gate: gate, rejected: rejected, record: record}
+	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log, gate: gate, stale: stale, rejected: rejected, record: record}
 	var transport http.RoundTripper
 	if caddy == nil {
 		ic.bound, ic.unbound = boundTo(all, upstream)
@@ -249,6 +250,13 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// would otherwise reach it through a shared front end (domain fronting).
 	if name := hostOnly(r.Host); name != "" && name != ic.host {
 		ic.refuse(w, http.StatusMisdirectedRequest, fmt.Sprintf("This connection is to %s. Open a new connection for %s.", ic.host, name))
+		return
+	}
+	if ic.stale != nil && ic.stale() {
+		// Connection: close ends the connection after this answer, with a GOAWAY on HTTP/2,
+		// and a browser sends a 421 again on a new connection, which the new driver decides.
+		w.Header().Set("Connection", "close")
+		ic.refuse(w, http.StatusMisdirectedRequest, "Who drives this browser changed. Retry on a new connection.")
 		return
 	}
 	if ic.broken != "" {

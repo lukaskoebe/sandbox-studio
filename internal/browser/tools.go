@@ -102,6 +102,9 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 	}
 	var handback string
 	s.mu.Lock()
+	if st.driver.ID != sb.ID {
+		st.turns++
+	}
 	st.driver, st.lastUsed = sb, s.now()
 	if pg != nil {
 		pg.used = st.lastUsed

@@ -456,6 +456,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	}
 	defer gl.Close()
 	gw.Driver = brw.Driver // a browser VM's connections follow the rules of the agent driving it
+	gw.Turns = brw.Turns
 	// A teammate's browser logins go to the pages asking for Basic credentials.
 	gw.BrowserLogins, gw.SignIn = vault.BrowserLogins, brw.SignInSeen
 	go func() {

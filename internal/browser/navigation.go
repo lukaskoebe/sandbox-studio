@@ -191,7 +191,7 @@ func (s *Service) CloseSession(ctx context.Context, envID, teammateID, session s
 	}
 	// The user's own takeover of it ends with it: waiting agent calls are released and fail
 	// on the closed session.
-	s.endTakeover(pg)
+	s.endTakeover(st, pg)
 	select {
 	case st.run <- struct{}{}:
 	case <-ctx.Done():
