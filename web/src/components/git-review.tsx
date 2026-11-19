@@ -39,6 +39,8 @@ import {
   ForgeReview,
   ForgeReviewSummary,
   forgeReviewDescription,
+  rememberAttribution,
+  rememberedAttribution,
 } from "@/components/forge-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
@@ -368,6 +370,12 @@ function PushReview({ approval }: { approval: Approval }) {
   // pushed before but has none doesn't.
   const [openPR, setOpenPR] = useState(!!review?.pullRequest && !review.old)
   const [prTitle, setPRTitle] = useState(proposal?.title ?? "")
+  // The line naming the teammate ends the pull request's description only when ticked: the
+  // pull request goes up under the user's name.
+  const who = git?.push.teammateName ?? ""
+  const [attribute, setAttribute] = useState(
+    () => !!who && rememberedAttribution(who, "push")
+  )
   // A push to the branch a local working copy has checked out updates its files too, as
   // git's updateInstead does; git still refuses it when the copy has changes.
   const [updateCheckedOut, setUpdateCheckedOut] = useState(true)
@@ -412,8 +420,14 @@ function PushReview({ approval }: { approval: Approval }) {
           note: fullNote() || undefined,
           pullRequest:
             proposal && action === "allow"
-              ? { open: openPR, title: openPR ? prTitle.trim() : undefined }
-              : undefined,
+              ? {
+                  open: openPR,
+                  title: openPR ? prTitle.trim() : undefined,
+                  attribution: openPR && attribute ? true : undefined,
+                }
+              : pr && action === "allow" && attribute
+                ? { open: true, attribution: true }
+                : undefined,
           force: forced && action === "allow" ? true : undefined,
           updateCheckedOut:
             rv?.checkedOut && action === "allow" ? updateCheckedOut : undefined,
@@ -425,6 +439,25 @@ function PushReview({ approval }: { approval: Approval }) {
       )
   const rv = git.review
   const pr = git.pullRequest
+  const attribution = (pr ?? proposal)?.attribution
+  const attributionField = attribution && (
+    <label className="flex items-center gap-2 text-xs">
+      <Checkbox
+        checked={attribute}
+        onCheckedChange={(on) => {
+          setAttribute(on)
+          if (who) rememberAttribution(who, on, "push")
+        }}
+      />
+      <span className="min-w-0 break-words">
+        End the description with “{attribution}”
+        <span className="text-muted-foreground">
+          {" "}
+          · off by default, remembered per teammate
+        </span>
+      </span>
+    </label>
+  )
   const forced = !pr && !!rv?.forced
   const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
   const where = (c: LineComment) => commentWhere(lines, c)
@@ -607,21 +640,29 @@ function PushReview({ approval }: { approval: Approval }) {
       )}
 
       {!pending && canOpenLater(git) && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <GitPullRequestIcon className="size-3.5" />
-          {git.push.prResult
-            ? "The pull request was not opened."
-            : "Pushed without a pull request."}
-          <Button
-            variant="outline"
-            size="xs"
-            className="ml-auto"
-            disabled={openLater.isPending}
-            onClick={() => openLater.mutate({ ...params, body: {} })}
-          >
-            {openLater.isPending && <Spinner className="size-3" />}
-            Open pull request
-          </Button>
+        <div className="grid gap-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <GitPullRequestIcon className="size-3.5" />
+            {git.push.prResult
+              ? "The pull request was not opened."
+              : "Pushed without a pull request."}
+            <Button
+              variant="outline"
+              size="xs"
+              className="ml-auto"
+              disabled={openLater.isPending}
+              onClick={() =>
+                openLater.mutate({
+                  ...params,
+                  body: { attribution: attribute || undefined },
+                })
+              }
+            >
+              {openLater.isPending && <Spinner className="size-3" />}
+              Open pull request
+            </Button>
+          </div>
+          {attributionField}
         </div>
       )}
 
@@ -782,6 +823,7 @@ function PushReview({ approval }: { approval: Approval }) {
               )}
             </div>
           )}
+          {(pr || (proposal && openPR)) && attributionField}
           <div className="flex flex-wrap items-center gap-1.5">
             <div className="min-w-0 flex-1 basis-56 empty:hidden">
               {approval.sandboxId && (

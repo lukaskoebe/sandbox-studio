@@ -70,21 +70,31 @@ export function forgeReviewDescription(a: Approval) {
   return `${who}${where} drafted a review of a pull request. Nothing reaches the forge until you post it, as you, with your edits; discarding it tells ${d?.teammate || "the agent"} your note.`
 }
 
-// The attribution line is a per-teammate choice remembered in this browser.
-const attributionKey = (who: string) => `studio.review-attribution.${who}`
+// The attribution line is a per-teammate choice remembered in this browser: one for reviews and
+// comments, another for the pull requests of pushes.
+type Attributed = "review" | "push"
+const attributionKey = (who: string, what: Attributed) =>
+  `studio.${what}-attribution.${who}`
 
-export function rememberedAttribution(who: string) {
+export function rememberedAttribution(
+  who: string,
+  what: Attributed = "review"
+) {
   try {
-    return localStorage.getItem(attributionKey(who)) === "1"
+    return localStorage.getItem(attributionKey(who, what)) === "1"
   } catch {
     return false
   }
 }
 
-export function rememberAttribution(who: string, on: boolean) {
+export function rememberAttribution(
+  who: string,
+  on: boolean,
+  what: Attributed = "review"
+) {
   try {
-    if (on) localStorage.setItem(attributionKey(who), "1")
-    else localStorage.removeItem(attributionKey(who))
+    if (on) localStorage.setItem(attributionKey(who, what), "1")
+    else localStorage.removeItem(attributionKey(who, what))
   } catch {
     // Storage can be unavailable (private windows); the checkbox still applies to this review.
   }

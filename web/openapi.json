@@ -2374,7 +2374,7 @@
           },
           "pullRequest": {
             "$ref": "#/components/schemas/PullRequestStruct",
-            "description": "For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"
+            "description": "For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval. For git.pr approved with allow: its title and whether it names who pushed it"
           },
           "remember": {
             "description": "For browser.action: allow (or deny) the action on the origin from now on. For credential.issue: allow it always, for every sandbox of the teammate",
@@ -6354,6 +6354,10 @@
       "OpenInBody": {
         "additionalProperties": false,
         "properties": {
+          "attribution": {
+            "description": "End the pull request's description with its attribution line, which names the teammate and sandbox the push came from",
+            "type": "boolean"
+          },
           "title": {
             "description": "The pull request's title; empty keeps the proposed one",
             "maxLength": 200,
@@ -7397,6 +7401,10 @@
       "PullRequest": {
         "additionalProperties": false,
         "properties": {
+          "attribution": {
+            "description": "The line naming the teammate and sandbox the push came from, which ends the body only when the decision asks for it",
+            "type": "string"
+          },
           "base": {
             "description": "Branch to merge into",
             "type": "string"
@@ -7525,8 +7533,12 @@
       "PullRequestStruct": {
         "additionalProperties": false,
         "properties": {
+          "attribution": {
+            "description": "End the pull request's description with its attribution line, which names the teammate and sandbox the push came from",
+            "type": "boolean"
+          },
           "open": {
-            "description": "Open the review's pull request along with the push; false pushes without one",
+            "description": "Open the review's pull request along with the push; false pushes without one. A git.pr approval ignores it",
             "type": "boolean"
           },
           "title": {

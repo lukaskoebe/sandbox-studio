@@ -120,6 +120,41 @@ type PullRequest struct {
 	Base  string `json:"base" doc:"Branch to merge into"`
 	Title string `json:"title"`
 	Body  string `json:"body"`
+	// Attribution names the teammate and sandbox the push came from. It ends the body only
+	// when the decision asks for it: a pull request is the user's, under their name.
+	Attribution string `json:"attribution,omitempty" doc:"The line naming the teammate and sandbox the push came from, which ends the body only when the decision asks for it"`
+}
+
+// pushedBy is the attribution line of a teammate's push.
+func pushedBy(teammate, sandbox string) string {
+	if teammate == "" {
+		return ""
+	}
+	return "Pushed by " + teammate + " from sandbox " + sandbox + " through Sandbox Studio."
+}
+
+// legacyPushedBy is the attribution line that proposals from before Attribution end their
+// body with.
+var legacyPushedBy = regexp.MustCompile(`\n*(Pushed by [^\n]+ from sandbox [^\n]+ through Sandbox Studio\.)$`)
+
+// separated moves the attribution line a proposal from before Attribution ends its body with
+// into Attribution, so it, too, is added only when asked for.
+func (pr PullRequest) separated() PullRequest {
+	if m := legacyPushedBy.FindStringSubmatchIndex(pr.Body); pr.Attribution == "" && m != nil {
+		pr.Attribution = pr.Body[m[2]:m[3]]
+		pr.Body = strings.TrimSpace(pr.Body[:m[0]])
+	}
+	return pr
+}
+
+// attributed is the pull request as it is opened: its body ends with the attribution line
+// when attribute says so.
+func (pr PullRequest) attributed(attribute bool) PullRequest {
+	if attribute && pr.Attribution != "" {
+		pr.Body = strings.TrimSpace(pr.Body + "\n\n" + pr.Attribution)
+	}
+	pr.Attribution = ""
+	return pr
 }
 
 // Account is whom a forge token belongs to.

@@ -47,6 +47,9 @@ type Upstream struct {
 // Reviews are the reviews posted to the upstream's pull requests, oldest first.
 func (u *Upstream) Reviews() []PostedReview { return u.pulls.reviews() }
 
+// Pulls are the pull requests opened on the upstream, oldest first.
+func (u *Upstream) Pulls() []PostedReview { return u.pulls.openedPulls() }
+
 // NewUpstream returns an upstream that keeps its repositories under dir.
 func NewUpstream(dir string) *Upstream { return &Upstream{Dir: dir} }
 

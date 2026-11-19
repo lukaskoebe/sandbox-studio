@@ -197,7 +197,8 @@ func (s *Server) registerOpenPullRequest(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID of a git push"`
 		Body *struct {
-			Title string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
+			Title       string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
+			Attribution bool   `json:"attribution,omitempty" doc:"End the pull request's description with its attribution line, which names the teammate and sandbox the push came from"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -210,11 +211,11 @@ func (s *Server) registerOpenPullRequest(api huma.API) {
 		if s.Git == nil {
 			return nil, huma.Error503ServiceUnavailable("git review is not available")
 		}
-		title := ""
+		title, attribute := "", false
 		if in.Body != nil {
-			title = in.Body.Title
+			title, attribute = in.Body.Title, in.Body.Attribution
 		}
-		if _, err := s.Git.OpenPullRequest(ctx, in.Env, in.ID, title); err != nil {
+		if _, err := s.Git.OpenPullRequest(ctx, in.Env, in.ID, title, attribute); err != nil {
 			if errors.Is(err, gitreview.ErrForge) {
 				return nil, huma.Error502BadGateway(err.Error())
 			}

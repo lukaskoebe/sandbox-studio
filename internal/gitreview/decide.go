@@ -108,7 +108,8 @@ func (s *Service) GitDetail(ctx context.Context, a store.Approval) (*GitDetail, 
 		if err := json.Unmarshal(a.Payload, &pp); err != nil {
 			return nil, err
 		}
-		d.PullRequest = &pp.PullRequest
+		pr := pp.PullRequest.separated()
+		d.PullRequest = &pr
 	}
 	return d, nil
 }
@@ -405,7 +406,7 @@ func (s *Service) pullRequestAfterPush(ctx context.Context, p store.GitPush, a s
 		if t := strings.TrimSpace(choice.Title); t != "" {
 			pr.Title = truncate(t, 200)
 		}
-		_, _ = s.openPRNow(ctx, p, pr)
+		_, _ = s.openPRNow(ctx, p, pr.attributed(choice.Attribution))
 	}
 }
 
@@ -464,7 +465,7 @@ var (
 // pull request failed to open or was not approved, under title if it is set. approvalID is
 // the push's git.push approval. When one turns out to be open from the branch already, the
 // push records that it updates it.
-func (s *Service) OpenPullRequest(ctx context.Context, envID, approvalID, title string) (store.GitPush, error) {
+func (s *Service) OpenPullRequest(ctx context.Context, envID, approvalID, title string, attribute bool) (store.GitPush, error) {
 	s.httpClient()
 	a, err := s.Store.Approval(ctx, envID, approvalID)
 	if err != nil {
@@ -507,7 +508,7 @@ func (s *Service) OpenPullRequest(ctx context.Context, envID, approvalID, title 
 	if t := strings.TrimSpace(title); t != "" {
 		pr.Title = truncate(t, 200)
 	}
-	p, err = s.openPRNow(ctx, p, pr)
+	p, err = s.openPRNow(ctx, p, pr.attributed(attribute))
 	if err != nil {
 		return p, fmt.Errorf("%w: %v", ErrForge, err)
 	}
@@ -558,7 +559,16 @@ func (s *Service) decidePR(ctx context.Context, a store.Approval, d integrations
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer cancel()
-	url, err := s.openPR(ctx, p, pp.PullRequest)
+	pr := pp.PullRequest.separated()
+	if c := d.PullRequest; c != nil {
+		if t := strings.TrimSpace(c.Title); t != "" {
+			pr.Title = truncate(t, 200)
+		}
+		pr = pr.attributed(c.Attribution)
+	} else {
+		pr = pr.attributed(false)
+	}
+	url, err := s.openPR(ctx, p, pr)
 	sctx, scancel := settleCtx(ctx)
 	defer scancel()
 	if err != nil {

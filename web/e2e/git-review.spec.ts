@@ -1248,3 +1248,87 @@ test("a pushed branch shows its pull request's state, checks and comments in Pus
   await expect(row).toContainText("open")
   await expect(row).toContainText("checks passed")
 })
+
+// The pull request goes up under the user's name: the line naming the teammate is theirs to add.
+test("a teammate's pull request names who pushed it only when that is ticked", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const forge = `fj-${suffix}`
+  const host = `forgejo-${suffix}.example.com`
+  await api.createUpstream(`${host}/acme/web`)
+  await api.json("POST", `/api/environments/${env}/forges`, {
+    name: forge,
+    kind: "forgejo",
+    baseUrl: `https://${host}`,
+    token: "e2e-forge-token",
+  })
+  const who = `Credited ${suffix.slice(0, 4)}`
+  const teammate = await addTeammate(api, env, who)
+  const name = sandboxName("credit")
+  const id = await api.createSandbox(name, teammate)
+  await api.guestReady(id)
+  const line = `Pushed by ${who} from sandbox ${name} through Sandbox Studio.`
+  type Opened = { repo: string; body: { head: string; body: string } }
+  const opened = async (head: string) =>
+    ((await api.json<Opened[]>("GET", "/api/e2e/pulls")) ?? []).find(
+      (p) => p.repo === `${host}/acme/web` && p.body.head === head
+    )
+  const review = async (branch: string) => {
+    const pushed = await api.push(id, {
+      url: `https://git.studio.internal/${forge}/acme/web.git`,
+      branch,
+      from: "main",
+      file: `${branch.replace("/", "-")}.txt`,
+      content: `${branch}\n`,
+      message: `Add ${branch}`,
+    })
+    expect(pushed.error, pushed.output).toBeUndefined()
+    await page.goto(`/e/${env}`)
+    await approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: branch })
+      .getByRole("button", { name: "Review" })
+      .click()
+    const pane = page.getByTestId("git-review")
+    // The decision row sits below the diff until it renders, then sticks to the bottom.
+    await expect(
+      pane.getByText(`${branch.replace("/", "-")}.txt`).first()
+    ).toBeVisible()
+    return pane
+  }
+
+  // Off by default.
+  let pane = await review("feature/plain")
+  await expect(
+    pane.getByRole("checkbox", { name: /Also open a pull request/ })
+  ).toBeChecked()
+  let credit = pane.getByRole("checkbox", { name: /End the description with/ })
+  await expect(credit).not.toBeChecked()
+  await expect(pane.getByText(line, { exact: false })).toBeVisible()
+  await pane.getByRole("button", { name: "Push and open pull request" }).click()
+  await expect.poll(() => opened("feature/plain")).toBeTruthy()
+  expect((await opened("feature/plain"))!.body.body).not.toContain("Pushed by")
+
+  // Ticked, the description ends with it.
+  pane = await review("feature/credited")
+  credit = pane.getByRole("checkbox", { name: /End the description with/ })
+  // A click the moving row lost is clicked again; one that toggled twice still fails.
+  await expect(async () => {
+    if (!(await credit.isChecked())) await credit.click()
+    await expect(credit).toBeChecked({ timeout: 1000 })
+  }).toPass()
+  await pane.getByRole("button", { name: "Push and open pull request" }).click()
+  await expect.poll(() => opened("feature/credited")).toBeTruthy()
+  expect((await opened("feature/credited"))!.body.body).toBe(line)
+
+  // And the choice is remembered for the teammate's next push.
+  pane = await review("feature/again")
+  await expect(
+    pane.getByRole("checkbox", { name: /End the description with/ })
+  ).toBeChecked()
+  await pane.getByRole("button", { name: "Reject" }).click()
+})

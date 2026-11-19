@@ -810,7 +810,7 @@ func TestPushOpensItsPullRequestWhenChosen(t *testing.T) {
 	if _, text, _ := h.svc.Feedback(h.ctx, h.env.ID, a.ID, ""); !strings.Contains(text, "the pull request is open at "+p.PRURL) {
 		t.Fatalf("feedback = %q", text)
 	}
-	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, ""); !errors.Is(err, ErrPullRequestSet) {
+	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "", false); !errors.Is(err, ErrPullRequestSet) {
 		t.Fatalf("opening it again: %v", err)
 	}
 
@@ -850,7 +850,7 @@ func TestPushWithoutItsPullRequestCanOpenItLater(t *testing.T) {
 		t.Fatalf("push: %v", err)
 	}
 	a := h.approvals(t, KindPush, store.StatusPending)[0]
-	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, ""); !errors.Is(err, ErrNotPushed) {
+	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "", false); !errors.Is(err, ErrNotPushed) {
 		t.Fatalf("opening the pull request of a pending push: %v", err)
 	}
 	k, _ := integrations.Set{h.svc}.Kind(KindPush)
@@ -863,7 +863,7 @@ func TestPushWithoutItsPullRequestCanOpenItLater(t *testing.T) {
 	if _, text, _ := h.svc.Feedback(h.ctx, h.env.ID, a.ID, ""); !strings.HasSuffix(text, "approved and pushed.") {
 		t.Fatalf("feedback = %q", text)
 	}
-	p, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "Later")
+	p, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "Later", false)
 	if err != nil || p.PRResult != "opened" || p.PRURL == "" || len(h.forge.pulls) != 1 || h.forge.pulls[0].Title != "Later" {
 		t.Fatalf("open later = %+v, %v (%+v)", p, err, h.forge.pulls)
 	}
@@ -878,7 +878,7 @@ func TestPushWithoutItsPullRequestCanOpenItLater(t *testing.T) {
 		t.Fatalf("review of a push to main = %+v", d.Review)
 	}
 	h.decide(t, a2, integrations.Allow, "")
-	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a2.ID, ""); !errors.Is(err, ErrNoPullRequest) {
+	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a2.ID, "", false); !errors.Is(err, ErrNoPullRequest) {
 		t.Fatalf("opening a pull request of main: %v", err)
 	}
 }
@@ -1731,5 +1731,34 @@ func TestPromptNoteQuotesAFailedPush(t *testing.T) {
 	done()
 	if note, _, _ := h.svc.PromptNote(h.ctx, h.env.ID, g.sb.ID); note != "" {
 		t.Fatalf("the failed push was told twice: %q", note)
+	}
+}
+
+func TestPullRequestNamesWhoPushedItOnlyWhenAsked(t *testing.T) {
+	rv := PushReview{Branch: "feature", Teammate: "Iris", Sandbox: "work", Commits: []Commit{{SHA: "abc1234", Subject: "Add a", Body: "Why a."}}}
+	pr := prProposal(rv, "main")
+	if pr.Body != "Why a." || pr.Attribution != "Pushed by Iris from sandbox work through Sandbox Studio." {
+		t.Fatalf("proposal = %+v", pr)
+	}
+	if got := pr.attributed(false); got.Body != "Why a." || got.Attribution != "" {
+		t.Fatalf("without attribution = %+v", got)
+	}
+	if got := pr.attributed(true); got.Body != "Why a.\n\nPushed by Iris from sandbox work through Sandbox Studio." || got.Attribution != "" {
+		t.Fatalf("with attribution = %+v", got)
+	}
+	if got := prProposal(PushReview{Branch: "feature", Commits: rv.Commits}, "main"); got.Attribution != "" {
+		t.Fatalf("a push of no teammate's = %+v", got)
+	}
+
+	// A proposal from before Attribution has the line in its body.
+	old := PullRequest{Body: "Why a.\n\nPushed by Iris from sandbox work through Sandbox Studio."}.separated()
+	if old.Body != "Why a." || old.Attribution != "Pushed by Iris from sandbox work through Sandbox Studio." {
+		t.Fatalf("separated = %+v", old)
+	}
+	if only := (PullRequest{Body: "Pushed by Iris from sandbox work through Sandbox Studio."}).separated(); only.Body != "" || only.Attribution == "" {
+		t.Fatalf("separated, the line alone = %+v", only)
+	}
+	if kept := (PullRequest{Body: "Pushed by Iris from sandbox work through Sandbox Studio.\n\nMore."}).separated(); kept.Attribution != "" {
+		t.Fatalf("a line that doesn't end the body moved: %+v", kept)
 	}
 }

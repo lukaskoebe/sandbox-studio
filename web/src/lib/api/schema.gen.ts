@@ -4246,7 +4246,7 @@ export interface components {
             pathPrefix?: string;
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
-            /** @description For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval */
+            /** @description For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval. For git.pr approved with allow: its title and whether it names who pushed it */
             pullRequest?: components["schemas"]["PullRequestStruct"];
             /** @description For browser.action: allow (or deny) the action on the origin from now on. For credential.issue: allow it always, for every sandbox of the teammate */
             remember?: boolean;
@@ -5609,6 +5609,8 @@ export interface components {
             tipsOff: boolean;
         };
         OpenInBody: {
+            /** @description End the pull request's description with its attribution line, which names the teammate and sandbox the push came from */
+            attribution?: boolean;
             /** @description The pull request's title; empty keeps the proposed one */
             title?: string;
         };
@@ -5913,6 +5915,8 @@ export interface components {
             totalBytes: number;
         };
         PullRequest: {
+            /** @description The line naming the teammate and sandbox the push came from, which ends the body only when the decision asks for it */
+            attribution?: string;
             /** @description Branch to merge into */
             base: string;
             body: string;
@@ -5945,7 +5949,9 @@ export interface components {
             url?: string;
         };
         PullRequestStruct: {
-            /** @description Open the review's pull request along with the push; false pushes without one */
+            /** @description End the pull request's description with its attribution line, which names the teammate and sandbox the push came from */
+            attribution?: boolean;
+            /** @description Open the review's pull request along with the push; false pushes without one. A git.pr approval ignores it */
             open: boolean;
             /** @description The pull request's title; empty keeps the proposed one */
             title?: string;

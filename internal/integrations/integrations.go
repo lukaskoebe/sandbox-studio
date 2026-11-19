@@ -79,6 +79,9 @@ type ReviewEditComment struct {
 type PullRequestChoice struct {
 	Open  bool
 	Title string // empty keeps the proposed title
+	// Attribution ends the description with the line naming the teammate and sandbox the
+	// push came from.
+	Attribution bool
 }
 
 // ApprovalKind settles approvals of one kind. Decide moves a pending approval out of

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A teammate's pull request no longer ends with "Pushed by … from sandbox … through Sandbox
+  Studio." unless you tick it: the pull request goes up under your name. The push review
+  shows the line with a checkbox, off by default and remembered per teammate in this
+  browser. The same holds for opening the pull request after the push and for one the agent
+  proposes. The terminal app never adds it.
 - Settings → General → This browser has a text size, from 90% to 150%, that scales the
   whole page with it, terminals and diffs included. In the desktop app, Ctrl and + or −
   change it too, and Ctrl and 0 sets it back.

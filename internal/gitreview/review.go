@@ -323,9 +323,8 @@ func prProposal(rv PushReview, base string) PullRequest {
 		}
 		pr.Body = b.String()
 	}
-	if rv.Teammate != "" {
-		pr.Body = strings.TrimSpace(pr.Body + "\n\nPushed by " + rv.Teammate + " from sandbox " + rv.Sandbox + " through Sandbox Studio.")
-	}
+	pr.Body = strings.TrimSpace(pr.Body)
+	pr.Attribution = pushedBy(rv.Teammate, rv.Sandbox)
 	pr.Title = truncate(pr.Title, 200)
 	return pr
 }

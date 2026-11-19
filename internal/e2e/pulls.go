@@ -15,7 +15,9 @@ import (
 // The upstream's Forgejo API: the account e2e-user with the repositories acme/web and acme/api,
 // and on every repository a pull request 1, "Apply coupon codes", opened by someone else from
 // feature/coupons, whose CI passed.
-// Reviews and conversation comments posted to it are kept for the tests (GET /api/e2e/reviews).
+// Reviews and conversation comments posted to it are kept for the tests (GET /api/e2e/reviews),
+// and so are the pull requests opened on it (GET /api/e2e/pulls), numbered from 2. Every
+// repository's default branch is main.
 
 const pullDiff = `diff --git a/web/coupon.ts b/web/coupon.ts
 --- a/web/coupon.ts
@@ -37,6 +39,8 @@ type PostedReview struct {
 
 var pullsPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/pulls$`)
 
+var repoPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+$`)
+
 // statusPath is a commit's combined status; every commit's CI passed.
 var statusPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+/commits/[^/]+/status$`)
 
@@ -45,12 +49,19 @@ var pullPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/(pulls|issues)
 type pulls struct {
 	mu     sync.Mutex
 	posted []PostedReview
+	opened []PostedReview
 }
 
 func (p *pulls) reviews() []PostedReview {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]PostedReview{}, p.posted...)
+}
+
+func (p *pulls) openedPulls() []PostedReview {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]PostedReview{}, p.opened...)
 }
 
 // serve answers the Forgejo API requests it knows, and the user of GitHub's and GitLab's,
@@ -91,8 +102,22 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 		send([]map[string]any{{"full_name": "acme/web", "description": "The shop"}, {"full_name": "acme/api", "private": true}})
 		return true
 	}
+	if repoPath.MatchString(r.URL.Path) {
+		send(map[string]string{"default_branch": "main"})
+		return true
+	}
 	if m := pullsPath.FindStringSubmatch(r.URL.Path); m != nil {
 		repo := hostOnly(r.Host) + "/" + m[1] + "/" + m[2]
+		if r.Method == http.MethodPost {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			p.mu.Lock()
+			p.opened = append(p.opened, PostedReview{Repo: repo, Body: body})
+			n := len(p.opened) + 1
+			p.mu.Unlock()
+			send(map[string]any{"number": n, "html_url": "https://" + repo + "/pulls/" + strconv.Itoa(n)})
+			return true
+		}
 		if r.URL.Query().Get("state") == "closed" {
 			send([]any{})
 			return true

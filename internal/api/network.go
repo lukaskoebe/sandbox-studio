@@ -528,9 +528,10 @@ func (s *Server) registerNetwork(api huma.API) {
 			ExpiresAt   *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
 			BrowserOnly bool       `json:"browserOnly,omitempty" doc:"For network requests allowed or denied with a rule: the rule covers only the requests of the environment's browser VMs"`
 			PullRequest *struct {
-				Open  bool   `json:"open" doc:"Open the review's pull request along with the push; false pushes without one"`
-				Title string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
-			} `json:"pullRequest,omitempty" doc:"For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"`
+				Open        bool   `json:"open" doc:"Open the review's pull request along with the push; false pushes without one. A git.pr approval ignores it"`
+				Title       string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
+				Attribution bool   `json:"attribution,omitempty" doc:"End the pull request's description with its attribution line, which names the teammate and sandbox the push came from"`
+			} `json:"pullRequest,omitempty" doc:"For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval. For git.pr approved with allow: its title and whether it names who pushed it"`
 			Force            bool           `json:"force,omitempty" doc:"For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push"`
 			Review           *ReviewEditIn  `json:"review,omitempty" doc:"For git.review approved with allow: the review as edited, which Studio posts. Omitted posts the draft as it is"`
 			Comment          *CommentEditIn `json:"comment,omitempty" doc:"For git.comment approved with allow: the comment as edited, which Studio posts. Omitted posts it as it is"`
@@ -543,7 +544,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		id := integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember, Force: in.Body.Force,
 			UpdateCheckedOut: in.Body.UpdateCheckedOut}
 		if pr := in.Body.PullRequest; pr != nil {
-			id.PullRequest = &integrations.PullRequestChoice{Open: pr.Open, Title: pr.Title}
+			id.PullRequest = &integrations.PullRequestChoice{Open: pr.Open, Title: pr.Title, Attribution: pr.Attribution}
 		}
 		if rv := in.Body.Review; rv != nil {
 			id.Review = &integrations.ReviewEdit{Verdict: rv.Verdict, Summary: rv.Summary, Attribution: rv.Attribution}

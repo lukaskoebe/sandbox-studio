@@ -192,11 +192,8 @@ func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, p
 	if base == branch {
 		return nil, integrations.ToolError("%s is the branch to merge into; push your changes to another branch", branch)
 	}
-	body := strings.TrimSpace(in.Body)
-	if p.TeammateName != "" {
-		body = strings.TrimSpace(body + "\n\nPushed by " + p.TeammateName + " from sandbox " + sb.Name + " through Sandbox Studio.")
-	}
-	s.proposePR(ctx, p, PullRequest{Head: branch, Base: base, Title: truncate(title, 200), Body: body})
+	s.proposePR(ctx, p, PullRequest{Head: branch, Base: base, Title: truncate(title, 200), Body: strings.TrimSpace(in.Body),
+		Attribution: pushedBy(p.TeammateName, sb.Name)})
 	p, err = s.Store.GitPush(ctx, p.EnvironmentID, p.ID)
 	if err != nil {
 		return nil, err

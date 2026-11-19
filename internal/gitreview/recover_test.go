@@ -59,7 +59,7 @@ func TestRecoverFailsAPushStudioStoppedInTheMiddleOf(t *testing.T) {
 	if p, _ = h.st.GitPushByApproval(h.ctx, h.env.ID, a.ID); p.PRURL != "" || p.PRResult != "failed: "+stoppedOpening {
 		t.Fatalf("pull request after recovery = %+v", p)
 	}
-	if p, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, ""); err != nil || p.PRResult != "opened" || len(h.forge.pulls) != 1 {
+	if p, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "", false); err != nil || p.PRResult != "opened" || len(h.forge.pulls) != 1 {
 		t.Fatalf("open it again = %+v, %v", p, err)
 	}
 	// Run again, it finds nothing.
