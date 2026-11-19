@@ -439,7 +439,8 @@ diffs-container {
   --diffs-font-family: var(--font-mono);
   --diffs-header-font-family: var(--control-font);
   --diffs-font-size: var(--text-caption);
-  --diffs-line-height: 16px;
+  /* 16px at 100%, in whole pixels, as diff-view.tsx reserves for each row. */
+  --diffs-line-height: round(1rem, 1px);
   --diffs-bg: var(--background);
   --diffs-fg: var(--foreground);
 }

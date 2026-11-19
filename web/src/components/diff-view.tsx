@@ -39,6 +39,7 @@ import {
 } from "@/components/review-feedback"
 import { setDiffStyle, useDiffStyle, type DiffStyle } from "@/lib/diff-style"
 import { cn } from "@/lib/utils"
+import { useTextSize } from "@/lib/theme"
 
 /**
  * Token colors as Studio's own variables, so they follow the style and the scheme without
@@ -372,6 +373,8 @@ export default function DiffView({
         : e
     )
   }
+  // The rows grow with the text size picked in Settings, as --diffs-line-height does.
+  const scale = useTextSize() / 100
   const options = useMemo<CodeViewReactOptions<Note, undefined>>(
     () => ({
       theme: "studio",
@@ -382,9 +385,12 @@ export default function DiffView({
       maxLineDiffLength: maxTokenLine,
       stickyHeaders: true,
       // The heights the view reserves for what it hasn't drawn yet. They must match the styles
-      // (--diffs-line-height in styles.css, a 40px file header): the defaults of 20px lines
-      // left a gap at the bottom of a fast scroll until the real rows came in.
-      itemMetrics: { lineHeight: 16, diffHeaderHeight: 40 },
+      // (--diffs-line-height in styles.css, a 40px file header at 100%): the defaults of 20px
+      // lines left a gap at the bottom of a fast scroll until the real rows came in.
+      itemMetrics: {
+        lineHeight: Math.round(16 * scale),
+        diffHeaderHeight: Math.round(40 * scale),
+      },
       disableFileHeader: !fill,
       enableGutterUtility: commentable,
       // A click on a number, a drag over several or a shift-click selects them, and the
@@ -410,7 +416,7 @@ export default function DiffView({
             }
           : undefined,
     }),
-    [fill, style, commentable, selectable, indexes, comments]
+    [fill, style, commentable, selectable, indexes, comments, scale]
   )
 
   const set = (i: number, text?: string, start?: number) => {

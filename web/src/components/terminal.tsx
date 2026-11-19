@@ -25,6 +25,7 @@ import {
   setTerminalsDark,
   useTerminalsDark,
   useTerminalTheme,
+  useTextSize,
 } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
@@ -217,6 +218,10 @@ export function Terminal({
   const keptDark = useTerminalsDark()
   const paletteRef = useRef(palette)
   paletteRef.current = palette
+  // The terminal's text scales with the page's, which sets it in rem rather than in pixels.
+  const fontSize = Math.round((13 * useTextSize()) / 100)
+  const fontSizeRef = useRef(fontSize)
+  fontSizeRef.current = fontSize
   const [connected, setConnected] = useState(false)
   const [ctrlArmed, setCtrlArmed] = useState(false)
   const connectedRef = useRef(false)
@@ -343,7 +348,7 @@ export function Terminal({
     const term = new XTerm({
       fontFamily:
         '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-      fontSize: 13,
+      fontSize: fontSizeRef.current,
       cursorBlink: true,
       theme: paletteRef.current,
       allowProposedApi: true,
@@ -590,6 +595,13 @@ export function Terminal({
   useEffect(() => {
     if (termRef.current) termRef.current.options.theme = palette
   }, [palette])
+
+  useEffect(() => {
+    if (!termRef.current || termRef.current.options.fontSize === fontSize)
+      return
+    termRef.current.options.fontSize = fontSize
+    fitRef.current?.fit()
+  }, [fontSize])
 
   useEffect(() => {
     if (!active) {

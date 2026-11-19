@@ -257,6 +257,38 @@ test("Studio is Pixel unless this browser picks Quiet", async ({
   ).toBeNull()
 })
 
+test("this browser's text size scales the whole page", async ({
+  page,
+  env,
+}) => {
+  const rootSize = () =>
+    page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).fontSize)
+    )
+  await page.goto(`/e/${env}/settings/general`)
+  const size = page.getByRole("group", { name: "Text size" })
+  await expect(size.getByRole("button", { name: "100%" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  expect(await rootSize()).toBe(16)
+  const button = size.getByRole("button", { name: "150%" })
+  const before = (await button.boundingBox())!.height
+
+  await size.getByRole("button", { name: "125%" }).click()
+  await expect.poll(rootSize).toBe(20)
+  expect((await button.boundingBox())!.height).toBeGreaterThan(before)
+  await page.reload()
+  await expect.poll(rootSize).toBe(20)
+
+  // 100% is the default, so picking it again stores nothing.
+  await size.getByRole("button", { name: "100%" }).click()
+  await expect.poll(rootSize).toBe(16)
+  expect(
+    await page.evaluate(() => localStorage.getItem("studio.text-size"))
+  ).toBeNull()
+})
+
 test("the terminal shell is bash until zsh is picked, for every browser", async ({
   page,
   env,

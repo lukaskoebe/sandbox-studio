@@ -10,6 +10,7 @@ import {
   DownloadSimpleIcon,
   ListChecksIcon,
   PaletteIcon,
+  TextAaIcon,
   PencilSimpleIcon,
   PowerIcon,
   SparkleIcon,
@@ -34,7 +35,7 @@ import { SettingsLink } from "@/components/settings/link"
 import { SettingsPage } from "@/components/settings/page"
 import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
-import { quitApp } from "@/lib/desktop"
+import { inApp, quitApp } from "@/lib/desktop"
 import { useSSHAccess } from "@/components/ssh-dialog"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
 import {
@@ -53,7 +54,14 @@ import {
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { setupOver, useSetup } from "@/lib/setup"
 import { useOnboarding } from "@/lib/onboarding"
-import { setStyleName, useStyleName, type StyleName } from "@/lib/theme"
+import {
+  setStyleName,
+  setTextSize,
+  textSizes,
+  useStyleName,
+  useTextSize,
+  type StyleName,
+} from "@/lib/theme"
 import {
   $api,
   errorMessage,
@@ -86,6 +94,7 @@ export function GeneralSettings({ env }: { env: string }) {
       </SettingsGroup>
       <SettingsGroup label="This browser">
         <StyleSection />
+        <TextSizeSection />
       </SettingsGroup>
     </SettingsPage>
   )
@@ -530,6 +539,40 @@ function StyleSection() {
           {styles.map((s) => (
             <ToggleGroupItem key={s.value} value={s.value}>
               {s.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      }
+    />
+  )
+}
+
+/** How large Studio's text is in this browser, beside its style. */
+function TextSizeSection() {
+  const size = useTextSize()
+  return (
+    <SettingRow
+      icon={TextAaIcon}
+      title="Text size"
+      description={
+        inApp
+          ? "Everything scales with the text. Ctrl and + or − change it too, and Ctrl and 0 sets it back."
+          : "Everything scales with the text, as when the browser zooms."
+      }
+      control={
+        <ToggleGroup
+          aria-label="Text size"
+          variant="outline"
+          size="sm"
+          value={[String(size)]}
+          onValueChange={(v) => {
+            const next = textSizes.find((s) => String(s) === v[0])
+            if (next) setTextSize(next)
+          }}
+        >
+          {textSizes.map((s) => (
+            <ToggleGroupItem key={s} value={String(s)}>
+              {s}%
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
