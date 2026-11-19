@@ -35,7 +35,7 @@ func TestRestartRefusesAnOlderBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer release()
+	defer func() { _ = release() }()
 
 	var out bytes.Buffer
 	if code := runRestart(ctx, &out, "127.0.0.1:1"); code != 1 || !strings.Contains(out.String(), "older than the running one") || strings.Contains(out.String(), "Stopping") {
