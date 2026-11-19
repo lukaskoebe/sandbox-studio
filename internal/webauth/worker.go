@@ -101,8 +101,10 @@ var d=window.ServiceWorker&&Object.getOwnPropertyDescriptor(ServiceWorker.protot
 // a loopback host at the preview's port (the frame's ancestor, where the browser names it).
 // It reports the page's path as it loads and on each pushState, replaceState, popstate and
 // hashchange, says when the page starts to leave, and hands a click on a link to another
-// site to Studio, which opens it in a new tab or switches to the sandbox port it names. It
-// takes back, forward and go-to-a-path commands, the path on the preview's own origin.
+// site to Studio, which opens it in a new tab or switches to the sandbox port it names. The
+// frame may not navigate Studio's page (it is sandboxed without allow-top-navigation), so a
+// link on its own origin that targets _top or _parent opens in the frame instead. It takes
+// back, forward and go-to-a-path commands, the path on the preview's own origin.
 const previewBridge = `(function(){if(window.parent===window||window.__studioNav)return;window.__studioNav=1;
 var T="studio-preview-nav",s=location.protocol+"//",q=location.port?":"+location.port:"",ok=[s+"localhost"+q,s+"127.0.0.1"+q,s+"[::1]"+q],a=location.ancestorOrigins;
 if(a&&a.length)ok=ok.indexOf(a[0])>=0?[a[0]]:[];
@@ -115,7 +117,8 @@ if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",
 addEventListener("click",function(e){if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
 var p=e.composedPath?e.composedPath():[e.target],l=null;for(var i=0;i<p.length;i++){var n=p[i];if(n&&(n.tagName==="A"||n.tagName==="AREA")&&n.href){l=n;break}}
 if(!l)return;var t=(l.getAttribute("target")||"").toLowerCase();if(t&&t!=="_self"&&t!=="_top"&&t!=="_parent")return;
-var u;try{u=new URL(l.href,location.href)}catch(x){return}if((u.protocol!=="http:"&&u.protocol!=="https:")||u.origin===location.origin)return;
+var u;try{u=new URL(l.href,location.href)}catch(x){return}if(u.protocol!=="http:"&&u.protocol!=="https:")return;
+if(u.origin===location.origin){if(t==="_top"||t==="_parent"){e.preventDefault();location.assign(u.href)}return}
 e.preventDefault();post({event:"link",href:u.href})});
 addEventListener("message",function(e){var m=e.data;if(e.source!==parent||ok.indexOf(e.origin)<0||!m||m.type!==T)return;
 if(m.cmd==="back")history.back();else if(m.cmd==="forward")history.forward();else if(m.cmd==="hello")report();

@@ -54,6 +54,14 @@ import { cn, formatAge } from "@/lib/utils"
 type PreviewPort = components["schemas"]["PreviewPort"]
 
 /**
+ * What a preview may do in its frame: everything but navigate Studio's own page, which a
+ * script in the sandbox could otherwise send anywhere (top.location). Links that leave go
+ * through the preview bridge (internal/webauth/worker.go), popups open unsandboxed.
+ */
+const previewSandbox =
+  "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
+
+/**
  * The sandbox's running app, framed: the ports it listens on, polled every 5 s, and the
  * chosen one in an iframe that reloads when a request ends (docs/design/chat-mode.md §5).
  * Above it a browser bar locked to the preview: the port is a fixed part of the address that
@@ -673,6 +681,7 @@ function PreviewFrame({
               src={src}
               title={`Preview of port ${port}`}
               referrerPolicy="no-referrer"
+              sandbox={previewSandbox}
               onLoad={() => setLoading(false)}
               className="min-h-80 w-full flex-1 rounded-md bg-white ring-1 ring-foreground/10"
             />
@@ -698,6 +707,7 @@ function PreviewFrame({
               src={renewal}
               title={`Renewing the preview of port ${port}`}
               referrerPolicy="no-referrer"
+              sandbox={previewSandbox}
               onLoad={() => setRenewal(undefined)}
             />
           )}

@@ -94,6 +94,12 @@ from other local users and from web pages:
   forward and go-to-a-path commands from that page only, the path on its own origin. A page
   without the bridge (not HTML, or before Studio's script) still opens a typed path, with a new
   login on it.
+- Both of the panel's frames (the preview and the hidden renewal) are sandboxed with
+  everything a web app needs (scripts, its own origin and storage, forms, dialogs, popups that
+  leave the sandbox, downloads) but top navigation, so a script in the preview can't send
+  Studio's page elsewhere by setting `top.location`. A link of the preview's own that targets
+  `_top` or `_parent`, which the sandbox would block, the bridge opens in the frame. Its origin
+  stays its own, so the login cookies and the keyed host work as before.
 - The Vite dev server (`pnpm dev`, `pnpm dev:lan`) proxies `/api` with Studio's origin and
   goes through the same login exchange; it gets no key or bypass.
 

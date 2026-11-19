@@ -543,9 +543,11 @@ const (
 	moduleAnswer = `import {app} from './name.js';export const answer = "cached " + app`
 	moduleName   = `export const app = "module app"`
 	// A page under /nav, for the preview's address bar: a link within the app, a pushState, a
-	// link to another site and one to another port of the sandbox.
+	// link to another site and one to another port of the sandbox. Top is a link within the
+	// app that targets the top window, and Leave a script that tries to send Studio's page away.
 	navPage = `<!doctype html><html><head><title>Nav</title></head><body><h1>Nav page %s</h1>` +
 		`<a href="/nav/two?x=1">Two</a> <button onclick="history.pushState({},'','/nav/pushed')">Push</button> ` +
+		`<a href="/nav/top" target="_top">Top</a> <button onclick="try{top.location.href='/escaped'}catch(e){}">Leave</button> ` +
 		`<a href="https://example.com/docs">Docs</a> <a href="http://localhost:5173/from-link">Other port</a></body></html>`
 )
 

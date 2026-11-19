@@ -350,6 +350,17 @@ test("previews: the address bar follows the page and keeps its links in the prev
     ).toBeVisible()
     await expect(path).toHaveValue("/nav/one")
 
+    // The frame can't navigate Studio's page: a script that tries stays put, and a link of the
+    // app's own that targets the top window opens in the frame.
+    const studio = page.url()
+    await frame.getByRole("button", { name: "Leave" }).click()
+    await frame.getByRole("link", { name: "Top", exact: true }).click()
+    await expect(
+      frame.getByRole("heading", { name: "Nav page /nav/top" })
+    ).toBeVisible()
+    await expect(path).toHaveValue("/nav/top")
+    expect(page.url()).toBe(studio)
+
     await frame.getByRole("link", { name: "Two" }).click()
     await expect(path).toHaveValue("/nav/two?x=1")
     await frame.getByRole("button", { name: "Push" }).click()
