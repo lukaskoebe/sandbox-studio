@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A review keeps your place. Switching to another tab, another computer, folding the screen
+  or reloading brings a push or pull request review back to the file and line you were
+  reading, with your unsent note, line comments, where they go and the tab you were on.
+  Deciding the review forgets them. They are kept in this browser or app.
 - A chat folds the steps an agent takes between two of its messages into one row: how long it
   worked, how many steps, a chip for each file it edited with the lines added and removed, and
   how many steps failed. The row opens to the steps as quiet lines, each opening to its

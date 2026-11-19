@@ -285,7 +285,15 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
   shows. Below a container width of 42rem the rail comes first and a pick takes its place,
   with a way back. The tab counts the changed files. git status is asked every 10 seconds while
   Files or Changes shows, every 30 otherwise, and when a request ends. Files keeps its `?file=`
-  while another tab shows.
+  while another tab shows. Changes stays mounted once opened, hidden while another tab shows,
+  like the terminals. A push or pull request review keeps what the reader wrote but hasn't
+  sent, the tab, and where in the diff they were (the file at the top of the view and how far
+  into it, reported by the diff view's `onPlace` a moment after scrolling stops) in
+  localStorage under `studio.review.<approval ID>` (`lib/review-drafts.ts`), so a folded
+  screen, another computer or a reload finds them again. Line comments sit on the diff's
+  lines, so a draft saved against a different diff keeps only the note and where it goes.
+  Deciding drops the entry; nothing is saved for a decided review, and entries older than a
+  month, or past the newest hundred, go.
 
 The computer's ⋯ (`components/computer/computer-menu.tsx`) has its name and ID, template, size
 and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkpoint now,

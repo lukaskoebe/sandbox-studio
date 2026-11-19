@@ -155,10 +155,25 @@ test("a teammate's pull request review waits for approval and posts as edited", 
   await summary.fill(
     "The coupon is checked against the subtotal; see the line."
   )
+  // The edits outlive a reload, and go once the review is posted.
+  await page.reload()
+  await expect(summary).toHaveValue(
+    "The coupon is checked against the subtotal; see the line."
+  )
+  await expect(
+    pane.getByRole("button", { name: "Comment", exact: true })
+  ).toHaveAttribute("aria-pressed", "true")
   await pane.getByRole("checkbox", { name: /Review by an agent/ }).click()
   await pane.getByRole("button", { name: "Post review" }).click()
   await expect(pane).toBeHidden()
   await expect(card).toBeHidden()
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Object.keys(localStorage).filter((k) => k.startsWith("studio.review."))
+      )
+    )
+    .toEqual([])
 
   await expect
     .poll(async () =>

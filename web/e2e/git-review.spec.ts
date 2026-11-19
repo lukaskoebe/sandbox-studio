@@ -1087,6 +1087,113 @@ test("a diff lists its files to jump to, and a comment covers the lines dragged 
   expect(body.note).toContain("Keep these together")
 })
 
+test("a review keeps its note, comments, tab and place across another tab and a reload, until it is decided", async ({
+  page,
+  api,
+  env,
+}) => {
+  const pane = await reviewWithDiff(
+    { page, api, env },
+    "keep-place",
+    [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,2 +1,2 @@",
+      " one",
+      "-two",
+      "+TWO",
+      "diff --git a/long.txt b/long.txt",
+      "new file mode 100644",
+      "--- /dev/null",
+      "+++ b/long.txt",
+      "@@ -0,0 +1,300 @@",
+      ...Array.from({ length: 300 }, (_, i) => `+x ${i}`),
+      "",
+    ].join("\n")
+  )
+  const row = (text: RegExp) =>
+    pane.locator("[data-line]").filter({ hasText: text }).first()
+  const one = await numberOf(pane, row(/^one$/))
+  await page.mouse.click(one.x, one.y)
+  await pane
+    .getByRole("textbox", { name: "Comment on src/a.ts:1" })
+    .fill("Why one?")
+  await pane.getByRole("button", { name: "Save comment" }).click()
+  const comment = pane.getByRole("note", { name: "Comment on src/a.ts:1" })
+  await expect(comment).toContainText("Why one?")
+
+  // Reading on into long.txt.
+  const scroller = pane.locator(".diff-view > *").first()
+  const top = () => scroller.evaluate((el) => el.scrollTop)
+  // The number of the line of long.txt at the top of the view, under the file's header.
+  const topLine = async () => {
+    const edge = (await scroller.boundingBox())!.y + 40
+    return pane.locator("[data-line]").evaluateAll((rows, below) => {
+      const first = rows
+        .map((r) => ({ text: r.textContent, y: r.getBoundingClientRect().top }))
+        .filter((x) => x.y >= below)
+        .sort((a, b) => a.y - b.y)
+        .at(0)
+      const m = /^x (\d+)$/.exec(first?.text.trim() ?? "")
+      return m ? Number(m[1]) : -1
+    }, edge)
+  }
+  await scroller.hover()
+  await page.mouse.wheel(0, 2400)
+  await expect.poll(top).toBeGreaterThan(1500)
+  const at = await topLine()
+  expect(at).toBeGreaterThan(50)
+  const near = async () => Math.abs((await topLine()) - at)
+  // The place is saved a moment after the scrolling stops.
+  await page.waitForTimeout(600)
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await pane
+    .getByRole("textbox", { name: "Note for the agent" })
+    .fill("Mostly fine")
+
+  // Another tab and back: all of it is where it was.
+  await page.getByRole("tab", { name: "Terminal", exact: true }).click()
+  await expect(pane).toBeHidden()
+  await page.getByRole("tab", { name: /^Changes/ }).click()
+  await expect(
+    pane.getByRole("textbox", { name: "Note for the agent" })
+  ).toHaveValue("Mostly fine")
+  await expect(pane.getByRole("list", { name: "Line comments" })).toContainText(
+    "Why one?"
+  )
+  await pane.getByRole("tab", { name: "Changes", exact: true }).click()
+  await expect.poll(near).toBeLessThanOrEqual(2)
+
+  // A reload finds the same: the tab, the note, the comment and the place.
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await page.reload()
+  await expect(
+    pane.getByRole("textbox", { name: "Note for the agent" })
+  ).toHaveValue("Mostly fine")
+  await expect(pane.getByRole("list", { name: "Line comments" })).toContainText(
+    "Why one?"
+  )
+  await pane.getByRole("tab", { name: "Changes", exact: true }).click()
+  await expect.poll(near).toBeLessThanOrEqual(2)
+
+  // Deciding sends it all and forgets it.
+  const decided = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/decide")
+  )
+  await pane.getByRole("button", { name: "Reject" }).click()
+  const body = (await decided).postDataJSON() as { note?: string }
+  expect(body.note).toContain("Mostly fine")
+  expect(body.note).toContain("Why one?")
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Object.keys(localStorage).filter((k) => k.startsWith("studio.review."))
+      )
+    )
+    .toEqual([])
+})
+
 test("a push's commits open to their own changes", async ({
   page,
   api,

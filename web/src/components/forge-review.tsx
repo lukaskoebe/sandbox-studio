@@ -45,6 +45,7 @@ import {
   type Approval,
 } from "@/lib/api/client"
 import { plural, pullRequestName, verdictLabels } from "@/lib/approval-kinds"
+import { draftBase, useReviewDraft } from "@/lib/review-drafts"
 
 type Detail = NonNullable<Approval["forgeReview"]>
 type Draft = Detail["draft"]
@@ -202,6 +203,16 @@ function HeadNote({ approval, draft }: { approval: Approval; draft: Draft }) {
   )
 }
 
+/** What a forge review keeps of the reader's edits, until it is posted or discarded. */
+type ForgeDraft = {
+  verdict: Verdict
+  summary: string
+  comments: LineComment[]
+  elsewhere: DraftComment[]
+  discardNote: string
+  target: FeedbackTarget
+}
+
 /**
  * The review a teammate drafted of a pull request on a forge: the verdict, the summary and
  * the line comments, all editable while it waits. Post review sends it as the user's account;
@@ -215,24 +226,48 @@ export function ForgeReview({ approval }: { approval: Approval }) {
     c,
     index: lineIndex(lines, c),
   }))
-  const [verdict, setVerdict] = useState<Verdict>(draft?.verdict ?? "comment")
-  const [summary, setSummary] = useState(draft?.summary ?? "")
-  const [comments, setComments] = useState<LineComment[]>(() =>
-    placed
-      .filter((p) => p.index >= 0)
-      .map((p) => ({ index: p.index, text: p.c.body }))
+  const pending = approval.status === "pending"
+  // The reader's edits outlive the review, as a push review's do, until it is posted or
+  // discarded. A draft the teammate wrote again starts over, keeping where the outcome goes.
+  const saved = useReviewDraft<ForgeDraft>(
+    approval.id,
+    () => ({
+      verdict: draft?.verdict ?? "comment",
+      summary: draft?.summary ?? "",
+      comments: placed
+        .filter((p) => p.index >= 0)
+        .map((p) => ({ index: p.index, text: p.c.body })),
+      // Comments on lines the shown diff lacks (a truncated diff) post as drafted unless dropped.
+      elsewhere: placed.filter((p) => p.index < 0).map((p) => p.c),
+      discardNote: "",
+      target: draft?.teammate ? newChatTarget : "",
+    }),
+    {
+      base: draftBase(
+        draft?.diff,
+        draft?.verdict,
+        draft?.summary,
+        JSON.stringify(draft?.comments ?? [])
+      ),
+      carry: (d, fresh) => ({
+        ...fresh,
+        discardNote: d.discardNote,
+        target: d.target,
+      }),
+      off: !pending,
+    }
   )
-  // Comments on lines the shown diff lacks (a truncated diff) post as drafted unless dropped.
-  const [elsewhere, setElsewhere] = useState<DraftComment[]>(() =>
-    placed.filter((p) => p.index < 0).map((p) => p.c)
-  )
+  const { verdict, summary, comments, elsewhere, discardNote, target } =
+    saved.draft
+  const setVerdict = (v: Verdict) => saved.change({ verdict: v })
+  const setSummary = (v: string) => saved.change({ summary: v })
+  const setComments = (v: LineComment[]) => saved.change({ comments: v })
+  const setElsewhere = (v: DraftComment[]) => saved.change({ elsewhere: v })
+  const setDiscardNote = (v: string) => saved.change({ discardNote: v })
+  const setTarget = (v: FeedbackTarget) => saved.change({ target: v })
   const who = draft ? drafter(draft) : ""
   const [attribution, setAttribution] = useState(
     () => !!draft?.attribution || (!!who && rememberedAttribution(who))
-  )
-  const [discardNote, setDiscardNote] = useState("")
-  const [target, setTarget] = useState<FeedbackTarget>(
-    draft?.teammate ? newChatTarget : ""
   )
   const queryClient = useQueryClient()
   const decide = $api.useMutation(
@@ -256,7 +291,6 @@ export function ForgeReview({ approval }: { approval: Approval }) {
   const feedback = useSendFeedback()
   if (!detail || !draft) return null
   const pr = draft.pullRequest
-  const pending = approval.status === "pending"
   const params = {
     params: { path: { env: approval.environmentId, id: approval.id } },
   }
@@ -309,7 +343,10 @@ export function ForgeReview({ approval }: { approval: Approval }) {
         },
       })
       .then(
-        () => tell(""),
+        () => {
+          saved.drop()
+          tell("")
+        },
         () => {} // the hook says what failed
       )
   const discard = (action: "deny" | "dismiss") => {
@@ -320,7 +357,10 @@ export function ForgeReview({ approval }: { approval: Approval }) {
         body: { action, scope: "sandbox", note: note || undefined },
       })
       .then(
-        () => action === "deny" && tell(note),
+        () => {
+          saved.drop()
+          if (action === "deny") tell(note)
+        },
         () => {}
       )
   }
@@ -452,6 +492,8 @@ export function ForgeReview({ approval }: { approval: Approval }) {
           comments={comments}
           onComment={pending ? setComments : undefined}
           fill
+          place={saved.place}
+          onPlace={saved.onPlace}
           // A forge's comment is on one line here; a range would need its own fields.
           ranges={false}
           commentLabel={draft.teammate ? `${draft.teammate}'s draft` : "Draft"}

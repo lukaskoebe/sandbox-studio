@@ -280,6 +280,7 @@ export function ChangesView({
   git,
   onOpenFile,
   thread,
+  hidden,
 }: {
   env: string
   sandbox: Sandbox
@@ -294,6 +295,8 @@ export function ChangesView({
   /** Shows a file in the Files tab, relative to /workspace. */
   onOpenFile: (path: string) => void
   thread?: ScreenThread
+  /** Kept while another tab shows, so a review keeps its place. */
+  hidden?: boolean
 }) {
   const changedTurns = useChangedTurns(thread)
   const pushed = usePushed(env, sb.id)
@@ -410,7 +413,13 @@ export function ChangesView({
   const railWidth = Math.min(Math.max(rail, railSplit.min), railMax)
 
   return (
-    <div ref={box} className="@container flex min-h-0 min-w-0 flex-1">
+    <div
+      ref={box}
+      className={cn(
+        "@container flex min-h-0 min-w-0 flex-1",
+        hidden && "hidden"
+      )}
+    >
       <div className="flex min-h-0 min-w-0 flex-1">
         <ScrollArea
           aria-label="Changes"

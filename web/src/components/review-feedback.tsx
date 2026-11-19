@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
+import type { DiffPlace } from "@/lib/review-drafts"
 import { ErrorBoundary } from "@/components/error-boundary"
 
 /** A diff line, with the file and line number a comment on it refers to. */
@@ -156,6 +157,8 @@ export function UnifiedDiff({
   commentLabel,
   ranges,
   layouts,
+  place,
+  onPlace,
   ref,
 }: {
   diff: string
@@ -169,6 +172,9 @@ export function UnifiedDiff({
   ranges?: boolean
   /** Whether it offers stacked or split lines; full-length diffs always do. */
   layouts?: boolean
+  /** Where the reader was, to open there, and where they are as they scroll. */
+  place?: DiffPlace
+  onPlace?: (place: DiffPlace) => void
   /** For a list of comments that jumps to them. */
   ref?: Ref<DiffViewHandle>
 }) {
@@ -188,6 +194,8 @@ export function UnifiedDiff({
           commentLabel={commentLabel}
           ranges={ranges}
           layouts={layouts}
+          place={place}
+          onPlace={onPlace}
           ref={ref}
         />
       </Suspense>

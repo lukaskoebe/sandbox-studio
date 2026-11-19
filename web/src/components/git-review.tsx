@@ -68,6 +68,7 @@ import {
   type GitDetail,
 } from "@/lib/api/client"
 import { approvalKind, gitSummary } from "@/lib/approval-kinds"
+import { draftBase, useReviewDraft } from "@/lib/review-drafts"
 import { formatAge } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
@@ -355,17 +356,42 @@ export function GitReview({ approval }: { approval: Approval }) {
   return <PushReview approval={approval} />
 }
 
+/** What a push review keeps of what the reader wrote, until it is sent. */
+type PushDraft = {
+  note: string
+  comments: LineComment[]
+  target: FeedbackTarget
+}
+
 function PushReview({ approval }: { approval: Approval }) {
   const git = approval.git
-  const [note, setNote] = useState("")
-  const [comments, setComments] = useState<LineComment[]>([])
-  const [tab, setTab] = useState<Tab>("changes")
   const diffView = useRef<DiffViewHandle>(null)
   const review = git?.review
   const proposal = review?.pullRequest
-  const [target, setTarget] = useState<FeedbackTarget>(
-    git?.push.teammateName ? newChatTarget : ""
+  const pending = approval.status === "pending"
+  // What the reader wrote, the tab and where they were in the diff outlive the review: another
+  // tab, a folded screen or a reload finds them again. Line comments sit on the diff's lines, so
+  // a diff that changed keeps only the note and where it goes.
+  const saved = useReviewDraft<PushDraft, Tab>(
+    approval.id,
+    () => ({
+      note: "",
+      comments: [],
+      target: git?.push.teammateName ? newChatTarget : "",
+    }),
+    {
+      base: draftBase(review?.diff),
+      carry: (d, fresh) => ({ ...fresh, note: d.note, target: d.target }),
+      tab: "changes",
+      off: !pending,
+    }
   )
+  const { note, comments, target } = saved.draft
+  const tab = saved.tab ?? "changes"
+  const setTab = saved.setTab
+  const setNote = (v: string) => saved.change({ note: v })
+  const setComments = (v: LineComment[]) => saved.change({ comments: v })
+  const setTarget = (v: FeedbackTarget) => saved.change({ target: v })
   // A new branch opens its pull request by default; a push to a branch that has been
   // pushed before but has none doesn't.
   const [openPR, setOpenPR] = useState(!!review?.pullRequest && !review.old)
@@ -384,7 +410,6 @@ function PushReview({ approval }: { approval: Approval }) {
   const pushAgain = usePushAgain()
   const feedback = useSendFeedback()
   if (!git) return null
-  const pending = approval.status === "pending"
   const params = {
     params: { path: { env: approval.environmentId, id: approval.id } },
   }
@@ -398,8 +423,7 @@ function PushReview({ approval }: { approval: Approval }) {
       {
         onSuccess: (out) => {
           if (!out.left) return
-          setNote("")
-          setComments([])
+          saved.change({ note: "", comments: [] })
         },
       }
     )
@@ -434,7 +458,10 @@ function PushReview({ approval }: { approval: Approval }) {
         },
       })
       .then(
-        () => sends() && send(),
+        () => {
+          saved.drop()
+          if (sends()) send()
+        },
         () => {} // the hook says what failed
       )
   const rv = git.review
@@ -704,6 +731,8 @@ function PushReview({ approval }: { approval: Approval }) {
               comments={comments}
               onComment={pending ? setComments : undefined}
               fill
+              place={saved.place}
+              onPlace={saved.onPlace}
               ref={diffView}
             />
           </TabsContent>

@@ -166,6 +166,11 @@ export function ComputerScreen({
   // A browser replay and its activity stay while the tab is switched away and back.
   const [replay, setReplay] = useState<BrowserReplay | null>(null)
   const [rail, setRail] = useState<RailTab>()
+  // Changes stays mounted once opened, like the terminals, so a review keeps its place while
+  // another tab shows.
+  const [changesFor, setChangesFor] = useState<string>()
+  if (on && tab === "changes" && changesFor !== sb.id) setChangesFor(sb.id)
+  const keepChanges = on && changesFor === sb.id
 
   if (search.fold && !solo) {
     return (
@@ -452,9 +457,14 @@ export function ComputerScreen({
                   />
                 </ErrorBoundary>
               )}
-              {tab === "changes" && (
-                <ErrorBoundary label="the changes">
+              {keepChanges && (
+                <ErrorBoundary
+                  label="the changes"
+                  className={tab === "changes" ? undefined : "hidden"}
+                >
                   <ChangesView
+                    key={sb.id}
+                    hidden={tab !== "changes"}
                     env={env}
                     sandbox={sb}
                     reviews={reviews}

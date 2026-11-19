@@ -9,6 +9,7 @@ import {
 import {
   parsePatchFiles,
   registerCustomTheme,
+  type CodeView as CodeViewInstance,
   type CodeViewDiffItem,
   type DiffLineAnnotation,
   type FileDiffMetadata,
@@ -38,6 +39,7 @@ import {
   type LineComment,
 } from "@/components/review-feedback"
 import { setDiffStyle, useDiffStyle, type DiffStyle } from "@/lib/diff-style"
+import type { DiffPlace } from "@/lib/review-drafts"
 import { cn } from "@/lib/utils"
 import { useTextSize } from "@/lib/theme"
 
@@ -242,6 +244,10 @@ export type DiffViewProps = {
   ranges?: boolean
   /** Whether it offers stacked or split lines; full-length diffs always do. */
   layouts?: boolean
+  /** Where to open: a file by its path, and how far into it, as onPlace reported. */
+  place?: DiffPlace
+  /** Says where the reader is as they scroll, a moment after they stop. */
+  onPlace?: (place: DiffPlace) => void
   ref?: Ref<DiffViewHandle>
 }
 
@@ -255,6 +261,8 @@ export default function DiffView({
   commentLabel,
   ranges = true,
   layouts = fill,
+  place,
+  onPlace,
   ref,
 }: DiffViewProps) {
   const lines = parseDiff(diff)
@@ -263,6 +271,9 @@ export default function DiffView({
   const style = layouts ? picked : "unified"
   const [editing, setEditing] = useState<Editing>()
   const view = useRef<CodeViewHandle<Note, undefined>>(null)
+  // Where the reader is: the file at the top of the view and how far into it. Kept as they
+  // scroll, while the view shows; a hidden view's box has no scroll position to read.
+  const here = useRef<DiffPlace | undefined>(place)
   const box = useRef<HTMLDivElement>(null)
   // A line far from the view unmounts, and the editor on it: the draft outlives it.
   const draft = useRef<{
@@ -338,6 +349,8 @@ export default function DiffView({
       scrollToLine: (i) => {
         const l = lines[i]
         if (l.line === undefined) return
+        // A jump as the view shows again goes where it was asked, not back to the place.
+        here.current = undefined
         view.current?.scrollTo({
           type: "line",
           id: String(l.fileNo),
@@ -448,6 +461,68 @@ export default function DiffView({
   }
   const overview = fill && files.length > 1
 
+  const goTo = (p: DiffPlace) => {
+    const i = files.findIndex((f) => f.name === p.file)
+    if (i < 0) return false
+    // An item's offset counts up the page; a place counts down into the file.
+    view.current?.scrollTo({
+      type: "item",
+      id: String(i),
+      align: "start",
+      offset: -p.offset,
+    })
+    return true
+  }
+  // Back where the reader was: once, when the view first has the files.
+  const placed = useRef(false)
+  useEffect(() => {
+    if (placed.current || !place) return
+    if (goTo(place)) placed.current = true
+  })
+  // Hidden behind another tab and shown again, the box starts at the top: back to the place.
+  const back = useRef(goTo)
+  back.current = goTo
+  const hasFiles = files.length > 0
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    let shown = el.offsetHeight > 0
+    const watch = new ResizeObserver(() => {
+      const now = el.offsetHeight > 0
+      if (now && !shown && here.current) back.current(here.current)
+      shown = now
+    })
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [hasFiles])
+  const reporting = useRef<number>(undefined)
+  useEffect(() => () => window.clearTimeout(reporting.current), [])
+  const track = (top: number, viewer: CodeViewInstance<Note, undefined>) => {
+    if (!box.current?.offsetHeight || !files.length) return
+    // The last file that starts at or above the top of the view.
+    let lo = 0
+    let hi = files.length - 1
+    let at = 0
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if ((viewer.getTopForItem(String(mid)) ?? 0) <= top) {
+        at = mid
+        lo = mid + 1
+      } else hi = mid - 1
+    }
+    const p = {
+      file: files[at].name,
+      offset: Math.max(
+        0,
+        Math.round(top - (viewer.getTopForItem(String(at)) ?? 0))
+      ),
+    }
+    here.current = p
+    if (!onPlace) return
+    window.clearTimeout(reporting.current)
+    reporting.current = window.setTimeout(() => onPlace(p), 250)
+  }
+
   // Nothing the library reads as a file, such as a diff that is only Studio's notes.
   if (!files.length)
     return (
@@ -476,6 +551,7 @@ export default function DiffView({
               <CodeView<Note, undefined>
                 ref={view}
                 items={items}
+                onScroll={track}
                 className={cn(
                   "overflow-auto",
                   fill ? "max-h-[70dvh]" : "max-h-[60vh]"
