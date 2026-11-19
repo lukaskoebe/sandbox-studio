@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"net"
 	"strings"
 	"testing"
 
@@ -10,11 +9,7 @@ import (
 )
 
 func TestUnreachableRules(t *testing.T) {
-	saved := interfaceAddrs
-	interfaceAddrs = func() ([]net.Addr, error) {
-		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.178.63"), Mask: net.CIDRMask(24, 32)}}, nil
-	}
-	t.Cleanup(func() { interfaceAddrs = saved })
+	fakeHostAddrs(t, "192.168.178.63", "1.2.3.63")
 	g := &Gateway{
 		Addr: "127.0.0.1:7879",
 		PrivateHosts: func(context.Context, string) ([]store.PrivateHost, error) {
@@ -32,6 +27,7 @@ func TestUnreachableRules(t *testing.T) {
 		{"8.8.8.8", []int{53}, store.ActionAllow, ""},
 		{"git.company.local", nil, store.ActionAllow, ""}, // a name may resolve anywhere
 		{"192.168.178.63", []int{22}, store.ActionAllow, "an address of this computer"},
+		{"1.2.3.63", []int{443}, store.ActionAllow, "an address of this computer"},
 		{"192.168.178.63", []int{22}, store.ActionDeny, ""},
 		{"localhost", []int{3000}, store.ActionAllow, "stay inside the sandbox"},
 		{"127.0.0.1", nil, store.ActionProxy, "stay inside the sandbox"},

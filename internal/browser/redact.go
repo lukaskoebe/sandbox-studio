@@ -2,6 +2,7 @@ package browser
 
 import (
 	"encoding/json"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -194,13 +195,57 @@ func Redact(snapshot, origin string, fields map[string]Field, patterns []store.B
 // Scrub replaces every occurrence of the given secrets in s. The broker runs every text it
 // returns to an agent, logs or records through it, so a credential Studio filled cannot
 // come back even if the page echoes it somewhere a snapshot or get_text shows.
+//
+// A page that puts the secret in an address encodes it first, so the forms a URL or a form
+// submission takes are replaced too, whatever the case of their hex digits. Other encodings,
+// such as base64, are not.
 func Scrub(s string, secrets []string) string {
 	for _, v := range secrets {
-		if len(v) >= minScrub {
-			s = strings.ReplaceAll(s, v, RedactedValue)
+		if len(v) < minScrub {
+			continue
+		}
+		s = strings.ReplaceAll(s, v, RedactedValue)
+		for _, form := range encodedForms(v) {
+			s = hexInsensitive(form).ReplaceAllLiteralString(s, RedactedValue)
 		}
 	}
 	return s
+}
+
+// encodedForms are the ways a value appears in an address: a query value, a path segment,
+// and what a browser sends for a form field (which leaves * alone and escapes ~).
+func encodedForms(v string) []string {
+	query := url.QueryEscape(v)
+	form := strings.NewReplacer("%2A", "*", "~", "%7E").Replace(query)
+	var out []string
+	for _, f := range []string{query, url.PathEscape(v), form} {
+		if f != v && !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// hexInsensitive matches s exactly, except that the hex digits of its %XX escapes match in
+// either case.
+func hexInsensitive(s string) *regexp.Regexp {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+2 < len(s) {
+			b.WriteString("%")
+			for _, c := range s[i+1 : i+3] {
+				if lower := strings.ToLower(string(c)); lower != string(c) {
+					b.WriteString("[" + string(c) + lower + "]")
+				} else {
+					b.WriteString(regexp.QuoteMeta(string(c)))
+				}
+			}
+			i += 2
+			continue
+		}
+		b.WriteString(regexp.QuoteMeta(s[i : i+1]))
+	}
+	return regexp.MustCompile(b.String())
 }
 
 // minScrub is the shortest secret Scrub replaces; shorter ones would blank ordinary text.

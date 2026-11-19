@@ -481,10 +481,12 @@ hosts" in the code and the API) is the opt-in for such hosts:
   name. Only IPv4 is listed by address; an IPv6 host is listed by name.
 - Stays refused for every entry: loopback, link-local (including the cloud metadata address
   169.254.169.254), unspecified and multicast addresses, `198.18.0.0/15` (Studio's virtual
-  services), the host's own private addresses (so a dev server on `0.0.0.0` stays out of
-  reach; [this computer](#this-computer) opens such a port) and Studio's own ports.
-- A name not on the list stays refused private addresses, whatever DNS says, so a name that
-  rebinds to a private address is still blocked. A name entry never covers an address, and an
+  services), the host's own addresses, public ones included (so a dev server on `0.0.0.0`
+  stays out of reach; [this computer](#this-computer) opens such a port) and Studio's own
+  ports.
+- A name not on the list stays refused private addresses and this computer's own, whatever DNS
+  says, so a name that rebinds to a private address is still blocked, and a site this computer
+  serves at its public address is reached through `host.studio.internal` instead. A name entry never covers an address, and an
   address entry never covers a name that resolves to it.
 - The list only lifts the address restriction. The policy still decides, so a listed host
   needs an allow rule or an approval. A level never allows a private address or a listed name,

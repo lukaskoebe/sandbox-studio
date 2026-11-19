@@ -41,14 +41,14 @@ func (g *Gateway) Unreachable(ctx context.Context, r store.Rule) string {
 	}
 	ip = ip.Unmap()
 	switch {
-	case policy.Public(ip):
-		return ""
 	case ip.IsLoopback():
 		return "Connections to loopback addresses stay inside the sandbox, so this rule never applies. " + toHost
+	case hostAddr(ip): // public ones too: a sandbox reaches neither by address
+		return fmt.Sprintf("%s is an address of this computer, which sandboxes don't reach by its address. %s Make the rule for host.studio.internal instead.", ip, toHost)
+	case policy.Public(ip):
+		return ""
 	case !slices.ContainsFunc(privateRanges, func(p netip.Prefix) bool { return p.Contains(ip) }):
 		return fmt.Sprintf("Sandboxes never reach %s: link-local, multicast, reserved and Studio's own addresses stay refused.", ip)
-	case hostAddr(ip):
-		return fmt.Sprintf("%s is an address of this computer, which sandboxes don't reach by its address. %s Make the rule for host.studio.internal instead.", ip, toHost)
 	case !ip.Is4():
 		return fmt.Sprintf("Sandboxes don't reach %s: only IPv4 addresses can be on the local network list. List the host's name in Settings → Ports and LAN instead.", ip)
 	}

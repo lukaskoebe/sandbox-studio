@@ -214,6 +214,23 @@ func TestScrub(t *testing.T) {
 	if got := Scrub("token abc and abcdef1234!", []string{"abcdef1234", "abc"}); got != "token abc and "+RedactedValue+"!" {
 		t.Errorf("Scrub = %q", got)
 	}
+	// A secret a page put in its address, as a query, a path or a submitted form encode it.
+	secret := "p@ss word*~/x"
+	for _, s := range []string{
+		"https://a.example/?pw=p%40ss+word%2A~%2Fx",        // url.QueryEscape
+		"https://a.example/p@ss%20word%2A~%2Fx",            // url.PathEscape
+		"https://a.example/?pw=p%40ss+word*%7E%2Fx",        // a browser's form encoding
+		"https://a.example/?pw=p%40ss+word*%7e%2fx",        // lower-case hex
+		"https://a.example/?pw=" + secret + "&next=/x%2Fy", // raw
+	} {
+		if got := Scrub(s, []string{secret}); strings.Contains(got, "ss") || !strings.Contains(got, RedactedValue) {
+			t.Errorf("Scrub(%q) = %q", s, got)
+		}
+	}
+	// Hex digits match in either case, the secret's own letters don't.
+	if got := Scrub("P@SS WORD*~/X", []string{secret}); got != "P@SS WORD*~/X" {
+		t.Errorf("another value in other case: %q", got)
+	}
 }
 
 // The browser and teammate come from the channel: the payload cannot name another, browser
@@ -1336,5 +1353,24 @@ func TestStealthModeGoesWithEveryCommand(t *testing.T) {
 	cmds := f.fb.allCommands()
 	if len(cmds) < 2 || cmds[0].Stealth || !cmds[len(cmds)-1].Stealth {
 		t.Fatalf("stealth of the commands before and after turning it on: %+v", cmds)
+	}
+}
+
+// A page the agent reached by a click from an allowed one is still under its deny rules: a
+// snapshot of it is refused before any of its text is read.
+func TestSnapshotFollowsTheDenyRulesOfThePageItReads(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.st.AddBrowserPattern(f.ctx, store.BrowserPattern{EnvironmentID: f.env, TeammateID: f.ada.ID, Action: "*", Origin: "https://bank.example", Verdict: store.BrowserDeny}); err != nil {
+		t.Fatal(err)
+	}
+	f.fb.url = "https://news.example/"
+	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	f.fb.url = "https://bank.example/accounts"
+	out, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	if err == nil || !strings.Contains(err.Error(), "denies snapshot") {
+		t.Fatalf("snapshot of a denied page: %v, %v", out, err)
 	}
 }

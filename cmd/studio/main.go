@@ -431,7 +431,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	conns := &gateway.ConnLog{}
 	records := &gateway.Recorder{} // recordings of intercepted traffic, in memory only
 	authority := &ca.Authority{Store: st, Sealer: vault}
-	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialPublic}
+	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialGuest}
 	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log,
 		Client: forgeClient(p.Data)}
 	integs := integrations.Set{gitRemote}

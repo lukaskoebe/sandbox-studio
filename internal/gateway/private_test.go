@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -269,11 +270,7 @@ func TestDialGuardResolvesNames(t *testing.T) {
 }
 
 func TestCheckPrivateRefusesHostAddresses(t *testing.T) {
-	saved := interfaceAddrs
-	interfaceAddrs = func() ([]net.Addr, error) {
-		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.5"), Mask: net.CIDRMask(24, 32)}}, nil
-	}
-	t.Cleanup(func() { interfaceAddrs = saved })
+	fakeHostAddrs(t, "192.168.1.5")
 	check := checkPrivate(nil)
 	if err := check("tcp", "192.168.1.5:3000", nil); err == nil {
 		t.Fatal("a private host reached the host's own address")
@@ -284,11 +281,7 @@ func TestCheckPrivateRefusesHostAddresses(t *testing.T) {
 }
 
 func TestDialGuardReachesListedAddressesButNotTheHosts(t *testing.T) {
-	saved := interfaceAddrs
-	interfaceAddrs = func() ([]net.Addr, error) {
-		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.5"), Mask: net.CIDRMask(24, 32)}}, nil
-	}
-	t.Cleanup(func() { interfaceAddrs = saved })
+	fakeHostAddrs(t, "192.168.1.5")
 	g := &Gateway{
 		Addr: "127.0.0.1:7879", Log: slog.New(slog.DiscardHandler), Conns: &ConnLog{},
 		PrivateHosts: func(context.Context, string) ([]store.PrivateHost, error) {
@@ -359,5 +352,48 @@ func TestDialGuardReachesOpenHostPorts(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s dials %s: err = %v, want a refusal containing %q", c.env, c.addr, err, c.want)
 		}
+	}
+}
+
+// fakeHostAddrs makes ips the host's own addresses for the test.
+func fakeHostAddrs(t *testing.T, ips ...string) {
+	saved := interfaceAddrs
+	interfaceAddrs = func() ([]net.Addr, error) {
+		var out []net.Addr
+		for _, ip := range ips {
+			out = append(out, &net.IPNet{IP: net.ParseIP(ip), Mask: net.CIDRMask(24, 32)})
+		}
+		return out, nil
+	}
+	ownAddrs.ok = false
+	t.Cleanup(func() {
+		interfaceAddrs = saved
+		ownAddrs.ok = false
+	})
+}
+
+// A sandbox reaches no address of this computer by address, public ones included: a dev
+// server listening on every address would otherwise be one name away. Other public
+// addresses stay reachable, and an unreadable list fails closed.
+func TestCheckGuestRefusesTheHostsPublicAddresses(t *testing.T) {
+	fakeHostAddrs(t, "1.2.3.7", "2a00:1450::7")
+	for _, addr := range []string{"1.2.3.7:5432", "[2a00:1450::7]:3000", "[::ffff:1.2.3.7]:80"} {
+		if err := checkGuest("tcp", addr, nil); err == nil || !strings.Contains(err.Error(), "host.studio.internal") {
+			t.Errorf("%s: %v", addr, err)
+		}
+	}
+	if err := checkGuest("tcp", "1.2.3.8:443", nil); err != nil {
+		t.Errorf("another public address: %v", err)
+	}
+	if err := checkGuest("tcp", "192.168.1.9:443", nil); err == nil {
+		t.Error("a private address passed")
+	}
+	if err := checkPrivate(nil)("tcp", "1.2.3.7:22", nil); err == nil {
+		t.Error("a listed name reached the host's public address")
+	}
+	interfaceAddrs = func() ([]net.Addr, error) { return nil, errors.New("no interfaces") }
+	ownAddrs.ok = false
+	if err := checkGuest("tcp", "1.2.3.8:443", nil); err == nil {
+		t.Error("an unreadable address list let a connection through")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -190,6 +191,20 @@ func checkPublic(network, address string, _ syscall.RawConn) error {
 	return nil
 }
 
+// checkGuest is the Control of the dialers a sandbox's connections take to names that aren't
+// listed: public addresses, but not this computer's own, whose services listen on every
+// address. A site served here is reached through host.studio.internal.
+func checkGuest(network, address string, raw syscall.RawConn) error {
+	if err := checkPublic(network, address, raw); err != nil {
+		return err
+	}
+	ap, _ := netip.ParseAddrPort(address)
+	if hostAddr(ap.Addr()) {
+		return fmt.Errorf("refusing to connect to %s: an address of this computer; use host.studio.internal", ap.Addr())
+	}
+	return nil
+}
+
 // checkPrivate returns the Control of a dialer for a listed name: privateAddr, and never one
 // of Studio's own ports.
 func checkPrivate(reserved []uint16) func(network, address string, _ syscall.RawConn) error {
@@ -204,32 +219,46 @@ func checkPrivate(reserved []uint16) func(network, address string, _ syscall.Raw
 		if !privateAddr(ap.Addr()) {
 			return fmt.Errorf("refusing to connect to %s: not a public or private address", ap.Addr())
 		}
-		if !public(ap.Addr()) && hostAddr(ap.Addr()) {
+		if hostAddr(ap.Addr()) {
 			return fmt.Errorf("refusing to connect to %s: an address of this computer", ap.Addr())
 		}
 		return nil
 	}
 }
 
-// interfaceAddrs lists the host's own addresses; tests replace it.
+// interfaceAddrs lists the host's own addresses; tests replace it with fakeHostAddrs.
 var interfaceAddrs = net.InterfaceAddrs
 
+// ownAddrs keeps the host's addresses for a few seconds, as every connection asks.
+var ownAddrs struct {
+	mu   sync.Mutex
+	at   time.Time
+	list []netip.Addr
+	ok   bool
+}
+
+const ownAddrsFresh = 5 * time.Second
+
 // hostAddr reports whether ip is one of the host's own addresses, whose services (a dev server
-// on 0.0.0.0, say) a private host must not reach. It fails closed.
+// on 0.0.0.0, say) a sandbox must not reach by address. When the list can't be read it keeps
+// the last one it read, and fails closed before any.
 func hostAddr(ip netip.Addr) bool {
-	addrs, err := interfaceAddrs()
-	if err != nil {
-		return true
-	}
-	ip = ip.Unmap()
-	for _, a := range addrs {
-		if n, ok := a.(*net.IPNet); ok {
-			if own, ok := netip.AddrFromSlice(n.IP); ok && own.Unmap() == ip {
-				return true
+	ownAddrs.mu.Lock()
+	defer ownAddrs.mu.Unlock()
+	if !ownAddrs.ok || time.Since(ownAddrs.at) > ownAddrsFresh {
+		if addrs, err := interfaceAddrs(); err == nil {
+			list := make([]netip.Addr, 0, len(addrs))
+			for _, a := range addrs {
+				if n, ok := a.(*net.IPNet); ok {
+					if own, ok := netip.AddrFromSlice(n.IP); ok {
+						list = append(list, own.Unmap())
+					}
+				}
 			}
+			ownAddrs.list, ownAddrs.at, ownAddrs.ok = list, time.Now(), true
 		}
 	}
-	return false
+	return !ownAddrs.ok || slices.Contains(ownAddrs.list, ip.Unmap())
 }
 
 // reservedPorts are the ports of Studio's own listeners, which no private host is dialed on.
@@ -281,7 +310,7 @@ func (g *Gateway) guardedDialer(envID string, fallback func(ctx context.Context,
 			if fallback != nil {
 				return fallback(ctx, network, addr)
 			}
-			d := &net.Dialer{Timeout: 15 * time.Second, Resolver: g.resolver, Control: checkPublic}
+			d := &net.Dialer{Timeout: 15 * time.Second, Resolver: g.resolver, Control: checkGuest}
 			return d.DialContext(ctx, network, addr)
 		}
 		d := &net.Dialer{Timeout: 15 * time.Second, Resolver: g.resolver, Control: checkPrivate(g.reservedPorts())}

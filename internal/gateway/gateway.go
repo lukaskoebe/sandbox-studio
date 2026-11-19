@@ -541,9 +541,20 @@ func readCredentials(br *bufio.Reader) (user, pass string, err error) {
 // the LAN through any approved name that resolves there.
 var publicDialer = &net.Dialer{Timeout: 15 * time.Second, Control: checkPublic}
 
-// DialPublic connects the way the gateway does, to public addresses only.
+// DialPublic connects to public addresses only, for Studio's own calls: a login refresh, a
+// provider's models, a forge.
 func DialPublic(ctx context.Context, network, addr string) (net.Conn, error) {
 	return publicDialer.DialContext(ctx, network, addr)
+}
+
+// guestDialer is publicDialer for a sandbox's connections: not to this computer's own
+// addresses either.
+var guestDialer = &net.Dialer{Timeout: 15 * time.Second, Control: checkGuest}
+
+// DialGuest connects the way the gateway does for a sandbox: to public addresses that aren't
+// this computer's.
+func DialGuest(ctx context.Context, network, addr string) (net.Conn, error) {
+	return guestDialer.DialContext(ctx, network, addr)
 }
 
 // public reports whether ip is on the public Internet (policy.Public).

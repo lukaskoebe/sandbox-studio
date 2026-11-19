@@ -328,7 +328,7 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 	}
 	after, _ := c.currentURL(ctx)
 	c.s.record(ctx, c.st, c.pg, e)
-	return fmt.Sprintf("done; the page is at %s. Run `studio browser snapshot` to see it.", after), nil
+	return c.scrub(fmt.Sprintf("done; the page is at %s. Run `studio browser snapshot` to see it.", after)), nil
 }
 
 // decode reads a tool's arguments. Unknown fields are refused: a call has no say in
@@ -471,6 +471,10 @@ func (c *call) snapshot(ctx context.Context, params json.RawMessage) (any, error
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return nil, errors.New("the snapshot was not understood")
 	}
+	// A click on an allowed page can land on a blocked one: the page it read decides.
+	if err := c.authorize(ctx, Request{Action: "snapshot", Origin: Origin(snap.Origin)}, snap.Origin, ""); err != nil {
+		return nil, err
+	}
 	text, refs, err := c.s.redactSnapshot(ctx, c.st, c.pg, snap)
 	if err != nil {
 		return nil, err
@@ -484,7 +488,7 @@ func (c *call) snapshot(ctx context.Context, params json.RawMessage) (any, error
 	if text == "" {
 		text = "(no elements)"
 	}
-	return "page: " + snap.Origin + "\n" + c.s.loginsFor(ctx, c.st.env, c.st.teammate, snap.Origin) + "\n" + clip(text, maxAgentText), nil
+	return c.scrub("page: " + snap.Origin + "\n" + c.s.loginsFor(ctx, c.st.env, c.st.teammate, snap.Origin) + "\n" + clip(text, maxAgentText)), nil
 }
 
 // redactSnapshot reads the attributes of the snapshot's valued fields and blanks the
@@ -698,7 +702,7 @@ func (c *call) screenshot(ctx context.Context, params json.RawMessage) (any, err
 	var img Image
 	img.Image.MIMEType = "image/jpeg"
 	img.Image.Data = base64.StdEncoding.EncodeToString(shot)
-	img.Text = "page: " + url
+	img.Text = c.scrub("page: " + url)
 	return img, nil
 }
 
@@ -746,5 +750,5 @@ func (c *call) back(ctx context.Context, params json.RawMessage) (any, error) {
 	}
 	after, _ := c.currentURL(ctx)
 	c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: "back", url: after, outcome: "ok", shot: shot})
-	return "went back to " + after, nil
+	return c.scrub("went back to " + after), nil
 }

@@ -1317,6 +1317,11 @@ export function PolicyPicker({
           </button>
         ))}
       </div>
+      {value === "block" && (
+        <span className="text-xs text-muted-foreground">
+          The teammate can't read this site's pages either.
+        </span>
+      )}
     </div>
   )
 }

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- A teammate can no longer read a page its browser rules block by clicking its way there from
+  an allowed one: `studio browser snapshot` now checks the rules of the page it reads, as every
+  other way of reading a page did. The site's Blocked setting says so.
+- A password or token Studio filled into a page no longer reaches the teammate when the page
+  puts it in its address. Studio blanked it only as typed, while an address carries it encoded
+  (`p%40ss+word`), and the address after a click, a screenshot, going back and a snapshot's
+  first line weren't checked at all.
+- A sandbox can no longer reach a database or dev server on this computer through the
+  computer's public address: it reaches this computer only through `host.studio.internal`.
+  A site you serve from this computer at its public address is reached the same way, and a
+  rule naming one of the computer's public addresses says so.
 - A computer whose create or fork finished just as Studio stopped is no longer deleted when
   Studio starts again. Studio keeps a note while a create or fork runs and removes it at the
   end; if that removal didn't happen, the next start took the computer for one that failed
