@@ -171,10 +171,17 @@ export function Diff({
   oldText?: string
   newText: string
 }) {
-  const rows = useMemo(
-    () => diffLines(oldText ?? "", newText),
-    [oldText, newText]
-  )
+  // A card shows the start of a long change; the counts are the whole change's.
+  const { rows, hidden, added, removed } = useMemo(() => {
+    const all = diffLines(oldText ?? "", newText)
+    const changed = (r: Row) => r.op === "+" || r.op === "-"
+    return {
+      rows: all.slice(0, maxRows),
+      hidden: all.slice(maxRows).filter(changed).length,
+      added: all.filter((r) => r.op === "+").length,
+      removed: all.filter((r) => r.op === "-").length,
+    }
+  }, [oldText, newText])
   const tokens = useDiffTokens(
     useMemo(
       () =>
@@ -186,8 +193,6 @@ export function Diff({
       [rows, path]
     )
   )
-  const added = rows.filter((r) => r.op === "+").length
-  const removed = rows.filter((r) => r.op === "-").length
   return (
     <div className="min-w-0 overflow-hidden rounded-md border">
       <div className="flex items-center gap-2 border-b bg-muted/50 px-2 py-1 font-mono text-caption">
@@ -233,6 +238,14 @@ export function Diff({
             </div>
           )
         )}
+        {hidden > 0 && (
+          <div className="px-2 pt-1 font-sans text-muted-foreground">
+            {hidden === 1
+              ? "1 more changed line"
+              : `${hidden} more changed lines`}{" "}
+            not shown
+          </div>
+        )}
       </pre>
     </div>
   )
@@ -243,48 +256,48 @@ type Row = { op: "+" | "-" | " " | "…"; text: string }
 /** Lines of context kept around each change. */
 const context = 2
 
+/** The most rows a change's card shows. */
+const maxRows = 2000
+
+/** The most changed lines a diff looks for; a larger change shows as removed and added. */
+const maxEdits = 1000
+
 /**
- * A line diff by longest common subsequence, with unchanged runs cut to a little context.
- * Large files fall back to the whole old text removed and the new one added.
+ * A line diff, with unchanged runs cut to a little context. The lines both texts start and end
+ * with stay out of the comparison; between them Myers' diff finds the fewest lines removed and
+ * added, removals first, so its cost grows with the size of the change rather than the file's.
+ * A change of more than maxEdits lines shows its old lines removed and its new ones added.
  */
 export function diffLines(a: string, b: string): Row[] {
-  const x = a === "" ? [] : a.replace(/\n$/, "").split("\n")
-  const y = b === "" ? [] : b.replace(/\n$/, "").split("\n")
-  let rows: Row[]
-  if (x.length * y.length > 250_000) {
-    rows = [
-      ...x.map((text) => ({ op: "-" as const, text })),
-      ...y.map((text) => ({ op: "+" as const, text })),
-    ]
-  } else {
-    // lcs[i][j]: length of the common subsequence of x[i:] and y[j:].
-    const lcs = Array.from({ length: x.length + 1 }, () =>
-      new Array<number>(y.length + 1).fill(0)
-    )
-    for (let i = x.length - 1; i >= 0; i--)
-      for (let j = y.length - 1; j >= 0; j--)
-        lcs[i][j] =
-          x[i] === y[j]
-            ? lcs[i + 1][j + 1] + 1
-            : Math.max(lcs[i + 1][j], lcs[i][j + 1])
-    rows = []
-    let i = 0
-    let j = 0
-    while (i < x.length || j < y.length) {
-      if (i < x.length && j < y.length && x[i] === y[j]) {
-        rows.push({ op: " ", text: x[i] })
-        i++
-        j++
-      } else if (
-        j < y.length &&
-        (i >= x.length || lcs[i][j + 1] >= lcs[i + 1][j])
-      ) {
-        rows.push({ op: "+", text: y[j++] })
-      } else {
-        rows.push({ op: "-", text: x[i++] })
-      }
-    }
-  }
+  const all = (t: string) => (t === "" ? [] : t.replace(/\n$/, "").split("\n"))
+  const before = all(a)
+  const after = all(b)
+  let head = 0
+  while (
+    head < before.length &&
+    head < after.length &&
+    before[head] === after[head]
+  )
+    head++
+  let tail = 0
+  while (
+    tail < before.length - head &&
+    tail < after.length - head &&
+    before[before.length - 1 - tail] === after[after.length - 1 - tail]
+  )
+    tail++
+  const x = before.slice(head, before.length - tail)
+  const y = after.slice(head, after.length - tail)
+  const same = (text: string): Row => ({ op: " ", text })
+  let rows = myers(x, y, maxEdits) ?? [
+    ...x.map((text) => ({ op: "-" as const, text })),
+    ...y.map((text) => ({ op: "+" as const, text })),
+  ]
+  rows = [
+    ...before.slice(0, head).map(same),
+    ...rows,
+    ...before.slice(before.length - tail).map(same),
+  ]
   const keep = rows.map((_, i) =>
     rows
       .slice(Math.max(0, i - context), i + context + 1)
@@ -296,4 +309,70 @@ export function diffLines(a: string, b: string): Row[] {
     else if (out.at(-1)?.op !== "…") out.push({ op: "…", text: "" })
   })
   return out
+}
+
+/**
+ * Whether round d reaches diagonal k down from k+1, a line added, rather than right from k−1, a
+ * line removed; at is how far the previous round reached on a diagonal. On a tie it goes right,
+ * so removals come before what replaces them.
+ */
+function down(at: (k: number) => number, k: number, d: number) {
+  return k === -d || (k !== d && at(k - 1) < at(k + 1))
+}
+
+/**
+ * Myers' O(ND) diff of x and y, or undefined if it takes more than limit lines removed and
+ * added. v[k] is how far along x the furthest path on diagonal k (x index − y index) reaches;
+ * each round d keeps a copy of its v, from −d to d, to walk the path back.
+ */
+function myers(x: string[], y: string[], limit: number): Row[] | undefined {
+  const n = x.length
+  const m = y.length
+  const off = n + m + 1
+  const v = new Int32Array(2 * off + 1)
+  const trace: Int32Array[] = []
+  for (let d = 0; d <= Math.min(n + m, limit); d++) {
+    for (let k = -d; k <= d; k += 2) {
+      let i = down((j) => v[off + j], k, d)
+        ? v[off + k + 1]
+        : v[off + k - 1] + 1
+      let j = i - k
+      while (i < n && j < m && x[i] === y[j]) {
+        i++
+        j++
+      }
+      v[off + k] = i
+      if (i >= n && j >= m) return walkBack(x, y, trace, d)
+    }
+    trace.push(v.slice(off - d, off + d + 1))
+  }
+  return undefined
+}
+
+/** The rows of the path myers found in round last, walked back through its rounds' copies. */
+function walkBack(
+  x: string[],
+  y: string[],
+  trace: Int32Array[],
+  last: number
+): Row[] {
+  const rows: Row[] = []
+  let i = x.length
+  let j = y.length
+  for (let d = last; d > 0; d--) {
+    const prev = trace[d - 1]
+    const at = (n: number) => prev[n + d - 1]
+    const k = i - j
+    const added = down(at, k, d)
+    const fromK = added ? k + 1 : k - 1
+    const fromI = at(fromK)
+    const fromJ = fromI - fromK
+    // The unchanged run after this round's one change, then the change.
+    while (i > (added ? fromI : fromI + 1)) rows.push({ op: " ", text: x[--i] })
+    rows.push(added ? { op: "+", text: y[fromJ] } : { op: "-", text: x[fromI] })
+    i = fromI
+    j = fromJ
+  }
+  while (i > 0) rows.push({ op: " ", text: x[--i] })
+  return rows.reverse()
 }

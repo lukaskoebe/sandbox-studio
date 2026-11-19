@@ -22,6 +22,10 @@
   Bold, italics, links and inline code over 500 characters (1,000 for code) now show their
   markers, and a paragraph over 32 KB shows as plain text. Each event of a running chat
   now parses only the message it changed, instead of every message on screen.
+- A file change in a chat shows only the lines that changed, with a little context, in a file
+  of any size: one edit in a 600-line file showed all 600 lines removed and added again.
+  Removed lines come before the ones that replace them, and a change of more than 2,000 rows
+  shows its first 2,000 and says how many changed lines it leaves out.
 - Deleting a sandbox in `studio tui` waits until Studio has removed it, instead of failing
   with "context deadline exceeded" after 15 seconds while the delete goes on, which made a
   second try say the sandbox was busy.
