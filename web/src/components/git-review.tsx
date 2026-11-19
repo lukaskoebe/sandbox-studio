@@ -399,9 +399,11 @@ function PushReview({ approval }: { approval: Approval }) {
     decide.isPending && decide.variables.body.action === action
   // A new chat starts only when there is something to tell it beyond the outcome.
   const sends = () => !!target && (target !== newChatTarget || !!fullNote())
+  // The note goes to the chat once the decision is in, even if the review closed meanwhile, as
+  // when the push left the list: a mutate's own onSuccess doesn't run once it unmounted.
   const act = (action: Action) =>
-    decide.mutate(
-      {
+    decide
+      .mutateAsync({
         ...params,
         body: {
           action,
@@ -416,9 +418,11 @@ function PushReview({ approval }: { approval: Approval }) {
           updateCheckedOut:
             rv?.checkedOut && action === "allow" ? updateCheckedOut : undefined,
         },
-      },
-      { onSuccess: () => sends() && send() }
-    )
+      })
+      .then(
+        () => sends() && send(),
+        () => {} // the hook says what failed
+      )
   const rv = git.review
   const pr = git.pullRequest
   const forced = !pr && !!rv?.forced

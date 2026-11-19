@@ -26,6 +26,9 @@
   of any size: one edit in a 600-line file showed all 600 lines removed and added again.
   Removed lines come before the ones that replace them, and a change of more than 2,000 rows
   shows its first 2,000 and says how many changed lines it leaves out.
+- A note you send with a push review's decision reaches its chat or terminal even if the
+  review closed before the decision was in, as when a slow push left the list or you picked
+  another change. It went nowhere before. The same holds for a pull request review.
 - Deleting a sandbox in `studio tui` waits until Studio has removed it, instead of failing
   with "context deadline exceeded" after 15 seconds while the delete goes on, which made a
   second try say the sandbox was busy.

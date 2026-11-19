@@ -268,9 +268,11 @@ export function ForgeReview({ approval }: { approval: Approval }) {
           : { note, terminal: target.slice(9) }
     feedback.mutate({ ...params, body })
   }
+  // What the chat is told goes once the decision is in, even if the review closed meanwhile: a
+  // mutate's own onSuccess doesn't run once it unmounted.
   const post = () =>
-    decide.mutate(
-      {
+    decide
+      .mutateAsync({
         ...params,
         body: {
           action: "allow",
@@ -295,18 +297,22 @@ export function ForgeReview({ approval }: { approval: Approval }) {
             ],
           },
         },
-      },
-      { onSuccess: () => tell("") }
-    )
+      })
+      .then(
+        () => tell(""),
+        () => {} // the hook says what failed
+      )
   const discard = (action: "deny" | "dismiss") => {
     const note = discardNote.trim()
-    decide.mutate(
-      {
+    decide
+      .mutateAsync({
         ...params,
         body: { action, scope: "sandbox", note: note || undefined },
-      },
-      { onSuccess: () => action === "deny" && tell(note) }
-    )
+      })
+      .then(
+        () => action === "deny" && tell(note),
+        () => {}
+      )
   }
   // The forge takes an approval without text; anything else needs a summary.
   const empty = !summary.trim() && verdict !== "approve"

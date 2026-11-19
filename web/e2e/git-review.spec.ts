@@ -336,6 +336,64 @@ test("a review that doesn't exist says so", async ({ page, env }) => {
   await expect(page).toHaveURL(new RegExp(`/e/${env}/activity\\?kind=git$`))
 })
 
+// The note goes once the decision is in, even when the review closed meanwhile, as a push that
+// takes a while upstream leaves the list before the answer comes back.
+test("a review's note reaches the chat when the review closed before the decision was in", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const teammate = await addTeammate(
+    api,
+    env,
+    `Left ${Math.random().toString(36).slice(2, 6)}`
+  )
+  const id = await api.createSandbox(sandboxName("left"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  const pushed = await api.push(id, {
+    url: forge.url,
+    file: "late.txt",
+    content: "late\n",
+    message: "Add late",
+  })
+  expect(pushed.error, pushed.output).toBeUndefined()
+  await page.goto(`/e/${env}`)
+  await approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "team/app" })
+    .getByRole("button", { name: "Review" })
+    .click()
+  const pane = page.getByTestId("git-review")
+  await pane.getByRole("tab", { name: /^Comments/ }).click()
+  await pane
+    .getByRole("textbox", { name: "Note for the agent" })
+    .fill("Name it later.txt instead")
+  await pane.getByRole("combobox", { name: "Send to" }).click()
+  await page.getByRole("option", { name: /^Chat/ }).click()
+
+  // The decision takes a moment; the review closes before it's in.
+  await page.route("**/approvals/*/decide", async (route) => {
+    await new Promise((r) => setTimeout(r, 1500))
+    await route.continue()
+  })
+  await pane.getByRole("button", { name: "Reject" }).click()
+  await page.getByRole("tab", { name: "Files" }).click()
+  await expect(pane).toBeHidden()
+  await expect(page.getByText("Feedback sent to the agent")).toBeVisible()
+  await page.unroute("**/approvals/*/decide")
+
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  await expect(page.getByRole("main")).toContainText(
+    "Name it later.txt instead"
+  )
+})
+
 // Review feedback goes straight to the agent: line comments and the outcome as a prompt of
 // its chat, or pasted into its terminal.
 test("review comments are sent to the agent's chat, terminal or a new chat", async ({
