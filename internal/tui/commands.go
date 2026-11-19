@@ -137,13 +137,12 @@ func (m *app) lifecycle(sb sandboxes.View, action, verb string) tea.Cmd {
 	}
 }
 
-// remove deletes a sandbox.
+// remove deletes a sandbox. Studio stops the VM first and retries a busy one, which can take
+// longer than a request's timeout, so this waits, as a start does, until it's done.
 func (m *app) remove(sb sandboxes.View) tea.Cmd {
 	ctx, client, env := m.ctx, m.client, m.env.ID
 	return func() tea.Msg {
-		rctx, cancel := requestContext(ctx)
-		defer cancel()
-		if err := client.DeleteSandbox(rctx, env, sb.ID); err != nil {
+		if err := client.DeleteSandbox(ctx, env, sb.ID); err != nil {
 			return actionDone{err: fmt.Errorf("delete %s: %w", sb.Name, err)}
 		}
 		return actionDone{done: "Deleted " + sb.Name}

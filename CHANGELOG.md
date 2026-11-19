@@ -17,6 +17,9 @@
   back: the connections it opened while you drove end at their next request, and the browser
   opens new ones that follow the agent's rules. The same happens when another agent starts
   driving.
+- Deleting a sandbox in `studio tui` waits until Studio has removed it, instead of failing
+  with "context deadline exceeded" after 15 seconds while the delete goes on, which made a
+  second try say the sandbox was busy.
 - `studio restart` refuses to replace a Studio whose database is newer than the binary it
   runs from, which couldn't open it, instead of stopping that Studio and leaving none. A
   Studio that fails while starting ends the wait at once, instead of after three minutes,
