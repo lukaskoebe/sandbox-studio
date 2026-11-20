@@ -65,7 +65,6 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxinfo"
 	"github.com/lukaskoebe/sandbox-studio/internal/secretcheck"
-	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
@@ -375,11 +374,17 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		return err
 	}
 	auth.Quit = stop // `studio quit`, and the Windows tray's Quit
+	refreshAutostart(addr, log)
 	// Studio must not run without its vault: without the key the stored secrets are lost.
-	vault, err := secrets.Open(ctx, st, p.Data, log)
+	// While the keychain holding the key is locked, Studio waits for it (keychain.go).
+	vault, opened, err := openVault(ctx, st, p.Data, addr, auth, open, log)
 	if err != nil {
 		return err
 	}
+	if vault == nil {
+		return nil // stopped while it waited
+	}
+	open = open && !opened
 	if err := ensureEnvironment(ctx, st); err != nil {
 		return err
 	}

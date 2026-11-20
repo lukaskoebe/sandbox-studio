@@ -26,6 +26,11 @@ import (
 // ErrInvalid is wrapped by errors describing a secret the vault refuses to store.
 var ErrInvalid = errors.New("invalid secret")
 
+// ErrKeychainLocked is wrapped by Open's error when the vault key is in the OS keychain and the
+// keychain is locked or doesn't answer, as after a reboot with only SSH logins. It may open
+// later, so Studio waits for it rather than exit (cmd/studio/keychain.go).
+var ErrKeychainLocked = errors.New("the vault key is kept in the OS keychain, which is locked or not reachable")
+
 const (
 	keySize       = 32
 	maxValueBytes = 16 << 10
@@ -133,6 +138,9 @@ func loadKey(ctx context.Context, st *store.Store, primary, fallback KeyStore, l
 	key, err := ks.Get()
 	if errors.Is(err, ErrNoKey) {
 		return nil, nil, fmt.Errorf("the vault key is kept in the %s, but it is missing; the secrets cannot be decrypted", describe(ks.Name()))
+	}
+	if err != nil && ks.Name() == backendKeychain {
+		return nil, nil, fmt.Errorf("%w (%v); unlock it", ErrKeychainLocked, err)
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("the vault key is kept in the %s, which is not reachable (%w); unlock it and restart", describe(ks.Name()), err)

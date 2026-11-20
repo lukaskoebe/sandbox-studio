@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -103,6 +104,7 @@ func startService(ctx context.Context, addr string) bool {
 	if err != nil {
 		return false
 	}
+	_, _ = svc.Refresh() // after an update, the unit an older Studio wrote starts this binary
 	st, err := svc.Status()
 	if err != nil || !st.Enabled || st.Stale {
 		return false
@@ -112,6 +114,24 @@ func startService(ctx context.Context, addr string) bool {
 		return false
 	}
 	return exec.CommandContext(ctx, cmd[0], cmd[1:]...).Run() == nil
+}
+
+// refreshAutostart rewrites the login entry when an older Studio wrote it for this binary, as
+// after an update, so its settings, such as the systemd start limit, hold. A Studio on another
+// address, as in tests, leaves it alone.
+func refreshAutostart(addr string, log *slog.Logger) {
+	if addr != defaultAddr {
+		return
+	}
+	svc, err := autostart.Default()
+	if err != nil {
+		return
+	}
+	if done, err := svc.Refresh(); err != nil {
+		log.Warn("update the autostart entry", "err", err)
+	} else if done {
+		log.Info("updated the autostart entry an older Studio wrote")
+	}
 }
 
 // appPaths are the places of the Studio app next to the binary exe.

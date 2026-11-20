@@ -1,6 +1,7 @@
 package autostart
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,9 @@ func newService(t *testing.T, goos string) *Service {
 
 func TestLinux(t *testing.T) {
 	s := newService(t, "linux")
+	// A failing reload, as without a systemd user manager, doesn't fail the change.
+	reloads := 0
+	s.Reload = func() error { reloads++; return errors.New("no user manager") }
 	st, err := s.Status()
 	if err != nil || st.Enabled || !st.Supported {
 		t.Fatalf("initial: %+v %v", st, err)
@@ -28,7 +32,8 @@ func TestLinux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`ExecStart="/opt/Sandbox Studio/studio"`, "KillMode=process", "WantedBy=default.target"} {
+	// The start limit keeps a Studio that fails at every start from restarting without end.
+	for _, want := range []string{`ExecStart="/opt/Sandbox Studio/studio"`, "KillMode=process", "WantedBy=default.target", "StartLimitIntervalSec=5min", "StartLimitBurst=10"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("unit lacks %q:\n%s", want, data)
 		}
@@ -58,6 +63,9 @@ func TestLinux(t *testing.T) {
 	}
 	if _, err := s.Disable(); err != nil {
 		t.Fatalf("disabling twice: %v", err)
+	}
+	if reloads != 4 {
+		t.Fatalf("systemd reloaded %d times, want once per change (4)", reloads)
 	}
 }
 
@@ -133,5 +141,75 @@ func TestRefusesGoRun(t *testing.T) {
 	}
 	if _, err := (&Service{GOOS: "plan9", Exe: "/bin/studio"}).Enable(); err != ErrUnsupported {
 		t.Fatalf("plan9: %v", err)
+	}
+}
+
+func TestLinuxRefresh(t *testing.T) {
+	s := newService(t, "linux")
+	reloads := 0
+	s.Reload = func() error { reloads++; return nil }
+	unit := filepath.Join(s.Home, ".config", "systemd", "user", "sandbox-studio.service")
+	if done, err := s.Refresh(); done || err != nil {
+		t.Fatalf("refresh without a unit: %v %v", done, err)
+	}
+	// The unit v0.27.0 wrote, without the start limit.
+	old := `# Written by Sandbox Studio (Settings > Start at login).
+[Unit]
+Description=Sandbox Studio
+After=network-online.target
+
+[Service]
+ExecStart=%s
+Restart=on-failure
+RestartSec=5
+KillMode=process
+
+[Install]
+WantedBy=default.target
+`
+	write := func(content string) {
+		t.Helper()
+		if err := writeFile(unit, content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func() string {
+		t.Helper()
+		data, err := os.ReadFile(unit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+
+	// Another binary's unit, as a dev build finds the installed Studio's, stays.
+	other := strings.Replace(old, "%s", `"/usr/local/bin/studio"`, 1)
+	write(other)
+	if done, err := s.Refresh(); done || err != nil || read() != other {
+		t.Fatalf("refresh of another binary's unit: %v %v\n%s", done, err, read())
+	}
+	// So does one edited by hand.
+	edited := strings.Replace(old, "%s", `"/opt/Sandbox Studio/studio"`, 1)
+	edited = strings.TrimPrefix(edited, "# Written by Sandbox Studio (Settings > Start at login).\n")
+	write(edited)
+	if done, err := s.Refresh(); done || err != nil || read() != edited {
+		t.Fatalf("refresh of an edited unit: %v %v\n%s", done, err, read())
+	}
+
+	write(strings.Replace(old, "%s", `"/opt/Sandbox Studio/studio"`, 1))
+	if st, _ := s.Status(); !st.Stale {
+		t.Fatalf("an older unit isn't stale: %+v", st)
+	}
+	if done, err := s.Refresh(); !done || err != nil || !strings.Contains(read(), "StartLimitBurst=10") {
+		t.Fatalf("refresh of an older unit: %v %v\n%s", done, err, read())
+	}
+	if st, _ := s.Status(); st.Stale {
+		t.Fatalf("the refreshed unit is stale: %+v", st)
+	}
+	if done, err := s.Refresh(); done || err != nil {
+		t.Fatalf("refresh of a current unit: %v %v", done, err)
+	}
+	if reloads != 1 {
+		t.Fatalf("systemd reloaded %d times, want 1", reloads)
 	}
 }

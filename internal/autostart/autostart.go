@@ -9,12 +9,16 @@
 package autostart
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
+	"time"
 )
 
 // Name identifies Studio's entry in each OS's autostart mechanism.
@@ -52,6 +56,10 @@ type Service struct {
 	// Tray is the Windows tray launcher next to Exe (cmd/studiow), if there is one. The
 	// entry starts it, and it starts Exe without a console window.
 	Tray string
+	// Reload, if set, has the service manager read the entry again after it changed (Linux:
+	// systemctl --user daemon-reload), so a rewritten unit's settings, such as its start
+	// limit, hold before the next login. Best effort: the entry is written either way.
+	Reload func() error
 }
 
 // Default returns the service for the current user and binary.
@@ -72,8 +80,15 @@ func Default() (*Service, error) {
 		cfg = filepath.Join(home, ".config")
 	}
 	s := &Service{GOOS: runtime.GOOS, Home: home, ConfigHome: cfg, Exe: exe, Run: hostRunKey()}
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		s.Tray = TrayNextTo(exe)
+	case "linux":
+		s.Reload = func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			return exec.CommandContext(ctx, "systemctl", "--user", "daemon-reload").Run()
+		}
 	}
 	return s, nil
 }
@@ -153,6 +168,7 @@ func (s *Service) Enable() (Status, error) {
 			if err := os.Symlink(filepath.Join("..", unitName), link); err != nil {
 				return Status{}, err
 			}
+			s.reload()
 		}
 	case "windows":
 		if s.Run == nil {
@@ -181,6 +197,9 @@ func (s *Service) Disable() (Status, error) {
 				return Status{}, err
 			}
 		}
+		if s.GOOS == "linux" {
+			s.reload()
+		}
 	case "windows":
 		if s.Run == nil {
 			return Status{}, ErrUnsupported
@@ -192,6 +211,39 @@ func (s *Service) Disable() (Status, error) {
 		return Status{}, ErrUnsupported
 	}
 	return s.Status()
+}
+
+// Refresh rewrites a Linux unit that starts this binary but that an older Studio wrote, such
+// as one without the start limit, and has systemd read it again. A unit that starts another
+// binary, as a dev build finds the installed Studio's, or one edited by hand stays as it is.
+// It reports whether it rewrote the unit.
+func (s *Service) Refresh() (bool, error) {
+	if s.GOOS != "linux" {
+		return false, nil
+	}
+	path, want := s.file()
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	got := string(data)
+	if got == want || !strings.HasPrefix(got, unitHeader) || !slices.Contains(strings.Split(got, "\n"), "ExecStart="+quoteSystemd(s.Exe)) {
+		return false, nil
+	}
+	if err := writeFile(path, want); err != nil {
+		return false, err
+	}
+	s.reload()
+	return true, nil
+}
+
+func (s *Service) reload() {
+	if s.Reload != nil {
+		_ = s.Reload() // without systemd, or its user manager, there is nothing to reload
+	}
 }
 
 // StartCommand is the command that starts the entry now, for the user uid, or nil without one.
@@ -228,13 +280,22 @@ func (s *Service) wantsLink() string {
 	return filepath.Join(s.ConfigHome, "systemd", "user", "default.target.wants", unitName)
 }
 
+// unitHeader begins every unit Studio writes.
+const unitHeader = "# Written by Sandbox Studio (Settings > Start at login)."
+
 // systemdUnit starts Studio with the user session. KillMode=process keeps the sandbox VMs,
 // which are detached children of msb, running when Studio stops, as they do without systemd.
+// A Studio that keeps failing is restarted 10 times in 5 minutes at most, then left stopped:
+// a restart every 5 seconds without end once filled gnome-keyring's open files. An update's
+// rollback starts it 5 times at most (docs/updates.md). RestartSteps' growing delay isn't
+// used: its count is reset only by a start by hand, so it would grow with every update.
 func systemdUnit(exe string) string {
-	return fmt.Sprintf(`# Written by Sandbox Studio (Settings > Start at login).
+	return fmt.Sprintf(unitHeader+`
 [Unit]
 Description=Sandbox Studio
 After=network-online.target
+StartLimitIntervalSec=5min
+StartLimitBurst=10
 
 [Service]
 ExecStart=%s

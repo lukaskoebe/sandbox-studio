@@ -109,7 +109,10 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
 ## Process model
 
 - Studio is a normal user process, optionally started at login (`studio autostart`). There
-  is no system service.
+  is no system service. On Linux the entry is a systemd user unit that restarts a failing
+  Studio 10 times in 5 minutes at most. Studio rewrites a unit an older Studio wrote for the
+  same binary when it starts on the default address and on `studio restart`
+  (`autostart.Refresh`), then runs `systemctl --user daemon-reload`.
 - The SDK installs `msb` and `libkrunfw` into `~/.microsandbox` on first start, and Studio
   replaces an msb there that is older than the SDK's release (`runtime.Ensure`). The new files
   are renamed over the old ones, so running VMs keep the old msb until they restart. A failed
@@ -221,7 +224,9 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
 - Startup (`cmd/studio/main.go`): data dir and its lock `studio.lock` (held: ask the running
   Studio for a login link with the control credential, open it and exit), a check of msb's own database
   (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent
-  binaries, open the catalog and vault, make sure an environment exists, start the
+  binaries, open the catalog and vault (while the OS keychain that holds the vault key is
+  locked, as after a reboot with only SSH logins, Studio serves a page that says so and waits:
+  `cmd/studio/keychain.go`), make sure an environment exists, start the
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI. Once it listens,
   Studio prints the login banner (the link as an OSC 8 hyperlink) and, when stderr is a terminal

@@ -3,7 +3,7 @@ title: Secrets
 description: Store API keys and other credentials on the host and limit where Studio can use them.
 ---
 
-Secrets belong to an environment, a teammate or a single sandbox, and stay on the host. Studio encrypts them in its vault. Their master key is kept in the OS keychain when available, or in an owner-only file otherwise.
+Secrets belong to an environment, a teammate or a single sandbox, and stay on the host. Studio encrypts them in its vault. Their master key is kept in the OS keychain when available, or in an owner-only file otherwise. While the keychain is locked, Studio waits for it ([Troubleshooting](../troubleshooting/#studio-asks-you-to-unlock-your-keychain)).
 
 ## Add a secret
 

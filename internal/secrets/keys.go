@@ -3,9 +3,11 @@ package secrets
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
@@ -38,8 +40,27 @@ type keychain struct{ account string }
 
 func (keychain) Name() string { return backendKeychain }
 
+// keychainWait bounds a keychain read. On Linux a locked keychain is asked to unlock with a
+// prompt, whose answer never comes when its daemon can't show one. A var so tests can shorten it.
+var keychainWait = time.Minute
+
 func (k keychain) Get() ([]byte, error) {
-	s, err := keyring.Get(keychainService, k.account)
+	type got struct {
+		s   string
+		err error
+	}
+	done := make(chan got, 1)
+	go func() {
+		s, err := keyring.Get(keychainService, k.account)
+		done <- got{s, err}
+	}()
+	var r got
+	select {
+	case r = <-done:
+	case <-time.After(keychainWait):
+		return nil, fmt.Errorf("the keychain didn't answer within %s", keychainWait)
+	}
+	s, err := r.s, r.err
 	if errors.Is(err, keyring.ErrNotFound) {
 		return nil, ErrNoKey
 	}

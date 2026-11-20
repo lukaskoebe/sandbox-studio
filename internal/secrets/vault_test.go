@@ -163,16 +163,17 @@ func TestRecordedKeychainNeverFallsBackToFile(t *testing.T) {
 
 	keychain.err = errors.New("the keychain is locked")
 	_, err := New(ctx, st, keychain, file, quiet)
-	if err == nil || !strings.Contains(err.Error(), "OS keychain, which is not reachable") {
+	if !errors.Is(err, ErrKeychainLocked) || !strings.Contains(err.Error(), "OS keychain, which is locked or not reachable (the keychain is locked)") {
 		t.Fatalf("unreachable keychain: %v", err)
 	}
 	if file.calls != 0 {
 		t.Fatal("the file store was consulted although the keychain holds the key")
 	}
 
+	// A missing key won't come back by waiting, so Studio doesn't wait for it.
 	keychain.err = nil
 	keychain.key = nil
-	if _, err := New(ctx, st, keychain, file, quiet); err == nil || !strings.Contains(err.Error(), "missing") {
+	if _, err := New(ctx, st, keychain, file, quiet); err == nil || errors.Is(err, ErrKeychainLocked) || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("missing key: %v", err)
 	}
 	if file.calls != 0 {

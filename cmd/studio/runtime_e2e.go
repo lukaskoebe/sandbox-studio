@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -199,3 +201,17 @@ type msbBackuper struct{}
 func (*msbBackuper) Soon() {}
 
 func backupMSBDB(context.Context, *slog.Logger) *msbBackuper { return &msbBackuper{} }
+
+// While the file e2e-keychain-locked is in the data directory, the vault's keychain is locked:
+// Studio waits for it (keychain.go) until the test removes the file and retries.
+func init() {
+	open := openSecrets
+	openSecrets = func(ctx context.Context, st *store.Store, data string, log *slog.Logger) (*secrets.Vault, error) {
+		if _, err := os.Stat(filepath.Join(data, "e2e-keychain-locked")); err == nil {
+			return nil, fmt.Errorf("%w (e2e); unlock it", secrets.ErrKeychainLocked)
+		}
+		return open(ctx, st, data, log)
+	}
+	keychainLocked = func() (bool, bool) { return false, false }
+	keychainRetryGap = time.Second
+}

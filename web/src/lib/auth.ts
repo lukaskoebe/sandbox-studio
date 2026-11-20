@@ -3,10 +3,60 @@ export type AuthBootstrapResult = {
   error?: string
   /** Studio didn't answer, as while it restarts. */
   unreachable?: boolean
+  /** Studio waits for the OS keychain to unlock. */
+  keychain?: KeychainWait
 }
 
 /** Studio didn't answer, or answered that it can't serve yet. */
 export class UnreachableError extends Error {}
+
+/** How Studio waits for the OS keychain that holds its secrets' key (cmd/studio/keychain.go). */
+export type KeychainWait = {
+  waiting: "keychain"
+  message: string
+  /** The last read of the key. */
+  error?: string
+  since: string
+  /** Seconds before Retry reads the key again. */
+  retryIn: number
+}
+
+/** Studio runs, but waits for the OS keychain to unlock before it starts. */
+export class KeychainLockedError extends UnreachableError {
+  constructor(readonly wait: KeychainWait) {
+    super(wait.message)
+  }
+}
+
+/** The wait a response carries while Studio waits for the keychain, else null. */
+async function keychainWait(response: Response): Promise<KeychainWait | null> {
+  if (response.headers.get("X-Studio-Waiting") !== "keychain") return null
+  try {
+    return (await response.json()) as KeychainWait
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Asks Studio to read the key from the keychain again, which may show the keychain's password
+ * prompt on the desktop. Null once Studio no longer waits.
+ */
+export async function retryKeychain(): Promise<KeychainWait | null> {
+  let response: Response
+  try {
+    response = await fetch("/api/keychain/retry", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    })
+  } catch {
+    throw new UnreachableError(
+      "Could not reach Studio. This page connects by itself once Studio runs again."
+    )
+  }
+  return keychainWait(response)
+}
 
 /** Read the launch token and remove its fragment before any route can load. */
 function consumeLaunchToken(): string | null {
@@ -43,6 +93,7 @@ export function bootstrapAuth(): Promise<AuthBootstrapResult> {
         authenticated: false,
         error: authErrorMessage(error),
         unreachable: error instanceof UnreachableError,
+        keychain: error instanceof KeychainLockedError ? error.wait : undefined,
       }
     }
   })()
@@ -91,6 +142,8 @@ export async function readAuthStatus(): Promise<boolean> {
     )
   }
 
+  const wait = await keychainWait(response)
+  if (wait) throw new KeychainLockedError(wait)
   if (!response.ok) {
     throw new UnreachableError(
       `Studio could not check the login state (HTTP ${response.status}). Retry when the connection is available.`

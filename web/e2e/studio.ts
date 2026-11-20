@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process"
-import { access, mkdtemp, rm } from "node:fs/promises"
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
@@ -25,6 +25,8 @@ export type Studio = {
   /** A fresh one-time login link, from `studio login-url`. */
   loginURL: () => Promise<string>
   stop: () => Promise<void>
+  /** Unlocks the keychain of a Studio started with keychainLocked. */
+  unlockKeychain: () => Promise<void>
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -32,9 +34,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /**
  * Starts a Studio with its own data directory on port. The invalid D-Bus address keeps
  * it away from the OS keychain: its vault key must land in a file in the data directory.
+ * With keychainLocked, the e2e build's keychain is locked (cmd/studio/runtime_e2e.go), and
+ * Studio waits for it until unlockKeychain.
  */
-export async function startStudio(port: number): Promise<Studio> {
+export async function startStudio(
+  port: number,
+  { keychainLocked = false }: { keychainLocked?: boolean } = {}
+): Promise<Studio> {
   const home = await mkdtemp(path.join(tmpdir(), "studio-e2e-"))
+  const lock = path.join(home, "e2e-keychain-locked")
+  if (keychainLocked) await writeFile(lock, "")
   const addr = `127.0.0.1:${port}`
   const url = `http://${addr}`
   const env = {
@@ -76,7 +85,10 @@ export async function startStudio(port: number): Promise<Studio> {
       throw new Error(`Studio on ${addr} exited:\n${log}`)
     }
     try {
-      if ((await fetch(`${url}/api/auth/status`)).ok) break
+      const res = await fetch(`${url}/api/auth/status`)
+      if (res.ok) break
+      if (keychainLocked && res.headers.get("X-Studio-Waiting") === "keychain")
+        break
     } catch {
       // not listening yet
     }
@@ -87,7 +99,7 @@ export async function startStudio(port: number): Promise<Studio> {
     await sleep(100)
   }
   try {
-    await access(path.join(home, "vault.key"))
+    if (!keychainLocked) await access(path.join(home, "vault.key"))
   } catch {
     await stop()
     throw new Error(
@@ -99,6 +111,7 @@ export async function startStudio(port: number): Promise<Studio> {
     url,
     home,
     stop,
+    unlockKeychain: () => rm(lock, { force: true }),
     loginURL: async () => {
       const { stdout } = await promisify(execFile)(
         studioBinary,

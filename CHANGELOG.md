@@ -23,6 +23,12 @@
   Questions leave part of Lead's daily limit for writing the day.
 - Home's **Today so far** card says what happened since you last looked at today: who worked,
   pushes, new requests and scheduled runs.
+- A locked OS keychain no longer keeps Studio restarting. After a reboot with only SSH logins,
+  Studio used to exit at every start, and on Linux its login entry started it again every
+  5 seconds, which could fill the keychain's open files and block logging in on the desktop.
+  Studio now waits, and its page says **Unlock your keychain**; it starts once you log in on
+  the desktop, or on **Retry**. The Linux login entry stops after 10 failed starts in 5
+  minutes, and Studio updates an entry an older version wrote.
 
 ## v0.27.0 — 2026-11-20
 

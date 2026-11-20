@@ -11,6 +11,9 @@ fetchClient.use({
   onResponse({ response }) {
     if (response.status === 401)
       window.dispatchEvent(new Event("studio-auth-expired"))
+    // Studio restarted and waits for the OS keychain: the gate says so (auth-gate.tsx).
+    if (response.headers.get("X-Studio-Waiting") === "keychain")
+      window.dispatchEvent(new Event("studio-keychain-locked"))
     return response
   },
 })

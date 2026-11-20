@@ -23,6 +23,7 @@ require (
 	github.com/danielgtaylor/huma/v2 v2.40.0
 	github.com/go-git/go-billy/v5 v5.9.2
 	github.com/go-git/go-git/v5 v5.19.3
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/golang/snappy v1.0.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/hybridgroup/yzma v1.29.1
@@ -149,7 +150,6 @@ require (
 	github.com/go-openapi/validate v0.26.1 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/certificate-transparency-go v1.3.3 // indirect
