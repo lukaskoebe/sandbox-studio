@@ -71,10 +71,13 @@ const statuses: Record<
 export function ToolCallCard({
   tool,
   line = false,
+  live = false,
   defaultOpen = false,
 }: {
   tool: ToolBody
   line?: boolean
+  /** The step a fold is on now: its title shimmers while the call runs. */
+  live?: boolean
   defaultOpen?: boolean
 }) {
   const kind = toolKind(tool.kind)
@@ -107,7 +110,15 @@ export function ToolCallCard({
           className="size-3.5 shrink-0 text-muted-foreground"
           aria-label={kind.label}
         />
-        <span className="min-w-0 flex-1 truncate" title={tool.title}>
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate",
+            live &&
+              (tool.status === "pending" || tool.status === "in_progress") &&
+              "shimmer"
+          )}
+          title={tool.title}
+        >
           {tool.title || kind.label}
         </span>
         {counts && (counts.added > 0 || counts.removed > 0) && (

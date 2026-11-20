@@ -23,6 +23,8 @@
   Questions leave part of Lead's daily limit for writing the day.
 - Home's **Today so far** card says what happened since you last looked at today: who worked,
   pushes, new requests and scheduled runs.
+- The step an agent is on now looks like the steps before it: a line with a spinner, instead
+  of a card. Thoughts in a row of steps are lines too.
 - A chat's step row no longer says **Worked for** while a call in it still runs, as when you
   send a message during a long command.
 - A pull request review can go without a summary when it has comments on lines. Before, only

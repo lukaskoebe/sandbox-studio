@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  BrainIcon,
   CaretRightIcon,
   ChatCircleDotsIcon,
   ShieldCheckIcon,
 } from "@phosphor-icons/react"
 import { ChatItemView, type ItemContext } from "@/components/chat/chat-items"
+import { Markdown } from "@/components/chat/markdown"
 import { PermissionCard } from "@/components/chat/permission-card"
 import { QuestionCard } from "@/components/chat/question-card"
 import {
@@ -135,7 +137,12 @@ export function StepRun({
         )}
       </div>
       <CollapsibleContent className="ml-1.5 grid min-w-0 gap-1 border-l-2 pl-3">
-        <Steps items={run.items} live={run.live} ctx={ctx} />
+        <Steps
+          items={run.items}
+          live={run.live}
+          waiting={run.waiting}
+          ctx={ctx}
+        />
       </CollapsibleContent>
     </Collapsible>
   )
@@ -145,10 +152,13 @@ export function StepRun({
 function Steps({
   items,
   live,
+  waiting,
   ctx,
 }: {
   items: ChatItem[]
   live: boolean
+  /** The newest step waits for you, so it doesn't shimmer. */
+  waiting: boolean
   ctx: Omit<ItemContext, "live">
 }) {
   const [all, setAll] = useState(false)
@@ -171,7 +181,7 @@ function Steps({
         <Step
           key={item.id}
           item={item}
-          ctx={{ ...ctx, live: live && i === shown.length - 1 }}
+          ctx={{ ...ctx, live: live && !waiting && i === shown.length - 1 }}
         />
       ))}
     </>
@@ -192,16 +202,14 @@ const answered: Record<string, string> = {
 }
 
 /**
- * One step: a tool call as a line that opens to its details, a thought, or an ask you settled
- * as a line that opens to its card. The step still being written shows in full.
+ * One step as a line that opens to its details: a tool call, a thought, or an ask you settled.
+ * The step still being worked on is a line too, its title shimmering.
  */
 function Step({ item, ctx }: { item: ChatItem; ctx: ItemContext }) {
   if (item.kind === "tool" && item.tool)
-    return ctx.live ? (
-      <ToolCallCard tool={item.tool} />
-    ) : (
-      <ToolCallCard tool={item.tool} line />
-    )
+    return <ToolCallCard tool={item.tool} line live={ctx.live} />
+  if (item.kind === "thought" && item.text)
+    return <ThoughtLine text={item.text.text} live={ctx.live} />
   if (item.kind === "permission" && item.permission) {
     const tc = item.permission.toolCall
     return (
@@ -232,6 +240,24 @@ function Step({ item, ctx }: { item: ChatItem; ctx: ItemContext }) {
       </SettledAsk>
     )
   return <ChatItemView item={item} ctx={ctx} />
+}
+
+/** A thought as a step's line: what it is, opening to the text. */
+function ThoughtLine({ text, live }: { text: string; live: boolean }) {
+  return (
+    <Collapsible className="group/thought grid min-w-0 gap-1 text-xs">
+      <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-2 rounded-sm py-0.5 text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">
+        <BrainIcon className="size-3.5 shrink-0" />
+        <span className={cn("min-w-0 flex-1 truncate", live && "shimmer")}>
+          {live ? "Thinking…" : "Thought it through"}
+        </span>
+        <CaretRightIcon className="size-3 shrink-0 transition-transform group-data-[open]/thought:rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="rounded-lg border bg-card p-2.5">
+        <Markdown text={text} />
+      </CollapsibleContent>
+    </Collapsible>
+  )
 }
 
 function SettledAsk({
