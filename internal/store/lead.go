@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -368,4 +369,172 @@ func (s *Store) SetLeadSeen(ctx context.Context, envID string, t time.Time) erro
 	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_seen (environment_id, seen_at) VALUES (?, ?)
 		ON CONFLICT (environment_id) DO UPDATE SET seen_at = excluded.seen_at`, envID, t.Unix())
 	return err
+}
+
+// Lead plan states.
+const (
+	LeadPlanDrafting  = "drafting"  // Lead is writing the plan or its reply
+	LeadPlanAsking    = "asking"    // Lead asked the user a question first
+	LeadPlanProposed  = "proposed"  // the plan waits for the user's approval
+	LeadPlanRunning   = "running"   // approved: its steps are being carried out
+	LeadPlanDone      = "done"      // carried out, and Lead reported back
+	LeadPlanCancelled = "cancelled" // the user cancelled or denied it
+	LeadPlanFailed    = "failed"    // Lead couldn't draft or carry it out
+)
+
+// LeadPlan is a plan of Lead's: messages to teammates it sends once the user approves them.
+type LeadPlan struct {
+	ID            string
+	EnvironmentID string
+	Title         string
+	State         string
+	Steps         json.RawMessage // lead.PlanStep, each with its state
+	ApprovalID    string
+	ApprovedAt    *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+// LeadPlanItem is one entry of a plan's thread: the user's words, Lead's, a plan it proposed, a
+// question it asked, its report, or a note from Studio.
+type LeadPlanItem struct {
+	ID     string
+	PlanID string
+	Kind   string
+	Text   string
+	Data   json.RawMessage
+	Model  string
+	Cost   int64
+	Priced bool
+	At     time.Time
+}
+
+const leadPlanCols = `id, environment_id, title, state, steps, approval_id, approved_at, created_at, updated_at`
+
+func scanLeadPlan(row interface{ Scan(...any) error }) (LeadPlan, error) {
+	var p LeadPlan
+	var steps string
+	var approved, created, updated int64
+	if err := row.Scan(&p.ID, &p.EnvironmentID, &p.Title, &p.State, &steps, &p.ApprovalID, &approved, &created, &updated); err != nil {
+		return p, err
+	}
+	p.Steps = json.RawMessage(steps)
+	if approved != 0 {
+		t := time.Unix(approved, 0)
+		p.ApprovedAt = &t
+	}
+	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+	return p, nil
+}
+
+// AddLeadPlan saves a new plan, drafting.
+func (s *Store) AddLeadPlan(ctx context.Context, p LeadPlan) (LeadPlan, error) {
+	if p.ID == "" {
+		p.ID = NewID()
+	}
+	if p.State == "" {
+		p.State = LeadPlanDrafting
+	}
+	if len(p.Steps) == 0 {
+		p.Steps = json.RawMessage("[]")
+	}
+	p.UpdatedAt = p.CreatedAt
+	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_plans (id, environment_id, title, state, steps, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, p.ID, p.EnvironmentID, p.Title, p.State, string(p.Steps), p.CreatedAt.Unix(), p.UpdatedAt.Unix())
+	return p, err
+}
+
+// SaveLeadPlan writes a plan's title, state, steps and approval.
+func (s *Store) SaveLeadPlan(ctx context.Context, p LeadPlan) error {
+	approved := int64(0)
+	if p.ApprovedAt != nil {
+		approved = p.ApprovedAt.Unix()
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE lead_plans SET title = ?, state = ?, steps = ?, approval_id = ?, approved_at = ?, updated_at = ?
+		WHERE id = ? AND environment_id = ?`, p.Title, p.State, string(p.Steps), p.ApprovalID, approved, p.UpdatedAt.Unix(), p.ID, p.EnvironmentID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetLeadPlan returns one of an environment's plans.
+func (s *Store) GetLeadPlan(ctx context.Context, envID, id string) (LeadPlan, error) {
+	p, err := scanLeadPlan(s.db.QueryRowContext(ctx, `SELECT `+leadPlanCols+` FROM lead_plans WHERE id = ? AND environment_id = ?`, id, envID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return p, ErrNotFound
+	}
+	return p, err
+}
+
+// LeadPlans are an environment's plans, the last changed first, at most limit.
+func (s *Store) LeadPlans(ctx context.Context, envID string, limit int) ([]LeadPlan, error) {
+	return s.leadPlans(ctx, `SELECT `+leadPlanCols+` FROM lead_plans WHERE environment_id = ? ORDER BY updated_at DESC, rowid DESC LIMIT ?`, envID, limit)
+}
+
+// LeadPlansIn are every environment's plans in one of the states, oldest first.
+func (s *Store) LeadPlansIn(ctx context.Context, states ...string) ([]LeadPlan, error) {
+	if len(states) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(states))
+	for i, st := range states {
+		args[i] = st
+	}
+	return s.leadPlans(ctx, `SELECT `+leadPlanCols+` FROM lead_plans WHERE state IN (?`+strings.Repeat(", ?", len(states)-1)+`) ORDER BY created_at, rowid`, args...)
+}
+
+func (s *Store) leadPlans(ctx context.Context, q string, args ...any) ([]LeadPlan, error) {
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LeadPlan{}
+	for rows.Next() {
+		p, err := scanLeadPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// AddLeadPlanItem adds an entry to a plan's thread.
+func (s *Store) AddLeadPlanItem(ctx context.Context, it LeadPlanItem) (LeadPlanItem, error) {
+	if it.ID == "" {
+		it.ID = NewID()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_plan_items (id, plan_id, kind, text, data, model, cost, priced, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		it.ID, it.PlanID, it.Kind, it.Text, string(it.Data), it.Model, it.Cost, it.Priced, it.At.Unix())
+	return it, err
+}
+
+// LeadPlanItems are a plan's thread, oldest first.
+func (s *Store) LeadPlanItems(ctx context.Context, planID string) ([]LeadPlanItem, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, plan_id, kind, text, data, model, cost, priced, at FROM lead_plan_items
+		WHERE plan_id = ? ORDER BY at, rowid`, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LeadPlanItem{}
+	for rows.Next() {
+		var it LeadPlanItem
+		var data string
+		var at int64
+		if err := rows.Scan(&it.ID, &it.PlanID, &it.Kind, &it.Text, &data, &it.Model, &it.Cost, &it.Priced, &at); err != nil {
+			return nil, err
+		}
+		if data != "" {
+			it.Data = json.RawMessage(data)
+		}
+		it.At = time.Unix(at, 0)
+		out = append(out, it)
+	}
+	return out, rows.Err()
 }

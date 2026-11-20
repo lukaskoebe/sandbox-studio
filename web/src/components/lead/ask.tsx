@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { Link } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,7 @@ function useAsks(env: string, day: string) {
 
 /**
  * Ask Lead (docs/lead.md): the questions asked about a day and Lead's answers, each pointing
- * at the threads, pushes and requests it speaks of. Lead only reads.
+ * at the threads, pushes and requests it speaks of. An answer sends nothing; plans do.
  */
 export function LeadAsks({
   env,
@@ -167,7 +168,16 @@ export function AskComposer({
           </Button>
         </div>
         <p className="text-caption text-muted-foreground">
-          {name} only reads: it answers from Studio's records of the day.
+          {name} answers from Studio's records of the day and sends nothing. To
+          have it message teammates,{" "}
+          <Link
+            to="/e/$env/lead/plans/new"
+            params={{ env }}
+            className="text-foreground underline underline-offset-2"
+          >
+            make a plan
+          </Link>
+          .
         </p>
       </div>
     </form>

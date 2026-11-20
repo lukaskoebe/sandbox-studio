@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 )
 
 // groupWindow is how close network requests from one sandbox must arrive to share a card. It
@@ -430,6 +431,8 @@ func (m *app) approvalURL(a api.ApprovalView) string {
 		return m.browserURL(env + "/settings/memory")
 	case a.ChatPermission != nil:
 		return m.browserURL(env + "/chats/" + a.ChatPermission.ChatID)
+	case a.LeadPlan != nil:
+		return m.browserURL(env + "/lead/plans/" + a.LeadPlan.PlanID)
 	}
 	return m.browserURL(env)
 }
@@ -678,8 +681,22 @@ func summary(a api.ApprovalView) string {
 		return firstNonEmpty(a.BrowserControl.TeammateName, "An agent") + " asks for the browser back: " + oneLine(a.BrowserControl.Reason)
 	case a.ChatPermission != nil:
 		return a.ChatPermission.Title
+	case a.LeadPlan != nil:
+		n := len(planMessages(a.LeadPlan.Steps))
+		return fmt.Sprintf("%s wants to send %d %s: %s", firstNonEmpty(a.LeadPlan.Lead, "Lead"), n, plural(n, "message", "messages"), a.LeadPlan.Title)
 	}
 	return a.Subject
+}
+
+// planMessages are a plan's steps that send something: messages and new threads.
+func planMessages(steps []lead.PlanStep) []lead.PlanStep {
+	var out []lead.PlanStep
+	for _, st := range steps {
+		if st.Kind == lead.StepMessage || st.Kind == lead.StepStart {
+			out = append(out, st)
+		}
+	}
+	return out
 }
 
 // gitSummary says what a push or pull request asks.

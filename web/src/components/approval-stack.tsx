@@ -76,6 +76,7 @@ import {
   isNetworkApproval,
 } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
+import { LeadPlanSummary } from "@/components/lead/plan-approval"
 import {
   heldFor,
   isConnection,
@@ -459,6 +460,8 @@ function ApprovalCard({
           <CredentialIssueDecision approval={approval} />
         ) : approval.kind === "chat.permission" && approval.chatPermission ? (
           <ChatPermissionSummary approval={approval} />
+        ) : approval.kind === "lead.plan" && approval.leadPlan ? (
+          <LeadPlanSummary approval={approval} />
         ) : isNetworkApproval(approval) ? (
           <ApprovalDecision approval={approval} compact />
         ) : (

@@ -24,7 +24,8 @@ const (
 	// TopicSessions: a session of a sandbox (a terminal, a program in it, a browser session,
 	// the user's turn in one, a port) opened or closed, so Home's lines are stale.
 	TopicSessions = "sessions"
-	// TopicLead: Lead began or finished writing a day, or its settings changed; ID is the day.
+	// TopicLead: Lead began or finished writing a day, or its settings changed; ID is the day,
+	// or "plan:" and the ID of a plan that changed.
 	TopicLead = "lead"
 )
 

@@ -225,6 +225,10 @@
           "kind": {
             "type": "string"
           },
+          "leadPlan": {
+            "$ref": "#/components/schemas/PlanPayload",
+            "description": "The messages Lead sends to teammates once the user approves"
+          },
           "memoryConflict": {
             "$ref": "#/components/schemas/ConflictPayload",
             "description": "Two facts that disagree"
@@ -4299,6 +4303,33 @@
         ],
         "type": "object"
       },
+      "FromLead": {
+        "additionalProperties": false,
+        "properties": {
+          "approvedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "Lead's name when it sent the message",
+            "type": "string"
+          },
+          "plan": {
+            "description": "The plan's title",
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "planId",
+          "plan",
+          "approvedAt"
+        ],
+        "type": "object"
+      },
       "GetMemoryIndexResponse": {
         "additionalProperties": false,
         "properties": {
@@ -5701,6 +5732,141 @@
         ],
         "type": "object"
       },
+      "LeadPlanItem": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cost": {
+            "description": "USD × 10^6; 0 when costs are hidden",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "you",
+              "lead",
+              "report",
+              "note"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "priced": {
+            "type": "boolean"
+          },
+          "question": {
+            "$ref": "#/components/schemas/PlanQuestion",
+            "description": "What Lead asked with this reply"
+          },
+          "steps": {
+            "description": "The plan Lead proposed with this reply",
+            "items": {
+              "$ref": "#/components/schemas/PlanStep"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "threads": {
+            "description": "The threads a report speaks of",
+            "items": {
+              "$ref": "#/components/schemas/PlanThread"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "cost",
+          "priced",
+          "at"
+        ],
+        "type": "object"
+      },
+      "LeadPlanView": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalId": {
+            "description": "The lead.plan approval it waits on",
+            "type": "string"
+          },
+          "approvedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "description": "The plan's thread, oldest first; only for one plan",
+            "items": {
+              "$ref": "#/components/schemas/LeadPlanItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "state": {
+            "enum": [
+              "drafting",
+              "asking",
+              "proposed",
+              "running",
+              "done",
+              "cancelled",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStep"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state",
+          "steps",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "LeadProse": {
         "additionalProperties": false,
         "properties": {
@@ -7051,6 +7217,20 @@
         ],
         "type": "object"
       },
+      "MessageBody": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
       "ModelInBody": {
         "additionalProperties": false,
         "properties": {
@@ -7960,6 +8140,162 @@
           "content",
           "priority",
           "status"
+        ],
+        "type": "object"
+      },
+      "PlanPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "description": "Of the steps; the approval holds only while the plan has them",
+            "type": "string"
+          },
+          "lead": {
+            "description": "Lead's name",
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStep"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "planId",
+          "lead",
+          "title",
+          "steps",
+          "digest"
+        ],
+        "type": "object"
+      },
+      "PlanQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "options"
+        ],
+        "type": "object"
+      },
+      "PlanStep": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When the message was in the thread, or the step was done",
+            "format": "date-time",
+            "type": "string"
+          },
+          "chatId": {
+            "description": "The thread the message goes to; a start step's once it is open",
+            "type": "string"
+          },
+          "computer": {
+            "description": "The computer's name",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "message",
+              "start",
+              "wait",
+              "tell"
+            ],
+            "type": "string"
+          },
+          "note": {
+            "description": "Why a step failed, or how a wait ended",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "proposed",
+              "pending",
+              "running",
+              "done",
+              "failed",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "teammate": {
+            "description": "The teammate's name",
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "text": {
+            "description": "The message, as the teammate reads it",
+            "type": "string"
+          },
+          "thread": {
+            "description": "The thread's title; a start step's new title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "state"
+        ],
+        "type": "object"
+      },
+      "PlanThread": {
+        "additionalProperties": false,
+        "properties": {
+          "answered": {
+            "description": "The teammate wrote back after Lead's message",
+            "type": "boolean"
+          },
+          "chatId": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "teammate": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "thread": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chatId",
+          "sandboxId",
+          "teammateId",
+          "teammate",
+          "thread",
+          "answered"
         ],
         "type": "object"
       },
@@ -12776,6 +13112,9 @@
               "null"
             ]
           },
+          "lead": {
+            "$ref": "#/components/schemas/FromLead"
+          },
           "mentions": {
             "items": {
               "$ref": "#/components/schemas/Mention"
@@ -16209,6 +16548,275 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LeadAskView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/plans": {
+      "get": {
+        "description": "Lead's plans, the last changed first, without their threads.",
+        "operationId": "listLeadPlans",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LeadPlanView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      },
+      "post": {
+        "description": "Asks Lead for a plan. Lead drafts it in the background and asks for a lead.plan approval; nothing is sent to a teammate until the user approves it. A lead event says when the draft is there.",
+        "operationId": "createLeadPlan",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadPlanView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/plans/{plan}": {
+      "get": {
+        "description": "A plan with its thread: what the user and Lead said, the steps and Lead's report.",
+        "operationId": "getLeadPlan",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Plan ID",
+            "in": "path",
+            "name": "plan",
+            "required": true,
+            "schema": {
+              "description": "Plan ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadPlanView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/plans/{plan}/cancel": {
+      "post": {
+        "description": "Cancels a plan: one waiting for approval is never sent, and a running one sends nothing more. Messages already sent stay in their threads.",
+        "operationId": "cancelLeadPlan",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Plan ID",
+            "in": "path",
+            "name": "plan",
+            "required": true,
+            "schema": {
+              "description": "Plan ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadPlanView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/plans/{plan}/messages": {
+      "post": {
+        "description": "Answers Lead's question or asks for a change. A proposed plan's approval is withdrawn and Lead drafts the plan again. 409 while Lead writes or carries out the plan, and once it is done or cancelled.",
+        "operationId": "messageLeadPlan",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Plan ID",
+            "in": "path",
+            "name": "plan",
+            "required": true,
+            "schema": {
+              "description": "Plan ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadPlanView"
                 }
               }
             },

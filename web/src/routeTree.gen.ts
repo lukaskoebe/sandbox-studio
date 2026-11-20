@@ -51,6 +51,8 @@ import { Route as EEnvSettingsUpdatesRouteImport } from './routes/e.$env.setting
 import { Route as EEnvTeammatesIndexRouteImport } from './routes/e.$env.teammates.index'
 import { Route as EEnvTeammatesIdRouteImport } from './routes/e.$env.teammates.$id'
 import { Route as EEnvGitReviewsIdRouteImport } from './routes/e.$env.git.reviews.$id'
+import { Route as EEnvLeadPlansPlanRouteImport } from './routes/e.$env.lead.plans.$plan'
+import { Route as EEnvLeadPlansNewRouteImport } from './routes/e.$env.lead.plans.new'
 import { Route as EEnvMemoryConflictsIdRouteImport } from './routes/e.$env.memory.conflicts.$id'
 import { Route as EEnvSandboxesIdWorkRouteImport } from './routes/e.$env.sandboxes.$id.work'
 import { Route as EEnvTeammatesIdViewRouteImport } from './routes/e.$env.teammates.$id.$view'
@@ -265,6 +267,16 @@ const EEnvGitReviewsIdRoute = EEnvGitReviewsIdRouteImport.update({
   path: '/git/reviews/$id',
   getParentRoute: () => EEnvRoute,
 } as any)
+const EEnvLeadPlansPlanRoute = EEnvLeadPlansPlanRouteImport.update({
+  id: '/lead/plans/$plan',
+  path: '/lead/plans/$plan',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvLeadPlansNewRoute = EEnvLeadPlansNewRouteImport.update({
+  id: '/lead/plans/new',
+  path: '/lead/plans/new',
+  getParentRoute: () => EEnvRoute,
+} as any)
 const EEnvMemoryConflictsIdRoute = EEnvMemoryConflictsIdRouteImport.update({
   id: '/memory/conflicts/$id',
   path: '/memory/conflicts/$id',
@@ -324,6 +336,8 @@ export interface FileRoutesByFullPath {
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
   '/e/$env/git/reviews/$id': typeof EEnvGitReviewsIdRoute
+  '/e/$env/lead/plans/$plan': typeof EEnvLeadPlansPlanRoute
+  '/e/$env/lead/plans/new': typeof EEnvLeadPlansNewRoute
   '/e/$env/memory/conflicts/$id': typeof EEnvMemoryConflictsIdRoute
   '/e/$env/sandboxes/$id/work': typeof EEnvSandboxesIdWorkRoute
   '/e/$env/teammates/$id/$view': typeof EEnvTeammatesIdViewRoute
@@ -369,6 +383,8 @@ export interface FileRoutesByTo {
   '/e/$env/settings': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates': typeof EEnvTeammatesIndexRoute
   '/e/$env/git/reviews/$id': typeof EEnvGitReviewsIdRoute
+  '/e/$env/lead/plans/$plan': typeof EEnvLeadPlansPlanRoute
+  '/e/$env/lead/plans/new': typeof EEnvLeadPlansNewRoute
   '/e/$env/memory/conflicts/$id': typeof EEnvMemoryConflictsIdRoute
   '/e/$env/sandboxes/$id/work': typeof EEnvSandboxesIdWorkRoute
   '/e/$env/teammates/$id/$view': typeof EEnvTeammatesIdViewRoute
@@ -417,6 +433,8 @@ export interface FileRoutesById {
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
   '/e/$env/git/reviews/$id': typeof EEnvGitReviewsIdRoute
+  '/e/$env/lead/plans/$plan': typeof EEnvLeadPlansPlanRoute
+  '/e/$env/lead/plans/new': typeof EEnvLeadPlansNewRoute
   '/e/$env/memory/conflicts/$id': typeof EEnvMemoryConflictsIdRoute
   '/e/$env/sandboxes/$id/work': typeof EEnvSandboxesIdWorkRoute
   '/e/$env/teammates/$id/$view': typeof EEnvTeammatesIdViewRoute
@@ -466,6 +484,8 @@ export interface FileRouteTypes {
     | '/e/$env/settings/'
     | '/e/$env/teammates/'
     | '/e/$env/git/reviews/$id'
+    | '/e/$env/lead/plans/$plan'
+    | '/e/$env/lead/plans/new'
     | '/e/$env/memory/conflicts/$id'
     | '/e/$env/sandboxes/$id/work'
     | '/e/$env/teammates/$id/$view'
@@ -511,6 +531,8 @@ export interface FileRouteTypes {
     | '/e/$env/settings'
     | '/e/$env/teammates'
     | '/e/$env/git/reviews/$id'
+    | '/e/$env/lead/plans/$plan'
+    | '/e/$env/lead/plans/new'
     | '/e/$env/memory/conflicts/$id'
     | '/e/$env/sandboxes/$id/work'
     | '/e/$env/teammates/$id/$view'
@@ -558,6 +580,8 @@ export interface FileRouteTypes {
     | '/e/$env/settings/'
     | '/e/$env/teammates/'
     | '/e/$env/git/reviews/$id'
+    | '/e/$env/lead/plans/$plan'
+    | '/e/$env/lead/plans/new'
     | '/e/$env/memory/conflicts/$id'
     | '/e/$env/sandboxes/$id/work'
     | '/e/$env/teammates/$id/$view'
@@ -865,6 +889,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvGitReviewsIdRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/e/$env/lead/plans/$plan': {
+      id: '/e/$env/lead/plans/$plan'
+      path: '/lead/plans/$plan'
+      fullPath: '/e/$env/lead/plans/$plan'
+      preLoaderRoute: typeof EEnvLeadPlansPlanRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/lead/plans/new': {
+      id: '/e/$env/lead/plans/new'
+      path: '/lead/plans/new'
+      fullPath: '/e/$env/lead/plans/new'
+      preLoaderRoute: typeof EEnvLeadPlansNewRouteImport
+      parentRoute: typeof EEnvRoute
+    }
     '/e/$env/memory/conflicts/$id': {
       id: '/e/$env/memory/conflicts/$id'
       path: '/memory/conflicts/$id'
@@ -976,6 +1014,8 @@ interface EEnvRouteChildren {
   EEnvNetworkIndexRoute: typeof EEnvNetworkIndexRoute
   EEnvTeammatesIndexRoute: typeof EEnvTeammatesIndexRoute
   EEnvGitReviewsIdRoute: typeof EEnvGitReviewsIdRoute
+  EEnvLeadPlansPlanRoute: typeof EEnvLeadPlansPlanRoute
+  EEnvLeadPlansNewRoute: typeof EEnvLeadPlansNewRoute
   EEnvMemoryConflictsIdRoute: typeof EEnvMemoryConflictsIdRoute
 }
 
@@ -1006,6 +1046,8 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvNetworkIndexRoute: EEnvNetworkIndexRoute,
   EEnvTeammatesIndexRoute: EEnvTeammatesIndexRoute,
   EEnvGitReviewsIdRoute: EEnvGitReviewsIdRoute,
+  EEnvLeadPlansPlanRoute: EEnvLeadPlansPlanRoute,
+  EEnvLeadPlansNewRoute: EEnvLeadPlansNewRoute,
   EEnvMemoryConflictsIdRoute: EEnvMemoryConflictsIdRoute,
 }
 

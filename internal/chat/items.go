@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"time"
 	"unicode/utf8"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
@@ -41,6 +42,16 @@ type UserBody struct {
 	Text        string       `json:"text"`
 	Attachments []Attachment `json:"attachments,omitempty"`
 	Mentions    []Mention    `json:"mentions,omitempty"`
+	// Lead is set on a message Lead sent as a step of a plan the user approved.
+	Lead *FromLead `json:"lead,omitempty"`
+}
+
+// FromLead says which of Lead's plans a message came from, and when the user approved it.
+type FromLead struct {
+	Name       string    `json:"name" doc:"Lead's name when it sent the message"`
+	PlanID     string    `json:"planId"`
+	Plan       string    `json:"plan" doc:"The plan's title"`
+	ApprovedAt time.Time `json:"approvedAt"`
 }
 
 // Mention is a file of the workspace the prompt names as @path, or @path:start-end for

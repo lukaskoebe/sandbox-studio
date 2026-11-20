@@ -639,7 +639,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go beats.Run(ctx)
 	// Lead writes each environment's day at its time, from what Studio records (docs/lead.md).
 	apiServer.Lead = &lead.Service{Store: st, AgentMem: agentMem, Keys: vault, Utility: leadUtility(agentMem.Utility), Bus: bus,
-		Log: log.With("component", "lead"), LowDisks: mgr.LowDisks}
+		Log: log.With("component", "lead"), LowDisks: mgr.LowDisks, Send: apiServer.LeadMessenger()}
+	integs = append(integs, apiServer.Lead) // settles lead.plan approvals; it serves no hosts
+	apiServer.Integrations = integs
 	go apiServer.Lead.Run(ctx)
 	mgr.SetHarnessConfig(apiServer.HarnessConfig)
 	mgr.SetCredentialConfig(creds.Config)

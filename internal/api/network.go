@@ -26,6 +26,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/secretcheck"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -71,6 +72,8 @@ type ApprovalView struct {
 	CredentialIssue *credentials.IssuePayload `json:"credentialIssue,omitempty" doc:"A sandbox's tool asks for credentials made from a secret with a kind"`
 	// ChatPermission is set for chat.permission approvals.
 	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
+	// LeadPlan is set for lead.plan approvals.
+	LeadPlan *lead.PlanPayload `json:"leadPlan,omitempty" doc:"The messages Lead sends to teammates once the user approves"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -143,6 +146,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p agentmem.ConflictPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.MemoryConflict = &p
+		}
+	case lead.ApprovalKind:
+		var p lead.PlanPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.LeadPlan = &p
 		}
 	}
 	if policy.IsNetworkKind(a.Kind) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -267,6 +268,16 @@ func (m *app) kindLines(c card, w int) []string {
 		p := a.ChatPermission
 		lines = append(lines, styleDim.Render(fit("In "+firstNonEmpty(p.TeammateName, "the teammate")+"'s thread “"+firstNonEmpty(oneLine(p.ChatTitle), "New thread")+"”", w)))
 		lines = append(lines, picksText(permissionPicks(p.Options))+styleDim.Render("  i ignore"))
+	case a.LeadPlan != nil:
+		// What goes to whom; the plan is approved in the browser, where it can be changed too.
+		for _, st := range planMessages(a.LeadPlan.Steps) {
+			to := "To " + st.Teammate + " · " + st.Thread
+			if st.Kind == lead.StepStart {
+				to = "New thread for " + st.Teammate + " · " + st.Thread
+			}
+			lines = append(lines, styleDim.Render(fit(to, w)), fit("  "+oneLine(st.Text), w))
+		}
+		lines = append(lines, styleDim.Render("enter opens the plan in the browser"))
 	default:
 		lines = append(lines, styleDim.Render("enter opens it in the browser"))
 	}

@@ -1,4 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router"
+import { PlusIcon } from "@phosphor-icons/react"
 import {
   SidebarMenuButton,
   SidebarMenuItem,
@@ -7,12 +8,12 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { $api } from "@/lib/api/client"
-import { clock, dayName, leadToday } from "@/lib/lead"
+import { clock, dayName, leadToday, planOpen, planStateLabel } from "@/lib/lead"
 import { LeadGlyph } from "./glyph"
 
 /**
  * Lead at the top of Teammates (docs/lead.md): its name, and while it writes, that it does.
- * On its pages, today and the last days it wrote are listed under it.
+ * Its open plans are listed under it, and on its pages the last days it wrote and New plan.
  */
 export function LeadSidebarRow({ env }: { env: string }) {
   const matchRoute = useMatchRoute()
@@ -29,8 +30,20 @@ export function LeadSidebarRow({ env }: { env: string }) {
     to: "/e/$env/lead/settings",
     params: { env },
   })
-  const onPage = onToday || onSettings || !!open
+  const onPlan = matchRoute({
+    to: "/e/$env/lead/plans/$plan",
+    params: { env },
+  }) as false | { plan?: string }
+  const onNew = !!matchRoute({ to: "/e/$env/lead/plans/new", params: { env } })
+  const onPage = onToday || onSettings || !!open || !!onPlan || onNew
   const days = (v?.days ?? []).filter((d) => d.day !== t).slice(0, 4)
+  const plans = $api.useQuery("get", "/api/environments/{env}/lead/plans", {
+    params: { path: { env } },
+  })
+  // Open plans show everywhere, the one open on the page even once it ended.
+  const shown = (plans.data ?? [])
+    .filter((p) => planOpen(p) || (!!onPlan && onPlan.plan === p.id))
+    .slice(0, 4)
   return (
     <>
       <SidebarMenuItem>
@@ -56,12 +69,59 @@ export function LeadSidebarRow({ env }: { env: string }) {
           )}
         </SidebarMenuButton>
       </SidebarMenuItem>
-      {onPage && days.length > 0 && (
+      {shown.length > 0 && (
+        <li className="list-none">
+          <SidebarMenuSub
+            aria-label={`${name}'s plans`}
+            className="mr-0 gap-px pr-0"
+          >
+            {shown.map((p) => (
+              <SidebarMenuSubItem key={p.id}>
+                <SidebarMenuSubButton
+                  size="sm"
+                  isActive={!!onPlan && onPlan.plan === p.id}
+                  render={
+                    <Link
+                      to="/e/$env/lead/plans/$plan"
+                      params={{ env, plan: p.id }}
+                    />
+                  }
+                  className="h-auto py-1"
+                >
+                  <span className="grid min-w-0 flex-1 leading-tight">
+                    <span className="truncate">{p.title || "Plan"}</span>
+                    <span
+                      className={
+                        p.state === "proposed" || p.state === "asking"
+                          ? "truncate text-caption text-(--st-waiting-fg)"
+                          : "truncate text-caption text-muted-foreground"
+                      }
+                    >
+                      {planStateLabel(p.state)}
+                    </span>
+                  </span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            ))}
+          </SidebarMenuSub>
+        </li>
+      )}
+      {onPage && (
         <li className="list-none">
           <SidebarMenuSub
             aria-label={`Days ${name} wrote`}
             className="mr-0 gap-px pr-0"
           >
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                size="sm"
+                isActive={onNew}
+                render={<Link to="/e/$env/lead/plans/new" params={{ env }} />}
+              >
+                <PlusIcon className="size-3.5" />
+                <span className="truncate">New plan</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
             {days.map((d) => (
               <SidebarMenuSubItem key={d.day}>
                 <SidebarMenuSubButton

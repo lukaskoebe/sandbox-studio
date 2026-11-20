@@ -831,6 +831,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/lead/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lead's plans, the last changed first, without their threads. */
+        get: operations["listLeadPlans"];
+        put?: never;
+        /** @description Asks Lead for a plan. Lead drafts it in the background and asks for a lead.plan approval; nothing is sent to a teammate until the user approves it. A lead event says when the draft is there. */
+        post: operations["createLeadPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/plans/{plan}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A plan with its thread: what the user and Lead said, the steps and Lead's report. */
+        get: operations["getLeadPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/plans/{plan}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cancels a plan: one waiting for approval is never sent, and a running one sends nothing more. Messages already sent stay in their threads. */
+        post: operations["cancelLeadPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/plans/{plan}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Answers Lead's question or asks for a change. A proposed plan's approval is withdrawn and Lead drafts the plan again. 409 while Lead writes or carries out the plan, and once it is done or cancelled. */
+        post: operations["messageLeadPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/lead/seen": {
         parameters: {
             query?: never;
@@ -3659,6 +3728,8 @@ export interface components {
             heldUntil?: string;
             id: string;
             kind: string;
+            /** @description The messages Lead sends to teammates once the user approves */
+            leadPlan?: components["schemas"]["PlanPayload"];
             /** @description Two facts that disagree */
             memoryConflict?: components["schemas"]["ConflictPayload"];
             /** @description A teammate's proposal for shared memory */
@@ -5086,6 +5157,15 @@ export interface components {
             /** @description Also copy the tools installed with mise use and the global mise config. Omitted, it follows the sandbox's fork defaults. */
             tools?: boolean;
         };
+        FromLead: {
+            /** Format: date-time */
+            approvedAt: string;
+            /** @description Lead's name when it sent the message */
+            name: string;
+            /** @description The plan's title */
+            plan: string;
+            planId: string;
+        };
         GetMemoryIndexResponse: {
             markdown: string;
         };
@@ -5562,6 +5642,44 @@ export interface components {
             /** @description What waited for the user, oldest first */
             waiting: components["schemas"]["LeadWaiting"][] | null;
         };
+        LeadPlanItem: {
+            /** Format: date-time */
+            at: string;
+            /**
+             * Format: int64
+             * @description USD × 10^6; 0 when costs are hidden
+             */
+            cost: number;
+            id: string;
+            /** @enum {string} */
+            kind: "you" | "lead" | "report" | "note";
+            model?: string;
+            priced: boolean;
+            /** @description What Lead asked with this reply */
+            question?: components["schemas"]["PlanQuestion"];
+            /** @description The plan Lead proposed with this reply */
+            steps?: components["schemas"]["PlanStep"][] | null;
+            text: string;
+            /** @description The threads a report speaks of */
+            threads?: components["schemas"]["PlanThread"][] | null;
+        };
+        LeadPlanView: {
+            /** @description The lead.plan approval it waits on */
+            approvalId?: string;
+            /** Format: date-time */
+            approvedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            /** @description The plan's thread, oldest first; only for one plan */
+            items?: components["schemas"]["LeadPlanItem"][] | null;
+            /** @enum {string} */
+            state: "drafting" | "asking" | "proposed" | "running" | "done" | "cancelled" | "failed";
+            steps: components["schemas"]["PlanStep"][] | null;
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         LeadProse: {
             /** @description A few words on the day as a whole */
             heading?: string;
@@ -6010,6 +6128,9 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        MessageBody: {
+            text: string;
+        };
         ModelInBody: {
             /** @description One of the models the chat's teammate offers; empty for its default */
             model: string;
@@ -6281,6 +6402,53 @@ export interface components {
             content: string;
             priority: string;
             status: string;
+        };
+        PlanPayload: {
+            /** @description Of the steps; the approval holds only while the plan has them */
+            digest: string;
+            /** @description Lead's name */
+            lead: string;
+            planId: string;
+            steps: components["schemas"]["PlanStep"][] | null;
+            title: string;
+        };
+        PlanQuestion: {
+            options: string[] | null;
+            text: string;
+        };
+        PlanStep: {
+            /**
+             * Format: date-time
+             * @description When the message was in the thread, or the step was done
+             */
+            at?: string;
+            /** @description The thread the message goes to; a start step's once it is open */
+            chatId?: string;
+            /** @description The computer's name */
+            computer?: string;
+            /** @enum {string} */
+            kind: "message" | "start" | "wait" | "tell";
+            /** @description Why a step failed, or how a wait ended */
+            note?: string;
+            sandboxId?: string;
+            /** @enum {string} */
+            state: "proposed" | "pending" | "running" | "done" | "failed" | "skipped";
+            /** @description The teammate's name */
+            teammate?: string;
+            teammateId?: string;
+            /** @description The message, as the teammate reads it */
+            text?: string;
+            /** @description The thread's title; a start step's new title */
+            thread?: string;
+        };
+        PlanThread: {
+            /** @description The teammate wrote back after Lead's message */
+            answered: boolean;
+            chatId: string;
+            sandboxId: string;
+            teammate: string;
+            teammateId: string;
+            thread: string;
         };
         PreviewOpenBody: {
             url: string;
@@ -8000,6 +8168,7 @@ export interface components {
         };
         UserBody: {
             attachments?: components["schemas"]["Attachment"][] | null;
+            lead?: components["schemas"]["FromLead"];
             mentions?: components["schemas"]["Mention"][] | null;
             text: string;
         };
@@ -10111,6 +10280,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeadAskView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listLeadPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadPlanView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createLeadPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadPlanView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getLeadPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Plan ID */
+                plan: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadPlanView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelLeadPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Plan ID */
+                plan: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadPlanView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    messageLeadPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Plan ID */
+                plan: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadPlanView"];
                 };
             };
             /** @description Error */

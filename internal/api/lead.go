@@ -15,8 +15,8 @@ import (
 )
 
 // registerLead adds Lead, which writes up each environment's day (docs/lead.md): its state,
-// a day's page, questions about a day, Summarize now and its settings. Lead only reads; nothing here acts on a
-// teammate, a computer or an approval.
+// a day's page, questions about a day, Summarize now, its settings and its plans. Only a plan
+// the user approved sends anything to a teammate; nothing here decides an approval.
 func (s *Server) registerLead(api huma.API) {
 	tags := []string{"lead"}
 	base := "/api/environments/{env}/lead"
@@ -157,4 +157,5 @@ func (s *Server) registerLead(api huma.API) {
 		}
 		return &struct{ Body store.LeadSettings }{v}, nil
 	})
+	s.registerLeadPlans(api, ready)
 }

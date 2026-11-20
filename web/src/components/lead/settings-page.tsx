@@ -8,6 +8,7 @@ import {
   CaretLeftIcon,
   ClockIcon,
   CurrencyDollarIcon,
+  ChatTextIcon,
   EyeIcon,
   LockIcon,
   MonitorIcon,
@@ -42,7 +43,7 @@ const notifyChoices: Record<LeadSettings["notify"], string> = {
 /**
  * How Lead writes the day (docs/lead.md): its name, when, on which days, what goes in, the
  * model it calls and what that may cost, and when it tells you. Each control saves when it
- * changes. What Lead may do is fixed: in this version it only reads.
+ * changes. What Lead may do is fixed: it reads, and sends a plan's messages once you approve it.
  */
 export function LeadSettingsPage({ env }: { env: string }) {
   const lead = $api.useQuery("get", "/api/environments/{env}/lead", {
@@ -245,9 +246,15 @@ function Settings({ env, v }: { env: string; v: LeadView }) {
           control={<Locked>Always</Locked>}
         />
         <SettingRow
+          icon={ChatTextIcon}
+          title="Message teammates in their threads, or start a thread on their computer"
+          description="Only in a plan you approved, and only the messages as you saw them. A change to the plan withdraws its approval."
+          control={<Locked>When you approve</Locked>}
+        />
+        <SettingRow
           icon={LockIcon}
-          title="Message teammates, start, steer or stop their work, start a task's run"
-          description="Not in this version: Lead only writes the day. When it can, each plan will wait for you."
+          title="Steer or stop their work, start a task's run"
+          description="Not in this version."
           control={<Locked>Not yet</Locked>}
         />
         <SettingRow

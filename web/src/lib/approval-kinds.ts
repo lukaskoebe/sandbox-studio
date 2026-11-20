@@ -2,6 +2,7 @@ import {
   BrainIcon,
   ChatCircleDotsIcon,
   ChatCircleTextIcon,
+  CompassIcon,
   CursorClickIcon,
   EyeIcon,
   GitBranchIcon,
@@ -184,6 +185,20 @@ const kinds: Record<string, ApprovalKind> = {
     area: "memory",
     page: "/e/$env",
   },
+  "lead.plan": {
+    title: "Plan",
+    summary: (a) => {
+      const p = a.leadPlan
+      if (!p) return a.subject
+      const n = (p.steps ?? []).filter(
+        (s) => s.kind === "message" || s.kind === "start"
+      ).length
+      return `${p.lead} wants to send ${plural(n, "message")}: ${p.title}`
+    },
+    icon: CompassIcon,
+    area: "chat",
+    page: "/e/$env",
+  },
   "browser.action": {
     title: "Browser action",
     summary: (a) => {
@@ -294,7 +309,8 @@ export function approvalSource(a: Approval): string | undefined {
     a.browserShow?.sandboxName ??
     a.gitCredential?.sandboxName ??
     a.secretRejected?.sandboxName ??
-    a.chatPermission?.sandboxName
+    a.chatPermission?.sandboxName ??
+    a.leadPlan?.lead
   )
 }
 

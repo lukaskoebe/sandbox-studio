@@ -17,12 +17,14 @@ import (
 
 // fakeLLM answers folds with a note and the day call with its day answer, and records calls.
 type fakeLLM struct {
-	mu    sync.Mutex
-	day   string
-	ask   string
-	gate  chan struct{} // an answer waits for it when set
-	err   error
-	calls []agentmem.Request
+	mu     sync.Mutex
+	day    string
+	ask    string
+	plan   string        // the draft of a plan
+	report string        // a plan's report
+	gate   chan struct{} // an answer waits for it when set
+	err    error
+	calls  []agentmem.Request
 }
 
 func (l *fakeLLM) Complete(_ context.Context, r agentmem.Request) (agentmem.Response, error) {
@@ -40,6 +42,12 @@ func (l *fakeLLM) Complete(_ context.Context, r agentmem.Request) (agentmem.Resp
 	}
 	if r.System == askPrompt {
 		return agentmem.Response{Text: l.ask, InputTokens: 4000, OutputTokens: 120}, nil
+	}
+	if r.System == planPrompt {
+		return agentmem.Response{Text: l.plan, InputTokens: 3000, OutputTokens: 200}, nil
+	}
+	if r.System == reportPrompt {
+		return agentmem.Response{Text: l.report, InputTokens: 1500, OutputTokens: 80}, nil
 	}
 	if r.System == foldPrompt {
 		return agentmem.Response{Text: "Ada finished the coupon importer and waits for the push review.", InputTokens: 900, OutputTokens: 40}, nil

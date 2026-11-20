@@ -12,6 +12,7 @@ import {
   DesktopTowerIcon,
   GearIcon,
   GitForkIcon,
+  ListChecksIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   TrayIcon,
@@ -127,6 +128,14 @@ export function Breadcrumbs({ env }: { env: string }) {
   const routeId = (leaf?.routeId ?? "") as string
   const params = (leaf?.params ?? {}) as Record<string, string>
   const search = (leaf?.search ?? {}) as TeammateSearch
+  const onPlan = routeId === "/e/$env/lead/plans/$plan"
+  const planId = onPlan ? params.plan : ""
+  const plan = $api.useQuery(
+    "get",
+    "/api/environments/{env}/lead/plans/{plan}",
+    { params: { path: { env, plan: planId } } },
+    { enabled: !!planId }
+  )
   const allTeammates = teammates.data ?? []
   const allSandboxes = sandboxes.data ?? []
   const allChats = chats.data ?? []
@@ -428,6 +437,22 @@ export function Breadcrumbs({ env }: { env: string }) {
                 ]
               : []),
           ],
+        },
+      ]
+    }
+    if (routeId.startsWith("/e/$env/lead/plans/")) {
+      const name = lead.data?.settings.name ?? "Lead"
+      return [
+        {
+          key: "lead",
+          label: name,
+          lead: <LeadGlyph className="size-4" />,
+          run: () => void navigate({ to: "/e/$env/lead", params: { env } }),
+        },
+        {
+          key: "plan",
+          label: onPlan ? plan.data?.title || "Plan" : "New plan",
+          lead: <ListChecksIcon />,
         },
       ]
     }

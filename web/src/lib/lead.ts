@@ -10,6 +10,40 @@ export type LeadPush = components["schemas"]["LeadPush"]
 export type LeadWaiting = components["schemas"]["LeadWaiting"]
 export type LeadAsk = components["schemas"]["LeadAskView"]
 export type LeadSince = components["schemas"]["LeadSince"]
+export type LeadPlan = components["schemas"]["LeadPlanView"]
+export type LeadPlanItem = components["schemas"]["LeadPlanItem"]
+export type PlanStep = components["schemas"]["PlanStep"]
+export type PlanPayload = components["schemas"]["PlanPayload"]
+
+/** Whether a plan can still change: it isn't done, cancelled or failed. */
+export function planOpen(p: { state: LeadPlan["state"] }): boolean {
+  return p.state !== "done" && p.state !== "cancelled" && p.state !== "failed"
+}
+
+/** A plan's state in a few words, for its page and the sidebar. */
+export function planStateLabel(state: LeadPlan["state"]): string {
+  switch (state) {
+    case "drafting":
+      return "Drafting"
+    case "asking":
+      return "Your turn"
+    case "proposed":
+      return "Waits for approval"
+    case "running":
+      return "Running"
+    case "done":
+      return "Done"
+    case "cancelled":
+      return "Cancelled"
+    case "failed":
+      return "Failed"
+  }
+}
+
+/** The steps that send something: messages and new threads, not the wait and the report. */
+export function sendingSteps(steps: PlanStep[] | null | undefined): PlanStep[] {
+  return (steps ?? []).filter((s) => s.kind === "message" || s.kind === "start")
+}
 
 /** Today's date as the API names days: YYYY-MM-DD, local. */
 export function today(now = new Date()): string {
@@ -129,3 +163,26 @@ export function refTargets(f: LeadFacts): Map<string, RefTarget> {
 
 /** Lead's weekday bits: Monday is bit 0. */
 export const weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const
+
+/** The model's text with its refs written out as names, for a plan's first message. */
+export function plainText(text: string, refs: Map<string, RefTarget>): string {
+  return pieces(text)
+    .map((p) => {
+      if ("text" in p) return p.text
+      const r = refs.get(p.ref)
+      switch (r?.kind) {
+        case "teammate":
+          return r.teammate.name
+        case "thread":
+          return `“${r.thread.title}”`
+        case "push":
+          return r.push.prNumber ? `#${r.push.prNumber}` : r.push.branch
+        case "approval":
+          return r.waiting.subject
+        case "task":
+          return r.title
+      }
+      return ""
+    })
+    .join("")
+}

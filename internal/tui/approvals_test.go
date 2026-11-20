@@ -11,6 +11,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -424,4 +425,28 @@ func TestBrowserPageGroupAllowsTheBrowserOnly(t *testing.T) {
 func pressCmd(m *app, key string) (*app, tea.Cmd) {
 	next, cmd := m.Update(keyMsg(key))
 	return next.(*app), cmd
+}
+
+func TestLeadPlanCardSaysWhatGoesToWhom(t *testing.T) {
+	a := api.ApprovalView{Approval: store.Approval{ID: "a1", EnvironmentID: "env1", Kind: lead.ApprovalKind, Subject: "p1", Status: "pending"}, LeadPlan: &lead.PlanPayload{
+		PlanID: "p1", Lead: "Lead", Title: "Check the tests",
+		Steps: []lead.PlanStep{
+			{Kind: lead.StepMessage, Teammate: "Ada", Thread: "Coupons", Text: "Do the tests pass?"},
+			{Kind: lead.StepStart, Teammate: "Juno", Thread: "Checkout", Text: "Please look at checkout."},
+			{Kind: lead.StepWait},
+		},
+	}}
+	if got, want := summary(a), "Lead wants to send 2 messages: Check the tests"; got != want {
+		t.Errorf("summary = %q, want %q", got, want)
+	}
+	m := &app{addr: "127.0.0.1:7878"}
+	if got, want := m.approvalURL(a), "http://127.0.0.1:7878/e/env1/lead/plans/p1"; got != want {
+		t.Errorf("approvalURL = %q, want %q", got, want)
+	}
+	text := strings.Join(m.kindLines(card{approvals: []api.ApprovalView{a}}, 80), "\n")
+	for _, want := range []string{"To Ada · Coupons", "Do the tests pass?", "New thread for Juno · Checkout", "enter opens the plan in the browser"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("card lines lack %q:\n%s", want, text)
+		}
+	}
 }

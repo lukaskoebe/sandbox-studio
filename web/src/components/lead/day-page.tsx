@@ -30,6 +30,7 @@ import {
   dollars,
   plural,
   leadToday,
+  plainText,
   refTargets,
   turnTime,
   type LeadDay,
@@ -303,13 +304,33 @@ function Day({
             <Section title="Tomorrow">
               <ul className="grid gap-2 text-xs/relaxed">
                 {(v.prose?.tomorrow ?? []).map((s, i) => (
-                  <li key={i}>
-                    <Prose env={env} text={s} refs={refs} />
+                  <li
+                    key={i}
+                    className="flex items-start justify-between gap-2"
+                  >
+                    <span className="min-w-0">
+                      <Prose env={env} text={s} refs={refs} />
+                    </span>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="shrink-0 text-muted-foreground"
+                      render={
+                        <Link
+                          to="/e/$env/lead/plans/new"
+                          params={{ env }}
+                          search={{ text: plainText(s, refs) }}
+                        />
+                      }
+                    >
+                      Make a plan
+                    </Button>
                   </li>
                 ))}
               </ul>
               <p className="text-caption text-muted-foreground">
-                Suggestions only; nothing is sent.
+                Suggestions only. Make a plan turns one into messages to
+                teammates, sent once you approve them.
               </p>
             </Section>
           )}

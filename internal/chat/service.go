@@ -212,6 +212,11 @@ func (s *Service) Create(ctx context.Context, sb store.Sandbox, harnessName stri
 	return s.create(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName})
 }
 
+// CreateTitled adds an idle chat with the sandbox's owner teammate, named title.
+func (s *Service) CreateTitled(ctx context.Context, sb store.Sandbox, harnessName, title string) (store.Chat, error) {
+	return s.create(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName, Title: title})
+}
+
 // CreateHeartbeat adds an idle chat that a heartbeat opens, which the chat list marks as one.
 func (s *Service) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harnessName string) (store.Chat, error) {
 	return s.create(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName, Heartbeat: true})
@@ -422,11 +427,12 @@ type File struct {
 	Data     []byte
 }
 
-// Prompt is what the user sends.
+// Prompt is what the user sends, or Lead with the user's approval.
 type Prompt struct {
 	Text        string
 	Attachments []File
 	Mentions    []Mention
+	Lead        *FromLead
 }
 
 // Send starts a turn with p, starting the chat's agent first if it isn't running. The
@@ -465,7 +471,7 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 		var atts []Attachment
 		if blocks, atts, err = l.prompt(p); err == nil {
 			var t store.ChatTurn
-			if t, err = l.start(ctx, c, UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions}, blocks, launch.ModelName); err == nil {
+			if t, err = l.start(ctx, c, UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions, Lead: p.Lead}, blocks, launch.ModelName); err == nil {
 				return t, nil
 			}
 		}
@@ -1288,6 +1294,9 @@ func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []
 	if note != "" {
 		blocks = append([]acp.ContentBlock{{Type: "text", Text: note}}, blocks...)
 	}
+	if user.Lead != nil {
+		blocks = append([]acp.ContentBlock{{Type: "text", Text: leadNote(user.Lead)}}, blocks...)
+	}
 	t, err := l.s.Store.StartChatTurnOn(ctx, c.ID, store.OriginChat, "", model)
 	if err != nil {
 		return t, err
@@ -1572,4 +1581,12 @@ func (s *Service) Cancel(ctx context.Context, envID, chatID string) error {
 		}
 	}()
 	return nil
+}
+
+// leadNote tells the agent who a message from Lead is from: another teammate that sends it
+// with the user's approval, which can't approve anything itself.
+func leadNote(f *FromLead) string {
+	return fmt.Sprintf("This message is from %s, the teammate in Studio that coordinates the others, sent as part of its plan %q, "+
+		"which the user approved. %s can't grant approvals: pushes, pull requests and network requests still ask the user.",
+		f.Name, f.Plan, f.Name)
 }

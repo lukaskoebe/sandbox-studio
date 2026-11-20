@@ -2,6 +2,7 @@ import {
   ArrowCounterClockwiseIcon,
   ArrowsInSimpleIcon,
   CaretRightIcon,
+  CompassIcon,
   FileIcon,
   ImageIcon,
   InfoIcon,
@@ -11,6 +12,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react"
 import { useCallback } from "react"
+import { Link } from "@tanstack/react-router"
 import type { Prompt } from "@/components/chat/composer"
 import {
   ChatPicture,
@@ -81,7 +83,7 @@ export function ChatItemView({
 }) {
   switch (item.kind) {
     case "user":
-      return <UserMessage item={item} />
+      return <UserMessage item={item} env={ctx.env} />
     case "agent":
       return item.text ? (
         <Message>
@@ -176,8 +178,48 @@ function AgentText({
   )
 }
 
-function UserMessage({ item }: { item: ChatItem }) {
-  return item.user ? <UserBubble u={item.user} /> : null
+function UserMessage({ item, env }: { item: ChatItem; env: string }) {
+  if (!item.user) return null
+  const lead = item.user.lead
+  if (!lead) return <UserBubble u={item.user} />
+  return (
+    <div className="grid justify-items-end gap-1">
+      <UserBubble u={item.user} />
+      <FromLead env={env} lead={lead} />
+    </div>
+  )
+}
+
+/**
+ * Who sent a message Lead wrote: Lead, for the plan the user approved, with a link to the plan
+ * (docs/lead.md#plans). The agent is told the same before the message.
+ */
+function FromLead({
+  env,
+  lead,
+}: {
+  env: string
+  lead: NonNullable<NonNullable<ChatItem["user"]>["lead"]>
+}) {
+  const at = new Date(lead.approvedAt).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+  return (
+    <span className="flex items-center gap-1 text-meta text-muted-foreground">
+      <CompassIcon className="size-3" aria-hidden />
+      <span>
+        {lead.name}, approved by you at {at} ·{" "}
+        <Link
+          to="/e/$env/lead/plans/$plan"
+          params={{ env, plan: lead.planId }}
+          className="underline-offset-2 hover:text-foreground hover:underline"
+        >
+          {lead.plan || "the plan"}
+        </Link>
+      </span>
+    </span>
+  )
 }
 
 /**

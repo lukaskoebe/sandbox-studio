@@ -430,8 +430,8 @@ function NeedsYou({ env, approvals }: { env: string; approvals: Approval[] }) {
 }
 
 /**
- * A decided git review or memory conflict links to its own page; other approvals are plain
- * text.
+ * A decided git review, memory conflict or plan of Lead's links to its own page; other
+ * approvals are plain text.
  */
 function ApprovalPageLink({
   approval: a,
@@ -446,6 +446,17 @@ function ApprovalPageLink({
       <Link
         to="/e/$env/git/reviews/$id"
         params={{ env: a.environmentId, id: a.id }}
+        className={className}
+      >
+        {children}
+      </Link>
+    )
+  const plan = a.leadPlan?.planId
+  if (plan)
+    return (
+      <Link
+        to="/e/$env/lead/plans/$plan"
+        params={{ env: a.environmentId, plan }}
         className={className}
       >
         {children}

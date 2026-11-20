@@ -3,7 +3,8 @@
 // day, and at a set time writes the day: what waits for the user, what each teammate finished,
 // has open or is blocked on, what shipped and what it cost. Studio fills in every number,
 // state and link from its records; the environment's utility model only writes the sentences.
-// Lead is read-only: it has no tool that acts on a teammate, a computer or an approval.
+// Lead has no tool that acts on a teammate, a computer or an approval. The one thing it sends
+// is a plan's messages, and only once the user approved the plan as it stands (plan.go).
 package lead
 
 import (
@@ -65,6 +66,10 @@ type Service struct {
 	LowDisks func(sandboxID string) []agentproto.Disk
 	// Now is the local time; time.Now when nil.
 	Now func() time.Time
+	// Send sends the messages of the plans the user approved; nil means no plans.
+	Send Messenger
+	// PlanPoll is how often a plan looks whether the teammates answered; planPollEvery when 0.
+	PlanPoll time.Duration
 
 	mu      sync.Mutex
 	writing map[string]bool       // environment -> a write runs
@@ -73,6 +78,8 @@ type Service struct {
 	folded  map[string]time.Time  // environment/teammate -> the last fold
 	asking  map[string]bool       // environment -> an answer is being written
 	asks    sync.WaitGroup        // the answers being written
+	plans   sync.WaitGroup        // the plans being drafted or carried out
+	planMu  sync.Mutex            // keeps two changes of a plan from crossing
 	// foldMu keeps two folds from reading the same note; callMu keeps two calls from passing
 	// the daily limit on the same usage.
 	foldMu, callMu sync.Mutex
@@ -111,6 +118,7 @@ func (s *Service) Run(ctx context.Context) {
 	if err := s.Store.FailLeadAsksAnswering(ctx, "Studio stopped before the answer was written. Ask again."); err != nil {
 		s.log().Warn("lead: giving up unanswered questions failed", "err", err)
 	}
+	s.recoverPlans(ctx)
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
@@ -384,7 +392,7 @@ type limitError struct{ reason string }
 
 func (e limitError) Error() string { return e.reason }
 
-// callKind is what a model call is for: the day, a note's fold, or an answer.
+// callKind is what a model call is for: the day, a note's fold, or an answer or a plan.
 type callKind int
 
 const (
@@ -457,7 +465,7 @@ func overLimit(u store.LeadUsage, set store.LeadSettings, m agentmem.UtilityMode
 			case callFold:
 				return "the notes used their share of the daily limit"
 			case callAsk:
-				return fmt.Sprintf("Questions used their share of %s's daily limit of $%.2f; the rest is kept for writing the day", set.Name, float64(set.DailyLimit)/1e6)
+				return fmt.Sprintf("Questions and plans used their share of %s's daily limit of $%.2f; the rest is kept for writing the day", set.Name, float64(set.DailyLimit)/1e6)
 			}
 			return fmt.Sprintf("Lead's daily limit of $%.2f is used up, so the day has its facts without sentences", float64(set.DailyLimit)/1e6)
 		}
@@ -467,7 +475,7 @@ func overLimit(u store.LeadUsage, set store.LeadSettings, m agentmem.UtilityMode
 		return "the notes made their share of the day's calls"
 	}
 	if kind == callAsk && u.Calls >= maxUnpricedAskCalls {
-		return fmt.Sprintf("Questions used their share of %s's %d calls a day; the rest are kept for writing the day", set.Name, maxUnpricedCalls)
+		return fmt.Sprintf("Questions and plans used their share of %s's %d calls a day; the rest are kept for writing the day", set.Name, maxUnpricedCalls)
 	}
 	if u.Calls >= maxUnpricedCalls {
 		return fmt.Sprintf("Lead made its %d calls for the day, so the day has its facts without sentences", maxUnpricedCalls)
