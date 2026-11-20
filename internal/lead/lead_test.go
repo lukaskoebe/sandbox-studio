@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -18,16 +19,27 @@ import (
 type fakeLLM struct {
 	mu    sync.Mutex
 	day   string
+	ask   string
+	gate  chan struct{} // an answer waits for it when set
 	err   error
 	calls []agentmem.Request
 }
 
 func (l *fakeLLM) Complete(_ context.Context, r agentmem.Request) (agentmem.Response, error) {
 	l.mu.Lock()
+	gate := l.gate
+	l.mu.Unlock()
+	if r.System == askPrompt && gate != nil {
+		<-gate
+	}
+	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.calls = append(l.calls, r)
 	if l.err != nil {
 		return agentmem.Response{}, l.err
+	}
+	if r.System == askPrompt {
+		return agentmem.Response{Text: l.ask, InputTokens: 4000, OutputTokens: 120}, nil
 	}
 	if r.System == foldPrompt {
 		return agentmem.Response{Text: "Ada finished the coupon importer and waits for the push review.", InputTokens: 900, OutputTokens: 40}, nil
@@ -384,20 +396,29 @@ func TestScheduledWriteRetries(t *testing.T) {
 	}
 }
 
-func TestFoldsLeaveTheDayItsShare(t *testing.T) {
+func TestFoldsAndAnswersLeaveTheDayItsShare(t *testing.T) {
 	set := store.DefaultLeadSettings()
 	priced := agentmem.UtilityModel{Priced: true, PriceInPerM: 1, PriceOutPerM: 5}
 	u := store.LeadUsage{Calls: 10, Cost: set.DailyLimit * foldSharePercent / 100}
-	if overLimit(u, set, priced, 1000, 200, true) == "" {
+	if overLimit(u, set, priced, 1000, 200, callFold) == "" {
 		t.Error("a fold went past the notes' share of the limit")
 	}
-	if overLimit(u, set, priced, 1000, 200, false) != "" {
-		t.Error("the day's call was stopped within the limit")
+	if overLimit(u, set, priced, 1000, 200, callAsk) != "" || overLimit(u, set, priced, 1000, 200, callDay) != "" {
+		t.Error("an answer or the day's call was stopped within its share")
+	}
+	u.Cost = set.DailyLimit * askSharePercent / 100
+	if overLimit(u, set, priced, 1000, 200, callAsk) == "" || overLimit(u, set, priced, 1000, 200, callDay) != "" {
+		t.Error("an answer went past its share, or the day was stopped within the limit")
 	}
 	unpriced := agentmem.UtilityModel{}
 	u = store.LeadUsage{Calls: maxUnpricedFoldCalls}
-	if overLimit(u, set, unpriced, 0, 0, true) == "" || overLimit(u, set, unpriced, 0, 0, false) != "" {
-		t.Error("the unpriced share is wrong")
+	if overLimit(u, set, unpriced, 0, 0, callFold) == "" || overLimit(u, set, unpriced, 0, 0, callAsk) != "" ||
+		overLimit(u, set, unpriced, 0, 0, callDay) != "" {
+		t.Error("the unpriced fold share is wrong")
+	}
+	u = store.LeadUsage{Calls: maxUnpricedAskCalls}
+	if overLimit(u, set, unpriced, 0, 0, callAsk) == "" || overLimit(u, set, unpriced, 0, 0, callDay) != "" {
+		t.Error("the unpriced answer share is wrong")
 	}
 }
 
@@ -497,5 +518,147 @@ func TestMarkdownEscapesWhatIsNotStudios(t *testing.T) {
 	}
 	if !strings.Contains(md, `\[Open the build\]`) {
 		t.Errorf("the summary isn't escaped:\n%s", md)
+	}
+}
+
+func (l *fakeLLM) askCalls() []agentmem.Request {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []agentmem.Request
+	for _, c := range l.calls {
+		if c.System == askPrompt {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func TestAskAnswersFromTheDay(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.turn(t, "Write the coupon importer", "Done; the tests pass.", 1.25)
+	f.push(t)
+	today := f.svc.now().Format(time.DateOnly)
+	day, err := f.svc.Day(ctx, f.env, today)
+	if err != nil {
+		t.Fatal(err)
+	}
+	thread, push := day.Facts.Teammates[0].Threads[0].Ref, day.Facts.Pushes[0].Ref
+	f.llm.ask = fmt.Sprintf("Ada wrote the importer in [%s].\n\nShe pushed [%s] and [push:9] is made up. Her key is sk-ant-api03-%s.",
+		thread, push, strings.Repeat("x", 40))
+	gate := make(chan struct{})
+	f.llm.gate = gate
+
+	a, err := f.svc.Ask(ctx, f.env, today, "  What did Ada get done?  ")
+	if err != nil || a.State != store.LeadAskAnswering || a.Question != "What did Ada get done?" {
+		t.Fatalf("ask = %+v, %v", a, err)
+	}
+	if _, err := f.svc.Ask(ctx, f.env, today, "And Juno?"); !errors.Is(err, ErrAnswering) {
+		t.Errorf("a second question while answering: %v", err)
+	}
+	close(gate)
+	f.svc.asks.Wait()
+
+	asks, err := f.svc.Asks(ctx, f.env, today)
+	if err != nil || len(asks) != 1 {
+		t.Fatalf("asks = %+v, %v", asks, err)
+	}
+	got := asks[0]
+	if got.State != store.LeadAskAnswered || got.AnsweredAt == nil || got.Cost == 0 {
+		t.Fatalf("answer = %+v", got)
+	}
+	if !strings.Contains(got.Answer, "["+thread+"]") || !strings.Contains(got.Answer, "["+push+"]") ||
+		strings.Contains(got.Answer, "push:9") || strings.Contains(got.Answer, "sk-ant") || !strings.Contains(got.Answer, "\n\n") {
+		t.Errorf("answer text = %q", got.Answer)
+	}
+	if len(got.Refs.Teammates) != 1 || len(got.Refs.Teammates[0].Threads) != 1 || len(got.Refs.Pushes) != 1 || len(got.Refs.Waiting) != 0 {
+		t.Errorf("refs = %+v", got.Refs)
+	}
+	calls := f.llm.askCalls()
+	if len(calls) != 1 || !strings.Contains(calls[0].User, "<facts>") || !strings.Contains(calls[0].User, "<question>\n\"What did Ada get done?\"") {
+		t.Fatalf("ask call = %+v", calls)
+	}
+
+	// A follow-up reads the question before it, its refs written out as names.
+	f.llm.gate = nil
+	if _, err := f.svc.Ask(ctx, f.env, today, "Is the push through?"); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.asks.Wait()
+	calls = f.llm.askCalls()
+	if len(calls) != 2 || !strings.Contains(calls[1].User, "<asked_before>") || !strings.Contains(calls[1].User, "Coupon import") ||
+		strings.Contains(strings.SplitN(calls[1].User, "<asked_before>", 2)[1], "["+thread+"]") {
+		t.Errorf("follow-up call = %s", calls[len(calls)-1].User)
+	}
+
+	if _, err := f.svc.Ask(ctx, f.env, f.svc.now().AddDate(0, 0, 2).Format(time.DateOnly), "Tomorrow?"); !errors.Is(err, ErrFutureDay) {
+		t.Errorf("a day that hasn't come: %v", err)
+	}
+}
+
+func TestAskSaysWhyItCantAnswer(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.turn(t, "Write the coupon importer", "Done.", 0)
+	today := f.svc.now().Format(time.DateOnly)
+	set := store.DefaultLeadSettings()
+	set.DailyLimit = 1 // a micro-dollar: nothing fits
+	if _, err := f.st.SetLeadSettings(ctx, f.env, set); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Ask(ctx, f.env, today, "What happened?"); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.asks.Wait()
+	asks, _ := f.svc.Asks(ctx, f.env, today)
+	if len(asks) != 1 || asks[0].State != store.LeadAskFailed || !strings.Contains(asks[0].Note, "share of Lead's daily limit") {
+		t.Errorf("asks = %+v", asks)
+	}
+	if len(f.llm.askCalls()) != 0 {
+		t.Error("the model was called over the limit")
+	}
+
+	// A Studio that stopped while answering leaves no answer waiting forever.
+	if _, err := f.st.AddLeadAsk(ctx, f.env, store.LeadAsk{Day: today, Question: "Still there?", AskedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.FailLeadAsksAnswering(ctx, "Studio stopped."); err != nil {
+		t.Fatal(err)
+	}
+	asks, _ = f.svc.Asks(ctx, f.env, today)
+	if asks[1].State != store.LeadAskFailed || asks[1].Note != "Studio stopped." {
+		t.Errorf("the stopped answer = %+v", asks[1])
+	}
+}
+
+func TestSinceYouLooked(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	now := f.svc.now()
+	if now.Hour() == 0 && now.Minute() < 2 {
+		t.Skip("too close to midnight")
+	}
+	v, err := f.svc.View(ctx, f.env)
+	if err != nil || v.Today.Since != nil {
+		t.Fatalf("never looked: %+v, %v", v.Today.Since, err)
+	}
+	if err := f.st.SetLeadSeen(ctx, f.env, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	f.turn(t, "Write the coupon importer", "Done.", 0)
+	f.push(t)
+	v, _ = f.svc.View(ctx, f.env)
+	s := v.Today.Since
+	if s == nil || s.Threads != 1 || s.Pushes != 1 || s.PRs != 1 || len(s.Teammates) != 1 || s.Teammates[0] != "Ada" {
+		t.Errorf("since = %+v", s)
+	}
+	if err := f.svc.Seen(ctx, f.env); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.SetLeadSeen(ctx, f.env, now.AddDate(0, 0, -1)); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ = f.svc.View(ctx, f.env); v.Today.Since != nil {
+		t.Errorf("looked yesterday: %+v", v.Today.Since)
 	}
 }

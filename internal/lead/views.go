@@ -39,6 +39,7 @@ type LeadToday struct {
 	TurnSeconds int64           `json:"turnSeconds"`
 	Cost        int64           `json:"cost"`
 	Costed      bool            `json:"costed"`
+	Since       *LeadSince      `json:"since,omitempty" doc:"What happened since the user last looked at the day, when that was today"`
 }
 
 // LeadTodayNote is a teammate's note of today.
@@ -124,6 +125,11 @@ func (s *Service) View(ctx context.Context, env string) (LeadView, error) {
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return v, err
 	}
+	if seen, err := s.Store.LeadSeen(ctx, env); err != nil {
+		return v, err
+	} else if seen.Before(now) {
+		v.Today.Since = since(f, seen)
+	}
 	if !set.ShowCosts {
 		v.Today.Cost, v.Today.Costed = 0, false
 	}
@@ -200,9 +206,15 @@ func (s *Service) Day(ctx context.Context, env, day string) (LeadDayView, error)
 }
 
 func hideCosts(v *LeadDayView) {
-	v.Cost, v.LeadCost, v.Facts.Cost, v.Facts.Costed = 0, 0, 0, false
-	for i := range v.Facts.Teammates {
-		t := &v.Facts.Teammates[i]
+	v.Cost, v.LeadCost = 0, 0
+	v.Facts.hideCosts()
+}
+
+// hideCosts takes the costs out of the facts.
+func (f *LeadFacts) hideCosts() {
+	f.Cost, f.Costed = 0, false
+	for i := range f.Teammates {
+		t := &f.Teammates[i]
 		t.Cost, t.Costed = 0, false
 		for j := range t.Threads {
 			t.Threads[j].Cost = 0

@@ -11,10 +11,11 @@ const stale: Record<string, string[]> = {
     "/api/environments/{env}/lead",
     "/api/environments/{env}/lead/days/{day}",
   ],
-  // Lead wrote a day or began to, or its settings changed.
+  // Lead wrote a day or began to, answered a question, or its settings changed.
   lead: [
     "/api/environments/{env}/lead",
     "/api/environments/{env}/lead/days/{day}",
+    "/api/environments/{env}/lead/days/{day}/asks",
   ],
   rules: ["/api/environments/{env}/rules"],
   secrets: ["/api/environments/{env}/secrets"],

@@ -61,6 +61,19 @@ test("Lead writes today's day from Home, the day page links its work, and the se
   expect(markdown).toMatch(/^# \w+day \d+ \w+ \d{4} · a steady day/)
   expect(markdown).toContain(`## ${name}`)
 
+  // Ask Lead: the answer comes back under the question, linking the thread it speaks of.
+  const ask = page.getByRole("form", { name: "Ask Lead" })
+  const question = `What did ${name} get done?`
+  const box = ask.getByLabel("Your question for Lead")
+  await expect(box).toHaveAttribute("placeholder", "Ask Lead about today…")
+  await box.fill(question)
+  await box.press("Enter")
+  const qa = page.getByRole("article", { name: question })
+  await expect(qa).toContainText(`You asked: ${question}`, { timeout: 30_000 })
+  await expect(qa.getByRole("link").first()).toBeVisible()
+  await expect(qa).toContainText(/\d\d:\d\d( [AP]M)? · e2e-writer/)
+  await expect(box).toHaveValue("")
+
   // The sidebar has Lead at the top of Teammates.
   const sidebar = page.locator("[data-sidebar=sidebar]")
   await expect(sidebar.getByRole("link", { name: /^Lead/ })).toBeVisible()

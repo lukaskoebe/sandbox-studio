@@ -8,6 +8,8 @@ export type LeadTeammate = components["schemas"]["LeadTeammate"]
 export type LeadThread = components["schemas"]["LeadThread"]
 export type LeadPush = components["schemas"]["LeadPush"]
 export type LeadWaiting = components["schemas"]["LeadWaiting"]
+export type LeadAsk = components["schemas"]["LeadAskView"]
+export type LeadSince = components["schemas"]["LeadSince"]
 
 /** Today's date as the API names days: YYYY-MM-DD, local. */
 export function today(now = new Date()): string {

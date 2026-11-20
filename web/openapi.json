@@ -286,6 +286,20 @@
         ],
         "type": "object"
       },
+      "AskInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
       "Attachment": {
         "additionalProperties": false,
         "properties": {
@@ -5389,6 +5403,71 @@
         ],
         "type": "object"
       },
+      "LeadAskView": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "Lead's answer: paragraphs split by a blank line, refs such as [push:2] pointing into refs",
+            "type": "string"
+          },
+          "answeredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "askedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cost": {
+            "description": "What the answer cost, USD × 10^6; 0 when costs are hidden",
+            "format": "int64",
+            "type": "integer"
+          },
+          "day": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "note": {
+            "description": "Why there is no answer",
+            "type": "string"
+          },
+          "priced": {
+            "type": "boolean"
+          },
+          "question": {
+            "type": "string"
+          },
+          "refs": {
+            "$ref": "#/components/schemas/LeadFacts",
+            "description": "The facts the answer's refs point at, as they were when it was written"
+          },
+          "state": {
+            "enum": [
+              "answering",
+              "answered",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "day",
+          "question",
+          "answer",
+          "refs",
+          "state",
+          "cost",
+          "priced",
+          "askedAt"
+        ],
+        "type": "object"
+      },
       "LeadBlocker": {
         "additionalProperties": false,
         "properties": {
@@ -5836,6 +5915,60 @@
         ],
         "type": "object"
       },
+      "LeadSince": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When the user last looked",
+            "format": "date-time",
+            "type": "string"
+          },
+          "prs": {
+            "description": "Of the pushes, those with a pull request",
+            "format": "int64",
+            "type": "integer"
+          },
+          "pushes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tasks": {
+            "description": "Task runs since",
+            "format": "int64",
+            "type": "integer"
+          },
+          "teammates": {
+            "description": "The names of the teammates with a turn since",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "threads": {
+            "description": "Threads with a turn since",
+            "format": "int64",
+            "type": "integer"
+          },
+          "waiting": {
+            "description": "Requests that began to wait since and still wait",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "at",
+          "teammates",
+          "threads",
+          "pushes",
+          "prs",
+          "waiting",
+          "tasks"
+        ],
+        "type": "object"
+      },
       "LeadTaskRun": {
         "additionalProperties": false,
         "properties": {
@@ -6045,6 +6178,10 @@
           "pushes": {
             "format": "int64",
             "type": "integer"
+          },
+          "since": {
+            "$ref": "#/components/schemas/LeadSince",
+            "description": "What happened since the user last looked at the day, when that was today"
           },
           "summary": {
             "description": "The written day's summary, its refs written out as names, once today is written",
@@ -15954,6 +16091,164 @@
               }
             },
             "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/days/{day}/asks": {
+      "get": {
+        "description": "The questions the user asked Lead about a day, oldest first, with its answers.",
+        "operationId": "listLeadAsks",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The local date, YYYY-MM-DD",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "description": "The local date, YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LeadAskView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      },
+      "post": {
+        "description": "Asks Lead about a day. Lead answers in the background from the day's facts and notes, and only reads; a lead event says when the answer is there. 409 while it answers another question.",
+        "operationId": "askLead",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The local date asked about, YYYY-MM-DD",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "description": "The local date asked about, YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadAskView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/seen": {
+      "post": {
+        "description": "Records that the user looked at the day now, for Home's since you looked.",
+        "operationId": "leadSeen",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "default": {
             "content": {

@@ -47,6 +47,18 @@ func (leadModel) Complete(_ context.Context, r agentmem.Request) (agentmem.Respo
 	if err := json.Unmarshal([]byte(body), &f); err != nil {
 		return agentmem.Response{}, err
 	}
+	if q, ok := between(r.User, "<question>\n", "\n</question>"); ok {
+		// An answer: the first teammate's first thread, and the question it was asked.
+		var question string
+		_ = json.Unmarshal([]byte(q), &question)
+		text := "Nobody worked on that day."
+		if len(f.Teammates) > 0 && len(f.Teammates[0].Threads) > 0 {
+			th := f.Teammates[0].Threads[0]
+			text = fmt.Sprintf("%s worked on [%s].", f.Teammates[0].Name, th.Ref)
+		}
+		text += fmt.Sprintf("\n\nYou asked: %s", question)
+		return agentmem.Response{Text: text, InputTokens: 2000, OutputTokens: 60}, nil
+	}
 	type line struct {
 		State string `json:"state"`
 		Text  string `json:"text"`

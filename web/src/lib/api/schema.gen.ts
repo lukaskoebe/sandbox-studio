@@ -813,6 +813,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/lead/days/{day}/asks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The questions the user asked Lead about a day, oldest first, with its answers. */
+        get: operations["listLeadAsks"];
+        put?: never;
+        /** @description Asks Lead about a day. Lead answers in the background from the day's facts and notes, and only reads; a lead event says when the answer is there. 409 while it answers another question. */
+        post: operations["askLead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Records that the user looked at the day now, for Home's since you looked. */
+        post: operations["leadSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/lead/settings": {
         parameters: {
             query?: never;
@@ -3644,6 +3679,9 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        AskInBody: {
+            question: string;
+        };
         Attachment: {
             mimeType: string;
             name: string;
@@ -5414,6 +5452,30 @@ export interface components {
             name: string;
             title: string;
         };
+        LeadAskView: {
+            /** @description Lead's answer: paragraphs split by a blank line, refs such as [push:2] pointing into refs */
+            answer: string;
+            /** Format: date-time */
+            answeredAt?: string;
+            /** Format: date-time */
+            askedAt: string;
+            /**
+             * Format: int64
+             * @description What the answer cost, USD × 10^6; 0 when costs are hidden
+             */
+            cost: number;
+            day: string;
+            id: string;
+            model?: string;
+            /** @description Why there is no answer */
+            note?: string;
+            priced: boolean;
+            question: string;
+            /** @description The facts the answer's refs point at, as they were when it was written */
+            refs: components["schemas"]["LeadFacts"];
+            /** @enum {string} */
+            state: "answering" | "answered" | "failed";
+        };
         LeadBlocker: {
             /** @enum {string} */
             kind: "push" | "disk" | "denied" | "failed" | "stopped" | "task";
@@ -5570,6 +5632,37 @@ export interface components {
              */
             writeAt: number;
         };
+        LeadSince: {
+            /**
+             * Format: date-time
+             * @description When the user last looked
+             */
+            at: string;
+            /**
+             * Format: int64
+             * @description Of the pushes, those with a pull request
+             */
+            prs: number;
+            /** Format: int64 */
+            pushes: number;
+            /**
+             * Format: int64
+             * @description Task runs since
+             */
+            tasks: number;
+            /** @description The names of the teammates with a turn since */
+            teammates: string[] | null;
+            /**
+             * Format: int64
+             * @description Threads with a turn since
+             */
+            threads: number;
+            /**
+             * Format: int64
+             * @description Requests that began to wait since and still wait
+             */
+            waiting: number;
+        };
         LeadTaskRun: {
             /** Format: date-time */
             at: string;
@@ -5635,6 +5728,8 @@ export interface components {
             prs: number;
             /** Format: int64 */
             pushes: number;
+            /** @description What happened since the user last looked at the day, when that was today */
+            since?: components["schemas"]["LeadSince"];
             /** @description The written day's summary, its refs written out as names, once today is written */
             summary?: string;
             /** Format: int64 */
@@ -9945,6 +10040,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LeadDayView"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listLeadAsks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description The local date, YYYY-MM-DD */
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadAskView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    askLead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description The local date asked about, YYYY-MM-DD */
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskInBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadAskView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    leadSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

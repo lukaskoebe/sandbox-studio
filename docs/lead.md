@@ -2,14 +2,14 @@
 
 Lead is a teammate without a computer that writes up each environment's day: what waits for
 the user, what each teammate finished, has open or is blocked on, what shipped, and what it
-cost. Studio fills in every number, state and link from its own records; the environment's
-utility model only writes the sentences. Lead is read-only: it has no tool that acts on a
-teammate, a computer or an approval.
+cost, and answers the user's questions about a day. Studio fills in every number, state and
+link from its own records; the environment's utility model only writes the sentences. Lead is
+read-only: it has no tool that acts on a teammate, a computer or an approval.
 
-Code: `internal/lead` (the service, facts, prompts and views), `internal/store/lead.go` and
-`067_lead.sql`, `internal/api/lead.go`; the web's `components/lead/` and `lib/lead.ts`; the
-TUI's `internal/tui/lead.go`. Design: the meta-agent concept and mocks (phases 2–4, Ask Lead,
-plans and standing orders, are still to come).
+Code: `internal/lead` (the service, facts, prompts and views; `ask.go` for questions),
+`internal/store/lead.go`, `067_lead.sql` and `068_lead_asks.sql`, `internal/api/lead.go`; the
+web's `components/lead/` and `lib/lead.ts`; the TUI's `internal/tui/lead.go`. Design: the
+meta-agent concept and mocks (phases 3 and 4, plans and standing orders, are still to come).
 
 ## Data
 
@@ -27,6 +27,11 @@ Days are local dates (`YYYY-MM-DD`) in Studio's time zone, since the day is the 
   has taken in. No foreign key to teammates, so a day keeps the notes of a teammate deleted
   since. The user's own computers have no note; the day has their facts only.
 - `lead_usage`: each day's calls, tokens and cost.
+- `lead_asks`: the user's questions about a day and Lead's answers: the state (`answering`,
+  `answered`, `failed`), the answer, the facts its refs point at (JSON, pruned to them), a note
+  when it has no answer, the model and cost. Questions left answering when Studio stopped are
+  failed when it starts.
+- `lead_seen`: when the user last looked at today, for Home's since you looked.
 
 ## How a day is written
 
@@ -64,13 +69,26 @@ note saying why. The Markdown escapes every text that isn't Studio's own (the se
 names, notes, thread titles, branches), so a link or picture in one stays text; the TUI
 unescapes it to show.
 
+## Questions
+
+`Ask` takes a question about a day that has come, one at a time per environment (409 while
+one is answered), saves it as answering and answers in the background within 2 minutes. The
+model gets the day's facts (stored for a written past day, live for today or an unwritten
+one) and notes, what was written about it with refs as names, the summaries of up to 5 days
+before, the 6 questions before this one with their answers (refs as names) and the question,
+each in its tags and JSON-quoted, and the time now. It answers in at most 5 sentences and 3
+paragraphs, plain text, citing refs. The answer is cleaned as the day's sentences are (refs
+that aren't in the facts dropped, secrets redacted, 1200 characters at most), and its refs
+keep the facts they point at, so an answer still links after the day moves on. Without a
+model or over the limit the question is saved failed, with a note saying why.
+
 ## The model and its budget
 
 Lead calls the utility model of the first teammate's provider that has one, as memory does
 (`agentmem.EnvironmentUtility`). Every call is counted in `lead_usage`. A priced model stops
 when the estimated next call would pass `daily_limit`; an unpriced one after 60 calls a day.
-The notes keep the rest for the day itself: folds stop at 60% of the limit, or 40 calls
-unpriced. Calls are counted one at a time, so a fold and Summarize now can't both pass the
+The notes and questions keep the rest for the day itself: folds stop at 60% of the limit, or
+40 calls unpriced, and questions at 80%, or 50 calls. Calls are counted one at a time, so a fold and Summarize now can't both pass the
 same check. The provider's key never appears in an error.
 
 ## API
@@ -83,11 +101,16 @@ Under `/api/environments/{env}/lead`:
 - `GET /days/{day}` is one day's page: written or, for today, the facts so far, with the
   sentences, the cost of Lead's calls, the day as Markdown and the written days before and
   after it. Facts that hide costs (`show_costs` off) carry none.
+- `GET /days/{day}/asks` is the questions about a day, oldest first; `POST` asks one (202 with
+  it answering, 409 while another is, 422 for a day that hasn't come).
+- `POST /seen` records that the user looked at today. `GET`'s `today.since` counts what
+  happened since then (teammates with a turn, threads, pushes and pull requests, requests
+  that began to wait, task runs), when it was today.
 - `POST /summarize` writes today's day now (202, 409 while writing).
 - `PUT /settings` replaces the settings.
 
-The `lead` event topic says when a day began or finished being written, or the settings
-changed; the web invalidates Lead's queries and the day's page on it and on the approvals and
+The `lead` event topic says when a day began or finished being written, a question was asked
+or answered, or the settings changed; the web invalidates Lead's queries and the day's page on it and on the approvals and
 chats topics.
 
 ## Web
@@ -101,8 +124,11 @@ chats topics.
   (today's live approval cards; a past day's snapshot), each
   teammate's lines with links to its threads, and beside them what shipped, blockers, costs
   and suggestions for tomorrow. **Copy as Markdown** copies the day.
+- Under the day, the questions asked about it with Lead's answers (`ask.tsx`), and a box to
+  ask another (Enter sends; one at a time). Opening and leaving today records the look.
 - Home's **Today so far** card shows the notes or, once written, the summary, with Summarize
-  now and Open the day.
+  now and Open the day, and "Since you looked at …" when something happened since. It keeps
+  what it showed while Home is open, and records the look.
 - `useLeadNotify` notifies when today's day is written while the page is open, as the
   `notify` setting says.
 
@@ -110,4 +136,4 @@ chats topics.
 
 Home lists Lead first under QUIET once a teammate worked today or the day is written: its
 summary and when it was written, or today's counts so far. The reading pane is the day as
-Markdown; `w` writes it now.
+Markdown; `w` writes it now. Questions are web only for now.

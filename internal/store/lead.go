@@ -267,3 +267,105 @@ func (s *Store) ChatUsageBefore(ctx context.Context, chatID string, before time.
 	}
 	return usage, err
 }
+
+// Ask Lead's states: an answer is being written, was written, or couldn't be.
+const (
+	LeadAskAnswering = "answering"
+	LeadAskAnswered  = "answered"
+	LeadAskFailed    = "failed"
+)
+
+// LeadAsk is a question the user asked Lead about a day, and its answer.
+type LeadAsk struct {
+	ID         string          `json:"id"`
+	Day        string          `json:"day" doc:"The day asked about, YYYY-MM-DD"`
+	Question   string          `json:"question"`
+	Answer     string          `json:"answer" doc:"Lead's answer; refs such as [push:2] point into refs"`
+	Refs       json.RawMessage `json:"-"`
+	State      string          `json:"state" enum:"answering,answered,failed"`
+	Note       string          `json:"note,omitempty" doc:"Why there is no answer"`
+	Model      string          `json:"model,omitempty"`
+	Cost       int64           `json:"cost" doc:"What the answer cost, USD × 10^6"`
+	Priced     bool            `json:"priced"`
+	AskedAt    time.Time       `json:"askedAt"`
+	AnsweredAt *time.Time      `json:"answeredAt,omitempty"`
+}
+
+// AddLeadAsk saves a question; its answer comes with FinishLeadAsk.
+func (s *Store) AddLeadAsk(ctx context.Context, envID string, a LeadAsk) (LeadAsk, error) {
+	if a.ID == "" {
+		a.ID = NewID()
+	}
+	a.State = LeadAskAnswering
+	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_asks (id, environment_id, day, question, state, asked_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		a.ID, envID, a.Day, a.Question, a.State, a.AskedAt.Unix())
+	return a, err
+}
+
+// FinishLeadAsk saves a question's answer, or why it has none.
+func (s *Store) FinishLeadAsk(ctx context.Context, a LeadAsk) error {
+	answered := int64(0)
+	if a.AnsweredAt != nil {
+		answered = a.AnsweredAt.Unix()
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE lead_asks SET answer = ?, refs = ?, state = ?, note = ?, model = ?, cost = ?, priced = ?, answered_at = ?
+		WHERE id = ?`, a.Answer, string(a.Refs), a.State, a.Note, a.Model, a.Cost, a.Priced, answered, a.ID)
+	return err
+}
+
+// LeadAsks are the questions asked about a day, oldest first.
+func (s *Store) LeadAsks(ctx context.Context, envID, day string) ([]LeadAsk, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, day, question, answer, refs, state, note, model, cost, priced, asked_at, answered_at
+		FROM lead_asks WHERE environment_id = ? AND day = ? ORDER BY asked_at, rowid`, envID, day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LeadAsk{}
+	for rows.Next() {
+		var a LeadAsk
+		var refs string
+		var asked, answered int64
+		if err := rows.Scan(&a.ID, &a.Day, &a.Question, &a.Answer, &refs, &a.State, &a.Note, &a.Model, &a.Cost, &a.Priced,
+			&asked, &answered); err != nil {
+			return nil, err
+		}
+		if refs != "" {
+			a.Refs = json.RawMessage(refs)
+		}
+		a.AskedAt = time.Unix(asked, 0)
+		if answered != 0 {
+			t := time.Unix(answered, 0)
+			a.AnsweredAt = &t
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// FailLeadAsksAnswering gives up on the answers a Studio that stopped was writing.
+func (s *Store) FailLeadAsksAnswering(ctx context.Context, note string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE lead_asks SET state = ?, note = ?, answered_at = ? WHERE state = ?`,
+		LeadAskFailed, note, now(), LeadAskAnswering)
+	return err
+}
+
+// LeadSeen is when the user last looked at the environment's day; zero when never.
+func (s *Store) LeadSeen(ctx context.Context, envID string) (time.Time, error) {
+	var at int64
+	err := s.db.QueryRowContext(ctx, `SELECT seen_at FROM lead_seen WHERE environment_id = ?`, envID).Scan(&at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(at, 0), nil
+}
+
+// SetLeadSeen records that the user looked at the day at t.
+func (s *Store) SetLeadSeen(ctx context.Context, envID string, t time.Time) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_seen (environment_id, seen_at) VALUES (?, ?)
+		ON CONFLICT (environment_id) DO UPDATE SET seen_at = excluded.seen_at`, envID, t.Unix())
+	return err
+}

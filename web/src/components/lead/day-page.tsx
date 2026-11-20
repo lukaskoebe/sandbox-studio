@@ -37,6 +37,7 @@ import {
   type LeadTeammate,
 } from "@/lib/lead"
 import { cn } from "@/lib/utils"
+import { AskComposer, LeadAsks, useLeadSeen } from "./ask"
 import { LeadGlyph } from "./glyph"
 import { Prose } from "./prose"
 
@@ -55,6 +56,8 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
   })
   const v = page.data
   const name = lead.data?.settings.name ?? "Lead"
+  const isToday = !!lead.data && day === leadToday(lead.data)
+  useLeadSeen(env, isToday)
 
   return (
     <>
@@ -112,8 +115,17 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
               />
             )
           )}
+          {v && <LeadAsks env={env} day={day} name={name} />}
         </div>
       </ScrollArea>
+      {v && (
+        <AskComposer
+          env={env}
+          day={day}
+          name={name}
+          about={isToday ? "today" : dayName(day)}
+        />
+      )}
     </>
   )
 }

@@ -31,8 +31,11 @@ const (
 	// maxUnpricedFoldCalls the notes' share of them; the rest are kept for writing the day.
 	maxUnpricedCalls     = 60
 	maxUnpricedFoldCalls = 40
+	maxUnpricedAskCalls  = 50
 	// foldSharePercent is the notes' share of a priced model's daily limit.
 	foldSharePercent = 60
+	// askSharePercent is the part of the limit that the notes and questions together may use.
+	askSharePercent = 80
 	// turnsPerFold is how many of a teammate's turns a fold reads, the newest.
 	turnsPerFold  = 100
 	dayOutTokens  = 1500
@@ -68,6 +71,8 @@ type Service struct {
 	quiet   map[string]bool       // environment/day@writeAt -> found without turns at its time
 	retry   map[string]retryState // environment -> a scheduled write to try again
 	folded  map[string]time.Time  // environment/teammate -> the last fold
+	asking  map[string]bool       // environment -> an answer is being written
+	asks    sync.WaitGroup        // the answers being written
 	// foldMu keeps two folds from reading the same note; callMu keeps two calls from passing
 	// the daily limit on the same usage.
 	foldMu, callMu sync.Mutex
@@ -102,6 +107,10 @@ func (s *Service) publish(env, day string) {
 
 // Run writes each environment's day at its time, and keeps the notes, until ctx ends.
 func (s *Service) Run(ctx context.Context) {
+	// An answer a Studio that stopped was writing won't come.
+	if err := s.Store.FailLeadAsksAnswering(ctx, "Studio stopped before the answer was written. Ask again."); err != nil {
+		s.log().Warn("lead: giving up unanswered questions failed", "err", err)
+	}
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
@@ -311,7 +320,7 @@ func (s *Service) writeDay(ctx context.Context, env, trigger string, day time.Ti
 	case len(f.Teammates) == 0:
 		d.Note = "Nobody worked on this day, so there is nothing to write about."
 	default:
-		resp, m, err := s.call(ctx, env, set, agentmem.Request{System: dayPrompt, User: input, MaxTokens: dayOutTokens}, false)
+		resp, m, err := s.call(ctx, env, set, agentmem.Request{System: dayPrompt, User: input, MaxTokens: dayOutTokens}, callDay)
 		if err != nil {
 			d.Note = err.Error()
 			if trigger == "schedule" && retryable(err) {
@@ -375,9 +384,18 @@ type limitError struct{ reason string }
 
 func (e limitError) Error() string { return e.reason }
 
-// call makes a model call within Lead's daily limit and counts it. A fold's calls have a share
-// of the limit, so that the day can still be written.
-func (s *Service) call(ctx context.Context, env string, set store.LeadSettings, r agentmem.Request, fold bool) (agentmem.Response, agentmem.UtilityModel, error) {
+// callKind is what a model call is for: the day, a note's fold, or an answer.
+type callKind int
+
+const (
+	callDay callKind = iota
+	callFold
+	callAsk
+)
+
+// call makes a model call within Lead's daily limit and counts it. Folds and answers have a
+// share of the limit, so that the day can still be written.
+func (s *Service) call(ctx context.Context, env string, set store.LeadSettings, r agentmem.Request, kind callKind) (agentmem.Response, agentmem.UtilityModel, error) {
 	var m agentmem.UtilityModel
 	day := s.now().Format(time.DateOnly)
 	p, ok, err := agentmem.EnvironmentUtility(ctx, s.Store, env)
@@ -404,7 +422,7 @@ func (s *Service) call(ctx context.Context, env string, set store.LeadSettings, 
 		return agentmem.Response{}, m, err
 	}
 	estIn := (len(r.System) + len(r.User)) / 3
-	if reason := overLimit(u, set, m, estIn, r.MaxTokens, fold); reason != "" {
+	if reason := overLimit(u, set, m, estIn, r.MaxTokens, kind); reason != "" {
 		_ = s.Store.AddLeadUsage(ctx, env, day, 0, 0, 0, 0)
 		return agentmem.Response{}, m, limitError{reason}
 	}
@@ -423,24 +441,33 @@ func (s *Service) call(ctx context.Context, env string, set store.LeadSettings, 
 	return resp, m, nil
 }
 
-// overLimit says why a call would go over the day's limit, or a fold's call over the notes'
-// share of it.
-func overLimit(u store.LeadUsage, set store.LeadSettings, m agentmem.UtilityModel, in, out int, fold bool) string {
+// overLimit says why a call would go over the day's limit, or a fold's or an answer's call over
+// its share of it.
+func overLimit(u store.LeadUsage, set store.LeadSettings, m agentmem.UtilityModel, in, out int, kind callKind) string {
 	if m.Priced {
 		limit := set.DailyLimit
-		if fold {
+		switch kind {
+		case callFold:
 			limit = limit * foldSharePercent / 100
+		case callAsk:
+			limit = limit * askSharePercent / 100
 		}
 		if u.Cost+m.Cost(in, out) > limit {
-			if fold {
+			switch kind {
+			case callFold:
 				return "the notes used their share of the daily limit"
+			case callAsk:
+				return fmt.Sprintf("Questions used their share of %s's daily limit of $%.2f; the rest is kept for writing the day", set.Name, float64(set.DailyLimit)/1e6)
 			}
 			return fmt.Sprintf("Lead's daily limit of $%.2f is used up, so the day has its facts without sentences", float64(set.DailyLimit)/1e6)
 		}
 		return ""
 	}
-	if fold && u.Calls >= maxUnpricedFoldCalls {
+	if kind == callFold && u.Calls >= maxUnpricedFoldCalls {
 		return "the notes made their share of the day's calls"
+	}
+	if kind == callAsk && u.Calls >= maxUnpricedAskCalls {
+		return fmt.Sprintf("Questions used their share of %s's %d calls a day; the rest are kept for writing the day", set.Name, maxUnpricedCalls)
 	}
 	if u.Calls >= maxUnpricedCalls {
 		return fmt.Sprintf("Lead made its %d calls for the day, so the day has its facts without sentences", maxUnpricedCalls)
@@ -530,7 +557,7 @@ func (s *Service) fold(ctx context.Context, env string, set store.LeadSettings, 
 		}
 		var text string
 		resp, _, err := s.call(ctx, env, set, agentmem.Request{System: foldPrompt,
-			User: foldInput(note.Note, summaries, fresh, now.Location()), MaxTokens: foldOutTokens}, true)
+			User: foldInput(note.Note, summaries, fresh, now.Location()), MaxTokens: foldOutTokens}, callFold)
 		switch {
 		case err == nil && strings.TrimSpace(resp.Text) != "":
 			text = clip(redact(oneLine(resp.Text)), maxNote)

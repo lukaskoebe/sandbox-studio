@@ -15,7 +15,7 @@ import (
 )
 
 // registerLead adds Lead, which writes up each environment's day (docs/lead.md): its state,
-// a day's page, Summarize now and its settings. Lead only reads; nothing here acts on a
+// a day's page, questions about a day, Summarize now and its settings. Lead only reads; nothing here acts on a
 // teammate, a computer or an approval.
 func (s *Server) registerLead(api huma.API) {
 	tags := []string{"lead"}
@@ -54,6 +54,54 @@ func (s *Server) registerLead(api huma.API) {
 		}
 		v, err := s.Lead.Day(ctx, in.Env, in.Day)
 		return &struct{ Body lead.LeadDayView }{v}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "listLeadAsks", Method: http.MethodGet, Path: base + "/days/{day}/asks", Tags: tags,
+		Description: "The questions the user asked Lead about a day, oldest first, with its answers.",
+	}, func(ctx context.Context, in *dayIn) (*struct{ Body []lead.LeadAskView }, error) {
+		if err := ready(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		v, err := s.Lead.Asks(ctx, in.Env, in.Day)
+		return &struct{ Body []lead.LeadAskView }{v}, apiError(err)
+	})
+
+	type askIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Day  string `path:"day" pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$" doc:"The local date asked about, YYYY-MM-DD"`
+		Body struct {
+			Question string `json:"question" minLength:"1" maxLength:"2000"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "askLead", Method: http.MethodPost, Path: base + "/days/{day}/asks", Tags: tags,
+		DefaultStatus: http.StatusAccepted,
+		Description: "Asks Lead about a day. Lead answers in the background from the day's facts and notes, and only reads; " +
+			"a lead event says when the answer is there. 409 while it answers another question.",
+	}, func(ctx context.Context, in *askIn) (*struct{ Body lead.LeadAskView }, error) {
+		if err := ready(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		v, err := s.Lead.Ask(ctx, in.Env, in.Day, in.Body.Question)
+		switch {
+		case errors.Is(err, lead.ErrAnswering):
+			return nil, huma.Error409Conflict(err.Error())
+		case errors.Is(err, lead.ErrFutureDay), errors.Is(err, lead.ErrNoQuestion):
+			return nil, huma.Error422UnprocessableEntity(err.Error())
+		}
+		return &struct{ Body lead.LeadAskView }{v}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "leadSeen", Method: http.MethodPost, Path: base + "/seen", Tags: tags,
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Records that the user looked at the day now, for Home's since you looked.",
+	}, func(ctx context.Context, in *envPath) (*struct{}, error) {
+		if err := ready(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		return &struct{}{}, apiError(s.Lead.Seen(ctx, in.Env))
 	})
 
 	huma.Register(api, huma.Operation{
