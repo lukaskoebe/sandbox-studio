@@ -356,6 +356,9 @@ func (m *app) refresh() tea.Cmd {
 	if m.screen == screenCheckpoints {
 		cmds = append(cmds, m.loadCheckpoints())
 	}
+	if m.inboxShows() {
+		cmds = append(cmds, m.loadLead())
+	}
 	if m.changes.tick != 0 && !m.changes.busy {
 		m.changes.tick = 0 // the Changes tab reads git again
 	}

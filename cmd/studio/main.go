@@ -53,6 +53,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/heartbeat"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
@@ -636,6 +637,10 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	beats := &heartbeat.Service{Store: st, Sandboxes: mgr, Chats: chats, Plan: apiServer.ChatLaunch, Bus: bus, Log: log}
 	apiServer.TaskRuns = beats
 	go beats.Run(ctx)
+	// Lead writes each environment's day at its time, from what Studio records (docs/lead.md).
+	apiServer.Lead = &lead.Service{Store: st, AgentMem: agentMem, Keys: vault, Utility: leadUtility(agentMem.Utility), Bus: bus,
+		Log: log.With("component", "lead"), LowDisks: mgr.LowDisks}
+	go apiServer.Lead.Run(ctx)
 	mgr.SetHarnessConfig(apiServer.HarnessConfig)
 	mgr.SetCredentialConfig(creds.Config)
 	apiServer.Register(mux)

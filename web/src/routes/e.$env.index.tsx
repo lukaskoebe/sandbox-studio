@@ -25,6 +25,7 @@ import { SetupCard } from "@/components/setup-card"
 import { OnboardingCard } from "@/components/onboarding-card"
 import { ColumnPage } from "@/components/column-page"
 import { ContinuePlaces } from "@/components/continue-places"
+import { LeadTodayCard } from "@/components/lead/today-card"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Approval, type Sandbox } from "@/lib/api/client"
@@ -95,6 +96,7 @@ function Home() {
             sandboxes={sandboxes.data ?? undefined}
           />
           <NeedsYou env={env} approvals={waiting} />
+          <LeadTodayCard env={env} />
           <SessionLines
             env={env}
             sandboxes={sandboxes.data ?? []}

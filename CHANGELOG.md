@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Lead writes up your day. It sits at the top of Teammates and, at 18:00 on weekdays, writes
+  what waits for you, what each teammate finished, has open or is stuck on, what shipped and
+  what it cost, with links to every thread, push and request. Studio fills in the numbers
+  and links; the small model of a teammate's provider writes the sentences, within a daily
+  limit of $1 you can change. **Summarize now** writes the day at any time, Home shows
+  **Today so far**, and **Copy as Markdown** copies it. Lead only reads: it never messages a
+  teammate or answers a request.
 - A push review is easier to read. Code shows at 13px on 20px lines instead of 11px on 16px,
   and grows with the text size. Review on a teammate's waiting push opens with the screen
   enlarged over the conversation, so the diff gets the width. Esc, or the folded conversation

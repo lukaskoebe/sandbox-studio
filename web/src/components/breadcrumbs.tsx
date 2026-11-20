@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ApprovalsButton } from "@/components/approval-stack"
+import { LeadGlyph } from "@/components/lead/glyph"
+import { dayName, leadToday } from "@/lib/lead"
 import { $api, type Sandbox, type Teammate } from "@/lib/api/client"
 import { chatTitle } from "@/lib/chats"
 import {
@@ -118,6 +120,9 @@ export function Breadcrumbs({ env }: { env: string }) {
     { params: { path: { env } } },
     { refetchInterval: 10000 }
   )
+  const lead = $api.useQuery("get", "/api/environments/{env}/lead", {
+    params: { path: { env } },
+  })
   const leaf = matches.at(-1)
   const routeId = (leaf?.routeId ?? "") as string
   const params = (leaf?.params ?? {}) as Record<string, string>
@@ -424,6 +429,44 @@ export function Breadcrumbs({ env }: { env: string }) {
               : []),
           ],
         },
+      ]
+    }
+    if (routeId.startsWith("/e/$env/lead")) {
+      const name = lead.data?.settings.name ?? "Lead"
+      const t = leadToday(lead.data)
+      const day =
+        routeId === "/e/$env/lead/$day"
+          ? params.day
+          : routeId === "/e/$env/lead/"
+            ? t
+            : undefined
+      const days = [
+        t,
+        ...(lead.data?.days ?? []).map((d) => d.day).filter((d) => d !== t),
+      ].slice(0, 15)
+      const goDay = (d: string) =>
+        d === t
+          ? void navigate({ to: "/e/$env/lead", params: { env } })
+          : void navigate({ to: "/e/$env/lead/$day", params: { env, day: d } })
+      return [
+        {
+          key: "lead",
+          label: name,
+          lead: <LeadGlyph className="size-4" />,
+          run: day === t ? undefined : () => goDay(t),
+        },
+        day
+          ? {
+              key: "day",
+              switches: "Switch day",
+              label: dayName(day, { short: true, today: t }),
+              menu: days.map((d) => ({
+                label: dayName(d, { short: true, today: t }),
+                current: d === day,
+                run: () => goDay(d),
+              })),
+            }
+          : { key: "settings", label: "Settings", lead: <GearIcon /> },
       ]
     }
     if (routeId === "/e/$env/sandboxes/$id") {

@@ -74,6 +74,7 @@ export default defineConfig({
             'network',
             'secrets',
             'teammates-providers',
+            'lead',
             'templates',
             'checkpoints',
             'memory',

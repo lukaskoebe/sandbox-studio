@@ -8,6 +8,13 @@ const stale: Record<string, string[]> = {
     "/api/approvals",
     "/api/environments/{env}/approvals",
     "/api/environments/{env}/approvals/{id}",
+    "/api/environments/{env}/lead",
+    "/api/environments/{env}/lead/days/{day}",
+  ],
+  // Lead wrote a day or began to, or its settings changed.
+  lead: [
+    "/api/environments/{env}/lead",
+    "/api/environments/{env}/lead/days/{day}",
   ],
   rules: ["/api/environments/{env}/rules"],
   secrets: ["/api/environments/{env}/secrets"],
@@ -22,9 +29,12 @@ const stale: Record<string, string[]> = {
     "/api/environments/{env}/teammates/{id}/tasks/{task}/runs",
     "/api/environments/{env}/teammates/{id}/timeline",
   ],
+  // A turn that began or ended changes today's day so far.
   chats: [
     "/api/environments/{env}/chats",
     "/api/environments/{env}/sessions",
+    "/api/environments/{env}/lead",
+    "/api/environments/{env}/lead/days/{day}",
     "/api/environments/{env}/sandboxes/{id}/chats",
     "/api/environments/{env}/teammates/{id}/timeline",
   ],

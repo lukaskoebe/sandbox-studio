@@ -28,6 +28,8 @@ func (m *app) reading(r inboxRow, rc rect) []string {
 		}
 	case r.task != nil:
 		return m.readingTask(*r.task, rc.w, rc.h)
+	case r.lead:
+		return m.readingLead(rc)
 	}
 	return nil
 }

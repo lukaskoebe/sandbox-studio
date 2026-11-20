@@ -74,6 +74,7 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
+import { LeadSidebarRow } from "@/components/lead/sidebar-row"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { teammateApprovals, ThreadDot } from "@/components/teammate/home"
@@ -267,6 +268,7 @@ export function AppSidebar({
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                <LeadSidebarRow env={env} />
                 {teammates.data?.map((p) => {
                   const computers = all.filter((sb) => sb.teammateId === p.id)
                   return (

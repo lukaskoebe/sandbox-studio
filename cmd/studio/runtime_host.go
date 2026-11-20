@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
@@ -342,6 +343,11 @@ func leftoversProbe(list func(context.Context) ([]store.Sandbox, error)) func(co
 }
 
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return gw }
+
+// leadUtility is the model Lead calls: the environment's utility model, as memory calls it.
+func leadUtility(u func(store.Provider, string) (agentmem.LLM, agentmem.UtilityModel, error)) func(store.Provider, string) (agentmem.LLM, agentmem.UtilityModel, error) {
+	return u
+}
 
 func serveSSH(ctx context.Context, vm string, keys runtime.SSHKeys) error {
 	return runtime.ServeSSH(ctx, vm, keys)

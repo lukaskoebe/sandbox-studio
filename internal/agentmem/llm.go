@@ -52,6 +52,9 @@ func (m UtilityModel) cost(in, out int) int64 {
 	return int64(float64(in)*m.PriceInPerM + float64(out)*m.PriceOutPerM)
 }
 
+// Cost is the price of a call in USD × 10^6; 0 for a model without a known price.
+func (m UtilityModel) Cost(in, out int) int64 { return m.cost(in, out) }
+
 // ErrNoUtility means the provider has no utility model Studio can call.
 var ErrNoUtility = errors.New("no utility model for this provider")
 

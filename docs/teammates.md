@@ -109,7 +109,7 @@ other sandboxes, no project, and network only to the hosts its kind needs
   refresh leaves the login as it was; once the access token has lapsed the provider is
   `expired`. Claude tokens are long-lived and are not refreshed.
 - **Utility calls.** When the environment's utility model is a subscription, its calls (memory
-  extraction and the dream judge) run as one-shot `claude -p --model haiku` or
+  extraction, the dream judge and [Lead](lead.md)) run as one-shot `claude -p --model haiku` or
   `codex exec -m gpt-6-luna` in the provider's utility VM, with the prompt on stdin. The VM
   starts on demand and stops after ten minutes without a call. A subscription has no known
   price, so its calls are capped by number per day, as an endpoint without a price is.
@@ -119,6 +119,9 @@ other sandboxes, no project, and network only to the hosts its kind needs
 What is built and what is verified is in [harnesses](harnesses.md#subscription-logins-built-pending-live-verification).
 
 ## Teammates
+
+[Lead](lead.md), at the top of the sidebar's Teammates, is not a teammate row: it has no
+computer, provider or harness, and only reads the environment's day.
 
 - Name (unique in the environment), role, avatar, approval scope, soul (markdown, at most
   16 KiB), harness, provider, default model, the models also offered in chats

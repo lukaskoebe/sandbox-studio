@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -50,6 +51,7 @@ type inboxRow struct {
 	thread  *session    // working and quiet: a thread, or an agent in a terminal
 	sb      string      // quiet: a computer of yours
 	task    *store.Task // quiet: a teammate's next scheduled run
+	lead    bool        // quiet: Lead and today's day
 }
 
 // inboxState is Home's list: the cursor, by its row's id and index, the reading pane's scroll,
@@ -60,7 +62,10 @@ type inboxState struct {
 	scroll  int    // the reading pane's, in lines
 	pushing string // the push whose y asked first
 	tasks   map[string][]store.Task
-	busy    bool // a read of the tasks, or the wait for the next one, is under way
+	lead    *lead.LeadView    // the environment's Lead, nil before it is read or without one
+	leadEnv string            // the environment lead and day are of
+	day     *lead.LeadDayView // today's day, when Lead shows
+	busy    bool              // a read of the tasks, or the wait for the next one, is under way
 	gen     int
 	review  struct {
 		id    string
@@ -73,6 +78,7 @@ type (
 	inboxTasksLoaded struct {
 		gen   int
 		tasks map[string][]store.Task
+		lead  leadLoaded
 	}
 	inboxTasksTick struct{ gen int }
 )
@@ -191,6 +197,9 @@ func (m *app) inboxRows() []inboxRow {
 			quiet = append(quiet, x)
 		}
 	}
+	if v := m.inbox.lead; leadShows(v) && m.inbox.leadEnv == m.env.ID {
+		rows = append(rows, inboxRow{section: inboxQuiet, id: "lead", lead: true})
+	}
 	slices.SortStableFunc(quiet, func(a, b session) int { return sessionTime(b).Compare(sessionTime(a)) })
 	for _, x := range quiet[:min(len(quiet), quietThreads)] {
 		rows = append(rows, inboxRow{section: inboxQuiet, id: x.id(), thread: &x})
@@ -301,6 +310,7 @@ func (m *app) watchInbox() tea.Cmd {
 			}
 			out.tasks[id] = list
 		}
+		out.lead = fetchLead(rctx, client, env)
 		return out
 	}
 }
@@ -315,9 +325,13 @@ func (m *app) inboxUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		}
 		if msg.tasks != nil {
 			in.tasks = msg.tasks
+			m.takeLead(msg.lead)
 		}
 		gen := in.gen
 		return tea.Tick(tasksEvery, func(time.Time) tea.Msg { return inboxTasksTick{gen} }), true
+	case leadLoaded:
+		m.takeLead(msg)
+		return nil, true
 	case inboxTasksTick:
 		if msg.gen == in.gen {
 			in.busy = false
@@ -384,6 +398,8 @@ func (m *app) inboxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case i < 0:
 	case r.card != nil:
 		return m, m.inboxCardKey(msg, *r.card)
+	case r.lead && key.Matches(msg, keyWriteDay):
+		return m, m.writeDay()
 	case key.Matches(msg, keyOpen):
 		return m, m.inboxOpen(r)
 	}
@@ -571,7 +587,7 @@ func (m *app) inboxBindings() []key.Binding {
 		bindings = append(bindings, keyUndo)
 	}
 	bindings = append(bindings, keyNextRow)
-	if ok && !slices.ContainsFunc(bindings, func(b key.Binding) bool { return b.Help().Key == "enter" }) {
+	if ok && !r.lead && !slices.ContainsFunc(bindings, func(b key.Binding) bool { return b.Help().Key == "enter" }) {
 		bindings = append(bindings, keyOpen)
 	}
 	return append(bindings, keyHelp, keyQuit, keyNewComputer, keyActivity, keySettings, keyEnv)
@@ -612,6 +628,8 @@ func (m *app) rowBindings(r inboxRow) []key.Binding {
 		return bindings
 	case r.thread != nil:
 		return []key.Binding{keyGoThread}
+	case r.lead:
+		return []key.Binding{keyWriteDay, keyReadDn}
 	case r.sb != "", r.task != nil:
 		return []key.Binding{keyOpen}
 	}
@@ -821,6 +839,8 @@ func (m *app) rowWho(r inboxRow) string {
 		}
 	case r.task != nil:
 		return m.teammates[r.task.TeammateID]
+	case r.lead:
+		return m.inbox.lead.Settings.Name
 	case r.sb != "":
 		if sb, ok := m.sandboxByID(r.sb); ok {
 			return sb.Name
@@ -879,6 +899,8 @@ func (m *app) rowCells(r inboxRow) (glyph, what, where string, when time.Time) {
 		return m.sessionMark(x, st), x.title(), where, sessionTime(x)
 	case r.task != nil:
 		return styleDim.Render("◷"), oneLine(r.task.Title), runWhen(*r.task.NextRunAt, m.now), time.Time{}
+	case r.lead:
+		return m.leadCells()
 	case r.sb != "":
 		sb, _ := m.sandboxByID(r.sb)
 		ph := phaseOf(sb)

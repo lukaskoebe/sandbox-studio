@@ -5389,6 +5389,857 @@
         ],
         "type": "object"
       },
+      "LeadBlocker": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "push",
+              "disk",
+              "denied",
+              "failed",
+              "stopped",
+              "task"
+            ],
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "type": "object"
+      },
+      "LeadDayHead": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "description": "The local date, YYYY-MM-DD",
+            "type": "string"
+          },
+          "heading": {
+            "type": "string"
+          },
+          "waiting": {
+            "description": "What waited for the user when the day was written",
+            "format": "int64",
+            "type": "integer"
+          },
+          "writtenAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "writtenAt",
+          "waiting"
+        ],
+        "type": "object"
+      },
+      "LeadDayView": {
+        "additionalProperties": false,
+        "properties": {
+          "cost": {
+            "description": "What the call that wrote the sentences cost, USD × 10^6",
+            "format": "int64",
+            "type": "integer"
+          },
+          "day": {
+            "type": "string"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/LeadFacts"
+          },
+          "leadCost": {
+            "description": "What all of Lead's calls of the day cost, USD × 10^6",
+            "format": "int64",
+            "type": "integer"
+          },
+          "markdown": {
+            "description": "The day as Markdown, for Copy as Markdown",
+            "type": "string"
+          },
+          "model": {
+            "description": "The model that wrote the sentences",
+            "type": "string"
+          },
+          "next": {
+            "description": "The written day after it, or today",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why the day has no sentences",
+            "type": "string"
+          },
+          "prev": {
+            "description": "The written day before it",
+            "type": "string"
+          },
+          "priced": {
+            "type": "boolean"
+          },
+          "prose": {
+            "$ref": "#/components/schemas/LeadProse"
+          },
+          "trigger": {
+            "enum": [
+              "schedule",
+              "now"
+            ],
+            "type": "string"
+          },
+          "written": {
+            "description": "Lead wrote the day; today's facts so far when not",
+            "type": "boolean"
+          },
+          "writtenAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "written",
+          "cost",
+          "priced",
+          "leadCost",
+          "facts",
+          "markdown"
+        ],
+        "type": "object"
+      },
+      "LeadFacts": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/LeadBlocker"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "computers": {
+            "description": "Computers with a turn on the day",
+            "format": "int64",
+            "type": "integer"
+          },
+          "cost": {
+            "description": "What the agents reported their turns cost, in USD × 10^6",
+            "format": "int64",
+            "type": "integer"
+          },
+          "costed": {
+            "description": "At least one agent reported a cost",
+            "type": "boolean"
+          },
+          "day": {
+            "description": "The local date, YYYY-MM-DD",
+            "type": "string"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pushes": {
+            "items": {
+              "$ref": "#/components/schemas/LeadPush"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "teammates": {
+            "description": "Who worked, most turn time first; the user's own computers have no id",
+            "items": {
+              "$ref": "#/components/schemas/LeadTeammate"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "threads": {
+            "description": "Threads with a turn on the day",
+            "format": "int64",
+            "type": "integer"
+          },
+          "turnSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "turns": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "waiting": {
+            "description": "What waited for the user, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/LeadWaiting"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "day",
+          "from",
+          "until",
+          "waiting",
+          "teammates",
+          "pushes",
+          "blockers",
+          "threads",
+          "turns",
+          "turnSeconds",
+          "computers",
+          "cost",
+          "costed"
+        ],
+        "type": "object"
+      },
+      "LeadProse": {
+        "additionalProperties": false,
+        "properties": {
+          "heading": {
+            "description": "A few words on the day as a whole",
+            "type": "string"
+          },
+          "summary": {
+            "description": "The day in two or three sentences",
+            "type": "string"
+          },
+          "teammates": {
+            "items": {
+              "$ref": "#/components/schemas/LeadProseTeammate"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "tomorrow": {
+            "description": "Suggestions for the next day; nothing is sent",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "summary",
+          "teammates",
+          "tomorrow"
+        ],
+        "type": "object"
+      },
+      "LeadProseLine": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "enum": [
+              "done",
+              "open",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "text"
+        ],
+        "type": "object"
+      },
+      "LeadProseTeammate": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LeadProseLine"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "ref": {
+            "description": "The teammate's ref, such as teammate:1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "lines"
+        ],
+        "type": "object"
+      },
+      "LeadPush": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "forge": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "prNumber": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "prUrl": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "repo": {
+            "description": "owner/name",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "pushed",
+              "failed",
+              "rejected",
+              "superseded"
+            ],
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "id",
+          "sandboxId",
+          "forge",
+          "repo",
+          "branch",
+          "state",
+          "at"
+        ],
+        "type": "object"
+      },
+      "LeadSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "dailyLimit": {
+            "description": "What Lead's model calls may cost a day, in USD × 10^6; models without a known price are capped by calls instead",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "days": {
+            "description": "The days it is written on: bit 0 is Monday, bit 6 Sunday",
+            "format": "int64",
+            "maximum": 127,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "heading": {
+            "description": "The day gets a short heading in the model's words",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "What Lead is called in the sidebar",
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "notify": {
+            "description": "When writing the day notifies: only when something waits for the user, always, or never",
+            "enum": [
+              "waiting",
+              "always",
+              "never"
+            ],
+            "type": "string"
+          },
+          "ownComputers": {
+            "description": "The sessions the user started on their own computers are part of the day",
+            "type": "boolean"
+          },
+          "showCosts": {
+            "description": "The day shows what each teammate and Lead spent",
+            "type": "boolean"
+          },
+          "skipQuiet": {
+            "description": "A day without turns gets no page",
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "writeAt": {
+            "description": "When the day is written, in minutes after local midnight",
+            "format": "int64",
+            "maximum": 1439,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "writeAt",
+          "days",
+          "skipQuiet",
+          "ownComputers",
+          "showCosts",
+          "heading",
+          "dailyLimit",
+          "notify",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "LeadTaskRun": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chatId": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "started",
+              "done",
+              "skipped",
+              "missed"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "taskId",
+          "title",
+          "outcome",
+          "at"
+        ],
+        "type": "object"
+      },
+      "LeadTeammate": {
+        "additionalProperties": false,
+        "properties": {
+          "avatar": {
+            "type": "string"
+          },
+          "computers": {
+            "description": "Names of the computers its turns ran on",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "cost": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "costed": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Empty for the user's own computers",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "description": "Lead's note of the teammate's day",
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/LeadTaskRun"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "threads": {
+            "items": {
+              "$ref": "#/components/schemas/LeadThread"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "turnSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "turns": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ref",
+          "name",
+          "threads",
+          "computers",
+          "turns",
+          "turnSeconds",
+          "cost",
+          "costed",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "LeadThread": {
+        "additionalProperties": false,
+        "properties": {
+          "cost": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "running": {
+            "description": "A turn still runs",
+            "type": "boolean"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "scheduled": {
+            "type": "boolean"
+          },
+          "seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stop": {
+            "description": "How the last turn ended, as the agent said",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "turns": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ref",
+          "id",
+          "title",
+          "sandboxId",
+          "sandboxName",
+          "turns",
+          "seconds",
+          "running",
+          "cost",
+          "last"
+        ],
+        "type": "object"
+      },
+      "LeadToday": {
+        "additionalProperties": false,
+        "properties": {
+          "cost": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "costed": {
+            "type": "boolean"
+          },
+          "day": {
+            "type": "string"
+          },
+          "notes": {
+            "description": "Each working teammate's note, most turn time first",
+            "items": {
+              "$ref": "#/components/schemas/LeadTodayNote"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "prs": {
+            "description": "Pushes that opened or updated a pull request",
+            "format": "int64",
+            "type": "integer"
+          },
+          "pushes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "summary": {
+            "description": "The written day's summary, its refs written out as names, once today is written",
+            "type": "string"
+          },
+          "threads": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "trigger": {
+            "enum": [
+              "schedule",
+              "now"
+            ],
+            "type": "string"
+          },
+          "turnSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "turns": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waiting": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "writtenAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "notes",
+          "waiting",
+          "pushes",
+          "prs",
+          "threads",
+          "turns",
+          "turnSeconds",
+          "cost",
+          "costed"
+        ],
+        "type": "object"
+      },
+      "LeadTodayNote": {
+        "additionalProperties": false,
+        "properties": {
+          "avatar": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "teammateId",
+          "name",
+          "note"
+        ],
+        "type": "object"
+      },
+      "LeadUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "calls": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cost": {
+            "description": "USD × 10^6, for models with a known price",
+            "format": "int64",
+            "type": "integer"
+          },
+          "inputTokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "outputTokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "Calls left out: over the limit, or no model to call",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "calls",
+          "inputTokens",
+          "outputTokens",
+          "cost",
+          "skipped"
+        ],
+        "type": "object"
+      },
+      "LeadView": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "description": "The written days, newest first",
+            "items": {
+              "$ref": "#/components/schemas/LeadDayHead"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "model": {
+            "$ref": "#/components/schemas/UtilityModel",
+            "description": "The model Lead calls: the utility model of the first teammate's provider that has one; absent when none has"
+          },
+          "offset": {
+            "description": "Studio's time zone's offset from UTC now, in minutes",
+            "format": "int64",
+            "type": "integer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/LeadSettings"
+          },
+          "today": {
+            "$ref": "#/components/schemas/LeadToday"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/LeadUsage",
+            "description": "Today's model calls"
+          },
+          "writing": {
+            "description": "Lead is writing today's day",
+            "type": "boolean"
+          },
+          "zone": {
+            "description": "Studio's time zone, as its abbreviation, such as CET; writeAt and the days are in it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "settings",
+          "today",
+          "days",
+          "writing",
+          "usage",
+          "zone",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "LeadWaiting": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "id",
+          "kind",
+          "subject",
+          "since"
+        ],
+        "type": "object"
+      },
       "Lineage": {
         "additionalProperties": false,
         "properties": {
@@ -9891,6 +10742,70 @@
         },
         "required": [
           "block"
+        ],
+        "type": "object"
+      },
+      "SettingsInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "dailyLimit": {
+            "description": "What Lead's model calls may cost a day, in USD × 10^6, at most $100",
+            "format": "int64",
+            "maximum": 100000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "days": {
+            "description": "The days it is written on: bit 0 is Monday, bit 6 Sunday",
+            "format": "int64",
+            "maximum": 127,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "heading": {
+            "type": "boolean"
+          },
+          "name": {
+            "description": "What Lead is called in the sidebar",
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "notify": {
+            "enum": [
+              "waiting",
+              "always",
+              "never"
+            ],
+            "type": "string"
+          },
+          "ownComputers": {
+            "type": "boolean"
+          },
+          "showCosts": {
+            "type": "boolean"
+          },
+          "skipQuiet": {
+            "type": "boolean"
+          },
+          "writeAt": {
+            "description": "When the day is written, in minutes after local midnight",
+            "format": "int64",
+            "maximum": 1439,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "writeAt",
+          "days",
+          "skipQuiet",
+          "ownComputers",
+          "showCosts",
+          "heading",
+          "dailyLimit",
+          "notify"
         ],
         "type": "object"
       },
@@ -14956,6 +15871,192 @@
         },
         "tags": [
           "network"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead": {
+      "get": {
+        "description": "Lead's settings, today so far as Home's card shows it, the written days, today's model calls and the model Lead calls.",
+        "operationId": "getLead",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/days/{day}": {
+      "get": {
+        "description": "A day as Lead wrote it, with the facts it was written from and the day as Markdown; for today before it is written, the facts so far.",
+        "operationId": "getLeadDay",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The local date, YYYY-MM-DD",
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "description": "The local date, YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadDayView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/settings": {
+      "put": {
+        "description": "Saves how Lead writes the day.",
+        "operationId": "setLeadSettings",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/summarize": {
+      "post": {
+        "description": "Writes today's day now, in the background; a lead event says when it is written. 409 while it is being written.",
+        "operationId": "summarizeLeadDay",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
         ]
       }
     },

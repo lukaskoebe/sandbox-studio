@@ -17,6 +17,7 @@ import { useRecordPlaces } from "@/lib/places"
 import { setupOnFirstLoad } from "@/lib/setup"
 import { useVisualViewportHeight } from "@/hooks/use-visual-viewport-height"
 import { RouteError } from "@/components/route-error"
+import { useLeadNotify } from "@/components/lead/notify"
 
 export const Route = createFileRoute("/e/$env")({
   // ?settings=<section> opened the settings dialog that the Settings page replaced; old links
@@ -55,6 +56,8 @@ function EnvironmentLayout() {
   useEffect(() => rememberEnvironment(env), [env])
   // Home offers to continue where you left off.
   useRecordPlaces(env)
+  // Lead says when it has written the day.
+  useLeadNotify(env)
   // Both kept in this browser: how wide the sidebar is, and whether it is folded to its icons.
   const [width, setWidth] = useStoredSize(
     "studio.sidebar-width",

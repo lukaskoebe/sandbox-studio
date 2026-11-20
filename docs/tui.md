@@ -220,8 +220,9 @@ row under the cursor. Its sections:
   an agent's permission, `▣` the browser, `◈` memory), who asked, what for, where and how long
   ago.
 - **WORKING**: the threads that work and wait on nothing.
-- **QUIET**: the threads done or ended in the last 24 hours (the five newest), each teammate's
-  next scheduled run, and your own computers.
+- **QUIET**: [Lead](lead.md) once a teammate worked today or the day is written (its reading
+  pane is the day, `w` writes it now), the threads done or ended in the last 24 hours (the
+  five newest), each teammate's next scheduled run, and your own computers.
 - **EARLIER TODAY**, under the list: what was decided today. It takes no cursor.
 
 With nothing at all it says `✓ Nothing waits for you.`

@@ -25,6 +25,9 @@ import { Route as EEnvChatsIndexRouteImport } from './routes/e.$env.chats.index'
 import { Route as EEnvChatsChatRouteImport } from './routes/e.$env.chats.$chat'
 import { Route as EEnvChatsNewRouteImport } from './routes/e.$env.chats.new'
 import { Route as EEnvGitIndexRouteImport } from './routes/e.$env.git.index'
+import { Route as EEnvLeadIndexRouteImport } from './routes/e.$env.lead.index'
+import { Route as EEnvLeadDayRouteImport } from './routes/e.$env.lead.$day'
+import { Route as EEnvLeadSettingsRouteImport } from './routes/e.$env.lead.settings'
 import { Route as EEnvMemoryIndexRouteImport } from './routes/e.$env.memory.index'
 import { Route as EEnvMergesMergeRouteImport } from './routes/e.$env.merges.$merge'
 import { Route as EEnvNetworkIndexRouteImport } from './routes/e.$env.network.index'
@@ -130,6 +133,21 @@ const EEnvChatsNewRoute = EEnvChatsNewRouteImport.update({
 const EEnvGitIndexRoute = EEnvGitIndexRouteImport.update({
   id: '/git/',
   path: '/git/',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvLeadIndexRoute = EEnvLeadIndexRouteImport.update({
+  id: '/lead/',
+  path: '/lead/',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvLeadDayRoute = EEnvLeadDayRouteImport.update({
+  id: '/lead/$day',
+  path: '/lead/$day',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvLeadSettingsRoute = EEnvLeadSettingsRouteImport.update({
+  id: '/lead/settings',
+  path: '/lead/settings',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvMemoryIndexRoute = EEnvMemoryIndexRouteImport.update({
@@ -277,6 +295,8 @@ export interface FileRoutesByFullPath {
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
+  '/e/$env/lead/$day': typeof EEnvLeadDayRoute
+  '/e/$env/lead/settings': typeof EEnvLeadSettingsRoute
   '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
@@ -298,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/builds/': typeof EEnvBuildsIndexRoute
   '/e/$env/chats/': typeof EEnvChatsIndexRoute
   '/e/$env/git/': typeof EEnvGitIndexRoute
+  '/e/$env/lead/': typeof EEnvLeadIndexRoute
   '/e/$env/memory/': typeof EEnvMemoryIndexRoute
   '/e/$env/network/': typeof EEnvNetworkIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
@@ -319,6 +340,8 @@ export interface FileRoutesByTo {
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
+  '/e/$env/lead/$day': typeof EEnvLeadDayRoute
+  '/e/$env/lead/settings': typeof EEnvLeadSettingsRoute
   '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
@@ -340,6 +363,7 @@ export interface FileRoutesByTo {
   '/e/$env/builds': typeof EEnvBuildsIndexRoute
   '/e/$env/chats': typeof EEnvChatsIndexRoute
   '/e/$env/git': typeof EEnvGitIndexRoute
+  '/e/$env/lead': typeof EEnvLeadIndexRoute
   '/e/$env/memory': typeof EEnvMemoryIndexRoute
   '/e/$env/network': typeof EEnvNetworkIndexRoute
   '/e/$env/settings': typeof EEnvSettingsIndexRoute
@@ -364,6 +388,8 @@ export interface FileRoutesById {
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
+  '/e/$env/lead/$day': typeof EEnvLeadDayRoute
+  '/e/$env/lead/settings': typeof EEnvLeadSettingsRoute
   '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
@@ -385,6 +411,7 @@ export interface FileRoutesById {
   '/e/$env/builds/': typeof EEnvBuildsIndexRoute
   '/e/$env/chats/': typeof EEnvChatsIndexRoute
   '/e/$env/git/': typeof EEnvGitIndexRoute
+  '/e/$env/lead/': typeof EEnvLeadIndexRoute
   '/e/$env/memory/': typeof EEnvMemoryIndexRoute
   '/e/$env/network/': typeof EEnvNetworkIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
@@ -410,6 +437,8 @@ export interface FileRouteTypes {
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
+    | '/e/$env/lead/$day'
+    | '/e/$env/lead/settings'
     | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
@@ -431,6 +460,7 @@ export interface FileRouteTypes {
     | '/e/$env/builds/'
     | '/e/$env/chats/'
     | '/e/$env/git/'
+    | '/e/$env/lead/'
     | '/e/$env/memory/'
     | '/e/$env/network/'
     | '/e/$env/settings/'
@@ -452,6 +482,8 @@ export interface FileRouteTypes {
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
+    | '/e/$env/lead/$day'
+    | '/e/$env/lead/settings'
     | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
@@ -473,6 +505,7 @@ export interface FileRouteTypes {
     | '/e/$env/builds'
     | '/e/$env/chats'
     | '/e/$env/git'
+    | '/e/$env/lead'
     | '/e/$env/memory'
     | '/e/$env/network'
     | '/e/$env/settings'
@@ -496,6 +529,8 @@ export interface FileRouteTypes {
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
+    | '/e/$env/lead/$day'
+    | '/e/$env/lead/settings'
     | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
@@ -517,6 +552,7 @@ export interface FileRouteTypes {
     | '/e/$env/builds/'
     | '/e/$env/chats/'
     | '/e/$env/git/'
+    | '/e/$env/lead/'
     | '/e/$env/memory/'
     | '/e/$env/network/'
     | '/e/$env/settings/'
@@ -645,6 +681,27 @@ declare module '@tanstack/react-router' {
       path: '/git'
       fullPath: '/e/$env/git/'
       preLoaderRoute: typeof EEnvGitIndexRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/lead/': {
+      id: '/e/$env/lead/'
+      path: '/lead'
+      fullPath: '/e/$env/lead/'
+      preLoaderRoute: typeof EEnvLeadIndexRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/lead/$day': {
+      id: '/e/$env/lead/$day'
+      path: '/lead/$day'
+      fullPath: '/e/$env/lead/$day'
+      preLoaderRoute: typeof EEnvLeadDayRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/lead/settings': {
+      id: '/e/$env/lead/settings'
+      path: '/lead/settings'
+      fullPath: '/e/$env/lead/settings'
+      preLoaderRoute: typeof EEnvLeadSettingsRouteImport
       parentRoute: typeof EEnvRoute
     }
     '/e/$env/memory/': {
@@ -903,6 +960,8 @@ interface EEnvRouteChildren {
   EEnvBuildsIdRoute: typeof EEnvBuildsIdRoute
   EEnvChatsChatRoute: typeof EEnvChatsChatRoute
   EEnvChatsNewRoute: typeof EEnvChatsNewRoute
+  EEnvLeadDayRoute: typeof EEnvLeadDayRoute
+  EEnvLeadSettingsRoute: typeof EEnvLeadSettingsRoute
   EEnvMergesMergeRoute: typeof EEnvMergesMergeRoute
   EEnvNetworkActivityRoute: typeof EEnvNetworkActivityRoute
   EEnvNetworkRequestsRoute: typeof EEnvNetworkRequestsRoute
@@ -912,6 +971,7 @@ interface EEnvRouteChildren {
   EEnvBuildsIndexRoute: typeof EEnvBuildsIndexRoute
   EEnvChatsIndexRoute: typeof EEnvChatsIndexRoute
   EEnvGitIndexRoute: typeof EEnvGitIndexRoute
+  EEnvLeadIndexRoute: typeof EEnvLeadIndexRoute
   EEnvMemoryIndexRoute: typeof EEnvMemoryIndexRoute
   EEnvNetworkIndexRoute: typeof EEnvNetworkIndexRoute
   EEnvTeammatesIndexRoute: typeof EEnvTeammatesIndexRoute
@@ -930,6 +990,8 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvBuildsIdRoute: EEnvBuildsIdRoute,
   EEnvChatsChatRoute: EEnvChatsChatRoute,
   EEnvChatsNewRoute: EEnvChatsNewRoute,
+  EEnvLeadDayRoute: EEnvLeadDayRoute,
+  EEnvLeadSettingsRoute: EEnvLeadSettingsRoute,
   EEnvMergesMergeRoute: EEnvMergesMergeRoute,
   EEnvNetworkActivityRoute: EEnvNetworkActivityRoute,
   EEnvNetworkRequestsRoute: EEnvNetworkRequestsRoute,
@@ -939,6 +1001,7 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvBuildsIndexRoute: EEnvBuildsIndexRoute,
   EEnvChatsIndexRoute: EEnvChatsIndexRoute,
   EEnvGitIndexRoute: EEnvGitIndexRoute,
+  EEnvLeadIndexRoute: EEnvLeadIndexRoute,
   EEnvMemoryIndexRoute: EEnvMemoryIndexRoute,
   EEnvNetworkIndexRoute: EEnvNetworkIndexRoute,
   EEnvTeammatesIndexRoute: EEnvTeammatesIndexRoute,

@@ -26,6 +26,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
+	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -57,6 +58,7 @@ type Server struct {
 	PreviewLogins *preview.Logins
 	Memory        *memory.Service
 	AgentMem      *agentmem.Service // memory in agent sessions; its endpoints answer 503 without it
+	Lead          *lead.Service     // writes the environments' days; its endpoints answer 503 without it
 	Log           *slog.Logger
 	Addr          string       // the address Studio listens on, used to build preview URLs
 	Guest         SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
@@ -126,6 +128,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerSecrets(api)
 	s.registerMemory(api)
 	s.registerMemoryAgent(api)
+	s.registerLead(api)
 	s.registerMemoryDream(api)
 	s.registerTeammates(api)
 	s.registerProviderModels(api)

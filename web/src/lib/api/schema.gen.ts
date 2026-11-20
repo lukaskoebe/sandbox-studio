@@ -779,6 +779,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/lead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lead's settings, today so far as Home's card shows it, the written days, today's model calls and the model Lead calls. */
+        get: operations["getLead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/days/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A day as Lead wrote it, with the facts it was written from and the day as Markdown; for today before it is written, the facts so far. */
+        get: operations["getLeadDay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Saves how Lead writes the day. */
+        put: operations["setLeadSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/summarize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Writes today's day now, in the background; a lead event says when it is written. 409 while it is being written. */
+        post: operations["summarizeLeadDay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/lineage": {
         parameters: {
             query?: never;
@@ -5346,6 +5414,296 @@ export interface components {
             name: string;
             title: string;
         };
+        LeadBlocker: {
+            /** @enum {string} */
+            kind: "push" | "disk" | "denied" | "failed" | "stopped" | "task";
+            refs?: string[] | null;
+            teammateId?: string;
+            text: string;
+        };
+        LeadDayHead: {
+            /** @description The local date, YYYY-MM-DD */
+            day: string;
+            heading?: string;
+            /**
+             * Format: int64
+             * @description What waited for the user when the day was written
+             */
+            waiting: number;
+            /** Format: date-time */
+            writtenAt: string;
+        };
+        LeadDayView: {
+            /**
+             * Format: int64
+             * @description What the call that wrote the sentences cost, USD × 10^6
+             */
+            cost: number;
+            day: string;
+            facts: components["schemas"]["LeadFacts"];
+            /**
+             * Format: int64
+             * @description What all of Lead's calls of the day cost, USD × 10^6
+             */
+            leadCost: number;
+            /** @description The day as Markdown, for Copy as Markdown */
+            markdown: string;
+            /** @description The model that wrote the sentences */
+            model?: string;
+            /** @description The written day after it, or today */
+            next?: string;
+            /** @description Why the day has no sentences */
+            note?: string;
+            /** @description The written day before it */
+            prev?: string;
+            priced: boolean;
+            prose?: components["schemas"]["LeadProse"];
+            /** @enum {string} */
+            trigger?: "schedule" | "now";
+            /** @description Lead wrote the day; today's facts so far when not */
+            written: boolean;
+            /** Format: date-time */
+            writtenAt?: string;
+        };
+        LeadFacts: {
+            blockers: components["schemas"]["LeadBlocker"][] | null;
+            /**
+             * Format: int64
+             * @description Computers with a turn on the day
+             */
+            computers: number;
+            /**
+             * Format: int64
+             * @description What the agents reported their turns cost, in USD × 10^6
+             */
+            cost: number;
+            /** @description At least one agent reported a cost */
+            costed: boolean;
+            /** @description The local date, YYYY-MM-DD */
+            day: string;
+            /** Format: date-time */
+            from: string;
+            pushes: components["schemas"]["LeadPush"][] | null;
+            /** @description Who worked, most turn time first; the user's own computers have no id */
+            teammates: components["schemas"]["LeadTeammate"][] | null;
+            /**
+             * Format: int64
+             * @description Threads with a turn on the day
+             */
+            threads: number;
+            /** Format: int64 */
+            turnSeconds: number;
+            /** Format: int64 */
+            turns: number;
+            /** Format: date-time */
+            until: string;
+            /** @description What waited for the user, oldest first */
+            waiting: components["schemas"]["LeadWaiting"][] | null;
+        };
+        LeadProse: {
+            /** @description A few words on the day as a whole */
+            heading?: string;
+            /** @description The day in two or three sentences */
+            summary: string;
+            teammates: components["schemas"]["LeadProseTeammate"][] | null;
+            /** @description Suggestions for the next day; nothing is sent */
+            tomorrow: string[] | null;
+        };
+        LeadProseLine: {
+            /** @enum {string} */
+            state: "done" | "open" | "blocked";
+            text: string;
+        };
+        LeadProseTeammate: {
+            lines: components["schemas"]["LeadProseLine"][] | null;
+            /** @description The teammate's ref, such as teammate:1 */
+            ref: string;
+        };
+        LeadPush: {
+            /** Format: date-time */
+            at: string;
+            branch: string;
+            forge: string;
+            id: string;
+            /** Format: int64 */
+            prNumber?: number;
+            prUrl?: string;
+            ref: string;
+            /** @description owner/name */
+            repo: string;
+            sandboxId: string;
+            /** @enum {string} */
+            state: "pending" | "pushed" | "failed" | "rejected" | "superseded";
+            teammateId?: string;
+        };
+        LeadSettings: {
+            /**
+             * Format: int64
+             * @description What Lead's model calls may cost a day, in USD × 10^6; models without a known price are capped by calls instead
+             */
+            dailyLimit: number;
+            /**
+             * Format: int64
+             * @description The days it is written on: bit 0 is Monday, bit 6 Sunday
+             */
+            days: number;
+            /** @description The day gets a short heading in the model's words */
+            heading: boolean;
+            /** @description What Lead is called in the sidebar */
+            name: string;
+            /**
+             * @description When writing the day notifies: only when something waits for the user, always, or never
+             * @enum {string}
+             */
+            notify: "waiting" | "always" | "never";
+            /** @description The sessions the user started on their own computers are part of the day */
+            ownComputers: boolean;
+            /** @description The day shows what each teammate and Lead spent */
+            showCosts: boolean;
+            /** @description A day without turns gets no page */
+            skipQuiet: boolean;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * Format: int64
+             * @description When the day is written, in minutes after local midnight
+             */
+            writeAt: number;
+        };
+        LeadTaskRun: {
+            /** Format: date-time */
+            at: string;
+            chatId?: string;
+            /** @enum {string} */
+            outcome: "started" | "done" | "skipped" | "missed";
+            reason?: string;
+            ref: string;
+            taskId: string;
+            title: string;
+        };
+        LeadTeammate: {
+            avatar?: string;
+            /** @description Names of the computers its turns ran on */
+            computers: string[] | null;
+            /** Format: int64 */
+            cost: number;
+            costed: boolean;
+            /** @description Empty for the user's own computers */
+            id?: string;
+            name: string;
+            /** @description Lead's note of the teammate's day */
+            note?: string;
+            ref: string;
+            tasks: components["schemas"]["LeadTaskRun"][] | null;
+            threads: components["schemas"]["LeadThread"][] | null;
+            /** Format: int64 */
+            turnSeconds: number;
+            /** Format: int64 */
+            turns: number;
+        };
+        LeadThread: {
+            /** Format: int64 */
+            cost: number;
+            id: string;
+            /** Format: date-time */
+            last: string;
+            ref: string;
+            /** @description A turn still runs */
+            running: boolean;
+            sandboxId: string;
+            sandboxName: string;
+            scheduled?: boolean;
+            /** Format: int64 */
+            seconds: number;
+            /** @description How the last turn ended, as the agent said */
+            stop?: string;
+            title: string;
+            /** Format: int64 */
+            turns: number;
+        };
+        LeadToday: {
+            /** Format: int64 */
+            cost: number;
+            costed: boolean;
+            day: string;
+            /** @description Each working teammate's note, most turn time first */
+            notes: components["schemas"]["LeadTodayNote"][] | null;
+            /**
+             * Format: int64
+             * @description Pushes that opened or updated a pull request
+             */
+            prs: number;
+            /** Format: int64 */
+            pushes: number;
+            /** @description The written day's summary, its refs written out as names, once today is written */
+            summary?: string;
+            /** Format: int64 */
+            threads: number;
+            /** @enum {string} */
+            trigger?: "schedule" | "now";
+            /** Format: int64 */
+            turnSeconds: number;
+            /** Format: int64 */
+            turns: number;
+            /** Format: int64 */
+            waiting: number;
+            /** Format: date-time */
+            writtenAt?: string;
+        };
+        LeadTodayNote: {
+            avatar?: string;
+            name: string;
+            note: string;
+            teammateId: string;
+        };
+        LeadUsage: {
+            /** Format: int64 */
+            calls: number;
+            /**
+             * Format: int64
+             * @description USD × 10^6, for models with a known price
+             */
+            cost: number;
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /**
+             * Format: int64
+             * @description Calls left out: over the limit, or no model to call
+             */
+            skipped: number;
+        };
+        LeadView: {
+            /** @description The written days, newest first */
+            days: components["schemas"]["LeadDayHead"][] | null;
+            /** @description The model Lead calls: the utility model of the first teammate's provider that has one; absent when none has */
+            model?: components["schemas"]["UtilityModel"];
+            /**
+             * Format: int64
+             * @description Studio's time zone's offset from UTC now, in minutes
+             */
+            offset: number;
+            settings: components["schemas"]["LeadSettings"];
+            today: components["schemas"]["LeadToday"];
+            /** @description Today's model calls */
+            usage: components["schemas"]["LeadUsage"];
+            /** @description Lead is writing today's day */
+            writing: boolean;
+            /** @description Studio's time zone, as its abbreviation, such as CET; writeAt and the days are in it */
+            zone: string;
+        };
+        LeadWaiting: {
+            id: string;
+            kind: string;
+            ref: string;
+            sandboxId?: string;
+            sandboxName?: string;
+            /** Format: date-time */
+            since: string;
+            subject: string;
+            teammateId?: string;
+        };
         Lineage: {
             checkpointRestoreSupported: boolean;
             checkpoints: components["schemas"]["LineageCheckpoint"][] | null;
@@ -6882,6 +7240,31 @@ export interface components {
         SetTrackersInBody: {
             /** @description Deny the listed domains to the environment's browsers unless a rule allows them */
             block: boolean;
+        };
+        SettingsInBody: {
+            /**
+             * Format: int64
+             * @description What Lead's model calls may cost a day, in USD × 10^6, at most $100
+             */
+            dailyLimit: number;
+            /**
+             * Format: int64
+             * @description The days it is written on: bit 0 is Monday, bit 6 Sunday
+             */
+            days: number;
+            heading: boolean;
+            /** @description What Lead is called in the sidebar */
+            name: string;
+            /** @enum {string} */
+            notify: "waiting" | "always" | "never";
+            ownComputers: boolean;
+            showCosts: boolean;
+            skipQuiet: boolean;
+            /**
+             * Format: int64
+             * @description When the day is written, in minutes after local midnight
+             */
+            writeAt: number;
         };
         Setup: {
             /**
@@ -9496,6 +9879,138 @@ export interface operations {
                 content: {
                     "application/json": number[] | null;
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getLead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getLeadDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description The local date, YYYY-MM-DD */
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDayView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setLeadSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    summarizeLeadDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

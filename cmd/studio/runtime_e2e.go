@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -92,6 +93,12 @@ func lostVMsProbe(func(context.Context) ([]store.Sandbox, error)) func(context.C
 }
 
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return e2e.Egress{Gateway: gw} }
+
+// leadUtility is the e2e Studio's model for Lead: one that writes the day from its facts
+// without a connection.
+func leadUtility(func(store.Provider, string) (agentmem.LLM, agentmem.UtilityModel, error)) func(store.Provider, string) (agentmem.LLM, agentmem.UtilityModel, error) {
+	return e2e.LeadModel
+}
 
 // serveSSH has no VM to serve.
 func serveSSH(context.Context, string, runtime.SSHKeys) error {
