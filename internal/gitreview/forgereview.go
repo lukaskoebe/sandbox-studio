@@ -314,8 +314,10 @@ func checkReview(verdict, summary string, comments []ReviewComment) error {
 	if !slices.Contains([]string{VerdictComment, VerdictApprove, VerdictRequestChanges}, verdict) {
 		return fmt.Errorf("verdict is comment, approve or request_changes, not %q", verdict)
 	}
-	if summary == "" && verdict != VerdictApprove {
-		return errors.New("write a summary")
+	// An approval needs no words, and line comments can say it all: forges take a review
+	// without a body then.
+	if summary == "" && verdict != VerdictApprove && len(comments) == 0 {
+		return errors.New("write a summary or a comment on a line")
 	}
 	if len(summary) > maxReviewSummary {
 		return fmt.Errorf("the summary is longer than %d bytes", maxReviewSummary)

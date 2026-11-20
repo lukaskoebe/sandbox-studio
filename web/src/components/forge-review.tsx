@@ -384,8 +384,8 @@ export function ForgeReview({
         () => {}
       )
   }
-  // The forge takes an approval without text; anything else needs a summary.
-  const empty = !summary.trim() && verdict !== "approve"
+  // The forge takes an approval, or a review with line comments, without a summary.
+  const empty = !summary.trim() && verdict !== "approve" && count === 0
 
   const facts = (
     <>
@@ -670,7 +670,7 @@ export function ForgeReview({
               <Button
                 size="sm"
                 disabled={decide.isPending || empty}
-                title={empty ? "Write a summary first" : undefined}
+                title={empty ? "Write a summary or a comment first" : undefined}
                 onClick={post}
               >
                 {busy("allow") && <Spinner />}

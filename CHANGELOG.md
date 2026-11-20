@@ -23,6 +23,8 @@
   Questions leave part of Lead's daily limit for writing the day.
 - Home's **Today so far** card says what happened since you last looked at today: who worked,
   pushes, new requests and scheduled runs.
+- A pull request review can go without a summary when it has comments on lines. Before, only
+  an approval could, and agents had to write one too.
 - A locked OS keychain no longer keeps Studio restarting. After a reboot with only SSH logins,
   Studio used to exit at every start, and on Linux its login entry started it again every
   5 seconds, which could fill the keychain's open files and block logging in on the desktop.

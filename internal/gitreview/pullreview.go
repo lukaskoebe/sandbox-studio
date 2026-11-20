@@ -303,7 +303,11 @@ func postReview(ctx context.Context, call restAPI, github bool, token, owner, re
 		}
 		comments = append(comments, m)
 	}
-	in := map[string]any{"event": event, "body": r.Body, "commit_id": r.CommitID, "comments": comments}
+	in := map[string]any{"event": event, "commit_id": r.CommitID, "comments": comments}
+	// A review whose line comments say it all has no body; the key is left out then.
+	if r.Body != "" {
+		in["body"] = r.Body
+	}
 	var out struct {
 		ID      int64  `json:"id"`
 		HTMLURL string `json:"html_url"`

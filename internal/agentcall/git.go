@@ -90,11 +90,11 @@ var GitPullRequestReadTool = Tool{agentproto.MethodGitPullRequestRead,
 // GitPullRequestReviewTool drafts a review; the user edits, posts or discards it.
 var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
 	"Drafts a review of a pull request, yours or anyone's: a verdict, a summary and comments on lines of its diff. To only " +
-		"comment, use verdict comment. Nothing is posted yet: the user " +
+		"comment, use verdict comment. The summary may be left out of an approval, or of a review whose line comments say it all. Nothing is posted yet: the user " +
 		"sees the draft beside the diff, can edit it, and posts or discards it. The call answers at once with \"awaiting approval\" and the approval ID; " +
 		"git_pull_request_review_status says what became of it. A comment must be on a line the diff shows, as added or kept (side new) " +
 		"or removed (side old). A new draft for the same pull request replaces one still waiting.",
-	obj([]string{"repository", "number", "verdict", "summary"}, map[string]any{
+	obj([]string{"repository", "number", "verdict"}, map[string]any{
 		"forge":      pullRequestRef["forge"],
 		"repository": pullRequestRef["repository"],
 		"number":     pullRequestRef["number"],

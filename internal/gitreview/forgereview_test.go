@@ -305,6 +305,34 @@ func TestADiscardedReviewTellsTheAgentWithTheNote(t *testing.T) {
 	}
 }
 
+func TestAReviewNeedsASummaryOnlyWithoutLineComments(t *testing.T) {
+	svc, _, sb, _ := newReviewHarness(t)
+	_, err := callReviewTool(t, svc.toolPullRequestReview, sb, `{"repository":"acme/web","number":42,"verdict":"comment"}`)
+	if !integrations.IsToolError(err) || !strings.Contains(err.Error(), "write a summary or a comment on a line") {
+		t.Fatalf("no summary, no comments: %v", err)
+	}
+	for _, verdict := range []string{"comment", "request_changes"} {
+		got, err := callReviewTool(t, svc.toolPullRequestReview, sb, `{"repository":"acme/web","number":42,"verdict":"`+verdict+`",
+			"comments":[{"path":"web/coupon.ts","line":21,"body":"Use finalTotal(cart)"}]}`)
+		if err != nil || got["status"] != "awaiting approval" {
+			t.Fatalf("%s with only a line comment: %v %v", verdict, got, err)
+		}
+	}
+	// GitHub gets no body key at all for it.
+	var in map[string]any
+	call := func(_ context.Context, _, _, _ string, body, _ any) error {
+		b, _ := json.Marshal(body)
+		return json.Unmarshal(b, &in)
+	}
+	if _, err := postReview(context.Background(), call, true, "t", "acme", "web", 42, ReviewPost{Verdict: VerdictComment, CommitID: "abc",
+		Comments: []ReviewComment{{Path: "a.go", Line: 4, Side: "new", Body: "y"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := in["body"]; ok || in["event"] != "COMMENT" {
+		t.Fatalf("posted %v", in)
+	}
+}
+
 func TestReviewDiffLines(t *testing.T) {
 	d := parseDiffLines(prDiff)
 	for _, c := range []struct {
