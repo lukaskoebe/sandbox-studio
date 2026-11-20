@@ -164,6 +164,13 @@ computer, provider or harness, and only reads the environment's day.
 - The terminal, check-ins and scheduled tasks always use the default. A chat opened in the
   terminal runs the TUI on the default too.
 
+A chat is named after its first prompt, then by the agent's `session_info_update` titles. The
+user can rename it from its **⋯** menu or by right-clicking it in the sidebar or on the home:
+`PUT /api/environments/{env}/chats/{chat}/title` with `{title}` (spaces collapsed, at most 200
+characters) stores it and sets `chats.title_set`, after which the agent's titles no longer
+replace it (`store.SetChatTitle` skips such a chat). The same menus copy the thread's link, hand
+it to the terminal, and delete it (`components/chat/chat-actions.tsx`).
+
 ## The conversation
 
 A teammate's page is its conversation beside its computer's screen

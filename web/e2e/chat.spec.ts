@@ -398,6 +398,57 @@ test("a message on the teammate's home starts a thread and opens it", async ({
   await expect(page).toHaveURL(/[?&]thread=/)
 })
 
+test("a thread's right-click menu in the sidebar renames and deletes it", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Namer ${Math.random().toString(36).slice(2, 6)}`
+  const teammate = await addTeammate(api, env, name)
+  const id = await api.createSandbox(sandboxName("namer"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  await page.goto(`/e/${env}/teammates/${teammate}?thread=${chat.id}`)
+  const threads = page.getByRole("list", { name: `${name}'s threads` })
+  const main = page.getByRole("main")
+
+  await threads
+    .getByRole("link", { name: /New chat/ })
+    .click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Rename…" }).click()
+  const dialog = page.getByRole("dialog", { name: "Rename thread" })
+  await dialog.getByRole("textbox", { name: "Title" }).fill("Flaky test hunt")
+  await dialog.getByRole("textbox", { name: "Title" }).press("Enter")
+  await expect(dialog).toBeHidden()
+  await expect(
+    threads.getByRole("link", { name: /Flaky test hunt/ })
+  ).toBeVisible()
+  await expect(main.getByRole("heading", { level: 1 })).toHaveText(
+    "Flaky test hunt"
+  )
+  expect(
+    (await api.json<{ chat: { title: string; titleSet: boolean } }>(
+      "GET",
+      `/api/environments/${env}/chats/${chat.id}`
+    ))!.chat
+  ).toMatchObject({ title: "Flaky test hunt", titleSet: true })
+
+  // Deleting the open thread goes back to the teammate's home.
+  await threads
+    .getByRole("link", { name: /Flaky test hunt/ })
+    .click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Delete…" }).click()
+  const ask = page.getByRole("alertdialog", { name: "Delete Flaky test hunt?" })
+  await ask.getByRole("button", { name: "Delete" }).click()
+  await expect(
+    threads.getByRole("link", { name: /Flaky test hunt/ })
+  ).toHaveCount(0)
+  await expect(page).not.toHaveURL(/[?&]thread=/)
+})
+
 test.describe("a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } })
 

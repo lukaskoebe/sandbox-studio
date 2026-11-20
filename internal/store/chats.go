@@ -45,6 +45,8 @@ type Chat struct {
 	// Model is the model the chat runs on, one its teammate offers; empty is the teammate's
 	// default.
 	Model string `json:"model,omitempty" doc:"The model the chat runs on from its next message; empty is the teammate's default"`
+	// TitleSet marks a title the user gave the chat, which the agent's titles don't replace.
+	TitleSet bool `json:"titleSet,omitempty" doc:"The user named the chat; the agent's titles no longer replace it"`
 }
 
 // ChatTurn is one prompt and everything the agent did for it.
@@ -79,12 +81,12 @@ type ChatItem struct {
 	Rev        int64           `json:"rev"`
 }
 
-const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat, task_id, model"
+const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat, task_id, model, title_set"
 
 func scanChat(row interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
 	var created, updated int64
-	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat, &c.TaskID, &c.Model)
+	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat, &c.TaskID, &c.Model, &c.TitleSet)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -298,12 +300,27 @@ func (s *Store) SetChatSession(ctx context.Context, chatID, sessionID string) er
 	})
 }
 
-// SetChatTitle renames a chat.
+// SetChatTitle names a chat after its prompt or the agent's title, unless the user named it.
 func (s *Store) SetChatTitle(ctx context.Context, chatID, title string) error {
 	return s.inChatTx(ctx, chatID, func(tx *sql.Tx, _ int64) error {
-		_, err := tx.ExecContext(ctx, "UPDATE chats SET title = ? WHERE id = ?", title, chatID)
+		_, err := tx.ExecContext(ctx, "UPDATE chats SET title = ? WHERE id = ? AND title_set = 0", title, chatID)
 		return err
 	})
+}
+
+// RenameChat gives a chat the user's title, which the agent's no longer replace.
+func (s *Store) RenameChat(ctx context.Context, envID, chatID, title string) (Chat, error) {
+	if _, err := s.Chat(ctx, envID, chatID); err != nil {
+		return Chat{}, err
+	}
+	err := s.inChatTx(ctx, chatID, func(tx *sql.Tx, _ int64) error {
+		_, err := tx.ExecContext(ctx, "UPDATE chats SET title = ?, title_set = 1 WHERE id = ?", title, chatID)
+		return err
+	})
+	if err != nil {
+		return Chat{}, err
+	}
+	return s.Chat(ctx, envID, chatID)
 }
 
 // SetChatModel sets the model a chat runs on from its next message; "" is the teammate's default.

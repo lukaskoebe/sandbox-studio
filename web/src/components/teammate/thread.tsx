@@ -1,27 +1,17 @@
-import { useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
 import {
   CaretLeftIcon,
   ChatCircleIcon,
   DotsThreeIcon,
+  LinkIcon,
+  PencilSimpleIcon,
   TerminalWindowIcon,
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
+import { useChatActions } from "@/components/chat/chat-actions"
 import { ChatStateBadge } from "@/components/chat/chat-items"
 import { ChatThread } from "@/components/chat/chat-thread"
 import { TeammateAvatar } from "@/components/teammate-avatar"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -31,12 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
-import {
-  $api,
-  errorMessage,
-  fetchClient,
-  type Teammate,
-} from "@/lib/api/client"
+import { type Teammate } from "@/lib/api/client"
 import { chatTitle, type Chat, type useChat } from "@/lib/chats"
 
 /**
@@ -168,7 +153,7 @@ export function TeammateThread({
   )
 }
 
-/** The thread's options: hand it to the agent's terminal, or delete it. */
+/** The thread's options: rename it, copy its link, hand it to the agent's terminal, delete it. */
 function ThreadMenu({
   env,
   chat,
@@ -180,40 +165,7 @@ function ThreadMenu({
   onTerminal: (session: string) => void
   onDeleted: () => void
 }) {
-  const queryClient = useQueryClient()
-  const [busy, setBusy] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const remove = $api.useMutation(
-    "delete",
-    "/api/environments/{env}/chats/{chat}",
-    {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/chats"],
-        })
-        setDeleting(false)
-        onDeleted()
-      },
-      onError: (err) => toast.error(errorMessage(err)),
-    }
-  )
-  const toTerminal = async () => {
-    setBusy(true)
-    try {
-      const { data, error } = await fetchClient.POST(
-        "/api/environments/{env}/chats/{chat}/terminal",
-        { params: { path: { env, chat: chat.id } } }
-      )
-      if (error) throw error
-      onTerminal(data.session)
-    } catch (err) {
-      toast.error(errorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-  const handable = chat.state === "idle"
-
+  const a = useChatActions(env, chat, { onTerminal, onDeleted })
   return (
     <>
       <DropdownMenu modal={false}>
@@ -227,12 +179,20 @@ function ThreadMenu({
             />
           }
         >
-          {busy ? <Spinner /> : <DotsThreeIcon weight="bold" />}
+          {a.handing ? <Spinner /> : <DotsThreeIcon weight="bold" />}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuItem onClick={a.rename}>
+            <PencilSimpleIcon />
+            Rename…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={a.copyLink}>
+            <LinkIcon />
+            Copy link
+          </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={!handable || busy}
-            onClick={() => void toTerminal()}
+            disabled={!a.handable || a.handing}
+            onClick={() => void a.toTerminal()}
           >
             <TerminalWindowIcon />
             <span className="grid">
@@ -245,39 +205,13 @@ function ThreadMenu({
             </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => setDeleting(true)}
-          >
+          <DropdownMenuItem variant="destructive" onClick={a.remove}>
             <TrashIcon />
             Delete thread
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <AlertDialog open={deleting} onOpenChange={setDeleting}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {chatTitle(chat)}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The conversation is gone for good. What the agent changed on the
-              computer stays.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() =>
-                remove.mutate({ params: { path: { env, chat: chat.id } } })
-              }
-            >
-              {remove.isPending && <Spinner />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {a.dialogs}
     </>
   )
 }

@@ -107,3 +107,7 @@ Requests made in the terminal have no Undo or Changes of their own. Undoing an e
 If the agent can't pick a conversation back up, for example because the computer was rebased and its home folder was replaced, the chat ends. An ended chat is read-only and offers **Start a new chat**.
 
 **Delete thread** in a thread's **⋯** menu removes the conversation. What the agent changed on the computer stays.
+
+## Rename a thread
+
+A thread is named after its first message, and the agent may give it a better name as it works. To name it yourself, choose **Rename…** in its **⋯** menu, or right-click it in the sidebar or on the teammate's home. A name you give stays: the agent no longer changes it. The right-click menu also copies the thread's link, continues it in the terminal, and deletes it.

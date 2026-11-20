@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
@@ -36,6 +36,7 @@ import {
 } from "@/components/approval-stack"
 import { BrowsingCard, useBrowsing } from "@/components/browser-browsing"
 import { isGitApproval } from "@/components/git-review"
+import { ChatContextMenu } from "@/components/chat/chat-actions"
 import { ComposerDock } from "@/components/chat/chat-thread"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { handFirstMessage } from "@/lib/first-message"
@@ -940,14 +941,23 @@ function DeskHome({
             )
           })}
           {listed.map((c) => (
-            <DeskRow
+            <ChatContextMenu
               key={c.id}
-              status={status(c)}
-              title={chatTitle(c)}
-              meta={statusLabels[status(c)]}
-              where={computerName(c.sandboxId)}
-              onClick={() => onThread(c)}
-            />
+              env={env}
+              chat={c}
+              onTerminal={(term) => {
+                const sb = computers.find((x) => x.id === c.sandboxId)
+                if (sb) onOpenComputer(sb, "terminal", term)
+              }}
+            >
+              <DeskRow
+                status={status(c)}
+                title={chatTitle(c)}
+                meta={statusLabels[status(c)]}
+                where={computerName(c.sandboxId)}
+                onClick={() => onThread(c)}
+              />
+            </ChatContextMenu>
           ))}
           {chats.length === 0 && inTerminals.length === 0 && (
             <p className="px-1 text-xs text-muted-foreground">
@@ -1005,22 +1015,25 @@ function DeskHome({
   )
 }
 
+/** A row of the desk; the rest of its props go to its button, such as a context menu's trigger. */
 function DeskRow({
   status,
   title,
   meta,
   where,
   onClick,
+  ...props
 }: {
   status: ThreadStatus
   title: string
   meta: string
   where?: string
   onClick: () => void
-}) {
+} & Omit<ComponentProps<"button">, "title" | "onClick">) {
   return (
     <button
       type="button"
+      {...props}
       onClick={onClick}
       className="flex min-w-0 items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 text-left text-sm outline-none hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring/40"
     >

@@ -499,6 +499,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/chats/{chat}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Renames the chat. The title stays: the agent's own titles no longer replace it. */
+        put: operations["renameChat"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/chats/{chat}/turns/{turn}/changes": {
         parameters: {
             query?: never;
@@ -4072,6 +4089,8 @@ export interface components {
             taskId?: string;
             teammateId: string;
             title: string;
+            /** @description The user named the chat; the agent's titles no longer replace it */
+            titleSet?: boolean;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -8100,6 +8119,10 @@ export interface components {
             sourceId?: string;
             text: string;
         };
+        TitleInBody: {
+            /** @description The chat's new title */
+            title: string;
+        };
         ToAdd: {
             /** @description For secret: the hosts the value may be sent to */
             hosts?: string[] | null;
@@ -9575,6 +9598,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatTerminal"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    renameChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
                 };
             };
             /** @description Error */

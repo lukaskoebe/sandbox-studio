@@ -1097,6 +1097,10 @@
           "title": {
             "type": "string"
           },
+          "titleSet": {
+            "description": "The user named the chat; the agent's titles no longer replace it",
+            "type": "boolean"
+          },
           "updatedAt": {
             "format": "date-time",
             "type": "string"
@@ -12683,6 +12687,21 @@
         ],
         "type": "object"
       },
+      "TitleInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "description": "The chat's new title",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
       "ToAdd": {
         "additionalProperties": false,
         "properties": {
@@ -15400,6 +15419,69 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ChatTerminal"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/title": {
+      "put": {
+        "description": "Renames the chat. The title stays: the agent's own titles no longer replace it.",
+        "operationId": "renameChat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
                 }
               }
             },

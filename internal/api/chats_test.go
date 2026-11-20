@@ -629,6 +629,36 @@ func TestChatModel(t *testing.T) {
 	}
 }
 
+// A chat the user renamed keeps its title when the agent names the chat again.
+func TestRenameChat(t *testing.T) {
+	agent := &acptest.Agent{SessionID: "ses_1", Turns: []acptest.Turn{{}, {Steps: []acptest.Step{
+		{Update: json.RawMessage(`{"sessionUpdate":"session_info_update","title":"The agent's title"}`)},
+	}}}}
+	h, s, _, env := newChatServer(t, agent)
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+	c := decode[store.Chat](t, do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"Fix the build"}`))
+	base := envBase + "/chats/" + c.ID
+	if log := waitIdle(t, h, base); log.Chat.Title != "Fix the build" {
+		t.Fatalf("first title: %q", log.Chat.Title)
+	}
+	if rec := do(h, "PUT", base+"/title", `{"title":"   "}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blank: %d %s", rec.Code, rec.Body)
+	}
+	rec := do(h, "PUT", base+"/title", `{"title":"  Build   fix "}`)
+	if got := decode[store.Chat](t, rec); rec.Code != http.StatusOK || got.Title != "Build fix" || !got.TitleSet {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body)
+	}
+	do(h, "POST", base+"/prompt", `{"text":"Again"}`)
+	if log := waitIdle(t, h, base); log.Chat.Title != "Build fix" {
+		t.Fatalf("after the agent's title: %q", log.Chat.Title)
+	}
+	if rec := do(h, "PUT", envBase+"/chats/nope/title", `{"title":"x"}`); rec.Code != http.StatusNotFound {
+		t.Fatalf("missing chat: %d %s", rec.Code, rec.Body)
+	}
+}
+
 // A picture an agent's message shows is served from its copy; one that couldn't be copied
 // says why, and a path the message doesn't show is no picture.
 func TestChatImage(t *testing.T) {

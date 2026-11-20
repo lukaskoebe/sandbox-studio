@@ -166,6 +166,25 @@ func (s *Server) registerChats(api huma.API) {
 		return nil, apiError(chats.Delete(ctx, in.Env, in.Chat))
 	})
 
+	type titleIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Chat string `path:"chat" doc:"Chat ID"`
+		Body struct {
+			Title string `json:"title" minLength:"1" maxLength:"200" doc:"The chat's new title"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "renameChat", Method: http.MethodPut, Path: "/api/environments/{env}/chats/{chat}/title", Tags: []string{"chats"},
+		Description: "Renames the chat. The title stays: the agent's own titles no longer replace it.",
+	}, func(ctx context.Context, in *titleIn) (*struct{ Body store.Chat }, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		c, err := chats.Rename(ctx, in.Env, in.Chat, in.Body.Title)
+		return &struct{ Body store.Chat }{c}, apiError(err)
+	})
+
 	type modelIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		Chat string `path:"chat" doc:"Chat ID"`

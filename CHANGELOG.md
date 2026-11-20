@@ -30,6 +30,9 @@
   suspended. A sandbox that has this now works again once it is stopped and started.
 - In the macOS app, DevTools and keyed previews were blank: the app blocked their
   `*.localhost` addresses. They load now.
+- Right-click a thread in the sidebar or on a teammate's home to rename it, copy its link,
+  continue it in the terminal, or delete it. The thread's **⋯** menu renames it too, and a
+  name you give stays.
 - A teammate's settings save as you change them, like Lead's. A field saves once you pause
   typing, and when you close the settings. The **Unsaved changes** bar is gone.
 - A new thread from a teammate's home, or from **New chat**, opens at once. Your message shows

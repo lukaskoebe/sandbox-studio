@@ -513,6 +513,22 @@ func (s *Service) useModel(ctx context.Context, c store.Chat, l *live, launch La
 	return l, nil
 }
 
+// Rename gives the chat the user's title, which the agent's titles no longer replace.
+func (s *Service) Rename(ctx context.Context, envID, chatID, title string) (store.Chat, error) {
+	title = strings.Join(strings.Fields(title), " ")
+	if title == "" {
+		return store.Chat{}, fmt.Errorf("%w: the title is empty", ErrInvalid)
+	}
+	if n := []rune(title); len(n) > 200 {
+		return store.Chat{}, fmt.Errorf("%w: the title is longer than 200 characters", ErrInvalid)
+	}
+	c, err := s.Store.RenameChat(ctx, envID, chatID, title)
+	if err == nil {
+		s.changed(c.EnvironmentID, c.ID, true)
+	}
+	return c, err
+}
+
 // SetModel sets the model the chat runs on from its next message; "" is the teammate's default.
 // The agent switches when that message goes (useModel).
 func (s *Service) SetModel(ctx context.Context, envID, chatID, model string) (store.Chat, error) {
@@ -1331,9 +1347,10 @@ func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []
 	return t, nil
 }
 
-// retitle names a chat. A scheduled run's chat keeps the title of its task and time.
+// retitle names a chat. A scheduled run's chat keeps the title of its task and time, and one
+// the user named keeps that name.
 func (s *Service) retitle(c store.Chat, title string) {
-	if title == "" || title == c.Title || c.TaskID != "" {
+	if title == "" || title == c.Title || c.TaskID != "" || c.TitleSet {
 		return
 	}
 	if err := s.Store.SetChatTitle(context.Background(), c.ID, title); err == nil {

@@ -19,6 +19,7 @@ import {
   TrayIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
+import { ChatContextMenu } from "@/components/chat/chat-actions"
 import { CommandPalette } from "@/components/command-palette"
 import { EnvironmentIcon } from "@/components/environment-icon"
 import {
@@ -491,6 +492,7 @@ function TeammateRow({
   terminals: AgentTerminal[]
 }) {
   const matchRoute = useMatchRoute()
+  const navigate = useNavigate()
   const search: {
     thread?: string
     computer?: string
@@ -649,26 +651,49 @@ function TeammateRow({
               const n = asks(c)
               const st = chatStatus(c, n)
               return (
-                <ThreadRow
+                <ChatContextMenu
                   key={c.id}
-                  status={st}
-                  title={chatTitle(c)}
-                  meta={[
-                    st === "done" || st === "ended"
-                      ? `${statusLabels[st]} ${formatAge(c.updatedAt)}`
-                      : statusLabels[st],
-                    computers.length > 1 && nameOf(c.sandboxId),
-                  ]}
-                  waiting={n}
-                  active={onPage && search.thread === c.id}
-                  link={
-                    <Link
-                      to="/e/$env/teammates/$id"
-                      params={{ env, id: teammate.id }}
-                      search={{ thread: c.id }}
-                    />
+                  env={env}
+                  chat={c}
+                  onTerminal={(term) =>
+                    void navigate({
+                      to: "/e/$env/teammates/$id",
+                      params: { env, id: teammate.id },
+                      search: {
+                        computer: c.sandboxId,
+                        tab: "terminal",
+                        term,
+                      },
+                    })
                   }
-                />
+                  onDeleted={() => {
+                    if (onPage && search.thread === c.id)
+                      void navigate({
+                        to: "/e/$env/teammates/$id",
+                        params: { env, id: teammate.id },
+                      })
+                  }}
+                >
+                  <ThreadRow
+                    status={st}
+                    title={chatTitle(c)}
+                    meta={[
+                      st === "done" || st === "ended"
+                        ? `${statusLabels[st]} ${formatAge(c.updatedAt)}`
+                        : statusLabels[st],
+                      computers.length > 1 && nameOf(c.sandboxId),
+                    ]}
+                    waiting={n}
+                    active={onPage && search.thread === c.id}
+                    link={
+                      <Link
+                        to="/e/$env/teammates/$id"
+                        params={{ env, id: teammate.id }}
+                        search={{ thread: c.id }}
+                      />
+                    }
+                  />
+                </ChatContextMenu>
               )
             })}
             {mine.length > listed.length && (
@@ -694,7 +719,10 @@ function TeammateRow({
   )
 }
 
-/** A thread under its teammate: its state, its title, and what it does where. */
+/**
+ * A thread under its teammate: its state, its title, and what it does where. The rest of its
+ * props go to its item, such as a context menu's trigger.
+ */
 function ThreadRow({
   status,
   title,
@@ -702,6 +730,7 @@ function ThreadRow({
   waiting = 0,
   active,
   link,
+  ...props
 }: {
   status: ThreadStatus
   title: string
@@ -709,9 +738,9 @@ function ThreadRow({
   waiting?: number
   active: boolean
   link: React.ReactElement
-}) {
+} & React.ComponentProps<"li">) {
   return (
-    <SidebarMenuSubItem>
+    <SidebarMenuSubItem {...props}>
       <SidebarMenuSubButton
         isActive={active}
         render={link}
