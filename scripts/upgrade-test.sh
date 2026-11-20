@@ -123,6 +123,10 @@ after() {
 	st show upgrade
 	check_marker "$id" "The sandbox, running through the upgrade,"
 
+	# On Windows a guest of the previous release that is stopped within a second or two of
+	# reconnecting hangs in its shutdown for its full 65 seconds (msb's vsock there; Linux
+	# stops at once), so the stop waits until the reconnect has settled.
+	sleep 10
 	st stop upgrade
 	st start upgrade
 	check_marker "$id" "The sandbox, stopped and started again by the new build,"
