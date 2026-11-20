@@ -17,7 +17,6 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowSquareOutIcon,
-  ArrowsOutIcon,
   CaretLeftIcon,
   CaretRightIcon,
   ClockCounterClockwiseIcon,
@@ -109,11 +108,12 @@ import { isBrowserAsk } from "@/lib/approval-kinds"
 import { normalizeBrowserAddress } from "@/lib/browser-address"
 import { neverOffered, type TypedPassword } from "@/lib/browser-logins"
 import {
-  defaultPageSize,
   fitPreferred,
+  pageSizes,
   setFitPreferred,
   type PageSize,
 } from "@/lib/browser-fit"
+import { PageSizeMenu, type SizeChoice } from "@/components/browser-size"
 import {
   elementWords,
   hostOf,
@@ -223,6 +223,8 @@ export function BrowserWindow({
   const sessions = st?.sessions ?? []
   const session = sessions.find((s) => s.id === picked)
   const sessionID = session?.id ?? ""
+  // The page size the session keeps, the user's or an agent's.
+  const kept = session ? session.viewport : st?.viewport
   const driving = session ? session.takeover : !!st?.takeover
 
   // The page the live view reports wins over the status's, which lags behind it.
@@ -355,14 +357,36 @@ export function BrowserWindow({
         (got) => got.scale,
         () => undefined
       )
-  const changeFit = (on: boolean) => {
-    setFit(on)
-    setFitPreferred(on)
-    // The page may have been fitted by an earlier visit, so it goes back either way.
-    if (on || !running) return
-    resize.mutate({
-      params: { path },
-      body: { ...defaultPageSize, session: sessionID },
+  // A device's size the session keeps, for everyone watching; fitting this view is this
+  // browser's own choice, which a kept size wins over.
+  const unkeep = $api.useMutation("delete", `${statusPath}/viewport`, {
+    onSettled: refresh,
+    onError: onError("change the page size"),
+  })
+  const keep = $api.useMutation("put", `${statusPath}/viewport`, {
+    onSettled: refresh,
+    onError: onError("change the page size"),
+  })
+  const chooseSize = (choice: SizeChoice) => {
+    if (choice !== "fit" && choice !== "default") {
+      keep.mutate({
+        params: { path },
+        body: {
+          ...pageSizes[choice],
+          scale: Math.min(4, Math.max(1, window.devicePixelRatio || 1)),
+          session: sessionID,
+          keep: true,
+        },
+      })
+      return
+    }
+    setFit(choice === "fit")
+    setFitPreferred(choice === "fit")
+    // A kept size goes, and the page goes back to its own size, which a fit then changes; the
+    // page may also have been fitted by an earlier visit.
+    if (!running || (choice === "fit" && !kept)) return
+    unkeep.mutate({
+      params: { path, query: sessionID ? { session: sessionID } : {} },
     })
   }
   const [addressError, setAddressError] = useState("")
@@ -633,6 +657,15 @@ export function BrowserWindow({
             <KeyboardIcon />
           </Button>
         )}
+        {liveView && (
+          <PageSizeMenu
+            name={name}
+            fit={fit}
+            kept={kept}
+            disabled={busy || keep.isPending || unkeep.isPending}
+            onChoose={chooseSize}
+          />
+        )}
         {running && <DownloadsButton env={env} teammate={teammate} />}
         {onActivity && (
           <Button
@@ -693,14 +726,6 @@ export function BrowserWindow({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuCheckboxItem
-                checked={fit}
-                onCheckedChange={changeFit}
-                title="The page takes the size of this view, so it shows at full size. Agents get the same page."
-              >
-                <ArrowsOutIcon />
-                Fit the page to this view
-              </DropdownMenuCheckboxItem>
               {liveView && (
                 <DropdownMenuCheckboxItem
                   checked={!!devtools}
@@ -889,7 +914,7 @@ export function BrowserWindow({
               canvasRef={frame}
               controlsOpen={keys}
               onControlsOpen={setKeys}
-              fitRoom={fit ? room : undefined}
+              fitRoom={fit && !kept ? room : undefined}
               onFit={fitPage}
               passwordField={passwordField}
               onPassword={offerPassword}

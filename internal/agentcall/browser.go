@@ -18,7 +18,8 @@ An action on a new site waits for the user's approval: the command exits 75, and
 again until they decide. Log in with fill-credential: Studio fills the vault secret itself after
 the user approves, and you never see its value. Script, cookie and storage access is not
 available. A screenshot is an image file whose path is printed: read the file to see it, and
-show it to the user in your message as ![what it shows](<the path>).
+show it to the user in your message as ![what it shows](<the path>). To see a page as a phone
+or a laptop shows it, set viewport phone (or tablet, laptop, desktop, 375x667) first.
 
 For a throwaway browser that keeps no cookies or storage, open --ephemeral, pass the session it
 prints to the other commands as --session, and close it when done. When you have built
@@ -68,6 +69,13 @@ func init() {
 		{agentproto.MethodBrowserGetText, "The text content of an element.",
 			obj([]string{"ref"}, map[string]any{"ref": ref()})},
 		{agentproto.MethodBrowserScreenshot, "A screenshot of the viewport, as an image file whose path is printed; read the file to see it. For the text and the element refs, use `studio browser snapshot`: it is much smaller.", obj(nil, map[string]any{})},
+		{agentproto.MethodBrowserViewport, "Set the page size, to see and screenshot the page as a phone, tablet, laptop or desktop shows it: " +
+			"phone is 390x844, tablet 820x1180, laptop 1440x900, desktop 1920x1080, or give a size such as 375x667; default goes back to 1280x720. " +
+			"The page keeps it until the browser restarts, and the user's view of your browser shows it too. Pages lay out for the size; the browser still says it is a desktop Chrome.",
+			obj([]string{"size"}, map[string]any{
+				"size":  str("phone, tablet, laptop, desktop, default, or WIDTHxHEIGHT in CSS pixels", "pattern", `^(phone|tablet|laptop|desktop|default|[0-9]{3,4}x[0-9]{3,4})$`),
+				"scale": map[string]any{"type": "number", "minimum": 1, "maximum": 3, "description": "Device pixels per CSS pixel, as a phone's 3 for sharp screenshots; default 1. Larger screenshots cost more to read."},
+			})},
 		{agentproto.MethodBrowserWait, "Wait for text to appear, for the URL to match, or for some milliseconds. Give one.",
 			obj(nil, map[string]any{
 				"text": str("Text to wait for", "maxLength", 1000),

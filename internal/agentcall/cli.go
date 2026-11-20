@@ -120,6 +120,7 @@ var commandNames = map[string]struct {
 	agentproto.MethodBrowserFillCredential:      {"browser fill-credential", []string{"ref", "name"}},
 	agentproto.MethodBrowserClose:               {"browser close", []string{"session"}},
 	agentproto.MethodBrowserShow:                {"browser show", []string{"url"}},
+	agentproto.MethodBrowserViewport:            {"browser viewport", []string{"size"}},
 	agentproto.MethodBrowserDownloadToWorkspace: {"browser download-to-workspace", []string{"name"}},
 	agentproto.MethodBrowserRequestControl:      {"browser request-control", []string{"reason"}},
 }

@@ -775,6 +775,10 @@
           "url": {
             "description": "The page the broker last saw",
             "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/Viewport",
+            "description": "The page size chosen for this session, which a live view doesn't fit over"
           }
         },
         "required": [
@@ -824,6 +828,10 @@
           "url": {
             "description": "The page the broker last saw",
             "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/Viewport",
+            "description": "The page size chosen for the persistent profile, which a live view doesn't fit over"
           },
           "vm": {
             "description": "State of the browser VM",
@@ -9709,6 +9717,10 @@
             "minimum": 200,
             "type": "integer"
           },
+          "keep": {
+            "description": "The session keeps this size, as a phone's or a laptop's the user chose: a live view doesn't fit the page over it, and agents' screenshots have it, until it is let go or the browser restarts. Without it, a size kept for the session is refused.",
+            "type": "boolean"
+          },
           "scale": {
             "description": "Device pixels per CSS pixel of the user's screen, so the frames are as sharp as it; Studio keeps a frame within 3840×2160 pixels and rounds down to hundredths. Omitted is 1.",
             "format": "double",
@@ -13502,6 +13514,33 @@
           "workspaceMiB",
           "dockerMiB",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "Viewport": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "description": "Name of the agent sandbox that chose it; empty when the user did",
+            "type": "string"
+          },
+          "height": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "scale": {
+            "description": "Device pixels per CSS pixel; omitted is 1",
+            "format": "double",
+            "type": "number"
+          },
+          "width": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
         ],
         "type": "object"
       },
@@ -26497,6 +26536,61 @@
       }
     },
     "/api/environments/{env}/teammates/{teammate}/browser/viewport": {
+      "delete": {
+        "description": "Lets go of the page size kept for a running session, the user's or an agent's: the page goes back to agent-browser's own size, 1280×720 at 1x, which a live view that fits the page then changes.",
+        "operationId": "unkeepBrowserSize",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "explode": false,
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "description": "An ephemeral session's ID; empty for the persistent profile",
+              "maxLength": 32,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      },
       "put": {
         "description": "Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720 at 1x.",
         "operationId": "resizeBrowser",

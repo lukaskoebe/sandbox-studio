@@ -635,8 +635,8 @@ test("DevTools open under the page and break out into a window", async ({
   await expect(win.getByRole("heading")).toHaveText("These DevTools ended")
 })
 
-// Fit the page to this view gives the page the size of the view's body, one pixel to one, and
-// follows the window; turned off, the page goes back to agent-browser's own size.
+// Fit to this view gives the page the size of the view's body, one pixel to one, and follows
+// the window; Standard puts the page back to agent-browser's own size.
 test("the page can be fitted to the live view, and follows its size", async ({
   page,
   api,
@@ -657,15 +657,14 @@ test("the page can be fitted to the live view, and follows its size", async ({
     const box = (await page.getByTestId("browser-view").boundingBox())!
     return [Math.floor(box.width), Math.floor(box.height)]
   }
-  const options = page.getByRole("button", { name: "Browser options" })
-  const fit = page.getByRole("menuitemcheckbox", {
-    name: "Fit the page to this view",
-  })
+  const sizes = page.getByRole("button", { name: /^Page size/ })
+  const fit = page.getByRole("menuitemradio", { name: "Fit to this view" })
 
-  await options.click()
+  await expect(sizes).toHaveAccessibleName("Page size: Standard size, 1280×720")
+  await sizes.click()
   await expect(fit).toHaveAttribute("aria-checked", "false")
   await fit.click()
-  await page.keyboard.press("Escape")
+  await expect(sizes).toHaveAccessibleName("Page size: Fits this view")
   await expect.poll(viewport).toEqual(await room())
   const [width] = await room()
   await expect(canvas).toHaveAttribute("width", String(width))
@@ -678,11 +677,73 @@ test("the page can be fitted to the live view, and follows its size", async ({
 
   // The choice is this computer's: it holds after a reload.
   await page.reload()
-  await options.click()
+  await sizes.click()
   await expect(fit).toHaveAttribute("aria-checked", "true")
-  await fit.click()
+  await page.getByRole("menuitemradio", { name: /^Standard/ }).click()
   await expect.poll(viewport).toEqual([1280, 720])
   await expect(canvas).toHaveAttribute("width", "1280")
+})
+
+// A device's size is the session's, not this view's: the page keeps it while the window changes,
+// and the view scales it to fit. An agent's `studio browser viewport` shows the same way, with
+// its name, and choosing a size here replaces it.
+test("a phone's or a laptop's size stays for the session, and so does an agent's", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { tm, base, call } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("https://example.com/login")
+  await address.press("Enter")
+  const canvas = page.getByLabel("Live view of the browser")
+  await expect(canvas).toHaveAttribute("width", "640")
+  const viewport = async () =>
+    (await api.json<FakeBrowser>(
+      "GET",
+      `/api/e2e/teammates/${tm}/browser`
+    ))!.browser!.sessions.find((s) => s.slot === 0)!.viewport
+  const kept = async () =>
+    (await api.json<Status & { viewport?: object }>("GET", base))!.viewport
+  const sizes = page.getByRole("button", { name: /^Page size/ })
+
+  await sizes.click()
+  await page.getByRole("menuitemradio", { name: /^Phone/ }).click()
+  await expect(sizes).toHaveAccessibleName("Page size: Phone size, 390×844")
+  await expect.poll(viewport).toEqual([390, 844])
+  await expect.poll(kept).toEqual({ width: 390, height: 844 })
+  await expect(canvas).toHaveAttribute("width", "390")
+  // The page is taller than the view, which scales it down to show it whole.
+  const room = (await page.getByTestId("browser-view").boundingBox())!
+  const frame = (await canvas.boundingBox())!
+  expect(frame.height).toBeLessThanOrEqual(room.height + 1)
+  await page.setViewportSize({ width: 1100, height: 700 })
+  await page.waitForTimeout(800)
+  expect(await viewport()).toEqual([390, 844])
+
+  // Fit waits while a size is kept, and takes over once it goes.
+  await sizes.click()
+  await page.getByRole("menuitemradio", { name: "Fit to this view" }).click()
+  await expect.poll(kept).toBeUndefined()
+  await expect.poll(viewport).not.toEqual([1280, 720])
+  await expect.poll(viewport).not.toEqual([390, 844])
+
+  await page.getByRole("button", { name: "Hand back" }).click()
+  const set = await call("browser_viewport", { size: "1024x700" })
+  expect(set!.error).toBeUndefined()
+  expect(String(set!.result)).toContain("1024×700")
+  await expect.poll(viewport).toEqual([1024, 700])
+  await expect(sizes).toHaveAccessibleName(
+    /Page size: Page size, 1024×700, chosen by /
+  )
+  await sizes.click()
+  await expect(
+    page.getByRole("menuitemradio", { name: /'s size 1024×700$/ })
+  ).toHaveAttribute("aria-checked", "true")
+  await page.getByRole("menuitemradio", { name: /^Laptop/ }).click()
+  await expect.poll(viewport).toEqual([1440, 900])
+  await expect.poll(kept).toEqual({ width: 1440, height: 900 })
+  await expect(sizes).toHaveAccessibleName("Page size: Laptop size, 1440×900")
 })
 
 // A paste on the live view types this computer's clipboard into the page, once the user has
@@ -711,11 +772,8 @@ test.describe("at 2x", () => {
     const box = (await page.getByTestId("browser-view").boundingBox())!
     const room = [Math.floor(box.width), Math.floor(box.height)]
 
-    await page.getByRole("button", { name: "Browser options" }).click()
-    await page
-      .getByRole("menuitemcheckbox", { name: "Fit the page to this view" })
-      .click()
-    await page.keyboard.press("Escape")
+    await page.getByRole("button", { name: /^Page size/ }).click()
+    await page.getByRole("menuitemradio", { name: "Fit to this view" }).click()
     await expect
       .poll(async () => {
         const s = await session()

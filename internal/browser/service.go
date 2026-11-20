@@ -104,14 +104,15 @@ type BrowserStatus struct {
 	Sessions   []BrowserSession `json:"sessions" doc:"Ephemeral sessions, oldest first"`
 	Blocked    *Blocked         `json:"blocked,omitempty" doc:"The deny rule that refused the page's host"`
 	SignIn     *SignIn          `json:"signIn,omitempty" doc:"The page asks for a username and password"`
+	Viewport   *Viewport        `json:"viewport,omitempty" doc:"The page size chosen for the persistent profile, which a live view doesn't fit over"`
 }
 
 // statusLocked describes st's browser in a VM state.
 func (st *state) statusLocked(vm string) BrowserStatus {
 	out := BrowserStatus{TeammateID: st.teammate, VM: vm, Takeover: st.takeover, SessionID: st.session, URL: st.url,
-		Driver: st.driver.Name, Sessions: []BrowserSession{}}
+		Driver: st.driver.Name, Sessions: []BrowserSession{}, Viewport: copyOf(st.size)}
 	for _, pg := range st.eph {
-		out.Sessions = append(out.Sessions, BrowserSession{ID: pg.id, Sandbox: pg.owner.Name, URL: pg.url, Takeover: pg.takeover, Opened: pg.opened})
+		out.Sessions = append(out.Sessions, BrowserSession{ID: pg.id, Sandbox: pg.owner.Name, URL: pg.url, Takeover: pg.takeover, Opened: pg.opened, Viewport: copyOf(pg.size)})
 	}
 	slices.SortFunc(out.Sessions, func(a, b BrowserSession) int { return cmp.Or(a.Opened.Compare(b.Opened), strings.Compare(a.ID, b.ID)) })
 	return out

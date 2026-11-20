@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- See a page as a phone shows it. The page size button beside the browser's address offers
+  Fit to this view, Phone, Tablet, Laptop, Desktop and Standard. A device's size stays for the
+  session, for everyone watching and for the teammate's screenshots, until the browser restarts.
+  Teammates set it too, with `studio browser viewport phone` or a size such as `375x667`, to
+  screenshot a phone layout. Screenshots too large for the channel now retry at a lower
+  quality instead of failing; a running browser gets this once it restarts.
 - Give Lead standing orders. **Standing orders** under Lead takes your words, a time and the
   days, such as "each morning, hand failing checks to whoever is idle". When an order comes
   due, Lead drafts the plan and it waits for your approval like any other; **Run now** drafts

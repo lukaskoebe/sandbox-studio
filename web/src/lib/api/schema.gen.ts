@@ -3159,7 +3159,8 @@ export interface paths {
         /** @description Sets the page size of a running session, so the page fits the user's view of it; the user needn't have taken over. A browser that restarts goes back to agent-browser's own size, 1280×720 at 1x. */
         put: operations["resizeBrowser"];
         post?: never;
-        delete?: never;
+        /** @description Lets go of the page size kept for a running session, the user's or an agent's: the page goes back to agent-browser's own size, 1280×720 at 1x, which a live view that fits the page then changes. */
+        delete: operations["unkeepBrowserSize"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3984,6 +3985,8 @@ export interface components {
             takeover: boolean;
             /** @description The page the broker last saw */
             url?: string;
+            /** @description The page size chosen for this session, which a live view doesn't fit over */
+            viewport?: components["schemas"]["Viewport"];
         };
         BrowserStatus: {
             /** @description The deny rule that refused the page's host */
@@ -4001,6 +4004,8 @@ export interface components {
             teammateId: string;
             /** @description The page the broker last saw */
             url?: string;
+            /** @description The page size chosen for the persistent profile, which a live view doesn't fit over */
+            viewport?: components["schemas"]["Viewport"];
             /**
              * @description State of the browser VM
              * @enum {string}
@@ -7029,6 +7034,8 @@ export interface components {
              * @description The page's height in CSS pixels
              */
             height: number;
+            /** @description The session keeps this size, as a phone's or a laptop's the user chose: a live view doesn't fit the page over it, and agents' screenshots have it, until it is let go or the browser restarts. Without it, a size kept for the session is refused. */
+            keep?: boolean;
             /**
              * Format: double
              * @description Device pixels per CSS pixel of the user's screen, so the frames are as sharp as it; Studio keeps a frame within 3840×2160 pixels and rounds down to hundredths. Omitted is 1.
@@ -8407,6 +8414,19 @@ export interface components {
             templateName?: string;
             /** Format: int64 */
             workspaceMiB: number;
+        };
+        Viewport: {
+            /** @description Name of the agent sandbox that chose it; empty when the user did */
+            by?: string;
+            /** Format: int64 */
+            height: number;
+            /**
+             * Format: double
+             * @description Device pixels per CSS pixel; omitted is 1
+             */
+            scale?: number;
+            /** Format: int64 */
+            width: number;
         };
         Vocabulary: {
             resourceKeys: string[] | null;
@@ -16460,6 +16480,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResizedBrowser"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    unkeepBrowserSize: {
+        parameters: {
+            query?: {
+                /** @description An ephemeral session's ID; empty for the persistent profile */
+                session?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

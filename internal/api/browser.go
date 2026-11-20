@@ -47,7 +47,7 @@ func (s *Server) browserError(err error) error {
 		errors.Is(err, browser.ErrBadPoint), errors.Is(err, browser.ErrBadViewport):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover), errors.Is(err, browser.ErrHidden),
-		errors.Is(err, browser.ErrBusy), errors.Is(err, browser.ErrNoDevTools), errors.Is(err, browser.ErrFilesNeedTakeover):
+		errors.Is(err, browser.ErrBusy), errors.Is(err, browser.ErrNoDevTools), errors.Is(err, browser.ErrKept), errors.Is(err, browser.ErrFilesNeedTakeover):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, browser.ErrNoSession), errors.Is(err, browser.ErrNoElement):
 		return huma.Error404NotFound(err.Error())
@@ -180,6 +180,7 @@ func (s *Server) registerBrowser(api huma.API) {
 			Height  int     `json:"height" minimum:"200" maximum:"2160" doc:"The page's height in CSS pixels"`
 			Scale   float64 `json:"scale,omitempty" minimum:"1" maximum:"4" doc:"Device pixels per CSS pixel of the user's screen, so the frames are as sharp as it; Studio keeps a frame within 3840×2160 pixels and rounds down to hundredths. Omitted is 1."`
 			Session string  `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+			Keep    bool    `json:"keep,omitempty" doc:"The session keeps this size, as a phone's or a laptop's the user chose: a live view doesn't fit the page over it, and agents' screenshots have it, until it is let go or the browser restarts. Without it, a size kept for the session is refused."`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -189,11 +190,27 @@ func (s *Server) registerBrowser(api huma.API) {
 		if err := need(); err != nil {
 			return nil, err
 		}
-		scale, err := s.Browser.Resize(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Width, in.Body.Height, in.Body.Scale)
+		scale, err := s.Browser.Resize(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Width, in.Body.Height, in.Body.Scale, in.Body.Keep)
 		if err != nil {
 			return nil, s.browserError(err)
 		}
 		return &struct{ Body resizedBrowser }{resizedBrowser{Scale: scale}}, nil
+	})
+
+	type unkeepBrowserIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Session  string `query:"session" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "unkeepBrowserSize", Method: http.MethodDelete, Path: "/api/environments/{env}/teammates/{teammate}/browser/viewport", Tags: []string{"browser"},
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Lets go of the page size kept for a running session, the user's or an agent's: the page goes back to agent-browser's own size, 1280×720 at 1x, which a live view that fits the page then changes.",
+	}, func(ctx context.Context, in *unkeepBrowserIn) (*struct{}, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		return nil, s.browserError(s.Browser.Unkeep(ctx, in.Env, in.Teammate, in.Session))
 	})
 
 	type closeSessionIn struct {

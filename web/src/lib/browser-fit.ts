@@ -16,6 +16,26 @@ const maxScale = 4
 /** agent-browser's own page size, which the page goes back to when the view stops fitting it. */
 export const defaultPageSize: PageSize = { width: 1280, height: 720 }
 
+/**
+ * The sizes a page can keep, a phone's, a tablet's (both upright), a laptop's and a desktop's,
+ * as `studio browser viewport` names them (internal/browser/viewport.go).
+ */
+export const pageSizes = {
+  phone: { width: 390, height: 844 },
+  tablet: { width: 820, height: 1180 },
+  laptop: { width: 1440, height: 900 },
+  desktop: { width: 1920, height: 1080 },
+} as const satisfies Record<string, PageSize>
+
+export type SizeName = keyof typeof pageSizes
+
+/** The name of a kept size, undefined for one of its own. */
+export function sizeName(v: PageSize): SizeName | undefined {
+  return (Object.keys(pageSizes) as SizeName[]).find(
+    (n) => pageSizes[n].width === v.width && pageSizes[n].height === v.height
+  )
+}
+
 // How long a fit waits for the room to stop changing, as while a panel is dragged, and how
 // long before it asks again when the frames still have another size.
 const settle = 300

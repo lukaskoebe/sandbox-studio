@@ -353,6 +353,7 @@ type BrowserSession struct {
 	Opened   time.Time `json:"opened"`
 	Blocked  *Blocked  `json:"blocked,omitempty" doc:"The deny rule that refused the page's host"`
 	SignIn   *SignIn   `json:"signIn,omitempty" doc:"The page asks for a username and password"`
+	Viewport *Viewport `json:"viewport,omitempty" doc:"The page size chosen for this session, which a live view doesn't fit over"`
 }
 
 // closeSession is browser_close: it ends the ephemeral session the call names.

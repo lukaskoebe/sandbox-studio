@@ -49,7 +49,15 @@ When the teammate has something to show you, such as the login page it just buil
 
 The shield in the address bar shows what the teammate may do on the site: **Ask first**, **Allowed** or **Blocked** for clicks and typing, and which fields are hidden from it. **Sites** lists every site with a rule or a visit, and **Add a rule or hide a field** covers single actions and fields. **Activity** lists every step by session; click one to see the page as it was after it.
 
-The options menu has **Fit the page to this view**, which gives the page the size of the browser window so it shows at full size; the teammate gets the same page. **Reset profile…** in it signs the teammate out of every site.
+The page size button beside the address bar shows the page as a phone, tablet, laptop or desktop would, or fits it to the browser window so it shows at full size:
+
+- **Fit to this view** gives the page the size of the window. This computer remembers the choice.
+- **Phone**, **Tablet**, **Laptop** and **Desktop** give the page that device's screen size, and the view scales it to fit. The size stays until the browser restarts or you choose another, for everyone watching and for the teammate's screenshots.
+- **Standard** is the browser's own 1280×720.
+
+Your teammate can set the size too, with `studio browser viewport phone` or a size such as `375x667`, for example to take screenshots of a phone layout; the button then says that it chose it. Only the size changes: sites that look at the browser itself still see a desktop Chrome.
+
+**Reset profile…** in the options menu signs the teammate out of every site.
 
 A browser sleeps after a while unused and wakes when the teammate browses or you open a page. Asleep, it says since when and lists its last pages: choose one to start it again there, or type another address into **or open a page…**. Its logins and cookies are kept.
 

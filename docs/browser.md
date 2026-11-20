@@ -174,6 +174,10 @@ a `browser_*` method, and the messages the broker answers with name the commands
 - `open(url, ephemeral?)`, `snapshot(full?)`, `click(ref)`, `fill(ref, text)`, `type(ref, text)`, `press(key)`,
   `select(ref, value)`, `scroll(direction, px)`, `get_text(ref?)`
 - `screenshot`, which the command writes to an image file and prints its path
+- `viewport(size, scale?)`: the page size, as `phone` (390×844), `tablet` (820×1180), `laptop`
+  (1440×900), `desktop` (1920×1080), `default` (1280×720) or `WIDTHxHEIGHT`, at 1 to 3 device
+  pixels per CSS pixel. The session keeps it, as when the user picks a size; see
+  [Page size](#page-size)
 - `wait(ms | text | url)`, `back`
 - `fill_credential(ref, name)`
 - `close(session)`, which ends an ephemeral session
@@ -191,7 +195,8 @@ has no browser. A browser VM cannot call tools.
 **Text first.** `browser_open` answers with the address and title, and the agent reads the page
 with `browser_snapshot`. A screenshot's JPEG is at most 180 KiB, so its reply fits one stream
 window of the channel (see [guest agent](guest-agent.md#limits-of-the-channel-on-msbs-vsock)).
-Larger screenshots are dropped, and the tool says the screenshot failed or was too large.
+The guest takes it at quality 60, then 40 and 25 while it is larger, as a phone's page at 3x
+can be; one still larger is dropped, and the tool says the screenshot failed or was too large.
 
 ## Lost replies
 
@@ -363,7 +368,7 @@ The window has, top to bottom:
 - **Toolbar**, one line like any browser's: Back, Forward and Reload
   (`POST …/browser/go {to, session}`), the address bar, who drives, the keyboard controls,
   Downloads (once there are any), Activity and the options menu (Put to sleep / Wake up,
-  Network rules, Fit the page to this view, Reset profile…). The shield in the address bar opens the site's info: what
+  Network rules, Reset profile…), with the page size beside it. The shield in the address bar opens the site's info: what
   the teammate may do there (Ask first, Allowed, Blocked), its hidden fields and other rules.
   Who drives is a chip with a face and a few words: the teammate is using the browser, is
   waiting for you, or isn't using it, each with **Take the wheel**; you're driving, with
@@ -489,20 +494,28 @@ clears the local input buffer.
   scrolled.
   `e2e/browser-layout.spec.ts` checks that the body never overflows while watching, driving,
   with the keyboard controls open and after handing back, in four window sizes and on a phone.
-- **Fit the page to this view.** An option of the menu, kept by this computer (local storage),
-  gives the page the size of the window's body, less the controls under the frame, so it shows
-  at one pixel to one instead of scaled (`lib/browser-fit.ts`). Once the room has stopped
-  changing for 300 ms, as after dragging a panel, the view asks
-  `PUT …/browser/viewport {width, height, session}`, which runs agent-browser's
+- <a id="page-size"></a>**Page size.** A menu beside the address bar (`browser-size.tsx`):
+  Fit to this view, Phone 390×844, Tablet 820×1180, Laptop 1440×900, Desktop 1920×1080, or
+  Standard, agent-browser's own 1280×720. Its icon says which. Fit is this computer's choice,
+  kept in local storage: it gives the page the size of the window's body, less the controls
+  under the frame, so it shows at one pixel to one instead of scaled (`lib/browser-fit.ts`).
+  Once the room has stopped changing for 300 ms, as after dragging a panel, the view asks
+  `PUT …/browser/viewport {width, height, scale, session}`, which runs agent-browser's
   `set viewport` in the session: the user needn't have taken over, it isn't logged, and it
   waits up to 5 s for another command (409 then). Sizes are 320×200 to 3840×2160, the screen
   stealth Chromium reports; a larger room gets a page of its shape that fits, shown a little
   scaled. While frames still have another size 5 s after asking, as after the browser restarts,
   the view asks again, but only from the window in use, so two views of one browser don't take
-  turns: the last to resize or be focused wins. Notes hold the size. Turning it off asks for
-  agent-browser's own 1280×720. Agents get the page at whatever size it has, as a user's
-  window would give them. The guest allows `set` only as `set viewport <width> <height>
-  [scale]`, outside a batch.
+  turns: the last to resize or be focused wins. Notes hold the size.
+  A device's size is the session's instead: `PUT …/browser/viewport` with `keep: true`, at the
+  screen's scale. The session keeps it (`page.size`, in the status as `viewport`, per session)
+  until it is let go or the browser restarts: everyone watching sees it, scaled to fit their
+  view, a fit is refused with 409 meanwhile, and agents' screenshots have it. An agent's
+  `studio browser viewport` keeps a size the same way, with its sandbox as `by`, and the menu
+  then says the teammate chose it; `default` lets it go. Fit to this view and Standard let a
+  kept size go (`DELETE …/browser/viewport?session=`), which puts the page back to 1280×720 for
+  a fit to change. The guest allows `set` only as `set viewport <width> <height> [scale]`,
+  outside a batch. Only the size changes: the browser still says it is a desktop Chrome.
 - **The screen's scale.** A page shown at one CSS pixel to one is still blurred on a screen of
   two device pixels to a CSS pixel when its frames are at 1x. So the fit also sends the
   screen's `devicePixelRatio` as `scale`, and the page gets that device scale factor: its

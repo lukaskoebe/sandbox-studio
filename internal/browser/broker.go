@@ -180,6 +180,8 @@ type page struct {
 	// frame is the latest screencast frame relayed, as the guest sent it, and when.
 	frame   []byte
 	frameAt time.Time
+	// size is the page size chosen for the session, by the user or an agent, if any.
+	size *Viewport
 }
 
 type refInfo struct {
@@ -496,7 +498,7 @@ func (st *state) reset() {
 	st.session, st.grants, st.eph, st.sites, st.hosts = "", nil, nil, nil, nil
 	st.fwdFrom, st.fwdPorts = "", nil
 	st.url, st.loading, st.refs, st.credRefs, st.secrets, st.visible = "", "", nil, nil, nil, false
-	st.frame, st.frameAt = nil, time.Time{}
+	st.frame, st.frameAt, st.size = nil, time.Time{}, nil
 }
 
 // navigated forgets what belonged to the previous page.

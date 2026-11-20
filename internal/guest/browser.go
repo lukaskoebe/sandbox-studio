@@ -464,20 +464,29 @@ func (a *Agent) runBrowserTrusted(ctx context.Context, slot browserSlot, args []
 	return nil, fmt.Errorf("agent-browser failed: %s", msg)
 }
 
+// shotQualities are the JPEG qualities a screenshot tries, until one fits
+// MaxBrowserScreenshot: a large page, such as a phone's at 3x, takes a lower one.
+var shotQualities = []string{"60", "40", "25"}
+
 // browserScreenshot takes a JPEG of the viewport, or nil if that fails or it is too large.
 func (a *Agent) browserScreenshot(ctx context.Context, slot browserSlot) []byte {
 	var b [8]byte
 	rand.Read(b[:])
 	path := filepath.Join(os.TempDir(), "studio-shot-"+hex.EncodeToString(b[:])+".jpg")
 	defer os.Remove(path)
-	if _, err := a.runBrowser(ctx, slot, []string{"screenshot", path, "--screenshot-format", "jpeg", "--screenshot-quality", "60"}, ""); err != nil {
-		return nil
+	for _, q := range shotQualities {
+		if _, err := a.runBrowser(ctx, slot, []string{"screenshot", path, "--screenshot-format", "jpeg", "--screenshot-quality", q}, ""); err != nil {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		if len(data) <= agentproto.MaxBrowserScreenshot {
+			return data
+		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil || len(data) > agentproto.MaxBrowserScreenshot {
-		return nil
-	}
-	return data
+	return nil
 }
 
 // capped keeps the first max bytes written and notes whether there were more.
