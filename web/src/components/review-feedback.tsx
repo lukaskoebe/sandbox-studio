@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode, type Ref } from "react"
+import { lazy, Suspense, useRef, type ReactNode, type Ref } from "react"
 import { toast } from "sonner"
 import type { DiffViewHandle } from "@/components/diff-view"
 import {
@@ -24,6 +24,7 @@ import {
 } from "@phosphor-icons/react"
 import { plural } from "@/lib/approval-kinds"
 import { cn } from "@/lib/utils"
+import { useComposerSpot } from "@/lib/composer-clearance"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 import type { DiffPlace } from "@/lib/review-drafts"
@@ -323,6 +324,26 @@ export function ReviewKeys({
           </span>
         ))}
     </p>
+  )
+}
+
+/**
+ * A review's decision row. It sits at the foot of the pane, so the approval stack, floating over
+ * a screen that has taken the page, keeps clear of it as it does of a composer.
+ */
+export function DecisionRow({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useComposerSpot(ref)
+  return (
+    <div ref={ref} role="group" aria-label="Decision" className={className}>
+      {children}
+    </div>
   )
 }
 

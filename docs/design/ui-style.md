@@ -103,7 +103,9 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   terminal's keys. Pages without the row keep the floating pill.
   Where a composer lies under its corner (a teammate's home, a wide conversation), the stack sits
   8 px above the composer instead of 1rem from the foot, and moves up as a draft grows, so a card
-  never hides Send (2026-11-16: a waiting card covered it). Each composer reports its box
+  never hides Send (2026-11-16: a waiting card covered it). A review's decision row counts as
+  one (`DecisionRow` in `review-feedback.tsx`), so a card that floats over an enlarged review
+  keeps clear of Approve and Add a note (2026-11-20). Each composer reports its box
   (`useComposerSpot`, `lib/composer-clearance.ts`) and the stack measures where it would rest
   (`useComposerClearance`); the open list keeps to the room left above it.
   Click alone opens it: a hover would open it over content as the pointer passes. The pill is a

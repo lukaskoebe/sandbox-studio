@@ -49,6 +49,7 @@ import type { DiffViewHandle } from "@/components/diff-view"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
+  DecisionRow,
   CommentNav,
   DiffFrameText,
   FeedbackTargetSelect,
@@ -804,9 +805,7 @@ function PushReview({
   // The decision, below the review: it stays in view as the review scrolls.
   const decision = (sticky: boolean) =>
     pending && (
-      <div
-        role="group"
-        aria-label="Decision"
+      <DecisionRow
         className={cn(
           "grid gap-2 rounded-lg border bg-background/95 p-2",
           sticky && "sticky bottom-0 z-10 shadow-md backdrop-blur"
@@ -978,7 +977,7 @@ function PushReview({
             </Button>
           </div>
         </div>
-      </div>
+      </DecisionRow>
     )
 
   if (!rv)
@@ -1222,9 +1221,17 @@ export function GitReviewHead({
 }
 
 /**
+ * A push waiting for its review opens with the teammate's screen enlarged over the
+ * conversation, so the diff has the width; Esc or the folded conversation brings the chat back.
+ * The rest open beside it.
+ */
+export const opensEnlarged = (a: Approval) =>
+  a.kind === "git.push" && a.status === "pending"
+
+/**
  * Opens a git approval's review where it is decided: its computer's Changes tab, beside the
- * thread in view when the computer is the open teammate's. A review whose computer is gone
- * opens its own page.
+ * thread in view when the computer is the open teammate's (over it, for a waiting push). A
+ * review whose computer is gone opens its own page.
  */
 export function useOpenGitReview() {
   const navigate = useNavigate()
@@ -1265,13 +1272,19 @@ export function useOpenGitReview() {
           change: undefined,
           computer: sb.id,
           fold: undefined,
+          full: opensEnlarged(a) || undefined,
         }),
       })
-    // A teammate's computer redirects to the teammate's desk.
+    // A teammate's computer redirects to the teammate's desk, enlarged there for a waiting
+    // push; a computer of its own has the page already.
     return navigate({
       to: "/e/$env/sandboxes/$id",
       params: { env, id: sb.id },
-      search: { tab: "changes", review: a.id },
+      search: {
+        tab: "changes",
+        review: a.id,
+        ...(sb.teammateId && opensEnlarged(a) ? { full: true } : {}),
+      },
     })
   }
 }

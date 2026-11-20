@@ -7,6 +7,7 @@ import {
 } from "@phosphor-icons/react"
 import { ComputerScreen, type ScreenChange } from "@/components/computer/screen"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import { opensEnlarged } from "@/components/git-review"
 import {
   ResizeHandle,
   useElementWidth,
@@ -129,8 +130,10 @@ export function TeammatePage({
 
   const screen = (change: ScreenChange) => {
     const { fold, full: enlarge, push, ...rest } = change
+    // Enlarging along with a place to go, as a waiting push's Review does, is one step.
+    const along = enlarge !== undefined && Object.keys(rest).length > 0
     // Folding and enlarging undo each other. Opening the screen from the home opens a tab.
-    if (fold !== undefined || enlarge !== undefined) {
+    if (!along && (fold !== undefined || enlarge !== undefined)) {
       if (wide)
         onSearch({
           fold: fold || undefined,
@@ -159,6 +162,7 @@ export function TeammatePage({
           : {}),
         ...rest,
         ...(wide && rest.tab ? { fold: undefined } : {}),
+        ...(wide && along ? { full: enlarge || undefined } : {}),
       },
       push && "quiet"
     )
@@ -377,7 +381,12 @@ export function TeammatePage({
               onProfile={(view) => profile(view)}
               onWatch={() => screen({ tab: "browser" })}
               onReview={(a) =>
-                screen({ tab: "changes", review: a.id, computer: a.sandboxId })
+                screen({
+                  tab: "changes",
+                  review: a.id,
+                  computer: a.sandboxId,
+                  ...(opensEnlarged(a) ? { full: true } : {}),
+                })
               }
               onOpenComputer={(c, tab) => screen({ computer: c.id, tab })}
               onExpand={() => screen({ fold: true })}

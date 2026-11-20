@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A push review is easier to read. Code shows at 13px on 20px lines instead of 11px on 16px,
+  and grows with the text size. Review on a teammate's waiting push opens with the screen
+  enlarged over the conversation, so the diff gets the width. Esc, or the folded conversation
+  at the side, brings the conversation back. An approval that floats over the review now sits
+  above Approve and push instead of covering it.
 - A repository cloned from a folder on your computer gets its pull requests from the forge it
   pushes to. `~/forge` and the `studio pr` commands used to stop at the folder, which has
   none, when it was the clone's origin. Now they go to the forge where the pull requests are:

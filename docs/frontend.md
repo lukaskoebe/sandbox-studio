@@ -33,7 +33,9 @@ binary embeds (`//go:embed`) and serves at `/`.
   a Shadow DOM, and highlights with Shiki in two workers that stay once started. Its theme's
   colours are `var(--code-*)`, so a change of style or scheme needs no new highlight, and the
   rest of the style reaches it through the `--diffs-*` variables on `diffs-container` in
-  `styles.css`. A line over 2000 characters stays plain here too. A full-length diff of several
+  `styles.css`: code at 13px on 20px lines at 100%, in rem so the text size scales it, with the
+  rows DiffView reserves (`itemMetrics`) worked out from the same text size. A line over 2000
+  characters stays plain here too. A full-length diff of several
   files lists them (`FileOverview`), beside it from a container width of 48rem. In a review
   (`fill`) the diff is the pane's one scroll frame: it fills the pane, the review's head and
   facts come in as `header` (the library's `renderCodeViewHeader`) and scroll away above the
@@ -196,7 +198,9 @@ Threads and the Settings.
 
 The rim between the home or the conversation and the screen drags. From the home's rail a little
 drag opens the desk; past the panel's minimum the screen takes the page (`full`), and past its
-maximum the screen folds to the rail again (`fold`), so the same rim reaches all three.
+maximum the screen folds to the rail again (`fold`), so the same rim reaches all three. Review
+on a push waiting for review (`opensEnlarged` in `git-review.tsx`) opens it with `full` set, so
+the diff has the width; Esc or the folded conversation's strip brings the conversation back.
 Double-click resets the split; the arrows move it, and past either end fold or expand.
 
 - Home: first the **Now** card (`<name> now`): its presence word and since when, or what waits

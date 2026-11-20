@@ -31,6 +31,7 @@ import { textareaClass } from "@/components/memory-dialogs"
 import { DiffStyleSwitch } from "@/components/diff-style-switch"
 import type { DiffViewHandle } from "@/components/diff-view"
 import {
+  DecisionRow,
   CommentNav,
   FeedbackTargetSelect,
   ReviewKeys,
@@ -589,11 +590,7 @@ export function ForgeReview({
         />
       </section>
       {pending && (
-        <div
-          role="group"
-          aria-label="Decision"
-          className="grid gap-2 rounded-lg border bg-background/95 p-2"
-        >
+        <DecisionRow className="grid gap-2 rounded-lg border bg-background/95 p-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="min-w-0 flex-1 basis-56 text-xs text-muted-foreground">
               Posts as <Ident>{draft.account || "you"}</Ident> on{" "}
@@ -681,7 +678,7 @@ export function ForgeReview({
               </Button>
             </div>
           </div>
-        </div>
+        </DecisionRow>
       )}
       <ReviewKeys
         comments={pending}

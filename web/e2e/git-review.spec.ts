@@ -290,19 +290,17 @@ test("a pending push review has a page of its own and is decided there", async (
   expect(await api.upstream(forge.repo)).toEqual([forge.initial])
 })
 
-// Review keeps the thread in view when the push comes from its teammate's computer.
-test("Review opens a push in Changes beside its teammate's thread", async ({
+// Review on a waiting push from its teammate's computer enlarges the screen over the thread,
+// and Esc puts the thread back beside the review.
+test("Review opens a waiting push enlarged over its teammate's thread", async ({
   page,
   api,
   env,
 }) => {
   await api.dismissApprovals()
   const forge = await forgeWithRepo(api, env)
-  const teammate = await addTeammate(
-    api,
-    env,
-    `Beside ${Math.random().toString(36).slice(2, 6)}`
-  )
+  const name = `Beside ${Math.random().toString(36).slice(2, 6)}`
+  const teammate = await addTeammate(api, env, name)
   const id = await api.createSandbox(sandboxName("beside"), teammate)
   await api.guestReady(id)
   const chat = (await api.json<{ id: string }>(
@@ -323,8 +321,20 @@ test("Review opens a push in Changes beside its teammate's thread", async ({
     .filter({ hasText: "team/app" })
   await card.getByRole("button", { name: "Review" }).click()
   await expect(page).toHaveURL(/[?&]tab=changes/)
+  await expect(page).toHaveURL(/[?&]full=/)
   expect(new URL(page.url()).searchParams.get("thread")).toBe(chat.id)
-  await expect(page.getByTestId("git-review")).toContainText("Add beside")
+  const review = page.getByTestId("git-review")
+  await expect(review).toContainText("Add beside")
+  const strip = page.getByRole("region", {
+    name: `${name}'s conversation, folded`,
+  })
+  await expect(strip).toBeVisible()
+
+  await page.keyboard.press("Escape")
+  await expect(strip).toBeHidden()
+  await expect(page).not.toHaveURL(/[?&]full=/)
+  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible()
+  await expect(review).toContainText("Add beside")
 
   await api.dismissApprovals()
 })
@@ -969,16 +979,23 @@ test("a push to a checked-out branch of a local repository updates its files", a
  * several. The mouse moves by itself, as hover() waits out the comment button over a number.
  */
 async function numberOf(pane: Locator, row: Locator) {
-  // A jump scrolls smoothly: the row settles first.
+  // A jump, or an editor scrolled into view, moves it smoothly: the row settles first, still
+  // for a fifth of a second.
   let was = -1
   await expect
-    .poll(async () => {
-      const y = (await row.boundingBox())?.y ?? -2
-      const settled = y === was
-      was = y
-      return settled
-    })
+    .poll(
+      async () => {
+        const y = (await row.boundingBox())?.y ?? -2
+        const settled = y === was
+        was = y
+        return settled
+      },
+      { intervals: [200] }
+    )
     .toBe(true)
+  // The view takes no clicks while it scrolls, and again 120 ms after (CodeView's
+  // suspendScrollInteractions).
+  await pane.page().waitForTimeout(150)
   const index = await row.getAttribute("data-line-index")
   const cell = pane
     .locator(`[data-column-number][data-line-index="${index}"]`)
@@ -1061,9 +1078,14 @@ test("a diff lists its files to jump to, and a comment covers the lines dragged 
   await expect(note).toContainText("lines 1–3")
   await expect(note).toContainText("Keep these together")
 
-  // A click and a shift-click select a range too.
+  // A click and a shift-click select a range too, near the top of long.txt, where the editor
+  // the click opens fits without a scroll.
+  await files.getByRole("button", { name: /long\.txt/ }).click()
   const x2 = await numberOf(pane, row(/^x 2$/))
   await page.mouse.click(x2.x, x2.y)
+  await expect(
+    pane.getByRole("textbox", { name: "Comment on long.txt:3" })
+  ).toBeVisible()
   const x5 = await numberOf(pane, row(/^x 5$/))
   await page.keyboard.down("Shift")
   await page.mouse.click(x5.x, x5.y)

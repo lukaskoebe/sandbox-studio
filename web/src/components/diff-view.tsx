@@ -539,10 +539,11 @@ export default function DiffView({
       maxLineDiffLength: maxTokenLine,
       stickyHeaders: true,
       // The heights the view reserves for what it hasn't drawn yet. They must match the styles
-      // (--diffs-line-height in styles.css, a 40px file header at 100%): the defaults of 20px
-      // lines left a gap at the bottom of a fast scroll until the real rows came in.
+      // (--diffs-line-height in styles.css, 20px lines and a 40px file header at 100%): rows
+      // reserved shorter than they are drawn leave a gap at the bottom of a fast scroll until
+      // the real rows come in.
       itemMetrics: {
-        lineHeight: Math.round(16 * scale),
+        lineHeight: Math.round(20 * scale),
         diffHeaderHeight: Math.round(40 * scale),
       },
       disableFileHeader: !fill,

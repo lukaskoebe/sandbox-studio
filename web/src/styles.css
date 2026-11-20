@@ -441,9 +441,10 @@ diffs-container {
   background-color: var(--background);
   --diffs-font-family: var(--font-mono);
   --diffs-header-font-family: var(--control-font);
-  --diffs-font-size: var(--text-caption);
-  /* 16px at 100%, in whole pixels, as diff-view.tsx reserves for each row. */
-  --diffs-line-height: round(1rem, 1px);
+  /* Code reads at 13px on 20px lines at 100%, and grows with the text size; the rows in whole
+     pixels, as diff-view.tsx reserves for each one. */
+  --diffs-font-size: 0.8125rem;
+  --diffs-line-height: round(1.25rem, 1px);
   --diffs-bg: var(--background);
   --diffs-fg: var(--foreground);
 }

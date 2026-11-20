@@ -23,6 +23,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
 import { StatusDot } from "@/components/status-dot"
 import { textareaClass } from "@/components/memory-dialogs"
+import { DecisionRow } from "@/components/review-feedback"
 import {
   rememberAttribution,
   rememberedAttribution,
@@ -233,11 +234,7 @@ export function ForgeComment({ approval }: { approval: Approval }) {
       </section>
 
       {pending && (
-        <div
-          role="group"
-          aria-label="Decision"
-          className="sticky bottom-0 z-10 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 shadow-md backdrop-blur"
-        >
+        <DecisionRow className="sticky bottom-0 z-10 flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/95 p-2 shadow-md backdrop-blur">
           <p className="min-w-0 flex-1 basis-56 text-xs text-muted-foreground">
             Posts as <Ident>{draft.account || "you"}</Ident> on{" "}
             {draft.forgeHost}
@@ -314,7 +311,7 @@ export function ForgeComment({ approval }: { approval: Approval }) {
               Post comment
             </Button>
           </div>
-        </div>
+        </DecisionRow>
       )}
     </div>
   )
