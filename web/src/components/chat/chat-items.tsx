@@ -192,7 +192,8 @@ function UserMessage({ item, env }: { item: ChatItem; env: string }) {
 
 /**
  * Who sent a message Lead wrote: Lead, for the plan the user approved, with a link to the plan
- * (docs/lead.md#plans). The agent is told the same before the message.
+ * (docs/lead.md#plans), or a follow-up it sent without asking, as its settings allow. The agent
+ * is told the same before the message.
  */
 function FromLead({
   env,
@@ -209,7 +210,10 @@ function FromLead({
     <span className="flex items-center gap-1 text-meta text-muted-foreground">
       <CompassIcon className="size-3" aria-hidden />
       <span>
-        {lead.name}, approved by you at {at} ·{" "}
+        {lead.auto
+          ? `${lead.name}, follow-up without asking`
+          : `${lead.name}, approved by you at ${at}`}{" "}
+        ·{" "}
         <Link
           to="/e/$env/lead/plans/$plan"
           params={{ env, plan: lead.planId }}

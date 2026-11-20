@@ -32,7 +32,13 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { $api, errorMessage } from "@/lib/api/client"
-import { dollars, weekdays, type LeadSettings, type LeadView } from "@/lib/lead"
+import {
+  dollars,
+  hhmm,
+  weekdays,
+  type LeadSettings,
+  type LeadView,
+} from "@/lib/lead"
 
 const notifyChoices: Record<LeadSettings["notify"], string> = {
   waiting: "Only if something waits for you",
@@ -40,10 +46,16 @@ const notifyChoices: Record<LeadSettings["notify"], string> = {
   never: "Never",
 }
 
+const followUpChoices = {
+  ask: "When you approve",
+  own: "Follow-ups in its own threads",
+}
+
 /**
  * How Lead writes the day (docs/lead.md): its name, when, on which days, what goes in, the
  * model it calls and what that may cost, and when it tells you. Each control saves when it
- * changes. What Lead may do is fixed: it reads, and sends a plan's messages once you approve it.
+ * changes. What Lead may do is mostly fixed: it reads, and sends a plan's messages once you approve
+ * them; only its follow-ups in threads its plan started may go without asking.
  */
 export function LeadSettingsPage({ env }: { env: string }) {
   const lead = $api.useQuery("get", "/api/environments/{env}/lead", {
@@ -117,6 +129,7 @@ function Settings({ env, v }: { env: string; v: LeadView }) {
         heading: next.heading,
         dailyLimit: next.dailyLimit,
         notify: next.notify,
+        followUps: next.followUps,
       },
     })
   }
@@ -140,6 +153,7 @@ function Settings({ env, v }: { env: string; v: LeadView }) {
           }. Summarize now on the day writes it whenever you like.`}
           control={
             <TimeInput
+              label="Write the day at"
               minutes={s.writeAt}
               disabled={save.isPending}
               onSave={(writeAt) => set({ writeAt })}
@@ -151,29 +165,12 @@ function Settings({ env, v }: { env: string; v: LeadView }) {
           title="On"
           description="The days it is written on. On the others the facts are still there, and Summarize now still writes them."
           control={
-            <ToggleGroup
-              aria-label="Days the day is written on"
-              variant="outline"
-              size="sm"
-              multiple
-              value={weekdays.filter((_, i) => s.days & (1 << i))}
+            <DaysPicker
+              label="Days the day is written on"
+              days={s.days}
               disabled={save.isPending}
-              onValueChange={(picked) =>
-                set({
-                  days: weekdays.reduce(
-                    (bits, d, i) =>
-                      picked.includes(d) ? bits | (1 << i) : bits,
-                    0
-                  ),
-                })
-              }
-            >
-              {weekdays.map((d) => (
-                <ToggleGroupItem key={d} value={d} className="w-8 px-0">
-                  {d}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+              onChange={(days) => set({ days })}
+            />
           }
         />
         <Toggle
@@ -248,8 +245,34 @@ function Settings({ env, v }: { env: string; v: LeadView }) {
         <SettingRow
           icon={ChatTextIcon}
           title="Message teammates in their threads, or start a thread on their computer"
-          description="Only in a plan you approved, and only the messages as you saw them. A change to the plan withdraws its approval."
-          control={<Locked>When you approve</Locked>}
+          description={`Only in a plan you approved, and only the messages as you saw them; a change to the plan withdraws its approval. ${
+            s.followUps
+              ? "Once a plan's messages are answered, Lead may follow up in a thread the plan started without asking, at most twice; a follow-up in any other thread waits for you."
+              : "When Lead would follow up on the answers, the follow-up waits for you too."
+          }`}
+          control={
+            <Select
+              value={s.followUps ? "own" : "ask"}
+              items={followUpChoices}
+              disabled={save.isPending}
+              onValueChange={(c) => c && set({ followUps: c === "own" })}
+            >
+              <SelectTrigger
+                size="sm"
+                aria-label="When Lead messages teammates"
+                className="w-60"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(followUpChoices).map(([k, text]) => (
+                  <SelectItem key={k} value={k}>
+                    {text}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
         />
         <SettingRow
           icon={LockIcon}
@@ -392,23 +415,61 @@ function NameRow({
 }
 
 /** "CET (UTC+1)", or "UTC+5:30" without a name. */
-function zoneName(zone: string, offset: number): string {
+export function zoneName(zone: string, offset: number): string {
   const h = Math.floor(Math.abs(offset) / 60)
   const m = Math.abs(offset) % 60
   const utc = `UTC${offset < 0 ? "−" : "+"}${h}${m ? `:${String(m).padStart(2, "0")}` : ""}`
   return zone && !/^[+-]/.test(zone) ? `${zone} (${utc})` : utc
 }
 
-const hhmm = (min: number) =>
-  `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`
+/** The days of the week as toggles, Monday first. */
+export function DaysPicker({
+  label,
+  days,
+  disabled,
+  onChange,
+}: {
+  label: string
+  days: number
+  disabled?: boolean
+  onChange: (days: number) => void
+}) {
+  return (
+    <ToggleGroup
+      aria-label={label}
+      variant="outline"
+      size="sm"
+      multiple
+      value={weekdays.filter((_, i) => days & (1 << i))}
+      disabled={disabled}
+      onValueChange={(picked) =>
+        onChange(
+          weekdays.reduce(
+            (bits, d, i) => (picked.includes(d) ? bits | (1 << i) : bits),
+            0
+          )
+        )
+      }
+    >
+      {weekdays.map((d) => (
+        <ToggleGroupItem key={d} value={d} className="w-8 px-0">
+          {d}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
 
-function TimeInput({
+/** A time of day that saves on Enter or when it loses focus. */
+export function TimeInput({
+  label,
   minutes,
   disabled,
   onSave,
 }: {
+  label: string
   minutes: number
-  disabled: boolean
+  disabled?: boolean
   onSave: (min: number) => void
 }) {
   const [draft, setDraft] = useState<string>()
@@ -424,7 +485,7 @@ function TimeInput({
   return (
     <Input
       type="time"
-      aria-label="Write the day at"
+      aria-label={label}
       className="w-28 font-mono"
       value={draft ?? hhmm(minutes)}
       disabled={disabled}

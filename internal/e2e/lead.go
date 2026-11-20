@@ -36,7 +36,7 @@ func (leadModel) Complete(_ context.Context, r agentmem.Request) (agentmem.Respo
 		return leadPlan(team, r.User)
 	}
 	if threads, ok := between(r.User, "<threads>\n", "\n</threads>"); ok {
-		var in []struct{ Teammate, Thread, Answer string }
+		var in []struct{ Ref, Teammate, Thread, Answer string }
 		_ = json.Unmarshal([]byte(threads), &in)
 		var parts []string
 		for _, t := range in {
@@ -46,7 +46,15 @@ func (leadModel) Complete(_ context.Context, r agentmem.Request) (agentmem.Respo
 				parts = append(parts, fmt.Sprintf("%s answered in %s.", t.Teammate, t.Thread))
 			}
 		}
-		return agentmem.Response{Text: strings.Join(parts, " "), InputTokens: 800, OutputTokens: 40}, nil
+		report := strings.Join(parts, " ")
+		// A plan whose words say "follow up" follows up once, in its first thread.
+		asked, _ := between(r.User, "<asked>\n", "\n</asked>")
+		if strings.Contains(asked, "follow up") && strings.Contains(r.User, "has 2 rounds of follow-ups left") && len(in) > 0 {
+			out, _ := json.Marshal(map[string]any{"report": report,
+				"followUps": []map[string]string{{"thread": in[0].Ref, "text": "Please also run the slow tests."}}})
+			return agentmem.Response{Text: string(out), InputTokens: 800, OutputTokens: 60}, nil
+		}
+		return agentmem.Response{Text: report, InputTokens: 800, OutputTokens: 40}, nil
 	}
 	body, ok := between(r.User, "<facts>\n", "\n</facts>")
 	if !ok {

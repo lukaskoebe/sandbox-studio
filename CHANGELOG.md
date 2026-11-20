@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- Give Lead standing orders. **Standing orders** under Lead takes your words, a time and the
+  days, such as "each morning, hand failing checks to whoever is idle". When an order comes
+  due, Lead drafts the plan and it waits for your approval like any other; **Run now** drafts
+  it at once. An order skips a day while its last plan is still open, and a done plan offers
+  to become one.
+- Lead follows up. When an answer leaves your request unfinished, its report can propose one
+  more message in the thread, at most twice a plan, and it waits for your approval like the
+  first. In Lead's settings you can let follow-ups go without asking, but only in threads the
+  plan itself started. Plans now know which teammates are busy and which open pull requests
+  have failing checks.
+- Lead makes plans. **New plan** under Lead, or **Make a plan** on one of a day's suggestions,
+  takes what you want from the team. Lead asks back when something is unclear, or proposes
+  messages to teammates' threads or new threads on their computers, with the exact text.
+  Nothing goes out until you **Approve and send**. Once the teammates have answered, Lead
+  tells you what they said, with links to their threads.
+- Ask Lead about a day. The box under a day takes a question, such as "What did Ada get
+  done?", and Lead answers in a few sentences from that day's facts and notes, with links to
+  the threads, pushes and requests it speaks of. The questions and answers stay with the day.
+  Questions leave part of Lead's daily limit for writing the day.
+- Home's **Today so far** card says what happened since you last looked at today: who worked,
+  pushes, new requests and scheduled runs.
+
 ## v0.27.0 — 2026-11-20
 
 - Lead writes up your day. It sits at the top of Teammates and, at 18:00 on weekdays, writes

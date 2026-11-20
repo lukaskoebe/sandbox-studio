@@ -15,6 +15,7 @@ import {
   ListChecksIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  RepeatIcon,
   TrayIcon,
 } from "@phosphor-icons/react"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
@@ -438,6 +439,18 @@ export function Breadcrumbs({ env }: { env: string }) {
               : []),
           ],
         },
+      ]
+    }
+    if (routeId === "/e/$env/lead/orders") {
+      const name = lead.data?.settings.name ?? "Lead"
+      return [
+        {
+          key: "lead",
+          label: name,
+          lead: <LeadGlyph className="size-4" />,
+          run: () => void navigate({ to: "/e/$env/lead", params: { env } }),
+        },
+        { key: "orders", label: "Standing orders", lead: <RepeatIcon /> },
       ]
     }
     if (routeId.startsWith("/e/$env/lead/plans/")) {

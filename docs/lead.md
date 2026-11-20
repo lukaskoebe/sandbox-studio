@@ -5,15 +5,16 @@ the user, what each teammate finished, has open or is blocked on, what shipped, 
 cost, and answers the user's questions about a day. Studio fills in every number, state and
 link from its own records; the environment's utility model only writes the sentences. On the
 user's request Lead also makes plans: messages to teammates that Studio sends only once the
-user approved them as they stand. Beyond that it has no tool that acts on a teammate, a
+user approved them as they stand, follows up on their answers, and drafts plans on its own
+for the user's standing orders. Beyond that it has no tool that acts on a teammate, a
 computer or an approval.
 
 Code: `internal/lead` (the service, facts, prompts and views; `ask.go` for questions,
-`plan.go` for plans, `integration.go` for the plan's approval), `internal/store/lead.go`,
-`067_lead.sql`, `068_lead_asks.sql` and `069_lead_plans.sql`, `internal/api/lead.go` and
-`leadplans.go` (which sends the messages); the web's `components/lead/` and `lib/lead.ts`;
-the TUI's `internal/tui/lead.go`. Design: the meta-agent concept and mocks (phase 4,
-standing orders, is still to come).
+`plan.go` for plans and follow-ups, `orders.go` for standing orders, `integration.go` for the
+plan's approval), `internal/store/lead.go`, `067_lead.sql` to `070_lead_orders.sql`,
+`internal/api/lead.go`, `leadplans.go` (which sends the messages) and `leadorders.go`; the
+web's `components/lead/` and `lib/lead.ts`; the TUI's `internal/tui/lead.go`. Design: the
+meta-agent concept and mocks.
 
 ## Data
 
@@ -23,7 +24,8 @@ Days are local dates (`YYYY-MM-DD`) in Studio's time zone, since the day is the 
   is written (`write_at`, minutes after midnight, 18:00) and on which days (`days`, a bit per
   weekday, Monday bit 0, weekdays by default), `skip_quiet` (no day without turns),
   `own_computers` (the user's own computers are part of the day, off), `show_costs`,
-  `heading`, `daily_limit` (USD × 10^6, $1) and `notify` (`waiting`, `always`, `never`).
+  `heading`, `daily_limit` (USD × 10^6, $1), `notify` (`waiting`, `always`, `never`) and
+  `follow_ups` (a follow-up in a thread the plan started goes without asking, off).
 - `lead_days`: a written day: when and why (`schedule` or `now`), the model and what its call
   cost, the facts (JSON), the sentences (JSON), a note when it has none, and a digest of what
   the sentences were written from.
@@ -38,9 +40,15 @@ Days are local dates (`YYYY-MM-DD`) in Studio's time zone, since the day is the 
 - `lead_seen`: when the user last looked at today, for Home's since you looked.
 - `lead_plans`: a plan: its title, state (`drafting`, `asking`, `proposed`, `running`,
   `done`, `cancelled`, `failed`), its steps (JSON, each with its state), the `lead.plan`
-  approval it waits on and when it was approved. `lead_plan_items` is its conversation:
-  the user's messages (`you`), Lead's replies (`lead`, with a proposal's steps or a question's
-  options), Lead's `report` and Studio's `note`s, each reply with its model and cost.
+  approval it waits on, when the user last approved its messages, and the standing order it
+  was drafted for (`order_id`). Each step has its round: 0 for the first messages, then 1 and
+  2 for follow-ups, with when the user approved it or whether it went without asking.
+  `lead_plan_items` is its conversation: the user's messages (`you`), Lead's replies (`lead`,
+  with a proposal's steps or a question's options), Lead's `report`s and Studio's `note`s,
+  each reply with its model and cost.
+- `lead_orders`: a standing order: the user's words, when it comes due (`at`, minutes after
+  midnight, and `days`, as the settings' bits), whether it is on, the day it last came due
+  (`last_day`), the plan it drafted last, and a note when it drafted none.
 
 ## How a day is written
 
@@ -95,9 +103,11 @@ model or over the limit the question is saved failed, with a note saying why.
 
 The user asks Lead for something that takes teammates (`NewPlan`, from New plan under Lead
 or Make a plan on a day's suggestion). Lead drafts a plan in the background within 2 minutes,
-from a roster of the environment's teammates (not the user's own computers), their computers
-and their 30 latest threads (title, whether a turn runs, the last prompt), and the plan's
-conversation so far. It answers with a reply and either a question with up to 4 answers to
+from a roster of the environment's teammates (not the user's own computers) and whether one
+has a turn running, their computers, their 30 latest threads (title, whether a turn runs, the
+last prompt), their open pull requests from the last 7 days with the state of their checks
+(at most 10, read from the forge as Pushed does, 15 s at most), and the plan's conversation
+so far. It answers with a reply and either a question with up to 4 answers to
 pick, or up to 6 steps: a **message** to a thread, or **start** a new thread on a teammate's
 computer, each with its text. `parsePlan` keeps only refs from the roster, so Lead can't
 write to a thread or computer the roster doesn't name. Studio adds two steps of its own:
@@ -124,6 +134,32 @@ being sent is marked failed rather than sent twice).
 Lead still only messages teammates: a teammate it messages asks the user for pushes, pull
 requests and requests as before, and steering, stopping or a task's run aren't plan steps.
 
+### Follow-ups
+
+The report also reads what the user asked for, and may follow up: one message in a thread
+the round wrote in, only when it moves the request on (never to thank or ask for status). A
+plan has at most 2 rounds of follow-ups after its first messages, and the report is told how
+many are left. A follow-up is a round of its own: by default the plan goes back to
+`proposed` with a new `lead.plan` approval for just those messages, and allowing it sends
+them, waits and reports again. With `follow_ups` on, a follow-up whose threads were all
+started by this plan's own start steps goes at once, marked as sent without asking; one in
+any other thread still waits for approval. A message sent without asking carries `auto` in
+the thread's `lead`, so the thread says so. A change the user asks for while a follow-up
+waits redrafts only that round; the rounds already sent stay.
+
+## Standing orders
+
+A standing order is the user's words for a plan Lead drafts on its own, such as "each
+morning, hand failing checks to whoever is idle". Lead's tick (every minute) drafts the plan
+of each order that is on, on today, past its time and not yet due today, with the order's
+words as the plan's first message and `order_id` set. The plan waits for approval as any
+plan does; the order only saves asking for it. A draft that finds nothing to do (no steps,
+no question) ends the plan as done with Lead's reply. An order whose last plan is still open
+drafts none that day and says why. Studio that wasn't running at an order's time drafts it
+when it starts, the same day only. A new order, or one moved to a time that has passed today
+or turned on after it, first comes due at its next time. **Run now** drafts the plan at once,
+on or off, and leaves the schedule as it is. An environment has at most 20 orders.
+
 ## The model and its budget
 
 Lead calls the utility model of the first teammate's provider that has one, as memory does
@@ -149,22 +185,27 @@ Under `/api/environments/{env}/lead`:
   happened since then (teammates with a turn, threads, pushes and pull requests, requests
   that began to wait, task runs), when it was today.
 - `POST /summarize` writes today's day now (202, 409 while writing).
-- `PUT /settings` replaces the settings.
+- `PUT /settings` replaces the settings, `followUps` among them.
 - `GET /plans` is the 30 latest plans; `POST /plans` makes one from the user's message (202,
   drafting). `GET /plans/{plan}` is a plan with its conversation; `POST /plans/{plan}/messages`
   sends it another message (409 while Lead drafts or carries it out, or once it is closed),
   and `POST /plans/{plan}/cancel` cancels it. A pending approval of kind `lead.plan` carries
-  `leadPlan`: the plan, its title, Lead's name and the messages.
+  `leadPlan`: the plan, its title, Lead's name and the messages (for a follow-up, its own).
+- `GET /orders` is the standing orders, oldest first, each with its last plan and when it
+  comes due next; `POST /orders` adds one (201; 409 at 20, 422 without words or days).
+  `PUT /orders/{order}` changes one, `DELETE` removes it (its plans stay), and
+  `POST /orders/{order}/run` drafts its plan now (202, the plan).
 
 The `lead` event topic says when a day began or finished being written, a question was asked
-or answered, a plan changed (its ID is `plan:` and the plan's), or the settings changed; the web invalidates Lead's queries and the day's page on it and on the approvals and
-chats topics.
+or answered, a plan changed (its ID is `plan:` and the plan's), a standing order changed (ID
+`orders`), or the settings changed; the web invalidates Lead's queries and the day's page on
+it and on the approvals and chats topics.
 
 ## Web
 
 - The sidebar has Lead at the top of Teammates, with "writing" or when today was written, and
-  its open plans under it with their state; on Lead's pages New plan and the last days it
-  wrote are listed under it.
+  its open plans under it with their state; on Lead's pages New plan, Standing orders and the
+  last days it wrote are listed under it.
 - `/e/$env/lead` is today, by Studio's date (`today.day`), not the browser's; `/lead/$day` a
   written day, `/lead/settings` its settings, saved one after another. A day:
   the caption (written when, on request or not, the model, the cost), the summary, four
@@ -182,10 +223,18 @@ chats topics.
   with Approve and send and their states once approved, notes, and the report with links to
   the threads, with a box for a change or another message at the bottom. The plan page claims
   its approval, so the floating stack leaves it out there; elsewhere the stack and Home show
-  its card (`plan-approval.tsx`) with the messages and Approve and send.
+  its card (`plan-approval.tsx`) with the messages and Approve and send. Each round's steps
+  show at the reply that proposed them, a follow-up's headed Follow-up 1 or 2, with who
+  approved it when or that it went without asking. A plan drafted for a standing order says
+  so with a link; a done plan of the user's own offers to become a standing order.
+- `/lead/orders` (with an optional `text`) is the standing orders: each with its words (Edit
+  words), on/off, time and days, when it comes due next, its last plan and note, Run now and
+  Delete; and a form to add one. Lead's settings say whether follow-ups in Lead's own threads
+  wait for approval (`orders-page.tsx`, `settings-page.tsx`).
 - Each of a day's suggestions for tomorrow has **Make a plan**, which opens a new plan with
   the suggestion as its text. A thread shows a message from a plan with "Lead, approved by you
-  at …" and a link to the plan (`FromLead` in `chat-items.tsx`).
+  at …", or "Lead, follow-up without asking", and a link to the plan (`FromLead` in
+  `chat-items.tsx`).
 - `useLeadNotify` notifies when today's day is written while the page is open, as the
   `notify` setting says.
 
@@ -193,5 +242,6 @@ chats topics.
 
 Home lists Lead first under QUIET once a teammate worked today or the day is written: its
 summary and when it was written, or today's counts so far. The reading pane is the day as
-Markdown; `w` writes it now. Questions and plans are web only for now; a plan's approval
-shows in the inbox with what goes to whom, and enter opens the plan in the browser.
+Markdown; `w` writes it now. Questions, plans and standing orders are web only for now; a
+plan's approval, a follow-up's too, shows in the inbox with what goes to whom, and enter
+opens the plan in the browser.

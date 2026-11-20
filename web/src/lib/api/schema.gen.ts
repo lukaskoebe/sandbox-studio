@@ -831,6 +831,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/lead/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The environment's standing orders, oldest first, with the plan each drafted last and when it comes due next. */
+        get: operations["listLeadOrders"];
+        put?: never;
+        /** @description Adds a standing order. It first comes due at its next time, not at once; 409 when the environment has 20 already. */
+        post: operations["createLeadOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/orders/{order}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Changes a standing order. Moved to a time that passed today, or turned on after it, it waits for its next time. */
+        put: operations["setLeadOrder"];
+        post?: never;
+        /** @description Deletes a standing order. The plans it drafted stay. */
+        delete: operations["deleteLeadOrder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/lead/orders/{order}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Drafts the order's plan now, whether or not it is on; its schedule stays as it is. The plan waits for approval as any plan does. */
+        post: operations["runLeadOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/lead/plans": {
         parameters: {
             query?: never;
@@ -925,7 +978,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Saves how Lead writes the day. */
+        /** @description Saves how Lead writes the day, and whether its follow-ups wait for approval. */
         put: operations["setLeadSettings"];
         post?: never;
         delete?: never;
@@ -5158,8 +5211,13 @@ export interface components {
             tools?: boolean;
         };
         FromLead: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the user approved the message; zero for one sent without asking
+             */
             approvedAt: string;
+            /** @description A follow-up Lead sent without asking, in a thread its plan started, as its settings allow */
+            auto?: boolean;
             /** @description Lead's name when it sent the message */
             name: string;
             /** @description The plan's title */
@@ -5666,13 +5724,18 @@ export interface components {
         LeadPlanView: {
             /** @description The lead.plan approval it waits on */
             approvalId?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the user last approved its messages
+             */
             approvedAt?: string;
             /** Format: date-time */
             createdAt: string;
             id: string;
             /** @description The plan's thread, oldest first; only for one plan */
             items?: components["schemas"]["LeadPlanItem"][] | null;
+            /** @description The standing order it was drafted for */
+            orderId?: string;
             /** @enum {string} */
             state: "drafting" | "asking" | "proposed" | "running" | "done" | "cancelled" | "failed";
             steps: components["schemas"]["PlanStep"][] | null;
@@ -5727,6 +5790,8 @@ export interface components {
              * @description The days it is written on: bit 0 is Monday, bit 6 Sunday
              */
             days: number;
+            /** @description A follow-up in a thread one of Lead's plans started goes without asking; every other message still waits for approval */
+            followUps: boolean;
             /** @description The day gets a short heading in the model's words */
             heading: boolean;
             /** @description What Lead is called in the sidebar */
@@ -6229,6 +6294,49 @@ export interface components {
             /** @description The pull request's title; empty keeps the proposed one */
             title?: string;
         };
+        OrderInput: {
+            /**
+             * Format: int64
+             * @description When it comes due, in minutes after local midnight
+             */
+            at: number;
+            /**
+             * Format: int64
+             * @description The days it comes due on: bit 0 is Monday, bit 6 Sunday
+             */
+            days: number;
+            enabled: boolean;
+            /** @description What Lead should do each time, as a plan's first message */
+            text: string;
+        };
+        OrderView: {
+            /**
+             * Format: int64
+             * @description Minutes after local midnight
+             */
+            at: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: int64
+             * @description Bit 0 is Monday, bit 6 Sunday
+             */
+            days: number;
+            enabled: boolean;
+            id: string;
+            /** @description The local date it last came due, YYYY-MM-DD */
+            lastDay?: string;
+            /** @description The plan it drafted last, while it is there */
+            lastPlan?: components["schemas"]["PlanHead"];
+            /**
+             * Format: date-time
+             * @description When it comes due next; none while it is off
+             */
+            next?: string;
+            /** @description Why it drafted no plan the last time it came due */
+            note?: string;
+            text: string;
+        };
         PRBranch: {
             ref: string;
             sha: string;
@@ -6403,6 +6511,12 @@ export interface components {
             priority: string;
             status: string;
         };
+        PlanHead: {
+            id: string;
+            /** @enum {string} */
+            state: "drafting" | "asking" | "proposed" | "running" | "done" | "cancelled" | "failed";
+            title: string;
+        };
         PlanPayload: {
             /** @description Of the steps; the approval holds only while the plan has them */
             digest: string;
@@ -6419,9 +6533,21 @@ export interface components {
         PlanStep: {
             /**
              * Format: date-time
+             * @description When the user approved the message
+             */
+            approvedAt?: string;
+            /**
+             * Format: date-time
              * @description When the message was in the thread, or the step was done
              */
             at?: string;
+            /** @description A follow-up sent without asking, in a thread the plan started, as Lead's settings allow */
+            auto?: boolean;
+            /**
+             * Format: date-time
+             * @description When a wait began
+             */
+            began?: string;
             /** @description The thread the message goes to; a start step's once it is open */
             chatId?: string;
             /** @description The computer's name */
@@ -6430,6 +6556,11 @@ export interface components {
             kind: "message" | "start" | "wait" | "tell";
             /** @description Why a step failed, or how a wait ended */
             note?: string;
+            /**
+             * Format: int64
+             * @description 0 for the plan's first messages, then 1 and on for each follow-up
+             */
+            round?: number;
             sandboxId?: string;
             /** @enum {string} */
             state: "proposed" | "pending" | "running" | "done" | "failed" | "skipped";
@@ -7515,6 +7646,8 @@ export interface components {
              * @description The days it is written on: bit 0 is Monday, bit 6 Sunday
              */
             days: number;
+            /** @description A follow-up in a thread one of Lead's plans started goes without asking */
+            followUps?: boolean;
             heading: boolean;
             /** @description What Lead is called in the sidebar */
             name: string;
@@ -10280,6 +10413,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeadAskView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listLeadOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createLeadOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setLeadOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Standing order ID */
+                order: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteLeadOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Standing order ID */
+                order: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    runLeadOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Standing order ID */
+                order: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadPlanView"];
                 };
             };
             /** @description Error */

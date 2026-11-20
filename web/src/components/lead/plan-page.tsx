@@ -10,6 +10,7 @@ import {
   InfoIcon,
   MinusCircleIcon,
   PlusCircleIcon,
+  RepeatIcon,
   ScrollIcon,
   XCircleIcon,
   type Icon,
@@ -130,6 +131,19 @@ export function LeadPlanPage({ env, plan }: { env: string; plan: string }) {
             >
               Make a new plan
             </Link>
+            {!p.orderId && p.state === "done" && firstAsk(p) && (
+              <>
+                {" or "}
+                <Link
+                  to="/e/$env/lead/orders"
+                  params={{ env }}
+                  search={{ text: firstAsk(p) }}
+                  className="text-foreground underline underline-offset-2"
+                >
+                  make this one a standing order
+                </Link>
+              </>
+            )}
           </p>
         </div>
       )}
@@ -149,44 +163,73 @@ function PlanThread({
   showCosts: boolean
 }) {
   const items = p.items ?? []
-  // The last proposal is the plan as it stands; the steps show with their states there.
-  let lastProposal = -1
+  // A round's last proposal is its messages as they stand; its steps show with their states
+  // there. Round 0 is the plan's first messages, then each follow-up is one.
+  const lastOfRound = new Map<number, number>()
   items.forEach((it, i) => {
-    if (it.kind === "lead" && (it.steps?.length ?? 0) > 0) lastProposal = i
+    if (it.kind === "lead" && it.steps?.length)
+      lastOfRound.set(it.steps[0].round ?? 0, i)
   })
-  const showSteps =
-    lastProposal >= 0 &&
-    (p.state === "proposed" ||
-      p.state === "running" ||
-      p.state === "done" ||
-      p.state === "failed" ||
-      (p.state === "cancelled" && !!p.approvedAt))
+  const stepsShown = (round: number) => {
+    const rs = (p.steps ?? []).filter((s) => (s.round ?? 0) === round)
+    // A proposal the user never approved, the plan cancelled, shows as a line.
+    return rs.some(
+      (s) =>
+        s.state !== "skipped" &&
+        (s.state !== "proposed" || p.state === "proposed")
+    )
+  }
   return (
     <section aria-label={`The plan with ${name}`} className="grid gap-4 pt-2">
-      {items.map((it, i) => (
-        <PlanItem
-          key={it.id}
-          env={env}
-          planId={p.id}
-          it={it}
-          name={name}
-          showCosts={showCosts}
-          latest={i === items.length - 1}
-          answer={answerAfter(items, i)}
-          planState={p.state}
-          steps={
-            i === lastProposal && showSteps ? (
-              <PlanSteps env={env} p={p} name={name} />
-            ) : it.steps && it.steps.length > 0 ? (
-              <p className="text-caption text-muted-foreground">
-                Proposed {it.steps.length}{" "}
-                {it.steps.length === 1 ? "message" : "messages"}
-                {i !== lastProposal ? ", replaced by a later plan" : ""}.
-              </p>
-            ) : null
-          }
-        />
-      ))}
+      {p.orderId && (
+        <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
+          <RepeatIcon className="size-3.5" aria-hidden />
+          <span>
+            {name} drafted this plan for{" "}
+            <Link
+              to="/e/$env/lead/orders"
+              params={{ env }}
+              className="text-foreground underline-offset-2 hover:underline"
+            >
+              your standing order
+            </Link>
+            .
+          </span>
+        </p>
+      )}
+      {items.map((it, i) => {
+        const round = it.steps?.[0]?.round ?? 0
+        const last = lastOfRound.get(round) === i
+        return (
+          <PlanItem
+            key={it.id}
+            env={env}
+            planId={p.id}
+            it={it}
+            name={name}
+            showCosts={showCosts}
+            latest={i === items.length - 1}
+            answer={answerAfter(items, i)}
+            planState={p.state}
+            steps={
+              last && stepsShown(round) ? (
+                <PlanSteps env={env} p={p} name={name} round={round} />
+              ) : it.steps && it.steps.length > 0 ? (
+                <p className="text-caption text-muted-foreground">
+                  Proposed {it.steps.length}{" "}
+                  {it.steps.length === 1 ? "message" : "messages"}
+                  {!last
+                    ? ", replaced by a later plan"
+                    : p.state === "cancelled"
+                      ? ", never sent"
+                      : ""}
+                  .
+                </p>
+              ) : null
+            }
+          />
+        )
+      })}
       {p.state === "drafting" && (
         <div className="flex items-start gap-2 text-sm">
           <LeadGlyph className="mt-0.5 size-4 shrink-0" />
@@ -197,6 +240,11 @@ function PlanThread({
       )}
     </section>
   )
+}
+
+/** What the user first asked for, which a standing order can ask again. */
+function firstAsk(p: LeadPlan): string | undefined {
+  return p.items?.find((it) => it.kind === "you")?.text
 }
 
 /** The user's next message after item i, when they spoke before Lead did. */
@@ -375,43 +423,68 @@ const stepIcons: Record<PlanStep["kind"], Icon> = {
 }
 
 /**
- * The plan's steps: what is sent to whom, and once approved how far Studio got. While it waits
- * for approval, it is approved or refused here or on its approval card.
+ * A round of the plan's steps: what is sent to whom, and once approved how far Studio got.
+ * Round 0 is the plan's first messages, then each follow-up is one. While a round waits for
+ * approval, it is approved or refused here or on its approval card.
  */
 function PlanSteps({
   env,
   p,
   name,
+  round,
 }: {
   env: string
   p: LeadPlan
   name: string
+  round: number
 }) {
+  const rs = (p.steps ?? []).filter((s) => (s.round ?? 0) === round)
+  const waiting =
+    p.state === "proposed" && rs.some((s) => s.state === "proposed")
   // The decision shows here, so the floating stack leaves the plan's approval out.
-  useClaimApprovals([p.state === "proposed" ? p.approvalId : undefined])
-  // Studio adds the wait and the report once the plan is approved; a proposal shows them too.
-  const steps: PlanStep[] =
-    p.state === "proposed"
-      ? [
-          ...(p.steps ?? []),
-          { kind: "wait", state: "proposed" },
-          { kind: "tell", state: "proposed" },
-        ]
-      : (p.steps ?? [])
+  useClaimApprovals([waiting ? p.approvalId : undefined])
+  // Studio adds the wait and the report once a round is approved; a proposal shows them too.
+  const steps: PlanStep[] = waiting
+    ? [
+        ...rs,
+        { kind: "wait", state: "proposed", round },
+        { kind: "tell", state: "proposed", round },
+      ]
+    : rs
+  const sending = rs.filter((s) => s.kind === "message" || s.kind === "start")
+  const auto = sending.some((s) => s.auto)
+  // Plans from before follow-ups keep their approval on the plan only.
+  const approvedAt =
+    sending.find((s) => s.approvedAt)?.approvedAt ??
+    (round === 0 ? p.approvedAt : undefined)
   return (
-    <div className="grid gap-3 rounded-(--radius) border p-3">
+    <div
+      role="group"
+      aria-label={round > 0 ? `Follow-up ${round}` : "The plan's messages"}
+      className="grid gap-3 rounded-(--radius) border p-3"
+    >
+      {round > 0 && (
+        <p className="section-label text-muted-foreground">Follow-up {round}</p>
+      )}
       <ol className="grid gap-3" aria-label="Steps">
         {steps.map((st, i) => (
           <StepRow key={i} env={env} st={st} name={name} />
         ))}
       </ol>
-      {p.state === "proposed" && p.approvalId && (
+      {waiting && p.approvalId && (
         <PlanDecision env={env} approvalId={p.approvalId} name={name} />
       )}
-      {p.approvedAt && (
+      {!waiting && auto && (
         <p className="text-caption text-muted-foreground">
-          Approved by you at {clock(p.approvedAt)}. Teammates still ask you for
-          pushes, pull requests and network requests.
+          Sent without asking, in a thread this plan started, as {name}'s
+          settings allow.
+        </p>
+      )}
+      {!waiting && !auto && approvedAt && (
+        <p className="text-caption text-muted-foreground">
+          {round > 0 ? "Follow-up approved" : "Approved"} by you at{" "}
+          {clock(approvedAt)}. Teammates still ask you for pushes, pull requests
+          and network requests.
         </p>
       )}
     </div>

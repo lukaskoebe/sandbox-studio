@@ -52,30 +52,47 @@ func (m *messenger) Queue(_ context.Context, _ string, chatID, text string, from
 		m.mu.Unlock()
 		return nil
 	}
-	m.f.answer(m.t, turn.ID, "The coupon tests pass on main.")
+	m.f.answerIn(m.t, chatID, turn.ID, "The coupon tests pass on main.")
 	return nil
 }
 
 // answer ends a turn of the fixture's chat with Ada's answer.
-func (f *fixture) answer(t *testing.T, turnID, text string) {
+func (f *fixture) answer(t *testing.T, turnID, text string) { f.answerIn(t, f.chat.ID, turnID, text) }
+
+func (f *fixture) answerIn(t *testing.T, chatID, turnID, text string) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := f.st.AddChatItem(ctx, store.ChatItem{ChatID: f.chat.ID, TurnID: turnID, Kind: chat.KindAgent, Body: json.RawMessage(`{"text":` + quote(text) + `}`)}); err != nil {
+	if _, err := f.st.AddChatItem(ctx, store.ChatItem{ChatID: chatID, TurnID: turnID, Kind: chat.KindAgent, Body: json.RawMessage(`{"text":` + quote(text) + `}`)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.st.EndChatTurn(ctx, f.chat.ID, turnID, "end_turn", nil); err != nil {
+	if _, err := f.st.EndChatTurn(ctx, chatID, turnID, "end_turn", nil); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func (m *messenger) Start(_ context.Context, _ string, sandboxID, title, text string, from chat.FromLead) (string, error) {
+// Start opens a thread on the computer and sends text there as Queue does.
+func (m *messenger) Start(ctx context.Context, env, sandboxID, title, text string, from chat.FromLead) (string, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.err != nil {
+		m.mu.Unlock()
 		return "", m.err
 	}
 	m.sent, m.from = append(m.sent, "new "+sandboxID+" "+title+": "+text), append(m.from, from)
-	return "chat-new", nil
+	m.mu.Unlock()
+	c, err := m.f.st.CreateChat(ctx, store.Chat{EnvironmentID: env, SandboxID: sandboxID, TeammateID: m.f.ada.ID, Harness: "claude", Title: title})
+	if err != nil {
+		return "", err
+	}
+	turn, err := m.f.st.StartChatTurn(ctx, c.ID, "chat", "")
+	if err != nil {
+		return "", err
+	}
+	body, _ := json.Marshal(chat.UserBody{Text: text, Lead: &from})
+	if _, err := m.f.st.AddChatItem(ctx, store.ChatItem{ChatID: c.ID, TurnID: turn.ID, Kind: chat.KindUser, Body: body}); err != nil {
+		return "", err
+	}
+	m.f.answerIn(m.t, c.ID, turn.ID, "Started on it.")
+	return c.ID, nil
 }
 
 func (m *messenger) calls() []string {

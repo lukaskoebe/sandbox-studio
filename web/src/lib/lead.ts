@@ -14,6 +14,8 @@ export type LeadPlan = components["schemas"]["LeadPlanView"]
 export type LeadPlanItem = components["schemas"]["LeadPlanItem"]
 export type PlanStep = components["schemas"]["PlanStep"]
 export type PlanPayload = components["schemas"]["PlanPayload"]
+export type LeadOrder = components["schemas"]["OrderView"]
+export type OrderInput = components["schemas"]["OrderInput"]
 
 /** Whether a plan can still change: it isn't done, cancelled or failed. */
 export function planOpen(p: { state: LeadPlan["state"] }): boolean {
@@ -163,6 +165,19 @@ export function refTargets(f: LeadFacts): Map<string, RefTarget> {
 
 /** Lead's weekday bits: Monday is bit 0. */
 export const weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const
+
+/** Weekday bits in words: "Every day", "Weekdays", "Weekends" or "Mo, We, Fr". */
+export function daysLabel(days: number): string {
+  if ((days & 0b1111111) === 0b1111111) return "Every day"
+  if ((days & 0b1111111) === 0b0011111) return "Weekdays"
+  if ((days & 0b1111111) === 0b1100000) return "Weekends"
+  return weekdays.filter((_, i) => days & (1 << i)).join(", ")
+}
+
+/** Minutes after midnight as "09:00". */
+export function hhmm(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`
+}
 
 /** The model's text with its refs written out as names, for a plan's first message. */
 export function plainText(text: string, refs: Map<string, RefTarget>): string {

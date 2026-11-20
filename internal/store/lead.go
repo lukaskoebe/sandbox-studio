@@ -28,6 +28,7 @@ type LeadSettings struct {
 	Heading      bool      `json:"heading" doc:"The day gets a short heading in the model's words"`
 	DailyLimit   int64     `json:"dailyLimit" minimum:"0" doc:"What Lead's model calls may cost a day, in USD × 10^6; models without a known price are capped by calls instead"`
 	Notify       string    `json:"notify" enum:"waiting,always,never" doc:"When writing the day notifies: only when something waits for the user, always, or never"`
+	FollowUps    bool      `json:"followUps" doc:"A follow-up in a thread one of Lead's plans started goes without asking; every other message still waits for approval"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
@@ -42,9 +43,9 @@ func DefaultLeadSettings() LeadSettings {
 func (s *Store) LeadSettings(ctx context.Context, envID string) (LeadSettings, error) {
 	v := DefaultLeadSettings()
 	var updated int64
-	err := s.db.QueryRowContext(ctx, `SELECT name, write_at, days, skip_quiet, own_computers, show_costs, heading, daily_limit, notify, updated_at
+	err := s.db.QueryRowContext(ctx, `SELECT name, write_at, days, skip_quiet, own_computers, show_costs, heading, daily_limit, notify, follow_ups, updated_at
 		FROM lead_settings WHERE environment_id = ?`, envID).Scan(&v.Name, &v.WriteAt, &v.Days, &v.SkipQuiet, &v.OwnComputers,
-		&v.ShowCosts, &v.Heading, &v.DailyLimit, &v.Notify, &updated)
+		&v.ShowCosts, &v.Heading, &v.DailyLimit, &v.Notify, &v.FollowUps, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, nil
 	}
@@ -58,11 +59,12 @@ func (s *Store) LeadSettings(ctx context.Context, envID string) (LeadSettings, e
 func (s *Store) SetLeadSettings(ctx context.Context, envID string, v LeadSettings) (LeadSettings, error) {
 	t := now()
 	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_settings (environment_id, name, write_at, days, skip_quiet, own_computers, show_costs,
-		heading, daily_limit, notify, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		heading, daily_limit, notify, follow_ups, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (environment_id) DO UPDATE SET name = excluded.name, write_at = excluded.write_at, days = excluded.days,
 			skip_quiet = excluded.skip_quiet, own_computers = excluded.own_computers, show_costs = excluded.show_costs,
-			heading = excluded.heading, daily_limit = excluded.daily_limit, notify = excluded.notify, updated_at = excluded.updated_at`,
-		envID, v.Name, v.WriteAt, v.Days, v.SkipQuiet, v.OwnComputers, v.ShowCosts, v.Heading, v.DailyLimit, v.Notify, t)
+			heading = excluded.heading, daily_limit = excluded.daily_limit, notify = excluded.notify, follow_ups = excluded.follow_ups,
+			updated_at = excluded.updated_at`,
+		envID, v.Name, v.WriteAt, v.Days, v.SkipQuiet, v.OwnComputers, v.ShowCosts, v.Heading, v.DailyLimit, v.Notify, v.FollowUps, t)
 	v.UpdatedAt = time.Unix(t, 0)
 	return v, err
 }
@@ -391,6 +393,7 @@ type LeadPlan struct {
 	Steps         json.RawMessage // lead.PlanStep, each with its state
 	ApprovalID    string
 	ApprovedAt    *time.Time
+	OrderID       string // the standing order it was drafted for
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -409,13 +412,13 @@ type LeadPlanItem struct {
 	At     time.Time
 }
 
-const leadPlanCols = `id, environment_id, title, state, steps, approval_id, approved_at, created_at, updated_at`
+const leadPlanCols = `id, environment_id, title, state, steps, approval_id, approved_at, order_id, created_at, updated_at`
 
 func scanLeadPlan(row interface{ Scan(...any) error }) (LeadPlan, error) {
 	var p LeadPlan
 	var steps string
 	var approved, created, updated int64
-	if err := row.Scan(&p.ID, &p.EnvironmentID, &p.Title, &p.State, &steps, &p.ApprovalID, &approved, &created, &updated); err != nil {
+	if err := row.Scan(&p.ID, &p.EnvironmentID, &p.Title, &p.State, &steps, &p.ApprovalID, &approved, &p.OrderID, &created, &updated); err != nil {
 		return p, err
 	}
 	p.Steps = json.RawMessage(steps)
@@ -439,8 +442,8 @@ func (s *Store) AddLeadPlan(ctx context.Context, p LeadPlan) (LeadPlan, error) {
 		p.Steps = json.RawMessage("[]")
 	}
 	p.UpdatedAt = p.CreatedAt
-	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_plans (id, environment_id, title, state, steps, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, p.ID, p.EnvironmentID, p.Title, p.State, string(p.Steps), p.CreatedAt.Unix(), p.UpdatedAt.Unix())
+	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_plans (id, environment_id, title, state, steps, order_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, p.ID, p.EnvironmentID, p.Title, p.State, string(p.Steps), p.OrderID, p.CreatedAt.Unix(), p.UpdatedAt.Unix())
 	return p, err
 }
 
@@ -537,4 +540,94 @@ func (s *Store) LeadPlanItems(ctx context.Context, planID string) ([]LeadPlanIte
 		out = append(out, it)
 	}
 	return out, rows.Err()
+}
+
+// LeadOrder is a standing order: a plan Lead drafts on its own at a set time, from the user's
+// words. Its plans wait for approval as any plan does.
+type LeadOrder struct {
+	ID            string
+	EnvironmentID string
+	Text          string
+	At            int // minutes after local midnight
+	Days          int // bit 0 Monday … bit 6 Sunday
+	Enabled       bool
+	LastDay       string // the local date it last came due
+	LastPlanID    string
+	Note          string // why it drafted none the last time it came due
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+const leadOrderCols = `id, environment_id, text, at, days, enabled, last_day, last_plan_id, note, created_at, updated_at`
+
+func scanLeadOrder(row interface{ Scan(...any) error }) (LeadOrder, error) {
+	var o LeadOrder
+	var created, updated int64
+	err := row.Scan(&o.ID, &o.EnvironmentID, &o.Text, &o.At, &o.Days, &o.Enabled, &o.LastDay, &o.LastPlanID, &o.Note, &created, &updated)
+	o.CreatedAt, o.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+	return o, err
+}
+
+// LeadOrders are an environment's standing orders, oldest first.
+func (s *Store) LeadOrders(ctx context.Context, envID string) ([]LeadOrder, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+leadOrderCols+` FROM lead_orders WHERE environment_id = ? ORDER BY created_at, rowid`, envID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LeadOrder{}
+	for rows.Next() {
+		o, err := scanLeadOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// GetLeadOrder returns one of an environment's standing orders.
+func (s *Store) GetLeadOrder(ctx context.Context, envID, id string) (LeadOrder, error) {
+	o, err := scanLeadOrder(s.db.QueryRowContext(ctx, `SELECT `+leadOrderCols+` FROM lead_orders WHERE id = ? AND environment_id = ?`, id, envID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return o, ErrNotFound
+	}
+	return o, err
+}
+
+// AddLeadOrder saves a new standing order.
+func (s *Store) AddLeadOrder(ctx context.Context, o LeadOrder) (LeadOrder, error) {
+	if o.ID == "" {
+		o.ID = NewID()
+	}
+	o.UpdatedAt = o.CreatedAt
+	_, err := s.db.ExecContext(ctx, `INSERT INTO lead_orders (`+leadOrderCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		o.ID, o.EnvironmentID, o.Text, o.At, o.Days, o.Enabled, o.LastDay, o.LastPlanID, o.Note, o.CreatedAt.Unix(), o.UpdatedAt.Unix())
+	return o, err
+}
+
+// SaveLeadOrder writes a standing order.
+func (s *Store) SaveLeadOrder(ctx context.Context, o LeadOrder) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE lead_orders SET text = ?, at = ?, days = ?, enabled = ?, last_day = ?, last_plan_id = ?, note = ?,
+		updated_at = ? WHERE id = ? AND environment_id = ?`, o.Text, o.At, o.Days, o.Enabled, o.LastDay, o.LastPlanID, o.Note, o.UpdatedAt.Unix(),
+		o.ID, o.EnvironmentID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteLeadOrder removes a standing order. The plans it drafted stay.
+func (s *Store) DeleteLeadOrder(ctx context.Context, envID, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM lead_orders WHERE id = ? AND environment_id = ?`, id, envID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

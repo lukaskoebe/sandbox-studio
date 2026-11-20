@@ -4307,8 +4307,13 @@
         "additionalProperties": false,
         "properties": {
           "approvedAt": {
+            "description": "When the user approved the message; zero for one sent without asking",
             "format": "date-time",
             "type": "string"
+          },
+          "auto": {
+            "description": "A follow-up Lead sent without asking, in a thread its plan started, as its settings allow",
+            "type": "boolean"
           },
           "name": {
             "description": "Lead's name when it sent the message",
@@ -5808,6 +5813,7 @@
             "type": "string"
           },
           "approvedAt": {
+            "description": "When the user last approved its messages",
             "format": "date-time",
             "type": "string"
           },
@@ -5827,6 +5833,10 @@
               "array",
               "null"
             ]
+          },
+          "orderId": {
+            "description": "The standing order it was drafted for",
+            "type": "string"
           },
           "state": {
             "enum": [
@@ -6024,6 +6034,10 @@
             "minimum": 0,
             "type": "integer"
           },
+          "followUps": {
+            "description": "A follow-up in a thread one of Lead's plans started goes without asking; every other message still waits for approval",
+            "type": "boolean"
+          },
           "heading": {
             "description": "The day gets a short heading in the model's words",
             "type": "boolean"
@@ -6077,6 +6091,7 @@
           "heading",
           "dailyLimit",
           "notify",
+          "followUps",
           "updatedAt"
         ],
         "type": "object"
@@ -7547,6 +7562,95 @@
         },
         "type": "object"
       },
+      "OrderInput": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When it comes due, in minutes after local midnight",
+            "format": "int64",
+            "maximum": 1439,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "days": {
+            "description": "The days it comes due on: bit 0 is Monday, bit 6 Sunday",
+            "format": "int64",
+            "maximum": 127,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "text": {
+            "description": "What Lead should do each time, as a plan's first message",
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "at",
+          "days",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "OrderView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Minutes after local midnight",
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "days": {
+            "description": "Bit 0 is Monday, bit 6 Sunday",
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastDay": {
+            "description": "The local date it last came due, YYYY-MM-DD",
+            "type": "string"
+          },
+          "lastPlan": {
+            "$ref": "#/components/schemas/PlanHead",
+            "description": "The plan it drafted last, while it is there"
+          },
+          "next": {
+            "description": "When it comes due next; none while it is off",
+            "format": "date-time",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why it drafted no plan the last time it came due",
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "at",
+          "days",
+          "enabled",
+          "createdAt"
+        ],
+        "type": "object"
+      },
       "PRBranch": {
         "additionalProperties": false,
         "properties": {
@@ -8143,6 +8247,35 @@
         ],
         "type": "object"
       },
+      "PlanHead": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "drafting",
+              "asking",
+              "proposed",
+              "running",
+              "done",
+              "cancelled",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state"
+        ],
+        "type": "object"
+      },
       "PlanPayload": {
         "additionalProperties": false,
         "properties": {
@@ -8204,8 +8337,22 @@
       "PlanStep": {
         "additionalProperties": false,
         "properties": {
+          "approvedAt": {
+            "description": "When the user approved the message",
+            "format": "date-time",
+            "type": "string"
+          },
           "at": {
             "description": "When the message was in the thread, or the step was done",
+            "format": "date-time",
+            "type": "string"
+          },
+          "auto": {
+            "description": "A follow-up sent without asking, in a thread the plan started, as Lead's settings allow",
+            "type": "boolean"
+          },
+          "began": {
+            "description": "When a wait began",
             "format": "date-time",
             "type": "string"
           },
@@ -8229,6 +8376,11 @@
           "note": {
             "description": "Why a step failed, or how a wait ended",
             "type": "string"
+          },
+          "round": {
+            "description": "0 for the plan's first messages, then 1 and on for each follow-up",
+            "format": "int64",
+            "type": "integer"
           },
           "sandboxId": {
             "type": "string"
@@ -11234,6 +11386,10 @@
             "maximum": 127,
             "minimum": 0,
             "type": "integer"
+          },
+          "followUps": {
+            "description": "A follow-up in a thread one of Lead's plans started goes without asking",
+            "type": "boolean"
           },
           "heading": {
             "type": "boolean"
@@ -16569,6 +16725,266 @@
         ]
       }
     },
+    "/api/environments/{env}/lead/orders": {
+      "get": {
+        "description": "The environment's standing orders, oldest first, with the plan each drafted last and when it comes due next.",
+        "operationId": "listLeadOrders",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrderView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      },
+      "post": {
+        "description": "Adds a standing order. It first comes due at its next time, not at once; 409 when the environment has 20 already.",
+        "operationId": "createLeadOrder",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderView"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/orders/{order}": {
+      "delete": {
+        "description": "Deletes a standing order. The plans it drafted stay.",
+        "operationId": "deleteLeadOrder",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Standing order ID",
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "description": "Standing order ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      },
+      "put": {
+        "description": "Changes a standing order. Moved to a time that passed today, or turned on after it, it waits for its next time.",
+        "operationId": "setLeadOrder",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Standing order ID",
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "description": "Standing order ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
+    "/api/environments/{env}/lead/orders/{order}/run": {
+      "post": {
+        "description": "Drafts the order's plan now, whether or not it is on; its schedule stays as it is. The plan waits for approval as any plan does.",
+        "operationId": "runLeadOrder",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Standing order ID",
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "description": "Standing order ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadPlanView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "lead"
+        ]
+      }
+    },
     "/api/environments/{env}/lead/plans": {
       "get": {
         "description": "Lead's plans, the last changed first, without their threads.",
@@ -16876,7 +17292,7 @@
     },
     "/api/environments/{env}/lead/settings": {
       "put": {
-        "description": "Saves how Lead writes the day.",
+        "description": "Saves how Lead writes the day, and whether its follow-ups wait for approval.",
         "operationId": "setLeadSettings",
         "parameters": [
           {

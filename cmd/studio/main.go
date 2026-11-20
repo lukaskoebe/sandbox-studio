@@ -639,7 +639,11 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go beats.Run(ctx)
 	// Lead writes each environment's day at its time, from what Studio records (docs/lead.md).
 	apiServer.Lead = &lead.Service{Store: st, AgentMem: agentMem, Keys: vault, Utility: leadUtility(agentMem.Utility), Bus: bus,
-		Log: log.With("component", "lead"), LowDisks: mgr.LowDisks, Send: apiServer.LeadMessenger()}
+		Log: log.With("component", "lead"), LowDisks: mgr.LowDisks, Send: apiServer.LeadMessenger(),
+		PRs: func(ctx context.Context, env, approvalID string) (lead.PRState, error) { // open PRs and their checks in a plan's roster
+			pr, err := gitRemote.PushPullRequest(ctx, env, approvalID)
+			return lead.PRState{Found: pr.Found, Number: pr.Number, State: pr.State, Checks: pr.Checks}, err
+		}}
 	integs = append(integs, apiServer.Lead) // settles lead.plan approvals; it serves no hosts
 	apiServer.Integrations = integs
 	go apiServer.Lead.Run(ctx)

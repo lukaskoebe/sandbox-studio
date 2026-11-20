@@ -70,6 +70,9 @@ type Service struct {
 	Send Messenger
 	// PlanPoll is how often a plan looks whether the teammates answered; planPollEvery when 0.
 	PlanPoll time.Duration
+	// PRs reads what became of a push's pull request on its forge, for a plan's roster; nil
+	// leaves pull requests out.
+	PRs func(ctx context.Context, env, approvalID string) (PRState, error)
 
 	mu      sync.Mutex
 	writing map[string]bool       // environment -> a write runs
@@ -80,6 +83,7 @@ type Service struct {
 	asks    sync.WaitGroup        // the answers being written
 	plans   sync.WaitGroup        // the plans being drafted or carried out
 	planMu  sync.Mutex            // keeps two changes of a plan from crossing
+	orderMu sync.Mutex            // standing orders come due one at a time
 	// foldMu keeps two folds from reading the same note; callMu keeps two calls from passing
 	// the daily limit on the same usage.
 	foldMu, callMu sync.Mutex
@@ -131,7 +135,8 @@ func (s *Service) Run(ctx context.Context) {
 	}
 }
 
-// Tick folds what is new into the notes and writes the days that are due.
+// Tick folds what is new into the notes, writes the days that are due and drafts the plans of
+// the standing orders that are.
 func (s *Service) Tick(ctx context.Context) {
 	envs, err := s.Store.Environments(ctx)
 	if err != nil {
@@ -153,6 +158,7 @@ func (s *Service) Tick(ctx context.Context) {
 				s.log().Warn("lead: writing the day failed", "env", e.ID, "err", err)
 			}
 		}
+		s.orders(ctx, e.ID, now)
 	}
 }
 

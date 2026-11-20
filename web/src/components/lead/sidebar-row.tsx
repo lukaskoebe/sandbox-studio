@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router"
-import { PlusIcon } from "@phosphor-icons/react"
+import { PlusIcon, RepeatIcon } from "@phosphor-icons/react"
 import {
   SidebarMenuButton,
   SidebarMenuItem,
@@ -13,7 +13,8 @@ import { LeadGlyph } from "./glyph"
 
 /**
  * Lead at the top of Teammates (docs/lead.md): its name, and while it writes, that it does.
- * Its open plans are listed under it, and on its pages the last days it wrote and New plan.
+ * Its open plans are listed under it, and on its pages New plan, Standing orders and the last
+ * days it wrote.
  */
 export function LeadSidebarRow({ env }: { env: string }) {
   const matchRoute = useMatchRoute()
@@ -35,7 +36,9 @@ export function LeadSidebarRow({ env }: { env: string }) {
     params: { env },
   }) as false | { plan?: string }
   const onNew = !!matchRoute({ to: "/e/$env/lead/plans/new", params: { env } })
-  const onPage = onToday || onSettings || !!open || !!onPlan || onNew
+  const onOrders = !!matchRoute({ to: "/e/$env/lead/orders", params: { env } })
+  const onPage =
+    onToday || onSettings || !!open || !!onPlan || onNew || onOrders
   const days = (v?.days ?? []).filter((d) => d.day !== t).slice(0, 4)
   const plans = $api.useQuery("get", "/api/environments/{env}/lead/plans", {
     params: { path: { env } },
@@ -120,6 +123,16 @@ export function LeadSidebarRow({ env }: { env: string }) {
               >
                 <PlusIcon className="size-3.5" />
                 <span className="truncate">New plan</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                size="sm"
+                isActive={onOrders}
+                render={<Link to="/e/$env/lead/orders" params={{ env }} />}
+              >
+                <RepeatIcon className="size-3.5" />
+                <span className="truncate">Standing orders</span>
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
             {days.map((d) => (

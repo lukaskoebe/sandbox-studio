@@ -27,6 +27,7 @@ import { Route as EEnvChatsNewRouteImport } from './routes/e.$env.chats.new'
 import { Route as EEnvGitIndexRouteImport } from './routes/e.$env.git.index'
 import { Route as EEnvLeadIndexRouteImport } from './routes/e.$env.lead.index'
 import { Route as EEnvLeadDayRouteImport } from './routes/e.$env.lead.$day'
+import { Route as EEnvLeadOrdersRouteImport } from './routes/e.$env.lead.orders'
 import { Route as EEnvLeadSettingsRouteImport } from './routes/e.$env.lead.settings'
 import { Route as EEnvMemoryIndexRouteImport } from './routes/e.$env.memory.index'
 import { Route as EEnvMergesMergeRouteImport } from './routes/e.$env.merges.$merge'
@@ -145,6 +146,11 @@ const EEnvLeadIndexRoute = EEnvLeadIndexRouteImport.update({
 const EEnvLeadDayRoute = EEnvLeadDayRouteImport.update({
   id: '/lead/$day',
   path: '/lead/$day',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvLeadOrdersRoute = EEnvLeadOrdersRouteImport.update({
+  id: '/lead/orders',
+  path: '/lead/orders',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvLeadSettingsRoute = EEnvLeadSettingsRouteImport.update({
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
   '/e/$env/lead/$day': typeof EEnvLeadDayRoute
+  '/e/$env/lead/orders': typeof EEnvLeadOrdersRoute
   '/e/$env/lead/settings': typeof EEnvLeadSettingsRoute
   '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
@@ -355,6 +362,7 @@ export interface FileRoutesByTo {
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
   '/e/$env/lead/$day': typeof EEnvLeadDayRoute
+  '/e/$env/lead/orders': typeof EEnvLeadOrdersRoute
   '/e/$env/lead/settings': typeof EEnvLeadSettingsRoute
   '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
@@ -405,6 +413,7 @@ export interface FileRoutesById {
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
   '/e/$env/lead/$day': typeof EEnvLeadDayRoute
+  '/e/$env/lead/orders': typeof EEnvLeadOrdersRoute
   '/e/$env/lead/settings': typeof EEnvLeadSettingsRoute
   '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
@@ -456,6 +465,7 @@ export interface FileRouteTypes {
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
     | '/e/$env/lead/$day'
+    | '/e/$env/lead/orders'
     | '/e/$env/lead/settings'
     | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
@@ -503,6 +513,7 @@ export interface FileRouteTypes {
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
     | '/e/$env/lead/$day'
+    | '/e/$env/lead/orders'
     | '/e/$env/lead/settings'
     | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
@@ -552,6 +563,7 @@ export interface FileRouteTypes {
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
     | '/e/$env/lead/$day'
+    | '/e/$env/lead/orders'
     | '/e/$env/lead/settings'
     | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
@@ -719,6 +731,13 @@ declare module '@tanstack/react-router' {
       path: '/lead/$day'
       fullPath: '/e/$env/lead/$day'
       preLoaderRoute: typeof EEnvLeadDayRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/lead/orders': {
+      id: '/e/$env/lead/orders'
+      path: '/lead/orders'
+      fullPath: '/e/$env/lead/orders'
+      preLoaderRoute: typeof EEnvLeadOrdersRouteImport
       parentRoute: typeof EEnvRoute
     }
     '/e/$env/lead/settings': {
@@ -999,6 +1018,7 @@ interface EEnvRouteChildren {
   EEnvChatsChatRoute: typeof EEnvChatsChatRoute
   EEnvChatsNewRoute: typeof EEnvChatsNewRoute
   EEnvLeadDayRoute: typeof EEnvLeadDayRoute
+  EEnvLeadOrdersRoute: typeof EEnvLeadOrdersRoute
   EEnvLeadSettingsRoute: typeof EEnvLeadSettingsRoute
   EEnvMergesMergeRoute: typeof EEnvMergesMergeRoute
   EEnvNetworkActivityRoute: typeof EEnvNetworkActivityRoute
@@ -1031,6 +1051,7 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvChatsChatRoute: EEnvChatsChatRoute,
   EEnvChatsNewRoute: EEnvChatsNewRoute,
   EEnvLeadDayRoute: EEnvLeadDayRoute,
+  EEnvLeadOrdersRoute: EEnvLeadOrdersRoute,
   EEnvLeadSettingsRoute: EEnvLeadSettingsRoute,
   EEnvMergesMergeRoute: EEnvMergesMergeRoute,
   EEnvNetworkActivityRoute: EEnvNetworkActivityRoute,

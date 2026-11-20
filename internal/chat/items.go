@@ -42,7 +42,8 @@ type UserBody struct {
 	Text        string       `json:"text"`
 	Attachments []Attachment `json:"attachments,omitempty"`
 	Mentions    []Mention    `json:"mentions,omitempty"`
-	// Lead is set on a message Lead sent as a step of a plan the user approved.
+	// Lead is set on a message Lead sent as a step of a plan: one the user approved, or a
+	// follow-up Lead's settings let it send without asking.
 	Lead *FromLead `json:"lead,omitempty"`
 }
 
@@ -51,7 +52,8 @@ type FromLead struct {
 	Name       string    `json:"name" doc:"Lead's name when it sent the message"`
 	PlanID     string    `json:"planId"`
 	Plan       string    `json:"plan" doc:"The plan's title"`
-	ApprovedAt time.Time `json:"approvedAt"`
+	ApprovedAt time.Time `json:"approvedAt" doc:"When the user approved the message; zero for one sent without asking"`
+	Auto       bool      `json:"auto,omitempty" doc:"A follow-up Lead sent without asking, in a thread its plan started, as its settings allow"`
 }
 
 // Mention is a file of the workspace the prompt names as @path, or @path:start-end for

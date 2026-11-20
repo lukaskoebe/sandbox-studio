@@ -132,11 +132,12 @@ func (s *Server) registerLead(api huma.API) {
 			Heading      bool   `json:"heading"`
 			DailyLimit   int64  `json:"dailyLimit" minimum:"0" maximum:"100000000" doc:"What Lead's model calls may cost a day, in USD × 10^6, at most $100"`
 			Notify       string `json:"notify" enum:"waiting,always,never"`
+			FollowUps    bool   `json:"followUps,omitempty" doc:"A follow-up in a thread one of Lead's plans started goes without asking"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "setLeadSettings", Method: http.MethodPut, Path: base + "/settings", Tags: tags,
-		Description: "Saves how Lead writes the day.",
+		Description: "Saves how Lead writes the day, and whether its follow-ups wait for approval.",
 	}, func(ctx context.Context, in *settingsIn) (*struct{ Body store.LeadSettings }, error) {
 		if err := ready(ctx, in.Env); err != nil {
 			return nil, err
@@ -148,7 +149,7 @@ func (s *Server) registerLead(api huma.API) {
 		}
 		v, err := s.Store.SetLeadSettings(ctx, in.Env, store.LeadSettings{Name: name, WriteAt: b.WriteAt, Days: b.Days,
 			SkipQuiet: b.SkipQuiet, OwnComputers: b.OwnComputers, ShowCosts: b.ShowCosts, Heading: b.Heading,
-			DailyLimit: b.DailyLimit, Notify: b.Notify})
+			DailyLimit: b.DailyLimit, Notify: b.Notify, FollowUps: b.FollowUps})
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -158,4 +159,5 @@ func (s *Server) registerLead(api huma.API) {
 		return &struct{ Body store.LeadSettings }{v}, nil
 	})
 	s.registerLeadPlans(api, ready)
+	s.registerLeadOrders(api, ready)
 }
