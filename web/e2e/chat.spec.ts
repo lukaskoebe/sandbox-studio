@@ -388,8 +388,12 @@ test("a message on the teammate's home starts a thread and opens it", async ({
   await box.fill("Please run the tests")
   await box.press("Enter")
 
+  // The thread opens at once, with the message, and sends it from there.
   await expect(page).toHaveURL(/[?&]thread=/)
+  const messages = main.getByLabel("Messages")
+  await expect(messages.getByText("Please run the tests")).toBeVisible()
   await expect(main).toContainText(greeting)
+  await expect(messages.getByText("Please run the tests")).toHaveCount(1)
   await page.waitForTimeout(1500)
   await expect(page).toHaveURL(/[?&]thread=/)
 })

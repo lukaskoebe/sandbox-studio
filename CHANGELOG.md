@@ -30,6 +30,9 @@
   suspended. A sandbox that has this now works again once it is stopped and started.
 - In the macOS app, DevTools and keyed previews were blank: the app blocked their
   `*.localhost` addresses. They load now.
+- A new thread from a teammate's home, or from **New chat**, opens at once. Your message shows
+  there while the computer and the agent start, instead of the composer waiting for them. If
+  it can't go, the thread says why and keeps your words in its composer.
 - The step an agent is on now looks like the steps before it: a line with a spinner, instead
   of a card. Thoughts in a row of steps are lines too.
 - A chat's step row no longer says **Worked for** while a call in it still runs, as when you

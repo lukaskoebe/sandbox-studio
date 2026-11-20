@@ -38,6 +38,7 @@ import { BrowsingCard, useBrowsing } from "@/components/browser-browsing"
 import { isGitApproval } from "@/components/git-review"
 import { ComposerDock } from "@/components/chat/chat-thread"
 import { Composer, type Prompt } from "@/components/chat/composer"
+import { handFirstMessage } from "@/lib/first-message"
 import { ModelPicker } from "@/components/chat/model-picker"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import {
@@ -1544,23 +1545,22 @@ function NewThread({
       void queryClient.invalidateQueries({ queryKey: ["get", path] })
   }
 
+  // The thread opens at once and sends the message itself, so that it shows there while the
+  // computer and the agent start.
   const start = async (body: Prompt) => {
     if (!computer)
       throw new Error(
         `${teammate.name} has no computer yet: give it one on the right.`
       )
-    await wake.ready()
     const { data, error } = await fetchClient.POST(
       "/api/environments/{env}/sandboxes/{id}/chats",
       {
         params: { path: { env, id: computer.id } },
-        body: {
-          ...body,
-          model: teammate.models?.includes(model) ? model : undefined,
-        },
+        body: { model: teammate.models?.includes(model) ? model : undefined },
       }
     )
     if (error) throw error
+    handFirstMessage(data.id, { prompt: body, ready: wake.ready() })
     return data
   }
 

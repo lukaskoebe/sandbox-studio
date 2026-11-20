@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, fetchClient, isReady } from "@/lib/api/client"
+import { handFirstMessage } from "@/lib/first-message"
 
 export const Route = createFileRoute("/e/$env/chats/new")({
   component: NewChatPage,
@@ -71,12 +72,17 @@ function NewChatPage() {
     setSending(prompt)
     let created: { id: string; teammateId: string }
     try {
+      // The thread sends the message itself, so it opens before the agent has started.
       const res = await fetchClient.POST(
         "/api/environments/{env}/sandboxes/{id}/chats",
-        { params: { path: { env, id: sandbox.id } }, body: prompt }
+        {
+          params: { path: { env, id: sandbox.id } },
+          body: {},
+        }
       )
       if (!res.data) throw res.error
       created = res.data
+      handFirstMessage(created.id, { prompt })
     } catch (err) {
       setSending(undefined)
       setError(errorMessage(err))

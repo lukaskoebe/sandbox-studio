@@ -61,6 +61,7 @@ import {
 } from "@/lib/chats"
 import { useChatStepsSetting } from "@/lib/chat-steps-setting"
 import { usePreviewSetting } from "@/lib/preview-setting"
+import { takeFirstMessage } from "@/lib/first-message"
 import { cn } from "@/lib/utils"
 
 /**
@@ -581,6 +582,54 @@ function ChatComposer({
     }
   }
 
+  // While a turn runs, a message goes into it where the agent takes one mid-turn, and
+  // otherwise, or asked to (after), waits for it to end after the ones already waiting.
+  const send = async (
+    prompt: Prompt,
+    { after, ready }: { after: boolean; ready?: Promise<void> }
+  ) => {
+    setError(undefined)
+    onSending(prompt)
+    try {
+      await (ready ?? wake.ready())
+      const res = await fetchClient.POST(
+        "/api/environments/{env}/chats/{chat}/queue",
+        {
+          params: { path, query: after ? { after } : undefined },
+          body: prompt,
+        }
+      )
+      if (res.error) throw res.error
+    } catch (err) {
+      onSending(undefined)
+      setError(errorMessage(err))
+      return false
+    }
+    onSent()
+    return true
+  }
+  // A new thread's first message, written where the thread was started, goes from here. Should
+  // it fail, its words come back into the composer.
+  const firstSent = useRef(false)
+  useEffect(() => {
+    if (firstSent.current) return
+    firstSent.current = true
+    const first = takeFirstMessage(chat.id)
+    if (!first) return
+    void send(first.prompt, { after: false, ready: first.ready }).then((ok) => {
+      if (!ok && first.prompt.text)
+        setInsert({ id: `first-${chat.id}`, text: first.prompt.text })
+    })
+  })
+  const stop = () =>
+    void fetchClient
+      .POST("/api/environments/{env}/chats/{chat}/cancel", {
+        params: { path },
+      })
+      .then((res) => {
+        if (res.error) toast.error(errorMessage(res.error))
+      })
+
   if (chat.state === "terminal") return <InTerminal env={env} chat={chat} />
   if (chat.state === "orphaned") {
     return (
@@ -602,38 +651,6 @@ function ChatComposer({
       </div>
     )
   }
-
-  // While a turn runs, a message goes into it where the agent takes one mid-turn, and
-  // otherwise, or asked to (after), waits for it to end after the ones already waiting.
-  const send = async (prompt: Prompt, { after }: { after: boolean }) => {
-    setError(undefined)
-    onSending(prompt)
-    try {
-      await wake.ready()
-      const res = await fetchClient.POST(
-        "/api/environments/{env}/chats/{chat}/queue",
-        {
-          params: { path, query: after ? { after } : undefined },
-          body: prompt,
-        }
-      )
-      if (res.error) throw res.error
-    } catch (err) {
-      onSending(undefined)
-      setError(errorMessage(err))
-      return false
-    }
-    onSent()
-    return true
-  }
-  const stop = () =>
-    void fetchClient
-      .POST("/api/environments/{env}/chats/{chat}/cancel", {
-        params: { path },
-      })
-      .then((res) => {
-        if (res.error) toast.error(errorMessage(res.error))
-      })
 
   return (
     <>
