@@ -42,11 +42,17 @@ async function signInPage(page: Page, api: Api, env: string) {
 // A click on the fake page's frame, which is 640x400 CSS pixels.
 async function clickPage(page: Page, x: number, y: number) {
   const canvas = page.getByLabel("Live view of the browser")
+  // Through the canvas's frame, so a card floating over the spot, such as another test's
+  // approval in the stack, waits and names itself instead of taking the click.
+  const frame = canvas.locator("xpath=..")
   const box = (await canvas.boundingBox())!
-  await page.mouse.click(
-    box.x + (x / 640) * box.width,
-    box.y + (y / 400) * box.height
-  )
+  const around = (await frame.boundingBox())!
+  await frame.click({
+    position: {
+      x: box.x - around.x + (x / 640) * box.width,
+      y: box.y - around.y + (y / 400) * box.height,
+    },
+  })
 }
 
 // Opens url from the address bar, and waits until the browser has: a click sent before then

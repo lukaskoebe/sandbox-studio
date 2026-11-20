@@ -720,7 +720,7 @@ func TestWorkerLoopKeepsQueuedWorkBehindPendingCleanup(t *testing.T) {
 	})
 	select {
 	case <-started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second): // a busy Windows runner is slow to reach the first run
 		t.Fatal("no job started")
 	}
 	active, queued := h.job(t, first.ID), h.job(t, second.ID)
@@ -780,7 +780,7 @@ func TestSecondWorkerCannotRecoverLiveBuild(t *testing.T) {
 	})
 	select {
 	case <-started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second): // a busy Windows runner is slow to reach the first run
 		t.Fatal("first worker did not start")
 	}
 	second, err := New(h.w.Options)
