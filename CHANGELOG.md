@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.27.0 — 2026-11-20
 
 - Lead writes up your day. It sits at the top of Teammates and, at 18:00 on weekdays, writes
   what waits for you, what each teammate finished, has open or is stuck on, what shipped and
