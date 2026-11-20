@@ -766,9 +766,14 @@ function ComputerCard({
           {...(starting ? phaseDot("booting") : phaseDot(p))}
           compact
         />
-        <span className="min-w-0 truncate font-mono text-sm font-medium">
+        <button
+          type="button"
+          title={`${c.name}: its details`}
+          className="min-w-0 truncate rounded-sm font-mono text-sm font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onOpen("details")}
+        >
           {c.name}
-        </span>
+        </button>
         {c.forkDefaults && <BaseMark />}
         <span className="ml-auto shrink-0 text-caption text-muted-foreground">
           {starting ? "Starting…" : phaseDot(p).label}

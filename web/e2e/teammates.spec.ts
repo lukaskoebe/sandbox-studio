@@ -193,6 +193,15 @@ test("an off computer starts from its card, its Terminal, or the folded screen",
   await expect(
     folded.getByRole("button", { name: `Start ${sandbox}` })
   ).toHaveCount(0)
+
+  // The card's name opens the computer's details.
+  await page.goto(`/e/${env}/teammates/${id}`)
+  await card.getByRole("button", { name: sandbox, exact: true }).click()
+  await expect(
+    page
+      .getByRole("region", { name: `${sandbox}'s screen` })
+      .getByRole("tab", { name: "Details", selected: true })
+  ).toBeVisible()
 })
 
 // A harness printing in a terminal counts as work, on the home's Now card and in the sidebar;
