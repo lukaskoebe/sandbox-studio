@@ -76,7 +76,8 @@ test("Lead writes today's day from Home, the day page links its work, and the se
 
   // The sidebar has Lead at the top of Teammates.
   const sidebar = page.locator("[data-sidebar=sidebar]")
-  await expect(sidebar.getByRole("link", { name: /^Lead/ })).toBeVisible()
+  // A thread another test left, such as "Lead's errand", isn't Lead's row.
+  await expect(sidebar.getByRole("link", { name: /^Lead(?!'s)/ })).toBeVisible()
 
   // The settings: a heading turned off leaves the date alone; a new name reaches the sidebar.
   await page.getByRole("link", { name: "Lead's settings" }).click()

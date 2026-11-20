@@ -81,7 +81,11 @@ func fakeClaude() {
 		writeTranscript(session)
 		switch {
 		case strings.HasPrefix(text, "say"):
-			emit("doc-text.jsonl")
+			emit("doc-text.jsonl", `"total_cost_usd":0.0021`,
+				`"total_cost_usd":0.0021,"modelUsage":{"claude-sonnet-5":{"inputTokens":12,"outputTokens":2,"contextWindow":200000}}`)
+		case text == "/compact":
+			fmt.Printf(`{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":14,"post_tokens":5},"session_id":%q}`+"\n", session)
+			fmt.Printf(`{"type":"result","subtype":"success","is_error":false,"result":"","stop_reason":"end_turn","session_id":%q,"total_cost_usd":0.0021,"usage":{}}`+"\n", session)
 		case strings.HasPrefix(text, "run"):
 			emit("doc-tool-use.jsonl")
 			if ans := askPermission(servers, PermissionTool, "Bash", testBashInput); ans.Behavior == "allow" {
@@ -463,6 +467,35 @@ func TestServeStreamsTextAndRunsClaudeForTheSession(t *testing.T) {
 	perm := servers[permissionServer]
 	if len(perm.Args) != 1 || perm.Args[0] != "claude-permission" || perm.Env[SocketEnv] == "" {
 		t.Errorf("permissions server: %+v", perm)
+	}
+}
+
+// The shim says how full the context is, as claude-agent-acp does: the last message's tokens
+// in the window the result names, and what a compaction left.
+func TestUsageSaysHowFullTheContextIs(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	id := s.open(t)
+	usage := func() (used, size int64) {
+		t.Helper()
+		var last *acp.SessionUpdate
+		for _, n := range s.drain() {
+			if n.Update.Kind == acp.UpdateUsage {
+				last = &n.Update
+			}
+		}
+		if last == nil || last.Used == nil || last.Size == nil || len(last.Cost) == 0 {
+			t.Fatalf("usage update: %+v", last)
+		}
+		return *last.Used, *last.Size
+	}
+	s.prompt(t, id, "say hello")
+	if used, size := usage(); used != 14 || size != 200000 {
+		t.Fatalf("after a message: %d of %d", used, size)
+	}
+	s.prompt(t, id, "/compact")
+	if used, size := usage(); used != 5 || size != 200000 {
+		t.Fatalf("after compacting: %d of %d", used, size)
 	}
 }
 

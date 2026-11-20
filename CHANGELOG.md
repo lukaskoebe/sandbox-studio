@@ -30,6 +30,8 @@
   suspended. A sandbox that has this now works again once it is stopped and started.
 - In the macOS app, DevTools and keyed previews were blank: the app blocked their
   `*.localhost` addresses. They load now.
+- The composer shows how full the agent's context is, and **Compact now** in its popover
+  summarizes the thread to make room. Claude subscription chats report their context too.
 - Right-click a thread in the sidebar or on a teammate's home to rename it, copy its link,
   continue it in the terminal, or delete it. The thread's **⋯** menu renames it too, and a
   name you give stays.

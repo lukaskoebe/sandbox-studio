@@ -27,6 +27,9 @@ const (
 	ACPPreview = "\nThe app runs at http://localhost:5173/login."
 	// ACPPicture shows a screenshot from the computer, as a reviewer does.
 	ACPPicture = "\n\n![The checkout page after the change](/home/agent/shots/checkout.png)"
+	// ACPContextUsed is how many tokens each turn adds to the agent's context of ACPContextSize.
+	ACPContextUsed = 52_000
+	ACPContextSize = 200_000
 )
 
 // acpTurns is the script of every prompt: the agent thinks a moment, answers, asks to run a
@@ -62,6 +65,8 @@ func acpTurns(n int) []acptest.Turn {
 			{Update: text(ACPTable)},
 			{Update: text(ACPPreview)},
 			{Update: text(ACPPicture)},
+			// How full the context is: ACPContextUsed more each turn.
+			{Update: raw(map[string]any{"sessionUpdate": "usage_update", "used": ACPContextUsed * (i + 1), "size": ACPContextSize})},
 		}}
 	}
 	return turns

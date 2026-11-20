@@ -23,6 +23,11 @@ import { Composer, type Prompt } from "@/components/chat/composer"
 import { PreviewSandbox } from "@/components/chat/markdown"
 import { OpenWorkspaceFile } from "@/components/chat/mention-picker"
 import { ModelPicker } from "@/components/chat/model-picker"
+import {
+  ContextMeter,
+  latestContext,
+  type ContextUse,
+} from "@/components/chat/context-meter"
 import { PlanCard } from "@/components/chat/plan-card"
 import { StepRun } from "@/components/chat/step-run"
 import { foldSteps, type Entry } from "@/components/chat/step-runs"
@@ -355,6 +360,7 @@ function ChatLog({
                 env={env}
                 chat={chat}
                 queued={queued}
+                context={latestContext(turns)}
                 teammateName={teammateName}
                 onSending={onSending}
                 onSent={() => setSending((s) => s && { ...s, sent: true })}
@@ -541,6 +547,7 @@ function ChatComposer({
   env,
   chat,
   queued,
+  context,
   teammateName,
   onSending,
   onSent,
@@ -548,6 +555,8 @@ function ChatComposer({
   env: string
   chat: Chat
   queued: QueuedPrompt[]
+  /** How full the agent's context is, once it said. */
+  context?: ContextUse
   teammateName: string
   /** The message being sent, or undefined when it didn't go. */
   onSending: (p: Prompt | undefined) => void
@@ -677,12 +686,26 @@ function ChatComposer({
         draft={`chat:${chat.id}`}
         onInput={wake.wake}
         hint={
-          teammate && (
-            <ModelPicker
-              teammate={teammate}
-              value={model ?? chat.model ?? ""}
-              onChange={(m) => void pickModel(m)}
-            />
+          (teammate || context) && (
+            <span className="flex items-center gap-1">
+              {teammate && (
+                <ModelPicker
+                  teammate={teammate}
+                  value={model ?? chat.model ?? ""}
+                  onChange={(m) => void pickModel(m)}
+                />
+              )}
+              {context && (
+                <ContextMeter
+                  context={context}
+                  teammateName={teammateName}
+                  running={chat.state === "running"}
+                  onCompact={() =>
+                    void send({ text: "/compact" }, { after: false })
+                  }
+                />
+              )}
+            </span>
           )
         }
         placeholder={

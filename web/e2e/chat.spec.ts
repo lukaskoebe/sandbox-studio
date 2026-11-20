@@ -398,6 +398,46 @@ test("a message on the teammate's home starts a thread and opens it", async ({
   await expect(page).toHaveURL(/[?&]thread=/)
 })
 
+test("the composer says how full the agent's context is, and compacts it", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Packer ${Math.random().toString(36).slice(2, 6)}`
+  const teammate = await addTeammate(api, env, name)
+  const id = await api.createSandbox(sandboxName("packer"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const main = page.getByRole("main")
+  const box = main.getByRole("textbox", { name: "Message" })
+  // Nothing to say before the agent reported its context.
+  await expect(box).toBeVisible()
+  await expect(main.getByRole("button", { name: /^Context:/ })).toHaveCount(0)
+
+  await box.fill("Please run the tests")
+  await box.press("Enter")
+  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(main.getByText(done)).toHaveCount(1)
+  const meter = main.getByRole("button", { name: "Context: 26% full" })
+  await expect(meter).toBeVisible()
+  await meter.click()
+  const popover = page.getByRole("dialog", { name: "Context" })
+  await expect(popover).toContainText(/52K of 200K tokens/i)
+  await popover.getByRole("button", { name: "Compact now" }).click()
+
+  // Compacting is the agent's /compact, sent as a message.
+  await expect
+    .poll(async () => (await api.guest(id)).acp[0]?.prompts.length)
+    .toBe(2)
+  expect(JSON.stringify((await api.guest(id)).acp[0].prompts[1])).toContain(
+    "/compact"
+  )
+})
+
 test("a thread's right-click menu in the sidebar renames and deletes it", async ({
   page,
   api,

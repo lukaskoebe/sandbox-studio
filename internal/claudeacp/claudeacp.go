@@ -376,10 +376,18 @@ type session struct {
 	// servers, which decide what the teammate may do (the permissions server is asked about).
 	allowed []string
 
-	mu    sync.Mutex // guards proc, turn, model, and the turn's cancelled flag
+	mu    sync.Mutex // guards proc, turn, model, the turn's cancelled flag, and the context
 	proc  *process   // the running Claude Code process, if any
 	turn  *turn      // the prompt being answered, if any
 	model string     // what --model Claude Code runs with; empty for the settings' model
+	// context is what the conversation holds, as claude-agent-acp reports it: the tokens of the
+	// last top-level assistant message (or what a compaction left), the model it came from,
+	// and the model's window from the last result.
+	context struct {
+		used   int64
+		model  string
+		window int64
+	}
 }
 
 // turn is a prompt being answered.
@@ -605,6 +613,7 @@ func (s *session) handle(p *process, m streamMessage) {
 	case "stream_event":
 		s.updates(p.mapper.stream(m.Event))
 	case "assistant":
+		s.measure(m.Message)
 		s.updates(p.mapper.assistant(m.Message))
 	case "user":
 		s.updates(p.mapper.user(m.Message))
@@ -622,8 +631,65 @@ func (s *session) system(m streamMessage) {
 			}
 		}
 	case "compact_boundary":
+		// The summary is what the context holds now; without a count, the next message tells.
+		var used int64
+		if m.CompactMetadata != nil && m.CompactMetadata.PostTokens != nil {
+			used = *m.CompactMetadata.PostTokens
+		}
+		s.mu.Lock()
+		s.context.used = used
+		s.mu.Unlock()
 		s.updates([]acp.SessionUpdate{{Kind: acp.UpdateCompaction, Status: "completed"}})
 	}
+}
+
+// measure keeps how full the context is after a top-level assistant message. Claude Code's
+// own banners (model "<synthetic>") carry no usage and don't count.
+func (s *session) measure(raw json.RawMessage) {
+	var msg struct {
+		Model string `json:"model"`
+		Usage *struct {
+			Input       int64 `json:"input_tokens"`
+			Output      int64 `json:"output_tokens"`
+			CacheRead   int64 `json:"cache_read_input_tokens"`
+			CacheCreate int64 `json:"cache_creation_input_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(raw, &msg) != nil || msg.Usage == nil || msg.Model == "<synthetic>" {
+		return
+	}
+	u := msg.Usage
+	s.mu.Lock()
+	s.context.used = u.Input + u.Output + u.CacheRead + u.CacheCreate
+	s.context.model = msg.Model
+	s.mu.Unlock()
+}
+
+// usage is the usage_update for a result: the cost so far, and how full the context is once
+// the result names the model's window.
+func (s *session) usage(m streamMessage) (acp.SessionUpdate, bool) {
+	u := acp.SessionUpdate{Kind: acp.UpdateUsage}
+	if m.TotalCostUSD != nil {
+		if cost, err := json.Marshal(map[string]any{"amount": *m.TotalCostUSD, "currency": "USD"}); err == nil {
+			u.Cost = cost
+		}
+	}
+	s.mu.Lock()
+	if w := m.ModelUsage[s.context.model].ContextWindow; w > 0 {
+		s.context.window = w
+	} else if len(m.ModelUsage) == 1 {
+		for _, mu := range m.ModelUsage {
+			if mu.ContextWindow > 0 {
+				s.context.window = mu.ContextWindow
+			}
+		}
+	}
+	if s.context.window > 0 {
+		used, window := s.context.used, s.context.window
+		u.Used, u.Size = &used, &window
+	}
+	s.mu.Unlock()
+	return u, u.Cost != nil || u.Size != nil
 }
 
 // result ends the running turn with what Claude Code reported.
@@ -633,10 +699,8 @@ func (s *session) result(m streamMessage) {
 	s.turn = nil
 	cancelled := t != nil && t.cancelled
 	s.mu.Unlock()
-	if m.TotalCostUSD != nil {
-		if cost, err := json.Marshal(map[string]any{"amount": *m.TotalCostUSD, "currency": "USD"}); err == nil {
-			s.updates([]acp.SessionUpdate{{Kind: acp.UpdateUsage, Cost: cost}})
-		}
+	if u, ok := s.usage(m); ok {
+		s.updates([]acp.SessionUpdate{u})
 	}
 	if t != nil {
 		t.done <- finishTurn(m, cancelled)

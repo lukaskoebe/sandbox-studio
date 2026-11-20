@@ -216,6 +216,16 @@ is the harness's own session ID. Studio only passes IDs matching
 `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. The ACP agent is stopped while the TUI runs, since only
 one process may write a session.
 
+### Context and compacting
+
+Each adapter reports how full its context is with `usage_update` `used` and `size`, which
+Studio keeps with the turn (`chat_turns.usage`); the composer shows the latest as a meter
+(`components/chat/context-meter.tsx`). Its **Compact now** sends `/compact` as a message, a
+command every adapter takes (sources checked 2026-11-20): `claude-agent-acp` 0.87.0 passes it
+to Claude Code, `codex-acp` 2.1.1 runs `thread/compact/start`, OpenCode 1.18.35 runs
+`session.summarize`, and the subscription shim passes it to `claude -p`. Each reports the
+smaller context after it.
+
 ### Switching a chat's model
 
 A chat runs on its teammate's default model unless the user picked one of the others it offers
@@ -257,8 +267,8 @@ Claude Code's output becomes ACP updates:
 | `assistant` message with a `tool_use` block (complete input) | `tool_call`, pending; the title and kind come from the tool, with its input and the files it touches |
 | `user` message with a `tool_result` | `tool_call_update`, `completed` or `failed` (`is_error`), with the result's text |
 | `assistant` `TodoWrite` | `plan` |
-| `system` `compact_boundary` | `compaction_update` |
-| `result` | the prompt's response: `end_turn`, `max_tokens`, `refusal` or `max_turn_requests`; an error result fails the prompt; `total_cost_usd` is a `usage_update` cost |
+| `system` `compact_boundary` | `compaction_update`; its `post_tokens` are what the context holds now |
+| `result` | the prompt's response: `end_turn`, `max_tokens`, `refusal` or `max_turn_requests`; an error result fails the prompt; a `usage_update` with `total_cost_usd` as its cost and, once `modelUsage` names the model's `contextWindow`, `used` (the last top-level assistant message's input, output and cache tokens, as `claude-agent-acp` counts them) and `size` |
 
 Text that streamed as deltas isn't shown again from the complete message. Messages of
 subagents (`parent_tool_use_id` set) aren't shown.

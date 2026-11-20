@@ -32,7 +32,15 @@ type streamMessage struct {
 	StopReason      string          `json:"stop_reason"`
 	Usage           json.RawMessage `json:"usage"`
 	TotalCostUSD    *float64        `json:"total_cost_usd"`
-	MCPServers      []struct {
+	// ModelUsage is a result's tally by model, with each model's context window.
+	ModelUsage map[string]struct {
+		ContextWindow int64 `json:"contextWindow"`
+	} `json:"modelUsage"`
+	// CompactMetadata is a compact_boundary's: the tokens the summary left in the context.
+	CompactMetadata *struct {
+		PostTokens *int64 `json:"post_tokens"`
+	} `json:"compact_metadata"`
+	MCPServers []struct {
 		Name   string `json:"name"`
 		Status string `json:"status"`
 	} `json:"mcp_servers"`

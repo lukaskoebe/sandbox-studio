@@ -331,10 +331,7 @@ export function turnUsage(t: ChatTurn): string {
       })} so far`
     )
   }
-  if (u.contextUsed && u.contextSize)
-    parts.push(
-      `${Math.round((u.contextUsed / u.contextSize) * 100)}% of memory used`
-    )
+  // How full the context is shows beside the composer instead (context-meter.tsx).
   return parts.join(" · ")
 }
 

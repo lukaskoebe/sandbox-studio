@@ -59,6 +59,10 @@ Network requests to hosts without a rule still go through [network approvals](..
 
 Sometimes the agent asks you something, such as which option to pick. The question appears as a short form in the chat. Fill it in and choose **Send answer**, or choose **Skip this question**.
 
+## Context and compacting
+
+Once your teammate has answered, a small ring beside the message box shows how full its context is: how much of this thread it keeps in mind. When the context runs full, your teammate summarizes the conversation on its own to make room. To choose when, select the ring and **Compact now**; this sends `/compact` to the agent, which summarizes the thread so far. Compacting waits while your teammate works.
+
 ## Pictures from your teammate
 
 A teammate can show you a picture in its message, such as a screenshot of a page it changed. It writes the picture's path on its computer into the message as `![what it shows](/path/to/picture.png)`, and the chat shows the picture with those words under it; select it to see it larger. Teammates know how; to have one always show you its changes to a UI, say so in its soul, for example: "After you change the UI, take a screenshot with `studio browser screenshot` and show it in your message."
