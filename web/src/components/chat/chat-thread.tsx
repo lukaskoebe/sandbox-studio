@@ -51,6 +51,7 @@ import {
   MessageScrollerButton,
   MessageScrollerContent,
   MessageScrollerItem,
+  useMessageScroller,
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
@@ -183,9 +184,6 @@ function ChatLog({
 
   // The message being sent shows until the log has it as a message or a queued prompt.
   const users = items.filter((i) => i.kind === "user").length
-  // A new message scrolls to the top. Only the latest is an anchor: the scroller goes to
-  // anchors it hasn't gone to yet, and would jump back to one from when the page opened.
-  const lastUser = [...items].reverse().find((i) => i.kind === "user")?.id
   const [sending, setSending] = useState<Sending>()
   if (sending && (users > sending.users || queued.length > sending.queued))
     setSending(undefined)
@@ -288,7 +286,6 @@ function ChatLog({
                         )}
                         <MessageScrollerItem
                           messageId={key}
-                          scrollAnchor={key === lastUser}
                           className={cn(dim && "opacity-50")}
                           title={turn?.undoneAt ? "Undone" : undefined}
                         >
@@ -337,7 +334,7 @@ function ChatLog({
                     )
                   })}
                   {sending && (
-                    <MessageScrollerItem key={sending.key} scrollAnchor>
+                    <MessageScrollerItem key={sending.key}>
                       <SendingMessage prompt={sending.prompt} />
                     </MessageScrollerItem>
                   )}
@@ -351,6 +348,7 @@ function ChatLog({
                 </MessageScrollerContent>
               </MessageScrollerViewport>
               <MessageScrollerButton />
+              <FollowSent sent={sending?.key} />
             </MessageScroller>
             <ComposerDock className="grid max-w-3xl gap-2">
               {pinned?.plan && (
@@ -460,6 +458,20 @@ function LoadEarlier({
       </p>
     </div>
   )
+}
+
+/**
+ * Takes the thread to its end when a message is sent, even from further up, and follows the
+ * reply there as it comes, as the thread does while it is at its end. A sent message isn't
+ * held at the top: the view would leave it once the reply filled the screen, a jump that
+ * depended on how long the reply was.
+ */
+function FollowSent({ sent }: { sent?: number }) {
+  const { scrollToEnd } = useMessageScroller()
+  useEffect(() => {
+    if (sent !== undefined) scrollToEnd({ behavior: "auto" })
+  }, [sent, scrollToEnd])
+  return null
 }
 
 /**

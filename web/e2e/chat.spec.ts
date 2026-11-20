@@ -195,7 +195,7 @@ test("a message sent while the agent works goes into its turn, or with Alt waits
   expect(JSON.stringify(agents[0].prompts)).not.toContain("changelog")
 })
 
-test("a reply in a long chat keeps the chat at its end", async ({
+test("sending in a long chat takes it to its end, and it follows the reply", async ({
   page,
   api,
   env,
@@ -223,15 +223,28 @@ test("a reply in a long chat keeps the chat at its end", async ({
     await expect(main.getByText(done)).toHaveCount(i + 1)
   }
 
-  // A reply scrolls to itself, not back to a message from when the page opened.
+  // Sent from further up, a message takes the chat to its end, and the chat stays there as
+  // the reply comes: it doesn't hold the message at the top and then jump once the reply
+  // fills the screen.
   await page.reload()
   const messages = main.getByRole("region", { name: "Messages" })
   await expect(messages.getByText(done)).toHaveCount(2)
+  await messages.evaluate((el) => (el.scrollTop = 0))
+  const atEnd = () =>
+    messages.evaluate(
+      (el) => el.scrollHeight - el.clientHeight - el.scrollTop <= 2
+    )
   await box.fill("Third request")
   await box.press("Enter")
+  await expect(messages.getByText("Third request")).toBeVisible()
+  await expect.poll(atEnd).toBe(true)
   // The agent thinks a moment before it answers, as real ones do.
   await expect(allow).toHaveCount(1)
-  await expect(messages.getByText("Third request")).toBeInViewport()
+  await expect(allow).toBeInViewport()
+  await expect.poll(atEnd).toBe(true)
+  await allow.click()
+  await expect(messages.getByText(done)).toHaveCount(3)
+  await expect.poll(atEnd).toBe(true)
   await expect(messages.getByText("First request")).not.toBeInViewport()
 })
 

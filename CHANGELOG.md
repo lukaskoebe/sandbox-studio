@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A message you send takes the chat to its end, and the chat follows the reply there. Before,
+  the message moved to the top of the chat and the view jumped once the reply filled the
+  screen.
 - See a page as a phone shows it. The page size button beside the browser's address offers
   Fit to this view, Phone, Tablet, Laptop, Desktop and Standard. A device's size stays for the
   session, for everyone watching and for the teammate's screenshots, until the browser restarts.
