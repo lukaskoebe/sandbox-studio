@@ -10,7 +10,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react"
 import { DisclosureRow } from "@/components/disclosure-row"
-import { useSavePart } from "@/components/save-bar"
+import { useSavePart } from "@/components/auto-save"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -117,9 +117,9 @@ export function TeammateForm({
   prefill?: { name?: string; role?: string }
   onSaved: () => void
   /**
-   * Shows each section as a row that opens to its fields, with the open one named here. In a
-   * SaveBar the page's bar saves the changes; otherwise the open row has a Save. Without it the
-   * sections follow each other with one Save.
+   * Shows each section as a row that opens to its fields, with the open one named here. In an
+   * AutoSave the changes save as they are made; otherwise the open row has a Save. Without it
+   * the sections follow each other with one Save.
    */
   sections?: { open?: string; onOpen: (id: string | undefined) => void }
 }) {
@@ -226,7 +226,7 @@ export function TeammateForm({
     else create.mutate({ params: { path: { env } }, body: body(harness) })
   }
 
-  // What differs from the saved teammate, for the page's save bar.
+  // What differs from the saved teammate, for the page's AutoSave.
   const dirty =
     teammate !== undefined &&
     (name !== teammate.name ||
@@ -244,6 +244,7 @@ export function TeammateForm({
   const inBar = useSavePart("teammate", {
     dirty,
     valid,
+    signature: harness ? JSON.stringify(body(harness)) : "",
     save: () => {
       if (!teammate || !harness) return Promise.resolve()
       setFormError(undefined)
@@ -251,22 +252,6 @@ export function TeammateForm({
         params: { path: { env, id: teammate.id } },
         body: body(harness),
       })
-    },
-    discard: () => {
-      if (!teammate) return
-      setName(teammate.name)
-      setRole(teammate.role)
-      setProviderId(teammate.providerId)
-      setHarness(teammate.harness)
-      setModel(teammate.model)
-      setModels(teammate.models ?? [])
-      setGitName(teammate.gitName)
-      setGitEmail(teammate.gitEmail)
-      setUseHostGit(teammate.useHostGitIdentity)
-      setSoul(teammate.soul)
-      setAvatar(teammate.avatar)
-      setApprovalScope(teammate.approvalScope)
-      setFormError(undefined)
     },
   })
 

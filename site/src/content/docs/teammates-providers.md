@@ -31,7 +31,7 @@ Choose the caret beside the teammate's name in the bar at the top, then **Settin
 - **Knowledge**: [Memory](../memory/), with **Learn from its chats** and **Dream every night**, and Tasks.
 - **Routine and access**: Check-ins, New hosts (its [network level](../network/#security-levels)), Network rules, [Browser](../browser/), Secrets, and Copy to another environment.
 
-One **Save** keeps the changes of every row, and **Delete Iris** is at the bottom. **← Iris** above the title, Esc, or the browser's back button returns to where you opened the settings from, such as a thread. ⌘K also finds each row by what it holds, such as *stealth*, *soul* or *check-ins*.
+Changes save as you make them: a field saves once you pause typing, and when you close the settings. A change that can't be saved yet, such as an empty name, says so, and closing asks first. **Delete Iris** is at the bottom. **← Iris** above the title, Esc, or the browser's back button returns to where you opened the settings from, such as a thread. ⌘K also finds each row by what it holds, such as *stealth*, *soul* or *check-ins*.
 
 ![Ada's settings: Profile, Knowledge, and Routine and access](../../assets/screenshots/teammate-settings.jpg)
 

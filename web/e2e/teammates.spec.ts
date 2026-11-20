@@ -354,7 +354,7 @@ for (const phone of [false, true]) {
   })
 }
 
-test("a teammate's settings have one save bar for the changes in every section, and closing them with changes asks", async ({
+test("a teammate's settings save as you type, and closing them with a change that can't save asks", async ({
   page,
   api,
   env,
@@ -362,47 +362,45 @@ test("a teammate's settings have one save bar for the changes in every section, 
   const name = sandboxName("Saver")
   const id = await addTeammate(api, env, name)
   const teammate = () =>
-    api.json<{ role: string; gitName: string }>(
+    api.json<{ name: string; role: string; gitName: string }>(
       "GET",
       `/api/environments/${env}/teammates/${id}`
     )
   await page.goto(`/e/${env}/teammates/${id}?profile=settings&open=identity`)
-  const bar = page.getByRole("region", { name: "Unsaved changes" })
+  const status = page.getByRole("status").filter({ hasText: /Sav|Not saved/ })
   await expect(page.getByLabel("Role")).toBeVisible()
-  await expect(bar).toBeHidden()
 
-  // A change in one section, then another: opening a section keeps the first change.
+  // A change saves once typing pauses; opening another section and changing it saves that too.
   await page.getByLabel("Role").fill("Reviewer")
-  await expect(bar).toBeVisible()
+  await expect(status).toContainText("Saved")
+  await expect.poll(async () => (await teammate())?.role).toBe("Reviewer")
   await page.getByRole("button", { name: /^Git identity/ }).click()
-  const gitName = await page.getByLabel("Git name").inputValue()
   await page.getByLabel("Git name").fill("Saver Bot")
-  await bar.getByRole("button", { name: "Discard" }).click()
-  await expect(bar).toBeHidden()
-  await expect(page.getByLabel("Git name")).toHaveValue(gitName)
+  await expect.poll(async () => (await teammate())?.gitName).toBe("Saver Bot")
 
-  await page.getByLabel("Git name").fill("Saver Bot")
+  // Closing the sheet right after a change saves it on the way out.
   await page.getByRole("button", { name: /^Identity/ }).click()
-  await page.getByLabel("Role").fill("Reviewer")
-  await bar.getByRole("button", { name: "Save", exact: true }).click()
-  await expect(bar).toBeHidden()
-  expect(await teammate()).toMatchObject({
-    role: "Reviewer",
-    gitName: "Saver Bot",
-  })
-
-  // Closing the sheet with a change asks; Stay keeps it, Leave goes.
   await page.getByLabel("Role").fill("Writer")
+  await page.keyboard.press("Escape")
+  await expect(
+    page.getByRole("region", { name: `${name}'s settings` })
+  ).toBeHidden()
+  await expect.poll(async () => (await teammate())?.role).toBe("Writer")
+
+  // An empty name can't save: it says so, and closing asks. Stay keeps it, Leave goes.
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings&open=identity`)
+  await page.getByLabel("Name", { exact: true }).fill("")
+  await expect(status).toContainText("Not saved until the form is complete")
   await page.keyboard.press("Escape")
   const ask = page.getByRole("alertdialog", { name: "Leave without saving?" })
   await ask.getByRole("button", { name: "Stay" }).click()
-  await expect(page.getByLabel("Role")).toHaveValue("Writer")
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("")
   await page.keyboard.press("Escape")
   await ask.getByRole("button", { name: "Leave" }).click()
   await expect(
     page.getByRole("region", { name: `${name}'s settings` })
   ).toBeHidden()
-  expect((await teammate())?.role).toBe("Reviewer")
+  expect((await teammate())?.name).toBe(name)
 })
 
 test("a teammate's security level is a card, or the environment's default", async ({

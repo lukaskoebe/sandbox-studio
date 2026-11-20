@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { HeartbeatIcon } from "@phosphor-icons/react"
-import { useSavePart } from "@/components/save-bar"
+import { useSavePart } from "@/components/auto-save"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -86,12 +86,12 @@ export function TeammateHeartbeat({
     saved.everyHours === draft.everyHours &&
     saved.fromHour === draft.fromHour &&
     saved.toHour === draft.toHour
-  // In a SaveBar the page's bar saves the times with the teammate's other changes.
+  // In an AutoSave the times save as they are changed, with the teammate's other changes.
   const inBar = useSavePart("checkins", {
     dirty: saved !== undefined && !unchanged,
     valid,
+    signature: JSON.stringify(draft),
     save: () => set.mutateAsync({ ...path, body: draft }),
-    discard: () => setDraft(saved ?? defaultHeartbeat),
   })
 
   return (

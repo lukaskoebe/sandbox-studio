@@ -30,6 +30,8 @@
   suspended. A sandbox that has this now works again once it is stopped and started.
 - In the macOS app, DevTools and keyed previews were blank: the app blocked their
   `*.localhost` addresses. They load now.
+- A teammate's settings save as you change them, like Lead's. A field saves once you pause
+  typing, and when you close the settings. The **Unsaved changes** bar is gone.
 - A new thread from a teammate's home, or from **New chat**, opens at once. Your message shows
   there while the computer and the agent start, instead of the composer waiting for them. If
   it can't go, the thread says why and keeps your words in its composer.

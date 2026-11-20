@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { BackToSetup } from "@/components/back-to-setup"
 import { BrowserSettings } from "@/components/browser-settings"
-import { SaveBar } from "@/components/save-bar"
+import { AutoSave } from "@/components/auto-save"
 import { DisclosureGroup, DisclosureRow } from "@/components/disclosure-row"
 import {
   TeammateLevelPicker,
@@ -99,7 +99,7 @@ export function TeammateSettings({
 
   return (
     // Closing the sheet leaves the settings as going to another page does.
-    <SaveBar leaves={(search) => search.profile !== "settings"}>
+    <AutoSave leaves={(search) => search.profile !== "settings"}>
       <div className="grid max-w-3xl grid-cols-1">
         {fromSetup && <BackToSetup step="teammate" />}
         <DisclosureGroup title="Profile">
@@ -108,7 +108,8 @@ export function TeammateSettings({
             env={env}
             teammate={teammate}
             providers={providers.data}
-            onSaved={() => toast.success("Teammate saved")}
+            // The settings say Saved themselves.
+            onSaved={() => undefined}
             sections={{ open, onOpen: setOpen }}
           />
         </DisclosureGroup>
@@ -227,7 +228,7 @@ export function TeammateSettings({
           </DisclosureRow>
         </div>
       </div>
-    </SaveBar>
+    </AutoSave>
   )
 }
 

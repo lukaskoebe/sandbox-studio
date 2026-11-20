@@ -34,15 +34,18 @@ test("a thread picks one of the models its teammate offers, from the next messag
   await expect(
     page.getByRole("button", { name: "Remove refused" })
   ).toBeVisible()
-  const bar = page.getByRole("region", { name: "Unsaved changes" })
-  await bar.getByRole("button", { name: "Save", exact: true }).click()
-  await expect(bar).toBeHidden()
-  expect(
-    await api.json<{ models: string[] }>(
-      "GET",
-      `/api/environments/${env}/teammates/${teammate}`
+  // The settings save the change themselves.
+  await expect
+    .poll(
+      async () =>
+        (
+          await api.json<{ models: string[] }>(
+            "GET",
+            `/api/environments/${env}/teammates/${teammate}`
+          )
+        )?.models
     )
-  ).toMatchObject({ models: ["claude-opus-5-5", "refused"] })
+    .toEqual(["claude-opus-5-5", "refused"])
 
   await api.guestReady(id)
   const chat = (await api.json<{ id: string }>(
