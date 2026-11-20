@@ -24,5 +24,22 @@
 	<string>12.0.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<!-- Studio serves DevTools and keyed previews on *.localhost over plain http. App Transport
+	     Security lets the app load its 127.0.0.1 page but blocked those names in the bundle. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

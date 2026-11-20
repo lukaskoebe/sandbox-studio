@@ -81,6 +81,7 @@ jobs:
             echo "$out"
             if echo "$out" | grep -q '"error"'; then cat "$SANDBOX_STUDIO_HOME"/logs/studio.log || true; exit 1; fi
             echo "$out" | grep -q "\"notifications\": $2" || { echo "notifications: want $2"; exit 1; }
+            echo "$out" | grep -q '"localhost": "resolves"' || { echo "localhost: want resolves"; exit 1; }
           }
           selftest cmd/studio-app/studio-app-ci false
           selftest "$RUNNER_TEMP/Sandbox Studio.app/Contents/MacOS/studio-app" true
