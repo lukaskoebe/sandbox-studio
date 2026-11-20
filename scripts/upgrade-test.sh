@@ -123,11 +123,19 @@ after() {
 	st show upgrade
 	check_marker "$id" "The sandbox, running through the upgrade,"
 
-	# On Windows a guest of the previous release that is stopped within a second or two of
-	# reconnecting hangs in its shutdown for its full 65 seconds (msb's vsock there; Linux
-	# stops at once), so the stop waits until the reconnect has settled.
+	# On Windows the previous release's guest, reconnected to a new Studio, can overrun its
+	# 65-second shutdown ("supervisor did not stop in time"; Linux stops at once). Studio
+	# stops the VM all the same, so that one error passes once the sandbox is stopped; the
+	# guest the new build starts below has to stop cleanly.
 	sleep 10
-	st stop upgrade
+	if ! st stop upgrade 2>"$work/stop"; then
+		cat "$work/stop" >&2
+		grep -q "supervisor did not stop in time" "$work/stop" ||
+			fail "The new build couldn't stop the sandbox."
+		[ "$(api GET "/api/environments/$env/sandboxes/$id" | jq -r .status)" = stopped ] ||
+			fail "The sandbox isn't stopped after its guest's shutdown overran."
+		say "The previous release's guest overran its shutdown; Studio stopped its VM anyway."
+	fi
 	st start upgrade
 	check_marker "$id" "The sandbox, stopped and started again by the new build,"
 
