@@ -48,12 +48,19 @@ async function browsing(
 /** Right-clicks the live view at (x, y), in the fake page's 640x400 CSS pixels. */
 async function rightClick(page: Page, x: number, y: number) {
   const canvas = page.getByLabel("Live view of the browser")
+  // The canvas's frame takes the right-click (and covers the canvas while a note holds the
+  // view). Through it, so a card floating over the spot, such as another test's approval in
+  // the stack, waits and names itself instead of taking the click.
+  const frame = canvas.locator("xpath=..")
   const box = (await canvas.boundingBox())!
-  await page.mouse.click(
-    box.x + (x / 640) * box.width,
-    box.y + (y / 400) * box.height,
-    { button: "right" }
-  )
+  const around = (await frame.boundingBox())!
+  await frame.click({
+    button: "right",
+    position: {
+      x: box.x - around.x + (x / 640) * box.width,
+      y: box.y - around.y + (y / 400) * box.height,
+    },
+  })
 }
 
 /**
@@ -216,9 +223,10 @@ test("notes go as text alone to an agent that can't take images", async ({
   await page.keyboard.press("Enter")
   // A right-click on the note while it closes would land on it rather than the page.
   await expect(page.getByRole("textbox", { name: /^Note/ })).toHaveCount(0)
-  // A note whose lookup fails keeps its point alone.
+  // A note whose lookup fails keeps its point alone. High on the page, clear of the approval
+  // stack, where other tests' approvals float.
   await page.route("**/browser/element?*", (route) => route.abort())
-  await rightClick(page, 500, 360)
+  await rightClick(page, 500, 60)
   await page.getByRole("textbox", { name: "Note 2" }).fill("Empty here")
   await page.keyboard.press("Enter")
   await page.unroute("**/browser/element?*")
@@ -250,7 +258,7 @@ test("notes go as text alone to an agent that can't take images", async ({
   spot(text, String.raw`1\. button "Sign in" \(#sign-in\), at`, "Press this")
   const [x2, y2] = spot(text, String.raw`2\. At`, "Empty here")
   expect(Math.abs(x2 - 500)).toBeLessThanOrEqual(2)
-  expect(Math.abs(y2 - 360)).toBeLessThanOrEqual(2)
+  expect(Math.abs(y2 - 60)).toBeLessThanOrEqual(2)
 })
 
 // A model that its provider says reads text only gets the notes as text alone too, though its

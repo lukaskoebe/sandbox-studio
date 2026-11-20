@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures"
+import { expect, hideApprovalStack, test } from "./fixtures"
 
 /** A host name unique to this run, so tests don't see each other's entries. */
 function freshName(label: string, suffix: string) {
@@ -18,6 +18,7 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
     )
 
   await page.goto(`/e/${env}/settings/ports`)
+  await hideApprovalStack(page)
   await expect(
     page.getByRole("heading", { name: "Local network", exact: true })
   ).toBeVisible()
@@ -64,6 +65,7 @@ test("Settings > Ports and LAN opens and closes ports of this computer", async (
   env,
 }) => {
   await page.goto(`/e/${env}/settings/ports`)
+  await hideApprovalStack(page)
   await expect(
     page.getByRole("heading", { name: "This computer", exact: true })
   ).toBeVisible()
@@ -93,6 +95,7 @@ test("a rule no sandbox can reach says so, and why", async ({
   env,
 }) => {
   await page.goto(`/e/${env}/network`)
+  await hideApprovalStack(page)
   await page.getByRole("button", { name: "Add rule", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Host", { exact: true }).fill("127.0.0.1")
@@ -121,6 +124,7 @@ test("a proxy rule's Advanced fields are saved with the rule", async ({
 }) => {
   const host = freshName("proxied", "example.org")
   await page.goto(`/e/${env}/network`)
+  await hideApprovalStack(page)
   await page.getByRole("button", { name: "Add rule", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Host", { exact: true }).fill(host)

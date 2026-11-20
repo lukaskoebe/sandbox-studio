@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -66,24 +67,46 @@ func TestCopiesLeaveTheirFilesOutOfTheCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// FADV_DONTNEED is advice: a page the kernel holds just then stays, as two of a small
+	// file's did once on a CI runner. A stray small file or two is that; more is a copy that
+	// skipped its drop.
+	const strays = 2
 	var archive bytes.Buffer
 	must(t, ExportWorkspaceAs(src, &archive, &bytes.Buffer{}, Zstd))
+	var kept []string
 	for name := range files {
-		if n := cachedPages(t, filepath.Join(src, name)); (n > 0) != (name == "hot") {
+		n := cachedPages(t, filepath.Join(src, name))
+		switch {
+		case name == "hot" && n == 0:
+			t.Errorf("export: hot was dropped from the cache")
+		case name != "hot" && n > 0 && strings.HasPrefix(name, "small/"):
+			kept = append(kept, fmt.Sprintf("%s has %d", name, n))
+		case name != "hot" && n > 0:
 			t.Errorf("export: %s has %d pages in the cache", name, n)
 		}
+	}
+	if len(kept) > strays {
+		t.Errorf("export: %d small files have pages in the cache: %v", len(kept), kept)
 	}
 
 	dst := t.TempDir()
 	must(t, ImportWorkspace(dst, &archive, nil))
+	kept = nil
 	for name, size := range files {
 		p := filepath.Join(dst, name)
 		if st, err := os.Stat(p); err != nil || st.Size() != int64(size) {
 			t.Fatalf("import: %s: %v, %v", name, st, err)
 		}
-		if n := cachedPages(t, p); n != 0 {
+		n := cachedPages(t, p)
+		switch {
+		case n > 0 && strings.HasPrefix(name, "small/"):
+			kept = append(kept, fmt.Sprintf("%s has %d", name, n))
+		case n > 0:
 			t.Errorf("import: %s has %d pages in the cache", name, n)
 		}
+	}
+	if len(kept) > strays {
+		t.Errorf("import: %d small files have pages in the cache: %v", len(kept), kept)
 	}
 }
 

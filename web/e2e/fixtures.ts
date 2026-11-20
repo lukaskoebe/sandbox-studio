@@ -305,6 +305,19 @@ export function approvals(page: Page) {
 }
 
 /**
+ * Hides the floating approval stack until the page navigates. The stack shows the pending
+ * approvals of every environment, so a card from a test running beside this one can sit over
+ * what this test clicks for as long as that test leaves it; a test that never looks at
+ * approvals hides it.
+ */
+export async function hideApprovalStack(page: Page) {
+  await page.addStyleTag({
+    content:
+      'section[aria-label="Approvals"].fixed { display: none !important }',
+  })
+}
+
+/**
  * The visible terminal. The test browser has WebGL off, so xterm.js renders rows as DOM
  * text; its own class names are the only handle on them.
  */

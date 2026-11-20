@@ -573,9 +573,10 @@ func TestCancelQuarantinesUntilNativeRunSettles(t *testing.T) {
 		}
 		close(done)
 	}()
+	// Generous: a busy Windows runner took most of 19 s to reach the setup.
 	select {
 	case <-started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("setup not started")
 	}
 	if _, err := h.w.Cancel(context.Background(), h.env, job.ID); err != nil {
@@ -583,7 +584,7 @@ func TestCancelQuarantinesUntilNativeRunSettles(t *testing.T) {
 	}
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("cancel did not return")
 	}
 	job = h.job(t, job.ID)

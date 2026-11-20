@@ -88,10 +88,11 @@ test("@ mentions a workspace file: the agent gets links, and the message opens t
   await chip.click()
   await expect(page).toHaveURL(/file=web%2Fsrc%2Fcheckout%2Fcoupon\.ts/)
   const screen = page.getByRole("region", { name: `${sb}'s screen` })
-  await expect(screen.locator("pre")).toContainText("applyCoupon")
+  // A review opened before stays mounted, hidden, behind Files.
+  await expect(screen.locator("pre:visible")).toContainText("applyCoupon")
 
   // Files mentions the lines selected in a file.
-  await screen.locator('[data-line="3"]').click({ clickCount: 3 })
+  await screen.locator('[data-line="3"]:visible').click({ clickCount: 3 })
   await page.evaluate(() => {
     const lines = document.querySelectorAll("[data-line]")
     const range = document.createRange()

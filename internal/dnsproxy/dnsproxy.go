@@ -10,10 +10,12 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -186,25 +188,29 @@ func Listen(addr string, upstreams []string, log *slog.Logger) (*Server, error) 
 // over both transports. With port 0 the kernel picks the TCP port, which can already be busy
 // for UDP, so another port is tried. TCP picks first because Windows keeps blocks of TCP ports
 // out of use (its excluded port ranges, for Hyper-V and WinNAT) and hands out UDP ports one
-// after another: a UDP port it picked was refused for TCP ten times in a row.
+// after another: a UDP port it picked was refused for TCP ten times in a row. It keeps blocks
+// of UDP ports too, and hands out TCP ports one after another as well, so after a refusal the
+// next port is drawn at random from the dynamic range rather than asked for again: ten TCP
+// ports in a row were each refused for UDP.
 func listenPair(addr string) (net.PacketConn, net.Listener, error) {
-	_, port, err := net.SplitHostPort(addr)
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, nil, err
 	}
+	try := addr
 	for attempt := 1; ; attempt++ {
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		pc, err := net.ListenPacket("udp", ln.Addr().String())
+		ln, err := net.Listen("tcp", try)
 		if err == nil {
-			return pc, ln, nil
+			var pc net.PacketConn
+			if pc, err = net.ListenPacket("udp", ln.Addr().String()); err == nil {
+				return pc, ln, nil
+			}
+			ln.Close()
 		}
-		ln.Close()
-		if port != "0" || attempt == 10 {
+		if port != "0" || attempt == 32 {
 			return nil, nil, err
 		}
+		try = net.JoinHostPort(host, strconv.Itoa(49152+rand.IntN(65536-49152)))
 	}
 }
 
