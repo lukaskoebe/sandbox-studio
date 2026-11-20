@@ -47,6 +47,9 @@ func statusOf(s msb.SandboxStatus) Status {
 type Options struct {
 	Image    string // OCI reference of the base image
 	GuestDir string // host directory mounted read-only at /opt/studio
+	// BeforeBoot, if set, runs before a sandbox VM is created or started, when Studio may
+	// change GuestDir's files that no VM holds.
+	BeforeBoot func(context.Context)
 }
 
 // Spec is the per-sandbox configuration.
@@ -104,6 +107,12 @@ const guestShutdownExecTimeout = 70 * time.Second
 // New returns a runtime with the given options.
 func New(opts Options) *Runtime { return &Runtime{opts: opts} }
 
+func (r *Runtime) beforeBoot(ctx context.Context) {
+	if r.opts.BeforeBoot != nil {
+		r.opts.BeforeBoot(ctx)
+	}
+}
+
 // BaseReference returns the configured OCI image reference used for new VMs.
 func (r *Runtime) BaseReference() string {
 	if r == nil {
@@ -140,6 +149,7 @@ func (r *Runtime) CreateForTransfer(ctx context.Context, name string, spec Spec,
 }
 
 func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string, bootGuest bool) error {
+	r.beforeBoot(ctx)
 	imageOptions, err := privateImageSourceOptions(spec.Image)
 	if err != nil {
 		return fmt.Errorf("create sandbox: %w", err)
@@ -289,6 +299,7 @@ func validImageSourceID(id string) bool {
 
 // Start boots a stopped sandbox in detached mode.
 func (r *Runtime) Start(ctx context.Context, name string) error {
+	r.beforeBoot(ctx)
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
 		return moveError(catalogError(err))
@@ -298,6 +309,7 @@ func (r *Runtime) Start(ctx context.Context, name string) error {
 
 // StartForTransfer starts a stopped sandbox in transfer mode, without its services.
 func (r *Runtime) StartForTransfer(ctx context.Context, name string) error {
+	r.beforeBoot(ctx)
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
 		return moveError(catalogError(err))

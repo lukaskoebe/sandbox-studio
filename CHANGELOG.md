@@ -23,6 +23,13 @@
   Questions leave part of Lead's daily limit for writing the day.
 - Home's **Today so far** card says what happened since you last looked at today: who worked,
   pushes, new requests and scheduled runs.
+- On Windows, a chat could fail to start with "the agent exited: unexpected EOF" after an
+  update made while a sandbox ran. Studio moved the sandbox's guest agent aside for the new
+  one, and the running VM then saw a mix of both files. Studio now leaves the agent a running
+  sandbox holds, and updates it before the next sandbox starts once none runs or is
+  suspended. A sandbox that has this now works again once it is stopped and started.
+- In the macOS app, DevTools and keyed previews were blank: the app blocked their
+  `*.localhost` addresses. They load now.
 - The step an agent is on now looks like the steps before it: a line with a spinner, instead
   of a card. Thoughts in a row of steps are lines too.
 - A chat's step row no longer says **Worked for** while a call in it still runs, as when you

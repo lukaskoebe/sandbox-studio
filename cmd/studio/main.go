@@ -350,10 +350,13 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	// From here on this process's msb library has msb's catalog open, so Studio's own SQLite
 	// leaves the catalog's files alone in it: see msbdb.ErrSealed.
 	msbdb.Seal()
+	agentStale := false
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); errors.Is(err, agentbin.ErrInUse) {
 		// Stopping here would leave no Studio to stop the sandboxes with, on Windows after every
-		// update made while they run. They keep the agent they have, which Studio still talks to.
-		log.Warn("the guest agent wasn't updated: a running sandbox holds it open. Stop every sandbox and restart Studio to update it", "err", err)
+		// update made while they run. They keep the agent they have, which Studio still talks to,
+		// and it is updated before a sandbox starts once none runs (agentCatchUp).
+		log.Warn("the guest agent wasn't updated: a running sandbox holds it open. It is, once every sandbox has stopped", "err", err)
+		agentStale = true
 	} else if err != nil {
 		return err
 	}
@@ -499,7 +502,13 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 
 	hub := agentchan.NewHub(log)
 	go agentMem.RunBrowse(ctx, hub) // ~/memory copies in the connected sandboxes, rewritten as memory changes
-	rt := newRuntime(runtime.Options{Image: image, GuestDir: p.Guest()}, log)
+	catchUp := &agentCatchUp{
+		install: func() error { return installGuestAgent(p.Guest(), goruntime.GOARCH) },
+		log:     log,
+		stale:   agentStale,
+	}
+	rt := newRuntime(runtime.Options{Image: image, GuestDir: p.Guest(), BeforeBoot: catchUp.catchUp}, log)
+	catchUp.vms = rt
 	mgr := &sandboxes.Manager{
 		Store:      st,
 		Runtime:    rt,

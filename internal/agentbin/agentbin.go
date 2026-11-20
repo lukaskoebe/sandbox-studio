@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 //go:embed all:dist
@@ -90,29 +89,19 @@ func install(dst string, data []byte) error {
 	if err == nil {
 		return nil
 	}
+	_ = os.Remove(tmp)
 	if _, serr := os.Stat(dst); serr != nil {
-		_ = os.Remove(tmp)
 		return err
 	}
 	// Windows won't replace a file another process has open, and a running sandbox's VM holds
-	// the agent open through its mount of the guest directory: an update of Studio stopped at
-	// its start until the sandboxes did. The open file can still be moved aside where its
-	// holder shares it for deletion, as Studio's updater does with a running studio.exe; the VM
-	// keeps the one it has open, and the new one takes the name.
-	aside := fmt.Sprintf("%s.old-%d", dst, time.Now().UnixNano())
-	if aerr := rename(dst, aside); aerr != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("%w: replacing %s: %v; moving it aside: %v", ErrInUse, filepath.Base(dst), err, aerr)
-	}
-	if err := rename(tmp, dst); err != nil {
-		_ = rename(aside, dst)
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	// the agent open through its mount of the guest directory. Moving it aside for the new one
+	// isn't safe either: msb's Windows file sharing knows files by path, so the VM would see the
+	// new file under the old one's inode, next to the old pages it cached, and every
+	// studio-agent it starts would run a mix of both. The sandboxes keep the old agent.
+	return fmt.Errorf("%w: replacing %s: %v", ErrInUse, filepath.Base(dst), err)
 }
 
-// removeAside removes the files install moved aside, once no sandbox holds them any more.
+// removeAside removes the files Studio 0.25 and 0.26 moved aside, once no sandbox holds them.
 func removeAside(dst string) {
 	aside, _ := filepath.Glob(dst + ".old-*")
 	for _, f := range aside {
