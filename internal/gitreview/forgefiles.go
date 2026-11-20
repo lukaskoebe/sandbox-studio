@@ -936,7 +936,14 @@ func reviewsFile(r *forgeRepo, info PullRequestInfo, at string) string {
 		if c.Side == "old" {
 			where += " (old)"
 		}
-		fmt.Fprintf(&b, "### %s · %s%s\n\n%s\n\n", where, c.Author, stamp(c.When), strings.TrimSpace(c.Body))
+		thread := ""
+		if c.Thread != "" {
+			thread = " · thread " + c.Thread
+			if c.Resolved {
+				thread += ", resolved"
+			}
+		}
+		fmt.Fprintf(&b, "### %s · %s%s%s\n\n%s\n\n", where, c.Author, stamp(c.When), thread, strings.TrimSpace(c.Body))
 	}
 	return b.String()
 }

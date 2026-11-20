@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Agents can ask to mark a pull request's review threads resolved, on GitHub and GitLab, once
+  they have dealt with them (`studio pr resolve`). Nothing changes until you approve the card,
+  which lists each thread with its first comment. `pr read` now names each review comment's
+  thread.
 - A message you send takes the chat to its end, and the chat follows the reply there. Before,
   the message moved to the top of the chat and the view jumped once the reply filled the
   screen.

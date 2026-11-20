@@ -193,6 +193,7 @@ func (g *GitLab) ReadPullRequest(ctx context.Context, token, owner, repo string,
 	// Notes: approvals and requested changes are system notes, line comments diff notes,
 	// the rest the conversation.
 	var notes []struct {
+		ID        int64      `json:"id"`
 		Body      string     `json:"body"`
 		Author    gitlabUser `json:"author"`
 		CreatedAt time.Time  `json:"created_at"`
@@ -222,7 +223,7 @@ func (g *GitLab) ReadPullRequest(ctx context.Context, token, owner, repo string,
 			if len(info.LineComments) == pageSize {
 				continue
 			}
-			lc := PRLineComment{Author: n.Author.Username, Path: n.Position.NewPath, Line: n.Position.NewLine, Side: "new", Body: n.Body, When: n.CreatedAt}
+			lc := PRLineComment{Author: n.Author.Username, Path: n.Position.NewPath, Line: n.Position.NewLine, Side: "new", Body: n.Body, When: n.CreatedAt, id: n.ID}
 			if n.Position.NewLine == 0 {
 				lc.Path, lc.Line, lc.Side = n.Position.OldPath, n.Position.OldLine, "old"
 			}
@@ -245,6 +246,9 @@ func (g *GitLab) ReadPullRequest(ctx context.Context, token, owner, repo string,
 				info.Reviews = append(info.Reviews, PRReview{Author: a.User.Username, State: "APPROVED", When: m.UpdatedAt})
 			}
 		}
+	}
+	if len(info.LineComments) > 0 {
+		info.threadErr = g.threads(ctx, token, mr, info.LineComments)
 	}
 	return info, nil
 }

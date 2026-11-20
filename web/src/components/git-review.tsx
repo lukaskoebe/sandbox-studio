@@ -1,4 +1,9 @@
 import {
+  ForgeResolve,
+  ForgeResolveSummary,
+  forgeResolveDescription,
+} from "@/components/forge-resolve"
+import {
   ForgeComment,
   ForgeCommentSummary,
   forgeCommentDescription,
@@ -242,7 +247,8 @@ export function isGitApproval(a: Approval) {
     a.kind === "git.push" ||
     a.kind === "git.pr" ||
     a.kind === "git.review" ||
-    a.kind === "git.comment"
+    a.kind === "git.comment" ||
+    a.kind === "git.resolve"
   )
 }
 
@@ -441,6 +447,13 @@ export function GitReview({
       <ReviewScroll>
         {head}
         <ForgeComment approval={approval} />
+      </ReviewScroll>
+    )
+  if (approval.kind === "git.resolve")
+    return (
+      <ReviewScroll>
+        {head}
+        <ForgeResolve approval={approval} />
       </ReviewScroll>
     )
   return <PushReview approval={approval} head={head} />
@@ -1146,6 +1159,7 @@ function Rewrite({ review: rv }: { review: NonNullable<GitDetail["review"]> }) {
 export function gitReviewDescription(approval: Approval) {
   if (approval.kind === "git.review") return forgeReviewDescription(approval)
   if (approval.kind === "git.comment") return forgeCommentDescription(approval)
+  if (approval.kind === "git.resolve") return forgeResolveDescription(approval)
   const git = approval.git
   if (git?.pullRequest)
     return "The push was approved and is on the forge. Approving opens this pull request."
@@ -1301,6 +1315,8 @@ export function GitApprovalSummary({
     return <ForgeReviewSummary approval={approval} onReview={onReview} />
   if (approval.kind === "git.comment")
     return <ForgeCommentSummary approval={approval} onReview={onReview} />
+  if (approval.kind === "git.resolve")
+    return <ForgeResolveSummary approval={approval} onReview={onReview} />
   const rv = approval.git?.review
   return (
     <div className="flex items-center gap-2 text-xs">

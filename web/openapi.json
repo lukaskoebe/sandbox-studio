@@ -202,6 +202,10 @@
             "$ref": "#/components/schemas/CommentDraft",
             "description": "A teammate's comment on a pull request's conversation, and what became of it"
           },
+          "forgeResolve": {
+            "$ref": "#/components/schemas/ResolveDraft",
+            "description": "A teammate's ask to resolve review threads of a pull request, and what became of it"
+          },
           "forgeReview": {
             "$ref": "#/components/schemas/ReviewDetail",
             "description": "A teammate's review draft of a pull request, and what became of it"
@@ -2356,7 +2360,7 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it",
+            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it; for git.resolve, allow resolves the threads and deny leaves them",
             "enum": [
               "allow",
               "deny",
@@ -2620,6 +2624,53 @@
           "name",
           "size",
           "saved"
+        ],
+        "type": "object"
+      },
+      "DraftThread": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "description": "Who started the thread",
+            "type": "string"
+          },
+          "body": {
+            "description": "The thread's first comment, cut at 2,000 bytes",
+            "type": "string"
+          },
+          "done": {
+            "description": "Resolved, once approved",
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "line": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "replies": {
+            "description": "How many replies follow it",
+            "format": "int64",
+            "type": "integer"
+          },
+          "side": {
+            "enum": [
+              "new",
+              "old"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "side",
+          "author",
+          "body"
         ],
         "type": "object"
       },
@@ -7764,11 +7815,19 @@
           "path": {
             "type": "string"
           },
+          "resolved": {
+            "description": "The thread is resolved",
+            "type": "boolean"
+          },
           "side": {
             "enum": [
               "new",
               "old"
             ],
+            "type": "string"
+          },
+          "thread": {
+            "description": "The review thread the comment is in, which git_pull_request_resolve takes; its replies share it",
             "type": "string"
           },
           "when": {
@@ -9940,6 +9999,93 @@
         },
         "required": [
           "scale"
+        ],
+        "type": "object"
+      },
+      "ResolveDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "description": "The forge account that resolves them: the user's token's",
+            "type": "string"
+          },
+          "forge": {
+            "type": "string"
+          },
+          "forgeHost": {
+            "description": "The forge's host",
+            "type": "string"
+          },
+          "forgeId": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "The agent's key for this ask, so that asking again doesn't ask twice",
+            "type": "string"
+          },
+          "note": {
+            "description": "The user's note",
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "result": {
+            "description": "Why resolving failed, thread by thread",
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "The sandbox's name",
+            "type": "string"
+          },
+          "state": {
+            "description": "Empty until it is decided and, once approved, done",
+            "enum": [
+              "resolved",
+              "discarded",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "teammate": {
+            "description": "The teammate owning the sandbox; empty for unowned sandboxes",
+            "type": "string"
+          },
+          "threads": {
+            "items": {
+              "$ref": "#/components/schemas/DraftThread"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "The pull request's title",
+            "type": "string"
+          },
+          "url": {
+            "description": "The pull request's web URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandbox",
+          "forge",
+          "forgeId",
+          "forgeHost",
+          "owner",
+          "repo",
+          "number",
+          "title",
+          "threads"
         ],
         "type": "object"
       },

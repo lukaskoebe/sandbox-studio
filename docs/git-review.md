@@ -590,6 +590,39 @@ review: `git_pull_request_comment(repository, number, body, forge?, idempotency_
   (`pr comment --wait` waits the same way): posted with its URL, discarded or dismissed
   with the note, or failed with the forge's answer. The next prompt has no note about it.
 
+## Resolve review threads
+
+A teammate can ask to mark review threads resolved, as the forge's Resolve conversation
+button does, once it has dealt with them: `git_pull_request_resolve(repository, number,
+threads, forge?, idempotency_key?)` (`studio pr resolve <number> --thread <id> …`), in
+`forgeresolve.go`. Resolving is a write, so it waits for the user like a comment.
+
+- **Threads.** `git_pull_request_read` names each line comment's `thread` and whether it is
+  `resolved`, and `~/forge`'s `reviews.md` has them in each comment's heading. On GitHub a
+  thread is GraphQL's only: Studio asks `POST /graphql` (`<base>/api/graphql` on GitHub
+  Enterprise Server) for the pull request's `reviewThreads`, the first 100 with 50 comments
+  each, and matches their comments' `databaseId` to the REST comments. On GitLab a thread is
+  a resolvable discussion, from `GET …/merge_requests/:iid/discussions`. Forgejo and Gitea
+  have no API to resolve a conversation, so the tool answers that it can't there. If the
+  threads can't be read, the comments have none and `pr read` still answers.
+- **Asking.** Studio reads the pull request again, so a thread must be one of its own: an ID
+  from another pull request is refused. Threads already resolved are left out and named in
+  `alreadyResolved`; if none is left, nothing is asked. Otherwise a `git.resolve` approval
+  holds each thread's place, author, first comment (cut at 2,000 bytes) and number of replies
+  (`ResolveDraft`), at most 20 a time. Asks don't replace each other, and an
+  `idempotency_key` works as for comments.
+- **The card** (`ForgeResolve` in `web/src/components/forge-resolve.tsx`) lists the threads
+  with "Resolves as <account> on <host>", **Leave open…** with a note, Ignore, and **Resolve
+  N threads**.
+- **Resolving.** Allow resolves each thread with the user's token: GraphQL's
+  `resolveReviewThread` on GitHub, `PUT …/discussions/:id` with `resolved: true` on GitLab.
+  Each thread is marked `done` as it resolves; if some fail, the outcome is failed with the
+  forge's answer per thread. GitHub needs **Pull requests: read and write**, which the token
+  already has; GitLab's **api** scope covers it.
+- **The agent learns** the outcome from `approval_status`, `studio wait <id>` or `pr resolve
+  --wait`: resolved, discarded or dismissed with the note, or failed with the reason and the
+  threads that did resolve.
+
 ## CI checks
 
 `git_pull_request_checks(repository, number?, branch?, forge?)` (`studio pr checks`) reads

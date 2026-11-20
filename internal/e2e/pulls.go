@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -18,6 +19,9 @@ import (
 // Reviews and conversation comments posted to it are kept for the tests (GET /api/e2e/reviews),
 // and so are the pull requests opened on it (GET /api/e2e/pulls), numbered from 2. Every
 // repository's default branch is main.
+// A GitHub forge's REST API (/api/v3) answers as the Forgejo one, and pull request 1 has a
+// review thread on web/coupon.ts:22 there, which its GraphQL API (/api/graphql) resolves;
+// a resolved thread is kept with the reviews, as {"resolved": id}.
 
 const pullDiff = `diff --git a/web/coupon.ts b/web/coupon.ts
 --- a/web/coupon.ts
@@ -44,12 +48,20 @@ var repoPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+$`)
 // statusPath is a commit's combined status; every commit's CI passed.
 var statusPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+/commits/[^/]+/status$`)
 
-var pullPath = regexp.MustCompile(`^/api/v1/repos/([^/]+)/([^/]+)/(pulls|issues)/1(\.diff|/commits|/files|/reviews|/comments)?$`)
+var pullPath = regexp.MustCompile(`^/api/v[13]/repos/([^/]+)/([^/]+)/(pulls|issues)/1(\.diff|/commits|/files|/reviews|/comments)?$`)
 
 type pulls struct {
 	mu     sync.Mutex
 	posted []PostedReview
 	opened []PostedReview
+	// threads are the review threads GraphQL named, by ID: their repository and whether
+	// they are resolved.
+	threads map[string]*thread
+}
+
+type thread struct {
+	repo     string
+	resolved bool
 }
 
 func (p *pulls) reviews() []PostedReview {
@@ -86,7 +98,11 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 		send(map[string]string{"username": "e2e-user"})
 		return true
 	}
-	if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
+	if r.URL.Path == "/api/graphql" && r.Method == http.MethodPost {
+		p.graphql(w, r)
+		return true
+	}
+	if !strings.HasPrefix(r.URL.Path, "/api/v1/") && !strings.HasPrefix(r.URL.Path, "/api/v3/") {
 		return false
 	}
 	// Every host is a Forgejo to the forge dialog's detection.
@@ -163,6 +179,10 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 		n := len(p.posted)
 		p.mu.Unlock()
 		send(map[string]any{"id": n, "html_url": "https://" + repo + "/pulls/1#review"})
+	case "pulls/comments":
+		// GitHub's review comments of the whole pull request.
+		send([]map[string]any{{"id": 501, "user": map[string]string{"login": "reviewer"}, "path": "web/coupon.ts",
+			"body": "Validate against finalTotal(cart).", "line": 22, "original_line": 22, "side": "RIGHT", "created_at": "2026-10-27T10:00:00Z"}})
 	case "issues/comments":
 		if r.Method != http.MethodPost {
 			send([]any{})
@@ -185,4 +205,49 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 		return false
 	}
 	return true
+}
+
+// graphql answers the two GraphQL calls Studio makes: a pull request's review threads, and
+// resolving one.
+func (p *pulls) graphql(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Query     string         `json:"query"`
+		Variables map[string]any `json:"variables"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.threads == nil {
+		p.threads = map[string]*thread{}
+	}
+	if strings.Contains(in.Query, "reviewThreads") {
+		repo := hostOnly(r.Host) + "/" + fmt.Sprint(in.Variables["owner"]) + "/" + fmt.Sprint(in.Variables["repo"])
+		id := ""
+		for k, t := range p.threads {
+			if t.repo == repo {
+				id = k
+			}
+		}
+		if id == "" {
+			id = "PRRT_e2e" + strconv.Itoa(len(p.threads)+1)
+			p.threads[id] = &thread{repo: repo}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"repository": map[string]any{"pullRequest": map[string]any{
+			"reviewThreads": map[string]any{"nodes": []map[string]any{{"id": id, "isResolved": p.threads[id].resolved,
+				"comments": map[string]any{"nodes": []map[string]any{{"databaseId": 501}}}}}}}}}})
+		return
+	}
+	id := fmt.Sprint(in.Variables["id"])
+	t, ok := p.threads[id]
+	if !ok || !strings.Contains(in.Query, "resolveReviewThread") {
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": nil, "errors": []map[string]any{{"message": "Could not resolve to a node with the global id of '" + id + "'"}}})
+		return
+	}
+	t.resolved = true
+	p.posted = append(p.posted, PostedReview{Repo: t.repo, Body: map[string]any{"resolved": id}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"resolveReviewThread": map[string]any{"thread": map[string]any{"isResolved": true}}}})
 }

@@ -3786,6 +3786,8 @@ export interface components {
             environmentId: string;
             /** @description A teammate's comment on a pull request's conversation, and what became of it */
             forgeComment?: components["schemas"]["CommentDraft"];
+            /** @description A teammate's ask to resolve review threads of a pull request, and what became of it */
+            forgeResolve?: components["schemas"]["ResolveDraft"];
             /** @description A teammate's review draft of a pull request, and what became of it */
             forgeReview?: components["schemas"]["ReviewDetail"];
             /** @description Set for git.push and git.pr approvals */
@@ -4516,7 +4518,7 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it; for git.resolve, allow resolves the threads and deny leaves them
              * @enum {string}
              */
             action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site" | "allow_session";
@@ -4620,6 +4622,25 @@ export interface components {
             session: string;
             /** Format: int64 */
             size: number;
+        };
+        DraftThread: {
+            /** @description Who started the thread */
+            author: string;
+            /** @description The thread's first comment, cut at 2,000 bytes */
+            body: string;
+            /** @description Resolved, once approved */
+            done?: boolean;
+            id: string;
+            /** Format: int64 */
+            line?: number;
+            path: string;
+            /**
+             * Format: int64
+             * @description How many replies follow it
+             */
+            replies?: number;
+            /** @enum {string} */
+            side: "new" | "old";
         };
         DreamInBody: {
             /** @description shared or teammate:<id> */
@@ -6394,8 +6415,12 @@ export interface components {
              */
             line?: number;
             path: string;
+            /** @description The thread is resolved */
+            resolved?: boolean;
             /** @enum {string} */
             side: "new" | "old";
+            /** @description The review thread the comment is in, which git_pull_request_resolve takes; its replies share it */
+            thread?: string;
             /** Format: date-time */
             when: string;
         };
@@ -7136,6 +7161,38 @@ export interface components {
              * @description The device pixels per CSS pixel the page got: the asked scale within a 3840×2160 frame, or 1 from a guest agent from before scales
              */
             scale: number;
+        };
+        ResolveDraft: {
+            /** @description The forge account that resolves them: the user's token's */
+            account?: string;
+            forge: string;
+            /** @description The forge's host */
+            forgeHost: string;
+            forgeId: string;
+            /** @description The agent's key for this ask, so that asking again doesn't ask twice */
+            idempotencyKey?: string;
+            /** @description The user's note */
+            note?: string;
+            /** Format: int64 */
+            number: number;
+            owner: string;
+            repo: string;
+            /** @description Why resolving failed, thread by thread */
+            result?: string;
+            /** @description The sandbox's name */
+            sandbox: string;
+            /**
+             * @description Empty until it is decided and, once approved, done
+             * @enum {string}
+             */
+            state?: "resolved" | "discarded" | "failed";
+            /** @description The teammate owning the sandbox; empty for unowned sandboxes */
+            teammate?: string;
+            threads: components["schemas"]["DraftThread"][] | null;
+            /** @description The pull request's title */
+            title: string;
+            /** @description The pull request's web URL */
+            url?: string;
         };
         ResourceUse: {
             /**

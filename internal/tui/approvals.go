@@ -607,6 +607,8 @@ func kindTitle(kind string) string {
 		return "Pull request review"
 	case "git.comment":
 		return "Pull request comment"
+	case "git.resolve":
+		return "Resolve review threads"
 	case "memory.share":
 		return "Memory share"
 	case "memory.conflict":
@@ -634,6 +636,8 @@ func approvalSource(a api.ApprovalView) string {
 		return firstNonEmpty(a.ForgeReview.Draft.Teammate, a.ForgeReview.Draft.Sandbox)
 	case a.ForgeComment != nil:
 		return firstNonEmpty(a.ForgeComment.Teammate, a.ForgeComment.Sandbox)
+	case a.ForgeResolve != nil:
+		return firstNonEmpty(a.ForgeResolve.Teammate, a.ForgeResolve.Sandbox)
 	case a.MemoryShare != nil:
 		return a.MemoryShare.TeammateName
 	case a.BrowserAction != nil:
@@ -661,6 +665,9 @@ func summary(a api.ApprovalView) string {
 	case a.ForgeComment != nil:
 		d := a.ForgeComment
 		return fmt.Sprintf("Comment on %s/%s#%d: %s", d.Owner, d.Repo, d.Number, oneLine(d.Body))
+	case a.ForgeResolve != nil:
+		d := a.ForgeResolve
+		return fmt.Sprintf("Resolve %d review %s on %s/%s#%d: %s", len(d.Threads), plural(len(d.Threads), "thread", "threads"), d.Owner, d.Repo, d.Number, d.Title)
 	case a.MemoryShare != nil:
 		return firstNonEmpty(a.MemoryShare.TeammateName, "A teammate") + " wants to share a fact with every teammate"
 	case a.MemoryConflict != nil:

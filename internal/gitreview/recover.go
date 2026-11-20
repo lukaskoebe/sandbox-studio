@@ -10,9 +10,10 @@ import (
 
 // What Recover records: whether the forge got it is unknown.
 const (
-	stoppedPushing = "Studio stopped before the push finished, so it may not have reached the forge; push again"
-	stoppedOpening = "Studio stopped while opening it; check the forge, then open it again"
-	stoppedPosting = "Studio stopped while posting it, so it may not have reached the forge; check the pull request"
+	stoppedPushing   = "Studio stopped before the push finished, so it may not have reached the forge; push again"
+	stoppedOpening   = "Studio stopped while opening it; check the forge, then open it again"
+	stoppedPosting   = "Studio stopped while posting it, so it may not have reached the forge; check the pull request"
+	stoppedResolving = "Studio stopped while resolving them; check the pull request"
 )
 
 // Recover settles what Studio stopped in the middle of: a push, pull request, review or
@@ -47,6 +48,21 @@ func (s *Service) Recover(ctx context.Context) error {
 			continue
 		}
 		d.State, d.Result = CommentFailed, stoppedPosting
+		payload, err := json.Marshal(d)
+		if err == nil {
+			err = s.Store.SetApprovalPayload(ctx, a.EnvironmentID, a.ID, payload)
+		}
+		errs = append(errs, err)
+	}
+	resolves, err := s.Store.ApprovedWithoutState(ctx, KindResolve)
+	errs = append(errs, err)
+	for _, a := range resolves {
+		d, err := ResolveDetail(a)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		d.State, d.Result = ResolveFailed, stoppedResolving
 		payload, err := json.Marshal(d)
 		if err == nil {
 			err = s.Store.SetApprovalPayload(ctx, a.EnvironmentID, a.ID, payload)

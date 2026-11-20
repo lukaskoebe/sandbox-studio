@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ForgeReviewOutcome } from "@/components/forge-review"
 import { ForgeCommentOutcome } from "@/components/forge-comment"
+import { ForgeResolveOutcome } from "@/components/forge-resolve"
 import { GitOutcome } from "@/components/git-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
@@ -181,6 +182,10 @@ function ActivitySettings() {
                       <div className="whitespace-normal">
                         <ForgeCommentOutcome draft={a.forgeComment} />
                       </div>
+                    ) : a.forgeResolve ? (
+                      <div className="whitespace-normal">
+                        <ForgeResolveOutcome draft={a.forgeResolve} />
+                      </div>
                     ) : a.git ? (
                       <div className="whitespace-normal">
                         <GitOutcome git={a.git} />
@@ -217,7 +222,7 @@ function Details({ text }: { text?: string }) {
 function What({ approval: a }: { approval: Approval }) {
   const kind = approvalKind(a)
   const what =
-    a.git || a.forgeReview || a.forgeComment ? (
+    a.git || a.forgeReview || a.forgeComment || a.forgeResolve ? (
       <Link
         to="/e/$env/git/reviews/$id"
         params={{ env: a.environmentId, id: a.id }}

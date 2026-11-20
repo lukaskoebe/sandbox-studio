@@ -237,6 +237,68 @@ test("discarding a review posts nothing and keeps the note", async ({
   expect(posted.filter((r) => r.repo === forge.repo)).toEqual([])
 })
 
+test("a teammate's ask to resolve a review thread waits for approval", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const host = `github-${suffix}.example.com`
+  const forge = `gh-${suffix}`
+  await api.json("POST", `/api/environments/${env}/forges`, {
+    name: forge,
+    kind: "github",
+    baseUrl: `https://${host}`,
+    token: "e2e-forge-token",
+  })
+  const sb = await api.createSandbox(sandboxName("resolve"))
+  const pr = { forge, repository: "acme/web", number: 1 }
+  type Read = { lineComments: { thread?: string; resolved?: boolean }[] }
+  const read = await call<Read>(api, sb, "git_pull_request_read", pr)
+  const thread = read.lineComments[0].thread!
+  expect(thread).toMatch(/^PRRT_/)
+  expect(read.lineComments[0].resolved).toBeFalsy()
+  const asked = await call<{ status: string; approval: string }>(
+    api,
+    sb,
+    "git_pull_request_resolve",
+    { ...pr, threads: [thread] }
+  )
+  expect(asked.status).toBe("awaiting approval")
+
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "acme/web#1" })
+  await expect(card).toContainText(
+    "Resolve 1 review thread on acme/web#1: Apply coupon codes"
+  )
+  await expect(card).toContainText("web/coupon.ts:22")
+  await card.getByRole("button", { name: "Review" }).click()
+  const pane = page.getByTestId("git-review")
+  await expect(pane).toContainText("Resolves as e2e-user")
+  await expect(pane).toContainText("Validate against finalTotal(cart).")
+  await pane.getByRole("button", { name: "Resolve thread" }).click()
+  await expect(pane).toBeHidden()
+  await expect(card).toBeHidden()
+
+  const posted = ((await api.json<Posted[]>("GET", "/api/e2e/reviews")) ?? [])
+    .filter((r) => r.repo === `${host}/acme/web`)
+    .at(-1)!
+  expect(posted.body.resolved).toBe(thread)
+  const status = await call<{ settled: boolean; result: { status: string } }>(
+    api,
+    sb,
+    "approval_status",
+    { approval: asked.approval }
+  )
+  expect(status.settled).toBe(true)
+  expect(status.result.status).toBe("resolved")
+  const again = await call<Read>(api, sb, "git_pull_request_read", pr)
+  expect(again.lineComments[0].resolved).toBe(true)
+})
+
 test("a teammate's comment on a pull request waits for approval and posts as edited", async ({
   page,
   api,

@@ -308,7 +308,7 @@ func (m *app) pushedOf(id string, list []api.ApprovalView) []api.ApprovalView {
 func (m *app) waitingOf(id string) []api.ApprovalView {
 	var out []api.ApprovalView
 	for _, a := range m.approvals {
-		if a.SandboxID == id && strings.HasPrefix(a.Kind, "git.") && gitPending(a) && (a.Git != nil || a.ForgeReview != nil || a.ForgeComment != nil) {
+		if a.SandboxID == id && strings.HasPrefix(a.Kind, "git.") && gitPending(a) && (a.Git != nil || a.ForgeReview != nil || a.ForgeComment != nil || a.ForgeResolve != nil) {
 			out = append(out, a)
 		}
 	}
@@ -744,6 +744,9 @@ func railReview(a api.ApprovalView) (string, string) {
 	case a.ForgeComment != nil:
 		c := a.ForgeComment
 		return fmt.Sprintf("Comment on %s/%s#%d", c.Owner, c.Repo, c.Number), ""
+	case a.ForgeResolve != nil:
+		c := a.ForgeResolve
+		return fmt.Sprintf("Threads of %s/%s#%d", c.Owner, c.Repo, c.Number), ""
 	case a.ForgeReview != nil:
 		d := a.ForgeReview.Draft
 		return fmt.Sprintf("Review of %s/%s#%d", d.Owner, d.Repo, d.PullRequest.Number), ""

@@ -134,6 +134,15 @@ function waitingRow(a: Approval) {
       mono: pr,
     }
   }
+  const r = a.forgeResolve
+  if (r) {
+    const pr = `${r.owner}/${r.repo}#${r.number}`
+    return {
+      label: `Review the threads to resolve on ${pr}`,
+      what: "Threads of",
+      mono: pr,
+    }
+  }
   const d = a.forgeReview?.draft
   if (d) {
     const pr = pullRequestName(d)

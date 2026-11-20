@@ -46,6 +46,8 @@ type PullRequestInfo struct {
 	Reviews      []PRReview      `json:"reviews"`
 	LineComments []PRLineComment `json:"lineComments,omitempty" doc:"The reviews' comments on lines of the diff"`
 	Comments     []PRComment     `json:"comments" doc:"The comments on the pull request's conversation"`
+	// threadErr is why the line comments have no threads, on a forge that has them.
+	threadErr error
 }
 
 // PRBranch is a pull request's base or head.
@@ -85,6 +87,11 @@ type PRLineComment struct {
 	Side   string    `json:"side" enum:"new,old"`
 	Body   string    `json:"body"`
 	When   time.Time `json:"when"`
+	// Thread is the review thread the comment is in, on GitHub and GitLab: replies share it.
+	Thread   string `json:"thread,omitempty" doc:"The review thread the comment is in, which git_pull_request_resolve takes; its replies share it"`
+	Resolved bool   `json:"resolved,omitempty" doc:"The thread is resolved"`
+	// id is the comment's ID on the forge, which finds its thread.
+	id int64
 }
 
 // PRComment is a comment on a pull request's conversation.
@@ -211,6 +218,7 @@ func readPullRequest(ctx context.Context, call restAPI, github bool, token, owne
 	// The reviews' line comments: GitHub lists them for the whole pull request, Forgejo per
 	// review, so only reviews that have some are asked.
 	type lineComment struct {
+		ID           int64     `json:"id"`
 		User         user      `json:"user"`
 		Path         string    `json:"path"`
 		Body         string    `json:"body"`
@@ -226,7 +234,7 @@ func readPullRequest(ctx context.Context, call restAPI, github bool, token, owne
 			if len(info.LineComments) == pageSize {
 				return
 			}
-			lc := PRLineComment{Author: c.User.Login, Path: c.Path, Body: c.Body, When: c.CreatedAt, Side: "new"}
+			lc := PRLineComment{Author: c.User.Login, Path: c.Path, Body: c.Body, When: c.CreatedAt, Side: "new", id: c.ID}
 			switch {
 			case github && c.Side == "LEFT":
 				lc.Side = "old"
@@ -377,7 +385,11 @@ func (g *GitHub) rest(ctx context.Context, token, method, path string, in, out a
 }
 
 func (g *GitHub) ReadPullRequest(ctx context.Context, token, owner, repo string, number int) (PullRequestInfo, error) {
-	return readPullRequest(ctx, g.rest, true, token, owner, repo, number)
+	info, err := readPullRequest(ctx, g.rest, true, token, owner, repo, number)
+	if err == nil && len(info.LineComments) > 0 {
+		info.threadErr = g.threads(ctx, token, owner, repo, number, info.LineComments)
+	}
+	return info, err
 }
 
 func (g *GitHub) PullRequestDiff(ctx context.Context, token, owner, repo string, number int, max int64) (string, bool, error) {

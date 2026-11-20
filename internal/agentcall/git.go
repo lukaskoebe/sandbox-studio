@@ -122,6 +122,21 @@ var GitPullRequestCommentTool = Tool{agentproto.MethodGitPullRequestComment,
 		"idempotency_key": idempotencyKey,
 	})}
 
+// GitPullRequestResolveTool asks to resolve review threads of a pull request.
+var GitPullRequestResolveTool = Tool{agentproto.MethodGitPullRequestResolve,
+	"Asks to mark review threads of a pull request resolved, as its Resolve conversation button does, such as once you've fixed what " +
+		"they asked. git_pull_request_read names each line comment's thread. Nothing changes yet: the user sees the threads and resolves " +
+		"them or says no. The call answers at once with \"awaiting approval\" and the approval ID; approval_status says what became of it. " +
+		"To say what you changed, comment with git_pull_request_comment first. GitHub and GitLab only.",
+	obj([]string{"repository", "number", "threads"}, map[string]any{
+		"forge":      pullRequestRef["forge"],
+		"repository": pullRequestRef["repository"],
+		"number":     pullRequestRef["number"],
+		"threads": map[string]any{"type": "array", "minItems": 1, "maxItems": 20, "description": "The threads' IDs, from git_pull_request_read",
+			"items": str("A thread's ID", "maxLength", 200)},
+		"idempotency_key": idempotencyKey,
+	})}
+
 // idempotencyKey lets an agent ask again, as after a timeout, without making a second draft.
 var idempotencyKey = str("Any key of yours for this call, such as a UUID: asking again with the same key answers with what it asked for instead of asking again", "maxLength", 200)
 
@@ -147,7 +162,8 @@ var GitPullRequestChecksTool = Tool{agentproto.MethodGitPullRequestChecks,
 
 func init() {
 	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitPullRequestCreateTool, GitRepositoriesTool, GitPullRequestListTool,
-		GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool, GitPullRequestChecksTool, GitPullRequestCommentTool)
+		GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool, GitPullRequestChecksTool, GitPullRequestCommentTool,
+		GitPullRequestResolveTool)
 }
 
 // GitCredentialCall routes the git credential helper's question to gitreview. It stays out

@@ -27,6 +27,7 @@ func (s *Service) Tools() []integrations.Tool {
 		{Def: agentcall.GitPullRequestReviewTool, Handle: s.toolPullRequestReview},
 		{Def: agentcall.GitReviewStatusTool, Handle: s.toolReviewStatus},
 		{Def: agentcall.GitPullRequestCommentTool, Handle: s.toolPullRequestComment},
+		{Def: agentcall.GitPullRequestResolveTool, Handle: s.toolPullRequestResolve},
 		{Def: agentcall.GitPullRequestChecksTool, Handle: s.toolPullRequestChecks},
 		// Not MCP tools: `studio forge sync`, and the guest's git credential helper.
 		{Def: agentcall.ForgeSyncCall, Handle: s.toolForgeSync},

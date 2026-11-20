@@ -107,6 +107,7 @@ var commandNames = map[string]struct {
 	agentproto.MethodGitReviewStatus:            {"pr review-status", []string{"number"}},
 	agentproto.MethodGitPullRequestChecks:       {"pr checks", []string{"number"}},
 	agentproto.MethodGitPullRequestComment:      {"pr comment", []string{"number"}},
+	agentproto.MethodGitPullRequestResolve:      {"pr resolve", []string{"number"}},
 	agentproto.MethodSandboxInfo:                {"info", nil},
 	agentproto.MethodApprovalStatus:             {"wait", []string{"approval"}},
 	agentproto.MethodBrowserOpen:                {"browser open", []string{"url"}},
@@ -335,6 +336,15 @@ func parseArgs(ctx context.Context, cmd command, args []string, env CLIEnv) (inv
 			}
 			list, _ := inv.params["comments"].([]any)
 			inv.params["comments"] = append(list, comment)
+			continue
+		}
+		if cmd.tool.Name == agentproto.MethodGitPullRequestResolve && name == "thread" {
+			v, err := next()
+			if err != nil {
+				return inv, err
+			}
+			list, _ := inv.params["threads"].([]any)
+			inv.params["threads"] = append(list, v)
 			continue
 		}
 		key := strings.ReplaceAll(name, "-", "_")
@@ -1065,6 +1075,9 @@ func printCommandHelp(w io.Writer, c command) {
 	}
 	if c.tool.Name == agentproto.MethodGitPullRequestReview {
 		fmt.Fprintln(w, "  --comment path:line=text  a comment on a line of the new file; path:line:old=text on a removed line; repeat it")
+	}
+	if c.tool.Name == agentproto.MethodGitPullRequestResolve {
+		fmt.Fprintln(w, "  --thread id            a thread to resolve, as pr read names it; repeat it")
 	}
 	fmt.Fprintln(w, "\n  --json  print the result as JSON    --wait  wait for the user's decision    -o file  where an image goes")
 }

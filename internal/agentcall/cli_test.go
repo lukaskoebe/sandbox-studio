@@ -151,6 +151,18 @@ func TestCLIEnumTakesDashes(t *testing.T) {
 	}
 }
 
+func TestCLIResolveTakesThreads(t *testing.T) {
+	f := &fakeCaller{}
+	r := runCLI(t, f, "", nil, "pr", "resolve", "12", "--forge", "github", "--repository", "o/r", "--thread", "PRRT_a", "--thread", "PRRT_b")
+	if r.code != ExitOK {
+		t.Fatalf("code %d, stderr %q", r.code, r.stderr)
+	}
+	got := params(t, f.calls[0])
+	if threads, _ := got["threads"].([]any); len(threads) != 2 || threads[1] != "PRRT_b" || got["number"] != float64(12) {
+		t.Fatalf("params %v", got)
+	}
+}
+
 // A pull request command run in a checkout takes its forge, repository and branch from the
 // remote through Studio's git host and the branch checked out.
 func TestCLIInfersTheRepository(t *testing.T) {

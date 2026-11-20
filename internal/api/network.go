@@ -54,6 +54,8 @@ type ApprovalView struct {
 	ForgeReview *gitreview.ReviewDetail `json:"forgeReview,omitempty" doc:"A teammate's review draft of a pull request, and what became of it"`
 	// ForgeComment is set for git.comment approvals.
 	ForgeComment *gitreview.CommentDraft `json:"forgeComment,omitempty" doc:"A teammate's comment on a pull request's conversation, and what became of it"`
+	// ForgeResolve is set for git.resolve approvals.
+	ForgeResolve *gitreview.ResolveDraft `json:"forgeResolve,omitempty" doc:"A teammate's ask to resolve review threads of a pull request, and what became of it"`
 	// MemoryShare is set for memory.share approvals.
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A teammate's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
@@ -97,6 +99,8 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		}
 	case gitreview.KindComment:
 		v.ForgeComment, _ = gitreview.CommentDetail(a)
+	case gitreview.KindResolve:
+		v.ForgeResolve, _ = gitreview.ResolveDetail(a)
 	case agentmem.ApprovalKind:
 		var p agentmem.SharePayload
 		if json.Unmarshal(a.Payload, &p) == nil {
@@ -525,7 +529,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action      string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site,allow_session" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it"`
+			Action      string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site,allow_session" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it; for git.comment, allow posts the comment and deny discards it; for git.resolve, allow resolves the threads and deny leaves them"`
 			Host        string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports       []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope       string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`

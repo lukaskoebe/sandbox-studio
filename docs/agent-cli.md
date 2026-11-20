@@ -77,7 +77,8 @@ number the first answer found.
 
 A call waits for the user when one of these is true:
 
-- The result's `status` is `awaiting approval`, as for `pr create`, `pr review` and `pr comment`.
+- The result's `status` is `awaiting approval`, as for `pr create`, `pr review`, `pr comment`
+  and `pr resolve`.
 - The error starts with "waiting for the user" or says "call again", as for a browser action
   on a site not yet allowed, or for a takeover.
 
@@ -85,7 +86,8 @@ With `--wait` the command keeps asking every 5 seconds:
 
 - `pr create` waits through `git_pull_request_status`.
 - `pr review` waits through `git_pull_request_review_status`.
-- `pr comment`, which has no status tool of its own, waits through `approval_status`.
+- `pr comment` and `pr resolve`, which have no status tool of their own, wait through
+  `approval_status`.
 - A refusal that only waits is retried as it was.
 
 ### Waiting for the user
@@ -115,7 +117,7 @@ as unknown. It's also an MCP tool, for agents without the command.
 Asking again, as after a timeout, doesn't make a second card:
 
 - `pr create` answers with the pushed branch's pull request once one is proposed.
-- `pr review` and `pr comment` take `--idempotency-key <key>`. A call with a key this sandbox
+- `pr review`, `pr comment` and `pr resolve` take `--idempotency-key <key>`. A call with a key this sandbox
   already asked with answers with what that call asked for instead of asking again, which
   for a review would replace the draft. The key is kept in the approval's payload as
   `idempotencyKey` (`store.ApprovalByKey`).
