@@ -150,6 +150,11 @@ test("a message sent while the agent works goes into its turn, or with Alt waits
   await box.press("Enter")
   await expect(box).toHaveValue("")
   await expect(main.getByText("Then fix the lint")).toBeVisible()
+  // The call before it hasn't run yet, so its row still waits, and doesn't say it worked.
+  await expect(
+    main.getByText(/^Waiting for you · \d+:\d+ · 1 step$/)
+  ).toBeVisible()
+  await expect(main.getByText(/Worked for/)).toHaveCount(0)
   const queued = main.getByRole("region", { name: "Queued messages" })
   await expect(queued).toBeHidden()
 

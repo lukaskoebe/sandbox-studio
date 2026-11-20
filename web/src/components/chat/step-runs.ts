@@ -44,6 +44,11 @@ const pendingAsk = (e: Entry) =>
   (e.item.kind === "permission" || e.item.kind === "question") &&
   e.item.status === "pending"
 
+/** A tool call that hasn't finished yet. */
+const toolRunning = (i: ChatItem) =>
+  i.kind === "tool" &&
+  (i.tool?.status === "pending" || i.tool?.status === "in_progress")
+
 /**
  * Folds each run of steps between the agent's messages into one entry. The agent's messages,
  * yours, plans, markers and asks that wait stay as they are. A run that is all one thought
@@ -99,9 +104,14 @@ export function foldSteps(
       if (id !== r.turnId) break
       after.push(e)
     }
-    if (r.turnId === openTurn && after.every(pendingAsk)) {
+    // A message steered into the turn can follow a call that still runs, such as a long
+    // sleep: the run goes on until the call ends.
+    if (
+      r.turnId === openTurn &&
+      (after.every(pendingAsk) || r.items.some(toolRunning))
+    ) {
       r.live = true
-      r.waiting = after.length > 0
+      r.waiting = after.some(pendingAsk)
       continue
     }
     const last = r.items.at(-1)!
