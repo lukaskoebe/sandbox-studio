@@ -12,7 +12,7 @@ You can work with an agent in two ways:
 - **Chat** (recommended): write to your teammates like in a messenger, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app on its computer, as a developer would.
 
-A teammate's page has both side by side: its home or the open thread on the left, and its computer's screen, with the terminal, on the right. A thread's **⋯** continues it in the agent's own interface on the terminal, so both stay one click away.
+A teammate's page has both side by side: its home or the open thread on the left, and its computer's screen, with the terminal, on the right. The thread's title in the top bar opens its options, among them continuing it in the agent's own interface on the terminal, so both stay one click away.
 
 ## What chats need
 
@@ -42,13 +42,13 @@ The steps between two of the agent's messages fold into one row, such as **Worke
 - Choose the row to see the steps, one line each; choose a line to see its details, such as an edit's diff or a command's output.
 - Choose a file's chip to open that file's changes on the **Changes** tab, once the request is done.
 - While the agent works, the row is open and shows its newest step in full. It closes when the agent writes again, unless you opened or closed it yourself.
-- A question or permission that waits for you, and a failed step that ended the request, stay outside the row.
+- A question or permission that waits for you, and a failed step that ended the request, stay outside the row. While a permission waits, the step it asks about is its card, and the row says how long the agent worked so far.
 
 To see every step as its own card, as before, turn on **Show every step** in **Settings → General**. It applies to everyone using this Studio.
 
 ## Approve steps
 
-When the agent wants to do something that needs your permission, a card appears in the chat with **Allow**, **Deny**, and **Ignore**. The same request also shows on Home under **Needs you**, and as a card at the bottom right of Studio's other pages, so you can answer from any page.
+When the agent wants to do something that needs your permission, a card appears in the chat: the step, such as **Run make test**, what it asks and for how long (**asks before running · 0:12**), what **Allow** would run, and **Allow**, **Deny**, and **Ignore**. The top bar shows **needs you** beside the thread's title meanwhile. The same request also shows on Home under **Needs you**, and as a card at the bottom right of Studio's other pages, so you can answer from any page.
 
 - **Don't ask again for this** appears when the agent offers to remember the decision.
 - **Ignore** says no without an answer; the agent stops waiting.
@@ -100,7 +100,7 @@ The screen beside a thread shows the computer at a glance: **Changes** has what 
 
 ## Open in the terminal and back
 
-Choose **Continue in the terminal** in a thread's **⋯** menu to continue the same conversation in the agent's own terminal app. Studio opens that terminal on the computer's screen, and the agent keeps the conversation so far.
+Choose **Continue in the terminal** in the menu of the thread's title in the top bar to continue the same conversation in the agent's own terminal app. Studio opens that terminal on the computer's screen, and the agent keeps the conversation so far.
 
 While the chat is in the terminal, it is read-only and shows **Back to chat**. Choose it to end the terminal app and continue in the chat; what happened in the terminal shows up in the chat, marked "Continued in the terminal". Exiting the terminal app yourself doesn't bring the chat back. Continue in the terminal is available when the teammate isn't working.
 
@@ -110,8 +110,8 @@ Requests made in the terminal have no Undo or Changes of their own. Undoing an e
 
 If the agent can't pick a conversation back up, for example because the computer was rebased and its home folder was replaced, the chat ends. An ended chat is read-only and offers **Start a new chat**.
 
-**Delete thread** in a thread's **⋯** menu removes the conversation. What the agent changed on the computer stays.
+**Delete thread…** in the menu of the thread's title in the top bar removes the conversation. What the agent changed on the computer stays.
 
 ## Rename a thread
 
-A thread is named after its first message, and the agent may give it a better name as it works. To name it yourself, choose **Rename…** in its **⋯** menu, or right-click it in the sidebar or on the teammate's home. A name you give stays: the agent no longer changes it. The right-click menu also copies the thread's link, continues it in the terminal, and deletes it.
+A thread is named after its first message, and the agent may give it a better name as it works. To name it yourself, choose **Rename…** in the menu of its title in the top bar, or right-click it in the sidebar or on the teammate's home. A name you give stays: the agent no longer changes it. The right-click menu also copies the thread's link, continues it in the terminal, and deletes it.

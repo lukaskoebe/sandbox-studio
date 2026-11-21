@@ -1,39 +1,22 @@
-import {
-  CaretLeftIcon,
-  ChatCircleIcon,
-  DotsThreeIcon,
-  LinkIcon,
-  PencilSimpleIcon,
-  TerminalWindowIcon,
-  TrashIcon,
-  WarningIcon,
-} from "@phosphor-icons/react"
+import { useLayoutEffect, useMemo, useRef } from "react"
+import { WarningIcon } from "@phosphor-icons/react"
 import { useChatActions } from "@/components/chat/chat-actions"
-import { ChatStateBadge } from "@/components/chat/chat-items"
 import { ChatThread } from "@/components/chat/chat-thread"
-import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
 import { type Teammate } from "@/lib/api/client"
 import { chatTitle, type Chat, type useChat } from "@/lib/chats"
+import { usePublishThreadActions } from "@/lib/thread-actions"
 
 /**
- * One thread with the teammate: the way back to its home, the thread's title and state, and the
- * chat itself with its composer. Its changes and terminal show on the screen beside it.
+ * One thread with the teammate: the chat itself with its composer. Its title, state and options
+ * are in the top bar's crumb, and its changes and terminal show on the screen beside it. The
+ * sidebar and Esc go back to the teammate's home.
  */
 export function TeammateThread({
   env,
   teammate,
   log,
-  computer,
-  onShowComputer,
   onBack,
   onShowChanges,
   onOpenFile,
@@ -42,10 +25,6 @@ export function TeammateThread({
   env: string
   teammate: Teammate
   log: ReturnType<typeof useChat>
-  /** The computer it runs on, named when the teammate has more than one. */
-  computer?: string
-  /** Shows its computer on the screen, which shows another. */
-  onShowComputer?: () => void
   onBack: () => void
   onShowChanges: (turnId: string, file?: string) => void
   onOpenFile: (path: string) => void
@@ -56,63 +35,20 @@ export function TeammateThread({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-1.5 px-3 md:px-4">
-        {/* A long name shrinks, so the thread's title, state and options stay on a phone. */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="max-w-[45%] min-w-0 shrink gap-1.5 pr-2.5 pl-1.5"
-          onClick={onBack}
-          title={`Back to ${teammate.name} (Esc)`}
-        >
-          <CaretLeftIcon />
-          <TeammateAvatar
-            name={teammate.name}
-            avatar={teammate.avatar}
-            className="size-4 shrink-0 text-[0.5rem]"
-          />
-          <span className="truncate">{teammate.name}</span>
-        </Button>
-        {chat && (
-          <>
-            <ChatCircleIcon className="ml-1.5 size-4 shrink-0 text-muted-foreground" />
-            <h1
-              className="min-w-0 truncate text-sm font-semibold"
-              title={chatTitle(chat)}
-            >
-              {chatTitle(chat)}
-            </h1>
-            {computer &&
-              (onShowComputer ? (
-                <button
-                  type="button"
-                  title={`Show ${computer} on the screen`}
-                  className="shrink-0 rounded-full border border-(--st-waiting)/40 bg-(--st-waiting)/10 px-2 font-mono text-caption text-foreground hover:bg-(--st-waiting)/25 max-sm:hidden"
-                  onClick={onShowComputer}
-                >
-                  on {computer} · Show
-                </button>
-              ) : (
-                <span className="shrink-0 rounded-full border px-2 font-mono text-caption text-muted-foreground max-sm:hidden">
-                  on {computer}
-                </span>
-              ))}
-            <span className="ml-auto flex shrink-0 items-center gap-1">
-              <ChatStateBadge chat={chat} />
-              <ThreadMenu
-                env={env}
-                chat={chat}
-                onTerminal={onTerminal}
-                onDeleted={onBack}
-              />
-            </span>
-          </>
-        )}
-      </header>
+      {/* The title shows in the top bar; the page keeps it as its heading for screen readers. */}
+      {chat && <h1 className="sr-only">{chatTitle(chat)}</h1>}
+      {chat && (
+        <ThreadOptions
+          env={env}
+          chat={chat}
+          onTerminal={onTerminal}
+          onDeleted={onBack}
+        />
+      )}
       {chat && (log.status === "error" || !log.live) && (
         <div
           role="status"
-          className="mx-4 flex shrink-0 items-center gap-2 rounded-md bg-muted px-3 py-1 text-xs"
+          className="mx-4 mt-3 flex shrink-0 items-center gap-2 rounded-md bg-muted px-3 py-1 text-xs"
         >
           <WarningIcon className="size-3 shrink-0 text-muted-foreground" />
           {log.error
@@ -153,8 +89,11 @@ export function TeammateThread({
   )
 }
 
-/** The thread's options: rename it, copy its link, hand it to the agent's terminal, delete it. */
-function ThreadMenu({
+/**
+ * The thread's options for its crumb in the top bar: rename it, copy its link, hand it to the
+ * agent's terminal, delete it. Their dialogs stay here, with the thread.
+ */
+function ThreadOptions({
   env,
   chat,
   onTerminal,
@@ -166,52 +105,25 @@ function ThreadMenu({
   onDeleted: () => void
 }) {
   const a = useChatActions(env, chat, { onTerminal, onDeleted })
-  return (
-    <>
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Thread options"
-              title="Thread options"
-            />
-          }
-        >
-          {a.handing ? <Spinner /> : <DotsThreeIcon weight="bold" />}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuItem onClick={a.rename}>
-            <PencilSimpleIcon />
-            Rename…
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={a.copyLink}>
-            <LinkIcon />
-            Copy link
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!a.handable || a.handing}
-            onClick={() => void a.toTerminal()}
-          >
-            <TerminalWindowIcon />
-            <span className="grid">
-              Continue in the terminal
-              <span className="text-caption text-muted-foreground">
-                {chat.state === "running"
-                  ? "Once the agent is done, or stopped"
-                  : "In the agent's own interface"}
-              </span>
-            </span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={a.remove}>
-            <TrashIcon />
-            Delete thread
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {a.dialogs}
-    </>
+  // The crumb calls the latest actions, and changes only when what it shows does.
+  const latest = useRef(a)
+  useLayoutEffect(() => {
+    latest.current = a
+  })
+  const running = chat.state === "running"
+  const actions = useMemo(
+    () => ({
+      chatId: chat.id,
+      rename: () => latest.current.rename(),
+      copyLink: () => latest.current.copyLink(),
+      toTerminal: () => void latest.current.toTerminal(),
+      remove: () => latest.current.remove(),
+      handable: a.handable,
+      handing: a.handing,
+      running,
+    }),
+    [chat.id, a.handable, a.handing, running]
   )
+  usePublishThreadActions(actions)
+  return a.dialogs
 }

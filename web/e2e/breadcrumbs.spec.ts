@@ -75,10 +75,12 @@ test("the breadcrumb row says where a page is, and its parts open their neighbou
     `/api/environments/${env}/sandboxes/${deskId}/chats`
   ))!
   await page.goto(`/e/${env}/teammates/${id}?thread=${chat.id}`)
-  await expect(crumbs.getByRole("listitem")).toHaveCount(3)
+  // The teammate › the thread, its state, and its computer.
+  await expect(crumbs.getByRole("listitem")).toHaveCount(4)
   await expect(
-    crumbs.getByRole("button", { name: /^Switch thread:/ })
+    crumbs.getByRole("button", { name: /^Thread options:/ })
   ).toBeVisible()
+  await expect(crumbs.getByTestId("thread-status")).toHaveText("done")
   await expect(crumbs.getByRole("listitem").last()).toHaveText(
     new RegExp(`^on.*${desk}`)
   )

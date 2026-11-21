@@ -57,7 +57,7 @@ test("every page's text is on the type scale, in both styles", async ({
   const box = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await box.fill("Please run the tests")
   await box.press("Enter")
-  await expect(page.getByText("asks before going on").first()).toBeVisible()
+  await expect(page.getByTestId("ask-status").first()).toBeVisible()
   await box.fill("Then fix the lint")
   await box.press("Alt+Enter")
   // It reads at the size of the messages, not bigger.

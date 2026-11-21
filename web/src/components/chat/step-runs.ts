@@ -52,13 +52,25 @@ const toolRunning = (i: ChatItem) =>
 /**
  * Folds each run of steps between the agent's messages into one entry. The agent's messages,
  * yours, plans, markers and asks that wait stay as they are. A run that is all one thought
- * stays a thought, which folds already. `openTurn` is the turn still underway.
+ * stays a thought, which folds already. `openTurn` is the turn still underway. The call an
+ * ask waits on is the ask's card until it is answered, so it leaves its run meanwhile.
  */
 export function foldSteps(
-  items: ChatItem[],
+  all: ChatItem[],
   turns: Map<string, ChatTurn>,
   openTurn?: string
 ): Entry[] {
+  const asked = new Set(
+    all.flatMap((i) =>
+      i.kind === "permission" && i.status === "pending"
+        ? [i.toolCallId || i.permission?.toolCall.toolCallId || ""]
+        : []
+    )
+  )
+  asked.delete("")
+  const items = all.filter(
+    (i) => !(i.kind === "tool" && i.toolCallId && asked.has(i.toolCallId))
+  )
   const out: Entry[] = []
   let run: ChatItem[] = []
   let from: string | undefined

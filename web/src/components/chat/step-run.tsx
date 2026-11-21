@@ -32,8 +32,8 @@ const maxChips = 4
 const maxLines = 5
 
 /**
- * A run of steps between two of the agent's messages, as one row: how long it worked, how many
- * steps, a chip per file it edited with the lines added and removed, and how many failed. While
+ * A run of steps between two of the agent's messages, as one row: how long it worked (so far,
+ * while an ask of the agent's waits below it), how many steps, a chip per file it edited with the lines added and removed, and how many failed. While
  * the run goes on it is open, its newest step streams and the rest are lines; it closes once the
  * agent writes again, unless it was opened or closed by hand. A file chip opens the file's diff
  * in Changes once the request is done.
@@ -58,13 +58,15 @@ export function StepRun({
   const failed = run.items.filter(
     (i) => i.kind === "tool" && i.tool?.status === "failed"
   ).length
-  const now = useNow(run.live)
+  const now = useNow(run.live && !run.waiting)
   const start = Date.parse(
     run.from ?? turn?.startedAt ?? run.items[0].updatedAt
   )
-  const end = run.live
-    ? now
-    : Math.max(...run.items.map((i) => Date.parse(i.updatedAt)))
+  // While an ask waits, its card counts that time; the run stops at its last step.
+  const end =
+    run.live && !run.waiting
+      ? now
+      : Math.max(...run.items.map((i) => Date.parse(i.updatedAt)))
   const took = Math.max(0, end - start)
   const steps = run.items.length
   const summary = stepSummary(run.items)
@@ -84,12 +86,12 @@ export function StepRun({
         >
           <CaretRightIcon className="size-3 shrink-0 transition-transform group-data-[open]/run:rotate-90" />
           <span>
-            {run.live ? (
+            {run.waiting ? (
+              <>Worked {spanLabel(took)} so far</>
+            ) : run.live ? (
               <>
-                <span className={cn(!run.waiting && "shimmer")}>
-                  {run.waiting ? "Waiting for you" : "Working"}
-                </span>{" "}
-                · <span className="tabular-nums">{clockLabel(took)}</span>
+                <span className="shimmer">Working</span> ·{" "}
+                <span className="tabular-nums">{clockLabel(took)}</span>
               </>
             ) : (
               <>Worked for {spanLabel(took)}</>

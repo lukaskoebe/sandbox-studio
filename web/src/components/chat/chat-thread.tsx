@@ -698,8 +698,8 @@ function ChatComposer({
         draft={`chat:${chat.id}`}
         onInput={wake.wake}
         hint={
-          (teammate || context) && (
-            <span className="flex items-center gap-1">
+          (teammate || context || chat.state === "running") && (
+            <span className="flex min-w-0 items-center gap-1">
               {teammate && (
                 <ModelPicker
                   teammate={teammate}
@@ -717,13 +717,20 @@ function ChatComposer({
                   }
                 />
               )}
+              {/* While it works, the keys say what sending does. */}
+              {chat.state === "running" && (
+                <span
+                  className="min-w-0 truncate pl-1"
+                  title="Enter steers this turn · Alt+Enter waits for the next"
+                >
+                  Enter steers · Alt+Enter waits
+                </span>
+              )}
             </span>
           )
         }
         placeholder={
-          chat.state === "running"
-            ? `Steer ${teammateName}: this goes into the current turn, with Alt+Enter after it`
-            : "Reply…"
+          chat.state === "running" ? `Steer ${teammateName}…` : "Reply…"
         }
       />
     </>

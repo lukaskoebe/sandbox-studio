@@ -32,12 +32,13 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   await main.getByRole("button", { name: "Send" }).click()
 
   await expect(main).toContainText(greeting)
-  await expect(main).toContainText(`${name} asks before going on`)
-  await expect(main).toContainText(tool)
-  // The steps so far are a row that says it waits, open while it does.
-  await expect(
-    main.getByRole("button", { name: /^Waiting for you · \d+:\d\d · 1 step$/ })
-  ).toBeVisible()
+  // The step it asks about and the ask are one card, which says what it waits for.
+  const ask = main.getByRole("group", { name: `${name} asks before going on` })
+  await expect(ask).toContainText(tool)
+  await expect(ask.getByTestId("ask-status")).toHaveText(
+    /^asks before running · \d+:\d\d$/
+  )
+  await expect(main.getByText(/^Waiting for you/)).toHaveCount(0)
   // The card shows what Allow runs, not only the agent's title for it.
   await expect(main.locator("pre", { hasText: command })).toBeVisible()
   // The agent waits for the answer.
@@ -139,8 +140,12 @@ test("a message sent while the agent works goes into its turn, or with Alt waits
   const box = main.getByRole("textbox", { name: "Message" })
   await box.fill("Please run the tests")
   await box.press("Enter")
-  // The turn waits for a permission, so it keeps running.
-  await expect(main).toContainText(`${name} asks before going on`)
+  // The turn waits for a permission, so it keeps running; the composer's keys say what
+  // sending does meanwhile.
+  const ask = main.getByRole("group", { name: `${name} asks before going on` })
+  await expect(ask).toBeVisible()
+  await expect(box).toHaveAttribute("placeholder", `Steer ${name}…`)
+  await expect(main.getByText("Enter steers · Alt+Enter waits")).toBeVisible()
   await expect(
     main.getByRole("button", { name: "Stop", exact: true })
   ).toBeVisible()
@@ -150,11 +155,9 @@ test("a message sent while the agent works goes into its turn, or with Alt waits
   await box.press("Enter")
   await expect(box).toHaveValue("")
   await expect(main.getByText("Then fix the lint")).toBeVisible()
-  // The call before it hasn't run yet, so its row still waits, and doesn't say it worked.
-  await expect(
-    main.getByText(/^Waiting for you · \d+:\d+ · 1 step$/)
-  ).toBeVisible()
-  await expect(main.getByText(/Worked for/)).toHaveCount(0)
+  // The call it asks about hasn't run yet: it is still the card, and no row says it worked.
+  await expect(ask).toContainText(tool)
+  await expect(main.getByText(/Worked/)).toHaveCount(0)
   const queued = main.getByRole("region", { name: "Queued messages" })
   await expect(queued).toBeHidden()
 
@@ -373,7 +376,10 @@ test("the teammate's home marks only the threads with something new", async ({
   await expect(news).toHaveCount(1)
   await cards.filter({ has: news }).click()
   await expect(page).toHaveURL(new RegExp(`thread=${fresh.id}`))
-  await page.getByTitle(`Back to ${name} (Esc)`).click()
+  await page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("button", { name, exact: true })
+    .click()
   await expect(cards).toHaveCount(2)
   await expect(news).toHaveCount(0)
 })
@@ -482,6 +488,11 @@ test("a thread's right-click menu in the sidebar renames and deletes it", async 
   await expect(main.getByRole("heading", { level: 1 })).toHaveText(
     "Flaky test hunt"
   )
+  await expect(
+    page
+      .getByRole("navigation", { name: "Where you are" })
+      .getByRole("button", { name: "Thread options: Flaky test hunt" })
+  ).toBeVisible()
   expect(
     (await api.json<{ chat: { title: string; titleSet: boolean } }>(
       "GET",
@@ -519,15 +530,20 @@ test.describe("a phone", () => {
       `/api/environments/${env}/sandboxes/${id}/chats`
     ))!
     await page.goto(`/e/${env}/chats/${chat.id}`)
-    const main = page.getByRole("main")
-    const options = main.getByRole("button", { name: "Thread options" })
+    // The title and its options are the top bar's last crumb, in view beside the long name.
+    const options = page
+      .getByRole("navigation", { name: "Where you are" })
+      .getByRole("button", { name: /^Thread options:/ })
     await expect(options).toBeVisible()
-    // The name shrinks instead of pushing the title out and the options past the screen.
     const box = (await options.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(390)
-    const title = (await main.getByRole("heading", { level: 1 }).boundingBox())!
-    expect(title.width).toBeGreaterThan(40)
-    await expect(main.getByTitle(`Back to ${name} (Esc)`)).toBeVisible()
+    expect(box.width).toBeGreaterThan(40)
+    await options.click()
+    await expect(page.getByRole("menuitem", { name: "Rename…" })).toBeVisible()
+    await expect(
+      page.getByRole("menuitem", { name: "Delete thread…" })
+    ).toBeVisible()
   })
 })
 

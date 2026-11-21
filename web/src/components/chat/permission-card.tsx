@@ -1,7 +1,7 @@
-import { useState } from "react"
-import { ShieldCheckIcon } from "@phosphor-icons/react"
+import { useEffect, useState } from "react"
 import { useDecideApproval } from "@/components/approval-decision"
 import { CodeBlock } from "@/components/chat/markdown"
+import { clockLabel } from "@/components/chat/step-runs"
 import { Diff, Locations, toolKind } from "@/components/chat/tool-call-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import type { ChatItem, PermissionOption } from "@/lib/chats"
+import { cn } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
 
@@ -133,7 +134,31 @@ export function PermissionInput({
   )
 }
 
-/** A permission request inside the chat: what the agent wants to do, and the decision. */
+/** What an ask says it waits for, by the kind of step it asks about. */
+const asksBefore: Record<string, string> = {
+  execute: "asks before running",
+  edit: "asks before editing",
+  delete: "asks before deleting",
+  move: "asks before moving",
+  fetch: "asks before fetching",
+}
+
+/** The time now, every second while `ticking`. */
+function useNow(ticking: boolean) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!ticking) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [ticking])
+  return now
+}
+
+/**
+ * A permission request inside the chat, as one card with the step it asks about: the step's
+ * kind and title, while it waits what it asks and for how long ("asks before running · 0:03"),
+ * what Allow would run, and the decision. Once answered it says how.
+ */
 export function PermissionCard({
   env,
   item,
@@ -146,6 +171,7 @@ export function PermissionCard({
   const p = item.permission
   const pending = item.status === "pending"
   useClaimApprovals([pending ? item.approvalId : undefined])
+  const now = useNow(pending)
   if (!p) return null
   const tc = p.toolCall
   const kind = toolKind(tc.kind)
@@ -155,19 +181,31 @@ export function PermissionCard({
     (outcomes[item.status ?? ""] ?? item.status) +
     (chosen?.kind.endsWith("_always") ? " from now on" : "")
   return (
-    <div className="grid min-w-0 gap-2.5 rounded-lg border border-primary/30 bg-card p-2.5 text-xs">
-      <div className="flex items-start gap-2">
-        <ShieldCheckIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />
-        <div className="grid min-w-0 flex-1 gap-0.5">
-          <p className="font-medium">{teammateName} asks before going on</p>
-          <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-            <kind.icon className="size-3 shrink-0" aria-label={kind.label} />
-            <span className="min-w-0 wrap-break-word">
-              {tc.title || kind.label}
-            </span>
-          </p>
-        </div>
-        {!pending && (
+    <div
+      role="group"
+      aria-label={`${teammateName} asks before going on`}
+      className={cn(
+        "grid min-w-0 gap-2.5 rounded-lg border bg-card p-2.5 text-xs",
+        pending ? "border-(--st-waiting)/50" : "border-primary/30"
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-2">
+        <kind.icon
+          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+          aria-label={kind.label}
+        />
+        <p className="min-w-0 flex-1 font-medium wrap-break-word">
+          {tc.title || kind.label}
+        </p>
+        {pending ? (
+          <span
+            data-testid="ask-status"
+            className="mt-px shrink-0 text-caption text-(--st-waiting-fg) tabular-nums"
+          >
+            {asksBefore[tc.kind ?? ""] ?? "asks before going on"} ·{" "}
+            {clockLabel(now - Date.parse(item.updatedAt))}
+          </span>
+        ) : (
           <Badge variant="outline" className="shrink-0">
             {outcome}
           </Badge>

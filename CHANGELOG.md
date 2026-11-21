@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- A thread's title lives in the top bar only. Its menu there holds Rename, Copy link, Continue
+  in the terminal and Delete, then the teammate's other threads, and a chip after it says
+  whether the thread works, needs you or is done. The header above the conversation, with its
+  back arrow, ⋯ and "on computer · Show" pill, is gone: Esc or the sidebar goes back.
+- A permission ask and the step it asks about are one card: "Run make test", "asks before
+  running · 0:12", the command, and Allow or Deny. The row of steps above it says how long the
+  agent worked so far instead of "Waiting for you".
+- While a teammate works, the composer says "Steer Iris…", and its foot what the keys do: Enter
+  steers this turn, Alt+Enter waits for the next.
 - Teammates wear drawn pixel sprites: 30 of them, from a fox and an owl to a robot and eight
   people, on a light tile of the teammate's color. A teammate without a chosen avatar, new or
   old, wears the one its name picks, where it showed its initials before; the initials, shapes

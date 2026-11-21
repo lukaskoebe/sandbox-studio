@@ -171,7 +171,10 @@ export function ApprovalsButton({ className }: { className?: string }) {
         count={n}
         className={cn(arrivals > 0 && "motion-safe:animate-count-arrival")}
       />{" "}
-      {n === 1 ? "needs you" : "need you"}
+      {/* A phone's top bar keeps the room for where you are. */}
+      <span className="max-sm:sr-only">
+        {n === 1 ? "needs you" : "need you"}
+      </span>
     </>
   )
   if (cards.length === 0)

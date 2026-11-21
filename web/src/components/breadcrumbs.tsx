@@ -12,10 +12,14 @@ import {
   DesktopTowerIcon,
   GearIcon,
   GitForkIcon,
+  LinkIcon,
   ListChecksIcon,
   MagnifyingGlassIcon,
+  PencilSimpleIcon,
   PlusIcon,
   RepeatIcon,
+  TerminalWindowIcon,
+  TrashIcon,
   TrayIcon,
 } from "@phosphor-icons/react"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
@@ -54,10 +58,17 @@ import {
 } from "@/lib/computer"
 import { openPalette } from "@/lib/palette"
 import { teammateSettings } from "@/lib/teammate-settings"
-import { chatStatus } from "@/lib/threads"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
+import { useThreadActions } from "@/lib/thread-actions"
+import {
+  chatApprovals,
+  chatStatus,
+  statusLabels,
+  type ThreadStatus,
+} from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
-/** One entry of a crumb's menu: a heading, a rule, or a place to go. */
+/** One entry of a crumb's menu: a heading, a rule, or a place to go or thing to do. */
 type MenuEntry =
   | { heading: string }
   | { rule: true }
@@ -65,9 +76,13 @@ type MenuEntry =
       label: string
       lead?: ReactNode
       right?: ReactNode
+      /** A line under the label, such as when an action can happen. */
+      hint?: string
       mono?: boolean
       inset?: boolean
       current?: boolean
+      disabled?: boolean
+      destructive?: boolean
       run: () => void
     }
 
@@ -78,6 +93,8 @@ type Crumb = {
   label: string
   lead?: ReactNode
   mono?: boolean
+  /** On a narrow window only its lead shows, leaving the room to the crumbs after it. */
+  compact?: boolean
   /** The crumb's neighbours, which its menu opens. */
   menu?: MenuEntry[]
   /** The menu button's name, which says what it switches rather than repeating the label. */
@@ -126,10 +143,12 @@ export function Breadcrumbs({ env }: { env: string }) {
   const lead = $api.useQuery("get", "/api/environments/{env}/lead", {
     params: { path: { env } },
   })
+  const pending = usePendingApprovals()
   const leaf = matches.at(-1)
   const routeId = (leaf?.routeId ?? "") as string
   const params = (leaf?.params ?? {}) as Record<string, string>
   const search = (leaf?.search ?? {}) as TeammateSearch
+  const threadActions = useThreadActions(search.thread)
   const onPlan = routeId === "/e/$env/lead/plans/$plan"
   const planId = onPlan ? params.plan : ""
   const plan = $api.useQuery(
@@ -258,6 +277,8 @@ export function Breadcrumbs({ env }: { env: string }) {
     run: goComputers,
   }
   let chip: Chip | undefined
+  // The open thread's state, said once, after its title.
+  let threadStatus: ThreadStatus | undefined
 
   const crumbs: Crumb[] = (() => {
     if (routeId === "/e/$env/")
@@ -415,13 +436,49 @@ export function Breadcrumbs({ env }: { env: string }) {
           ],
         }
       if (!search.thread) return [head]
+      if (thread)
+        threadStatus = chatStatus(
+          thread,
+          chatApprovals(
+            thread,
+            (pending.data ?? []).filter((a) => a.environmentId === env),
+            allChats
+          ).length
+        )
+      const a = threadActions
       return [
-        head,
+        { ...head, compact: true },
         {
           key: "thread",
-          switches: "Switch thread",
+          switches: "Thread options",
           label: thread ? chatTitle(thread) : "Thread",
           menu: [
+            ...(a
+              ? [
+                  {
+                    label: "Rename…",
+                    lead: <PencilSimpleIcon />,
+                    run: a.rename,
+                  },
+                  { label: "Copy link", lead: <LinkIcon />, run: a.copyLink },
+                  {
+                    label: "Continue in the terminal",
+                    lead: <TerminalWindowIcon />,
+                    hint: a.running
+                      ? "Once the agent is done, or stopped"
+                      : "In the agent's own interface",
+                    disabled: !a.handable || a.handing,
+                    run: a.toTerminal,
+                  },
+                  {
+                    label: "Delete thread…",
+                    lead: <TrashIcon />,
+                    destructive: true,
+                    run: a.remove,
+                  },
+                  { rule: true as const },
+                ]
+              : []),
             { heading: `${t.name}'s threads` },
             ...mine.slice(0, menuThreads).map((c) => ({
               label: chatTitle(c),
@@ -555,14 +612,21 @@ export function Breadcrumbs({ env }: { env: string }) {
           const inner = (
             <>
               {c.lead}
-              <span className={cn("truncate", c.mono && "font-mono")}>
+              <span
+                className={cn(
+                  "truncate",
+                  c.mono && "font-mono",
+                  c.compact && c.lead && "max-md:sr-only"
+                )}
+              >
                 {c.label}
               </span>
             </>
           )
           const cls = cn(
             "inline-flex h-6 max-w-80 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0",
-            last && "font-semibold text-foreground"
+            // Where you are shortens before the row scrolls, so its start stays in view.
+            last && "min-w-0 shrink font-semibold text-foreground"
           )
           return (
             <Fragment key={c.key}>
@@ -575,7 +639,7 @@ export function Breadcrumbs({ env }: { env: string }) {
                 </li>
               )}
               <li
-                className="flex shrink-0"
+                className={cn("flex", last ? "min-w-0 shrink" : "shrink-0")}
                 aria-current={last ? "page" : undefined}
               >
                 {c.menu && c.run && !last ? (
@@ -633,6 +697,12 @@ export function Breadcrumbs({ env }: { env: string }) {
             </Fragment>
           )
         })}
+        {threadStatus && (
+          <li className="ml-1.5 flex shrink-0">
+            <ThreadStatusChip status={threadStatus} />
+          </li>
+        )}
+        <TopBarSlot name="status" />
         {chip && (
           <li className="ml-1.5 flex shrink-0">
             <DropdownMenu>
@@ -640,9 +710,9 @@ export function Breadcrumbs({ env }: { env: string }) {
                 aria-label={`Switch computer: ${chip.sandbox.name}`}
                 className="inline-flex h-6 max-w-64 items-center gap-1.5 rounded-full border px-2 text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-popup-open:bg-accent data-popup-open:text-foreground"
               >
-                <span>on</span>
+                <span className="max-md:hidden">on</span>
                 {dot(chip.sandbox)}
-                <span className="truncate font-mono text-foreground">
+                <span className="truncate font-mono text-foreground max-md:sr-only">
                   {chip.sandbox.name}
                 </span>
                 <CaretDownIcon className="size-2.5 shrink-0 opacity-70" />
@@ -701,17 +771,28 @@ function CrumbMenu({ entries }: { entries: MenuEntry[] }) {
                   <DropdownMenuItem
                     key={j}
                     onClick={e.run}
+                    disabled={e.disabled}
+                    variant={e.destructive ? "destructive" : undefined}
                     className={cn(e.inset && "pl-5")}
                   >
                     {e.lead}
-                    <span
-                      className={cn(
-                        "min-w-0 flex-1 truncate",
-                        e.mono && "font-mono"
-                      )}
-                    >
-                      {e.label}
-                    </span>
+                    {e.hint ? (
+                      <span className="grid min-w-0 flex-1">
+                        <span className="truncate">{e.label}</span>
+                        <span className="truncate text-caption text-muted-foreground">
+                          {e.hint}
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1 truncate",
+                          e.mono && "font-mono"
+                        )}
+                      >
+                        {e.label}
+                      </span>
+                    )}
                     {e.current ? (
                       <CheckIcon className="text-muted-foreground" />
                     ) : (
@@ -726,5 +807,28 @@ function CrumbMenu({ entries }: { entries: MenuEntry[] }) {
         </Fragment>
       ))}
     </DropdownMenuContent>
+  )
+}
+
+/** The open thread's state after its title: one chip, in the waiting colour when it needs you. */
+function ThreadStatusChip({ status }: { status: ThreadStatus }) {
+  return (
+    <span
+      data-testid="thread-status"
+      className={cn(
+        "inline-flex h-5 items-center gap-1.5 rounded-full border px-2 text-caption font-normal text-muted-foreground max-md:px-1.5",
+        status === "waiting" &&
+          "border-(--st-waiting)/45 bg-(--st-waiting)/12 text-foreground"
+      )}
+    >
+      {/* A narrow window shows the dot alone. */}
+      <ThreadDot
+        status={status}
+        className={cn(status === "waiting" && "md:hidden")}
+      />
+      <span className="max-md:sr-only">
+        {status === "waiting" ? "needs you" : statusLabels[status]}
+      </span>
+    </span>
   )
 }

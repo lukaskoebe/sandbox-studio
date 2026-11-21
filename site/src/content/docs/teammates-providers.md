@@ -83,7 +83,7 @@ If an environment has no teammates when you add a provider, Studio adds a teamma
 2. Choose **+** next to **Teammates** and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, the dialog says *Add a provider first* and **Add a provider** opens **Settings → AI providers**.
 3. Choose **Give Iris a computer** on its page, or create a computer and pick that teammate.
 4. Write to the teammate on its page: that starts a thread, a chat. See [Chat](../chat/).
-5. To use the harness's own interface instead, choose **Continue in the terminal** in the thread's **⋯**. Studio opens the harness in a new terminal session on the computer's **Terminal** tab.
+5. To use the harness's own interface instead, choose **Continue in the terminal** in the menu of the thread's title in the top bar. Studio opens the harness in a new terminal session on the computer's **Terminal** tab.
 
 The provider key must be bound to the correct API host, and the computer must be running. A computer without a teammate still has a terminal, but it cannot start an agent session or use a teammate's memory or browser. Git in it works through the configured forges, and commits use the name and email set in git on the computer running Studio, if it has them.
 

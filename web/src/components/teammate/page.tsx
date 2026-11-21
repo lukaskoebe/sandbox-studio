@@ -356,11 +356,6 @@ export function TeammatePage({
               env={env}
               teammate={teammate}
               log={log}
-              // The crumb row names the thread's computer; this says only that it is off the screen.
-              computer={offScreen?.name}
-              onShowComputer={
-                offScreen ? () => screen({ computer: offScreen.id }) : undefined
-              }
               onBack={leaveThread}
               onShowChanges={(turn, file) => {
                 setTurnId(turn)

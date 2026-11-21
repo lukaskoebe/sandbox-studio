@@ -520,12 +520,6 @@ test("a computer pinned beside a chat says the chat works elsewhere", async ({
   await onDocs.getByRole("button", { name: `Show ${shop}` }).click()
   await expect(onShop).toBeVisible()
   await expect(onShop.getByRole("status")).toHaveCount(0)
-
-  // The chat's own chip shows its computer again too.
-  await crumbs.getByRole("button", { name: `Switch computer: ${shop}` }).click()
-  await page.getByRole("menuitem", { name: new RegExp(docs) }).click()
-  await page.getByRole("button", { name: `on ${shop} · Show` }).click()
-  await expect(onShop).toBeVisible()
 })
 
 test("a teammate's settings show what it knows and works on, its own rules, and turn its memory's learning and dreaming off", async ({

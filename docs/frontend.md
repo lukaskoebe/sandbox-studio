@@ -158,8 +158,13 @@ only by a word's start, since what they matched isn't shown.
 
 Above every page a row of breadcrumbs (`components/breadcrumbs.tsx`) says where it is: Home,
 Environment › a page, Settings › a section, Computers › a computer of the user's own, or a
-teammate › the open thread followed, on its desk and in a thread, by a chip for the computer it
-shows ("on ● docs-site"). Each part with a caret opens its neighbours; the chip's menu has the
+teammate › the open thread followed, in a thread, by its state (`lib/threads.ts`'s, with "needs
+you" while it waits), what the page puts in the row's status slot (`components/top-bar-slot.tsx`),
+and on its desk and in a thread a chip for the computer it shows ("on ● docs-site"). The thread's
+crumb is its title, whose menu has its options (Rename…, Copy link, Continue in the terminal,
+Delete thread…), which the thread page publishes through `lib/thread-actions.ts`, then the
+teammate's other threads. On a narrow window the teammate's crumb and the chips keep their icons
+and dots, so the title stays in view. Each part with a caret opens its neighbours; the chip's menu has the
 teammate's computers, Give it another computer and All computers. The teammate's crumb is two
 buttons when it isn't the last part: its name goes to its home and its caret opens the menu. What the computer's tabs show
 is on the computer, not in the row.
@@ -194,8 +199,9 @@ shows is in the URL's search, so Back, Forward and links work: `thread`, `comput
 `term`, `review`, `fold`, `full`, `profile` (`settings`, or the `tasks` or `memory` sheet over
 them; the old `card` opens `settings`), `open` (the open settings card) and `from=setup`. Esc
 closes a sheet, the settings or a menu first, then leaves the thread. The page has no header of
-its own: the crumb row's teammate is its only name, and its menu switches teammate and opens the
-Threads and the Settings.
+its own, nor has a thread: the crumb row's teammate is its only name, and its menu switches
+teammate and opens the Threads and the Settings; the thread's title, state and options are the
+row's too.
 
 The rim between the home or the conversation and the screen drags. From the home's rail a little
 drag opens the desk; past the panel's minimum the screen takes the page (`full`), and past its
