@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.28.0 — 2026-11-21
 
 - A thread's title lives in the top bar only. Its menu there holds Rename, Copy link, Continue
   in the terminal and Delete, then the teammate's other threads, and a chip after it says
