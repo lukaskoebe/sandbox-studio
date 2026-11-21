@@ -108,7 +108,9 @@ func TestAvatarSpritesMatchTheWebUI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, body, _ := strings.Cut(string(src), "\nconst sprites = {\n")
+	// A Windows checkout may end its lines with \r\n.
+	text := strings.ReplaceAll(string(src), "\r\n", "\n")
+	_, body, _ := strings.Cut(text, "\nconst sprites = {\n")
 	body, _, _ = strings.Cut(body, "\n} satisfies")
 	var names []string
 	for _, m := range regexp.MustCompile(`(?m)^  "?([a-z-]+)"?: \{$`).FindAllStringSubmatch(body, -1) {

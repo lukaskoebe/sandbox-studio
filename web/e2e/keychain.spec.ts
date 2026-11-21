@@ -29,9 +29,9 @@ test("Studio waits for a locked keychain, says so, and starts once it unlocks", 
     const retry = page.getByRole("button", { name: "Retry" })
     await retry.click()
     await expect(heading).toBeVisible()
-    await expect(page.getByRole("status")).toContainText(
-      "may show its password prompt on the desktop"
-    )
+    await expect(
+      page.getByRole("status").filter({ hasText: "Retry asks" })
+    ).toContainText("may show its password prompt on the desktop")
 
     // Unlocked, Retry starts Studio, and the page goes on with its session.
     await studio.unlockKeychain()

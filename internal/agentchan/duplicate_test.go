@@ -6,11 +6,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 )
 
 func TestHubRejectsDuplicateWhileSessionLiveAndAllowsReconnect(t *testing.T) {
@@ -22,6 +24,11 @@ func TestHubRejectsDuplicateWhileSessionLiveAndAllowsReconnect(t *testing.T) {
 
 	const id = "sb-duplicate"
 	path := filepath.Join(dir, "s.sock")
+	if runtime.GOOS == "windows" {
+		// Studio serves guests over named pipes there, so the test does too: over a Unix
+		// socket on Windows the duplicate's close once didn't arrive within 20 s.
+		path = paths.Paths{Data: dir}.AgentSocket(id)
+	}
 	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	connected := make(chan string, 2)
 	h.OnConnect = func(id string) { connected <- id }

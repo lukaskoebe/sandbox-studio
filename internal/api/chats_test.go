@@ -550,22 +550,35 @@ func TestChatStream(t *testing.T) {
 	if rec := do(h, "POST", base+"/prompt", `{"text":"Second"}`); rec.Code != http.StatusAccepted {
 		t.Fatalf("prompt: %d %s", rec.Code, rec.Body)
 	}
+	// The open stream follows the chat's state too: running while the turn works, idle again
+	// once it ends. A stream that wakes only after the turn ended finds the chat idle, as it
+	// last sent it, and sends no chat event: its client has missed nothing then.
 	var seen []string
-	for {
-		e := next(t, ch, "item", func(string) bool { return true })
-		if e.id <= chatEvent.id {
-			t.Fatalf("resent %s %d", e.data, e.id)
-		}
-		seen = append(seen, e.data)
-		if strings.Contains(e.data, `"Two"`) {
-			break
+	idle, two := true, false
+	timeout := time.After(10 * time.Second)
+	for !two || !idle {
+		select {
+		case e, ok := <-ch:
+			if !ok {
+				t.Fatal("the stream ended during the turn")
+			}
+			switch e.event {
+			case "item":
+				if e.id <= chatEvent.id {
+					t.Fatalf("resent %s %d", e.data, e.id)
+				}
+				seen = append(seen, e.data)
+				two = two || strings.Contains(e.data, `"Two"`)
+			case "chat":
+				idle = strings.Contains(e.data, `"state":"idle"`)
+			}
+		case <-timeout:
+			t.Fatalf("items %v, idle %v", seen, idle)
 		}
 	}
 	if !strings.Contains(seen[0], `"Second"`) {
 		t.Fatalf("items: %v", seen)
 	}
-	// The open stream follows the chat's state too: idle again once the turn ends.
-	next(t, ch, "chat", func(d string) bool { return strings.Contains(d, `"state":"idle"`) })
 
 	// Deleting the chat ends its stream.
 	var wg sync.WaitGroup

@@ -1142,10 +1142,11 @@ test("a review keeps its note, comments and place across another tab and a reloa
     pane.locator("[data-line]").filter({ hasText: text }).first()
   const one = await numberOf(pane, row(/^one$/))
   await page.mouse.click(one.x, one.y)
-  await pane
-    .getByRole("textbox", { name: "Comment on src/a.ts:1" })
-    .fill("Why one?")
-  await pane.getByRole("button", { name: "Save comment" }).click()
+  const draft = pane.getByRole("textbox", { name: "Comment on src/a.ts:1" })
+  await draft.fill("Why one?")
+  // Saved from the keys: a click here can land on the file's sticky header, which covers the
+  // line's editor while the diff scrolls it into view.
+  await draft.press("ControlOrMeta+Enter")
   const comment = pane.getByRole("note", { name: "Comment on src/a.ts:1" })
   await expect(comment).toContainText("Why one?")
 
