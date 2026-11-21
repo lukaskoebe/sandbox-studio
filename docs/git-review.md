@@ -609,8 +609,10 @@ threads, forge?, idempotency_key?)` (`studio pr resolve <number> --thread <id> â
   from another pull request is refused. Threads already resolved are left out and named in
   `alreadyResolved`; if none is left, nothing is asked. Otherwise a `git.resolve` approval
   holds each thread's place, author, first comment (cut at 2,000 bytes) and number of replies
-  (`ResolveDraft`), at most 20 a time. Asks don't replace each other, and an
-  `idempotency_key` works as for comments.
+  (`ResolveDraft`), at most 20 a time. Asks don't replace each other: the approval's subject
+  holds the pull request and the sorted thread IDs, so an ask for other threads of the same
+  pull request is a card of its own, and asking for the same threads again counts on the card
+  that waits and answers with its threads. An `idempotency_key` works as for comments.
 - **The card** (`ForgeResolve` in `web/src/components/forge-resolve.tsx`) lists the threads
   with "Resolves as <account> on <host>", **Leave openâ€¦** with a note, Ignore, and **Resolve
   N threads**.

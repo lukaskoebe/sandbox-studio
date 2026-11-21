@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -192,10 +193,22 @@ func (s *Service) toolPullRequestResolve(ctx context.Context, sb store.Sandbox, 
 	if err != nil {
 		return nil, err
 	}
-	a, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, Kind: KindResolve,
-		Subject: fmt.Sprintf("%s/%s", f.Name, pr), Payload: payload})
+	// One card per set of threads: an ask for others of the same pull request is a card of its
+	// own, and asking for the same ones again counts on the card that waits.
+	ids = make([]string, 0, len(asked))
+	for _, t := range asked {
+		ids = append(ids, t.ID)
+	}
+	slices.Sort(ids)
+	a, created, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, Kind: KindResolve,
+		Subject: fmt.Sprintf("%s/%s %s", f.Name, pr, strings.Join(ids, ",")), Payload: payload})
 	if err != nil {
 		return nil, err
+	}
+	if !created { // the card that waits says what an Allow resolves
+		if d, err := ResolveDetail(a); err == nil {
+			draft = *d
+		}
 	}
 	s.publish(sb.EnvironmentID, a.ID)
 	v := resolveView(a, draft)

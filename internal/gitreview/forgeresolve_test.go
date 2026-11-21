@@ -105,6 +105,39 @@ func TestResolvingThreadsWaitsForApproval(t *testing.T) {
 	}
 }
 
+// An ask for other threads of the same pull request is a card of its own, and each card
+// resolves the threads it shows; asking for the same ones again answers with the waiting card.
+func TestResolveAsksForOtherThreadsAreCardsOfTheirOwn(t *testing.T) {
+	svc, st, sb, fg := newResolveHarness(t)
+	fg.thirdThread = true
+	ctx := context.Background()
+	first, err := callReviewTool(t, svc.toolPullRequestResolve, sb, `{"repository":"group/sub/web","number":7,"threads":["d1"]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := callReviewTool(t, svc.toolPullRequestResolve, sb, `{"repository":"group/sub/web","number":7,"threads":["d3"],"idempotency_key":"k2"}`)
+	if err != nil || second["approval"] == first["approval"] {
+		t.Fatalf("second ask: %v %v", second, err)
+	}
+	again, err := callReviewTool(t, svc.toolPullRequestResolve, sb, `{"repository":"group/sub/web","number":7,"threads":["d3"]}`)
+	if err != nil || again["approval"] != second["approval"] {
+		t.Fatalf("the same threads again: %v %v", again, err)
+	}
+	pending, _ := st.Approvals(ctx, sb.EnvironmentID, store.StatusPending, 10)
+	if len(pending) != 2 {
+		t.Fatalf("pending: %v", pending)
+	}
+	for _, a := range pending {
+		d, err := ResolveDetail(a)
+		if err != nil || len(d.Threads) != 1 {
+			t.Fatalf("detail: %+v %v", d, err)
+		}
+		if want := map[bool]string{true: "d1", false: "d3"}[a.ID == first["approval"]]; d.Threads[0].ID != want {
+			t.Errorf("card %s resolves %s, want %s", a.ID, d.Threads[0].ID, want)
+		}
+	}
+}
+
 func TestADeniedResolveLeavesTheThreads(t *testing.T) {
 	svc, st, sb, fg := newResolveHarness(t)
 	ctx := context.Background()

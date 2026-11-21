@@ -20,8 +20,9 @@ type fakeGitLab struct {
 	diffs  []gitlabDiffEntry
 	me     string // the token's user; when set, /approve answers 401 as GitLab does for a second approval
 
-	drafts        int // the token's user's pending draft comments
-	publishStatus int // what /draft_notes/bulk_publish answers instead of succeeding
+	drafts        int  // the token's user's pending draft comments
+	publishStatus int  // what /draft_notes/bulk_publish answers instead of succeeding
+	thirdThread   bool // a second open thread, d3
 }
 
 const gitlabMR = "/api/v4/projects/group%2Fsub%2Fweb/merge_requests/7"
@@ -77,19 +78,27 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 			}
 			write(w, f.diffs[2:])
 		case "/notes":
-			write(w, []map[string]any{
+			notes := []map[string]any{
 				{"body": "approved this merge request", "system": true, "author": map[string]any{"username": "bob"}, "created_at": "2026-11-01T09:00:00Z"},
 				{"body": "added 1 commit", "system": true, "author": map[string]any{"username": "ada"}},
 				{"id": 21, "body": "Why 2?", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "new_line": 2}},
 				{"id": 22, "body": "Gone", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "old_line": 2}},
 				{"body": "Thanks!", "author": map[string]any{"username": "cy"}},
-			})
+			}
+			if f.thirdThread {
+				notes = append(notes, map[string]any{"id": 24, "body": "And 3?", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "new_line": 3}})
+			}
+			write(w, notes)
 		case "/discussions":
-			write(w, []map[string]any{
+			threads := []map[string]any{
 				{"id": "d0", "individual_note": true, "notes": []map[string]any{{"id": 20}}},
 				{"id": "d1", "notes": []map[string]any{{"id": 21, "resolvable": true}, {"id": 23, "resolvable": true}}},
 				{"id": "d2", "notes": []map[string]any{{"id": 22, "resolvable": true, "resolved": true}}},
-			})
+			}
+			if f.thirdThread {
+				threads = append(threads, map[string]any{"id": "d3", "notes": []map[string]any{{"id": 24, "resolvable": true}}})
+			}
+			write(w, threads)
 		case "/pipelines":
 			write(w, []map[string]any{{"id": 6, "sha": "head3"}, {"id": 5, "sha": "head2"}, {"id": 4, "sha": "head2"}})
 		case "/approvals":
