@@ -271,8 +271,8 @@ test("on Home the approvals' count opens nothing, and a new card slides in", asy
   await api.dismissApprovals()
   await page.goto(`/e/${env}`)
   await expect(approvals(page)).toBeVisible()
-  const host = `home-${Math.random().toString(36).slice(2, 8)}.example.org`
-  await api.connect(await api.createSandbox(sandboxName("homeask")), host)
+  const host = `slide-${Math.random().toString(36).slice(2, 8)}.example.org`
+  await api.connect(await api.createSandbox(sandboxName("slidein")), host)
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: host })

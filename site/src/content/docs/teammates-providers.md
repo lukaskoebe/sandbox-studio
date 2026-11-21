@@ -21,7 +21,7 @@ The teammate's page starts on its home:
 
 The box at the bottom sends a **Thread**, a message that starts a thread on the computer named under it; a **Task**, which goes on its task list and which it starts on right away; or **Teach**, a fact for its memory without a thread. When the teammate offers more than one model, the box also picks the thread's model.
 
-Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). Open a thread to go on with it; the chat takes the home's place, and the button with the teammate's name at the top left, its name in the bar at the top, or Esc, returns to the home. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
+Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). The layout switch at the right of the top bar gives the page to the home (**Home only**), to both, or to the computer (**Computer only**). Open a thread to go on with it; the chat takes the home's place, and the button with the teammate's name at the top left, its name in the bar at the top, or Esc, returns to the home. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
 
 ## A teammate's settings
 

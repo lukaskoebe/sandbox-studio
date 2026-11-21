@@ -308,6 +308,14 @@ export function approvals(page: Page) {
 }
 
 /** The top bar's count of approvals, which opens their list. */
+/** A layout of the teammate page's switch in the top bar: "Chat only", "Both", "Computer only". */
+export function layoutButton(page: Page, name: string) {
+  return page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("group", { name: "Layout" })
+    .getByRole("button", { name, exact: true })
+}
+
 export function approvalsButton(page: Page) {
   return page
     .getByRole("navigation", { name: "Where you are" })

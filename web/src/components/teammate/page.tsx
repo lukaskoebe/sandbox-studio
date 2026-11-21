@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "@tanstack/react-router"
-import {
-  ArrowLineRightIcon,
-  MonitorIcon,
-  PlusIcon,
-} from "@phosphor-icons/react"
+import { MonitorIcon, PlusIcon } from "@phosphor-icons/react"
 import { ComputerScreen, type ScreenChange } from "@/components/computer/screen"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { opensEnlarged } from "@/components/git-review"
@@ -14,8 +10,12 @@ import {
   useStoredSize,
 } from "@/components/resize-handle"
 import { useWideScreen } from "@/components/side-panel"
-import { TeammateAvatar } from "@/components/teammate-avatar"
+import { InTopBar } from "@/components/top-bar-slot"
 import { TeammateHome, teammateApprovals } from "@/components/teammate/home"
+import {
+  LayoutSwitch,
+  type PageLayout,
+} from "@/components/teammate/layout-switch"
 import {
   ProfileSettingsPage,
   ProfileSheet,
@@ -188,6 +188,22 @@ export function TeammatePage({
     )
   // The desk: the home narrowed to a panel beside the open computer, no thread open.
   const desk = wide && !search.thread && !folded && !full
+  // The top bar's layout switch: the conversation alone, both, or the computer alone.
+  const layout: PageLayout = folded
+    ? "conversation"
+    : full || !wide
+      ? "computer"
+      : "both"
+  const setLayout = (l: PageLayout) =>
+    screen(
+      l === "conversation"
+        ? { fold: true }
+        : l === "both"
+          ? { fold: false, full: false }
+          : wide
+            ? { full: true }
+            : { fold: false }
+    )
   // Memory or tasks opened from a settings row lead back to that row.
   const [settingsBack, setSettingsBack] = useState<string>()
   const backable = search.profile === "memory" || search.profile === "tasks"
@@ -306,15 +322,18 @@ export function TeammatePage({
 
   return (
     <div ref={box} className="relative flex min-h-0 flex-1">
-      {full && (
-        <ConversationStrip
-          teammate={teammate}
-          waiting={waiting.length}
-          onShow={() => screen({ full: false })}
-        />
+      {computer && (
+        <InTopBar>
+          <LayoutSwitch
+            value={layout}
+            onChange={setLayout}
+            conversation={search.thread ? "Chat" : "Home"}
+            narrow={!wide}
+          />
+        </InTopBar>
       )}
       {/* Kept while the screen takes the page, so a draft and the scroll stay; meanwhile its
-          approvals float in the stack, as nothing here shows them. */}
+          approvals are in the top bar's list, as nothing here shows them. */}
       <ClaimsHidden value={full || (!wide && !folded && !!computer)}>
         <div
           className={cn(
@@ -390,7 +409,6 @@ export function TeammatePage({
               }
               onOpenComputer={(c, tab) => screen({ computer: c.id, tab })}
               onExpand={() => screen({ fold: true })}
-              onFold={() => screen({ full: true })}
             />
           )}
         </div>
@@ -405,7 +423,7 @@ export function TeammatePage({
           defaultSize={Math.round(sizes.share * boxWidth)}
           onResize={(px) => setShare(px / boxWidth)}
           folded={full}
-          foldedSize={stripWidth}
+          foldedSize={0}
           onFold={(fold) => screen({ full: fold })}
           expanded={folded}
           expandedSize={boxWidth - railWidth}
@@ -431,7 +449,6 @@ export function TeammatePage({
             sandbox={computer}
             owner={teammate}
             search={{ ...search, fold: folded, full }}
-            enlargeable={wide}
             onChange={screen}
             chatComputer={offScreen}
             thread={
@@ -463,8 +480,7 @@ export function TeammatePage({
   )
 }
 
-/** The folded conversation's strip and the folded screen's rail, which a drag starts from. */
-const stripWidth = 48
+/** The folded screen's rail, which a drag starts from. */
 const railWidth = 56
 
 /** The conversation beside the screen: its default share of the page and the ends it drags to. */
@@ -472,53 +488,6 @@ const conversationSplit = { share: 0.444, min: 320, screenMin: 480 }
 
 /** The desk's home beside the computer: a narrow panel by default. */
 const deskSplit = { share: 0.3, min: 300, screenMin: 480 }
-
-/** The conversation while the screen takes the page: the teammate, and the way back. */
-function ConversationStrip({
-  teammate,
-  waiting,
-  onShow,
-}: {
-  teammate: Teammate
-  waiting: number
-  onShow: () => void
-}) {
-  return (
-    <section
-      aria-label={`${teammate.name}'s conversation, folded`}
-      className="flex w-12 shrink-0 flex-col items-center gap-1 pt-4.5 pb-2.5"
-    >
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Show the conversation"
-        title="Show the conversation"
-        className="text-muted-foreground hover:text-foreground"
-        onClick={onShow}
-      >
-        <ArrowLineRightIcon />
-      </Button>
-      <span className="my-1 h-px w-6 bg-border" />
-      <span
-        className="relative"
-        title={
-          waiting
-            ? `${teammate.name}: ${waiting} waiting for you`
-            : teammate.name
-        }
-      >
-        <TeammateAvatar
-          name={teammate.name}
-          avatar={teammate.avatar}
-          className="size-7 text-meta"
-        />
-        {waiting > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-(--st-waiting) ring-2 ring-background" />
-        )}
-      </span>
-    </section>
-  )
-}
 
 /** Where the screen goes while the teammate has no computer: an offer to give it one. */
 function NoComputer({

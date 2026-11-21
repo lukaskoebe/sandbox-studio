@@ -1,6 +1,7 @@
 import {
   addTeammate,
   expect,
+  layoutButton,
   sandboxName,
   teammateMenu,
   test,
@@ -348,7 +349,7 @@ test("the conversation and the screen split where they are dragged to, and past 
   await drag(-1000)
   await expect(page).toHaveURL(/[?&]full=1|[?&]full=true/)
   await expect(conversation).toBeHidden()
-  await page.getByRole("button", { name: "Show the conversation" }).click()
+  await layoutButton(page, "Both").click()
   await expect(edge).toBeVisible()
 })
 

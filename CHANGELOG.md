@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- One layout switch at the right of the top bar sets a teammate's page: the home or chat alone,
+  both side by side, or the computer alone. It replaces Enlarge and Fold on the computer's
+  bezel, the desk home's Expand and Fold, Unfold on the folded screen and the strip that
+  brought the conversation back. A tab on the folded screen still opens it beside the
+  conversation, and the divider still drags.
 - Approvals moved from the stack floating in the corner to a "needs you" button at the right
   of the top bar, on every page and at every width. It opens a compact list: one row per
   request, with Allow and Deny for network requests and agents' permission asks, and Review or

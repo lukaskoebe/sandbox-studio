@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ApprovalsButton } from "@/components/approval-stack"
+import { TopBarSlot } from "@/components/top-bar-slot"
 import { LeadGlyph } from "@/components/lead/glyph"
 import { dayName, leadToday } from "@/lib/lead"
 import { $api, type Sandbox, type Teammate } from "@/lib/api/client"
@@ -651,8 +652,10 @@ export function Breadcrumbs({ env }: { env: string }) {
           </li>
         )}
       </ol>
-      {/* The approvals wait up here, where they cover nothing. */}
+      {/* The approvals wait up here, where they cover nothing; then the page's own controls,
+          such as a teammate's layout switch. */}
       <ApprovalsButton />
+      <TopBarSlot />
       <Button
         variant="ghost"
         size="icon-sm"

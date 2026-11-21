@@ -5,14 +5,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react"
-import {
-  ArrowLineLeftIcon,
-  ArrowLineRightIcon,
-  ArrowsInSimpleIcon,
-  ArrowsOutSimpleIcon,
-  PowerIcon,
-  WarningIcon,
-} from "@phosphor-icons/react"
+import { PowerIcon, WarningIcon } from "@phosphor-icons/react"
 import { BrowserRail, type RailTab } from "@/components/browser-rail"
 import { tabMeta } from "@/components/computer/tab-meta"
 import { BrowserWindow, type BrowserReplay } from "@/components/browser-window"
@@ -64,10 +57,11 @@ export type ScreenChange = Partial<ScreenSearch> & {
 
 /**
  * A computer drawn as one screen (docs/design/teammate-computer.md): a bezel with the tabs
- * Terminal, Browser (a teammate's own), Preview and Changes, power, ⋯, enlarge and fold; under
- * it the display. The breadcrumb row names the computer and switches it. A computer that
- * is off shows a dark glass with Start; its teammate's browser, which runs in a VM of its own,
- * stays a tab beside it. Folded, the screen is a strip of tab icons.
+ * Terminal, Browser (a teammate's own), Preview and Changes, power and ⋯; under it the display.
+ * The breadcrumb row names the computer and switches it, and on a teammate's page its layout
+ * switch folds the screen or gives it the page. A computer that is off shows a dark glass with
+ * Start; its teammate's browser, which runs in a VM of its own, stays a tab beside it. Folded,
+ * the screen is a strip of tab icons, each of which opens the screen beside the conversation.
  */
 export function ComputerScreen({
   env,
@@ -76,7 +70,6 @@ export function ComputerScreen({
   search,
   onChange,
   solo,
-  enlargeable,
   lead,
   thread,
   chatComputer,
@@ -88,8 +81,6 @@ export function ComputerScreen({
   onChange: (change: ScreenChange) => void
   /** The screen fills the page: a plain computer, with nothing beside it to fold for. */
   solo?: boolean
-  /** The screen can take the page, with the conversation a strip beside it. */
-  enlargeable?: boolean
   /** Shown first on the bezel, such as the sidebar's toggle on a phone. */
   lead?: ReactNode
   /** The open thread, whose changes Changes shows. */
@@ -178,18 +169,7 @@ export function ComputerScreen({
         aria-label={`${sb.name}, folded`}
         className="flex w-14 shrink-0 flex-col items-center gap-1 border-l bg-sidebar py-2"
       >
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Unfold the screen"
-          title="Unfold the screen"
-          className="text-muted-foreground"
-          onClick={() => onChange({ fold: false })}
-        >
-          <ArrowLineLeftIcon />
-        </Button>
         <FoldedStart env={env} sandbox={sb} />
-        <span className="my-1 h-px w-6 bg-border" />
         {shown.map((t) => {
           const M = tabMeta[t]
           return (
@@ -308,32 +288,6 @@ export function ComputerScreen({
               owner={owner}
               onDetails={() => onChange({ tab: "details" })}
             />
-            {enlargeable && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={
-                  search.full ? "Shrink the screen" : "Enlarge the screen"
-                }
-                title={search.full ? "Shrink the screen" : "Enlarge the screen"}
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => onChange({ full: !search.full })}
-              >
-                {search.full ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
-              </Button>
-            )}
-            {!solo && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Fold the screen"
-                title="Fold the screen"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => onChange({ fold: true })}
-              >
-                <ArrowLineRightIcon />
-              </Button>
-            )}
           </div>
         </div>
         {chatComputer && (
@@ -612,7 +566,7 @@ function Power({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
 }
 
 /**
- * The folded screen's power button, under Unfold while the computer is off: it starts the
+ * The folded screen's power button, at the top of its strip while the computer is off: it starts the
  * computer and leaves the screen folded. One that can't start by itself (a lost VM, disks in
  * the old layout) gets none; unfolding shows why.
  */

@@ -3,8 +3,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
-  ArrowLineLeftIcon,
-  ArrowsOutLineHorizontalIcon,
   BrainIcon,
   BrowserIcon,
   CaretDownIcon,
@@ -180,8 +178,6 @@ type HomeProps = {
   onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
   /** The desk's home takes the page again, the computer folded to its rail. */
   onExpand: () => void
-  /** The desk's home folds to a rail, the computer taking the page. */
-  onFold: () => void
 }
 
 /**
@@ -866,7 +862,6 @@ function DeskHome({
   onReview,
   onOpenComputer,
   onExpand,
-  onFold,
 }: HomeProps) {
   const pending = usePendingApprovals()
   const asks = (pending.data ?? []).filter((a) => a.environmentId === env)
@@ -894,28 +889,6 @@ function DeskHome({
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1 pr-1.5 pl-3">
         <h2 className="mr-1 font-heading text-sm font-semibold">Home</h2>
-        <span className="ml-auto flex shrink-0 items-center">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Expand the home"
-            title="Expand the home"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={onExpand}
-          >
-            <ArrowsOutLineHorizontalIcon />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Fold the home"
-            title="Fold the home"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={onFold}
-          >
-            <ArrowLineLeftIcon />
-          </Button>
-        </span>
       </header>
       <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-3 pb-3">
         {shownWaiting.length > 0 && (

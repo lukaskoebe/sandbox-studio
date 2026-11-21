@@ -2,6 +2,7 @@ import {
   addTeammate,
   approvals,
   expect,
+  layoutButton,
   openApprovals,
   sandboxName,
   terminal,
@@ -326,13 +327,16 @@ test("Review opens a waiting push enlarged over its teammate's thread", async ({
   expect(new URL(page.url()).searchParams.get("thread")).toBe(chat.id)
   const review = page.getByTestId("git-review")
   await expect(review).toContainText("Add beside")
-  const strip = page.getByRole("region", {
-    name: `${name}'s conversation, folded`,
-  })
-  await expect(strip).toBeVisible()
+  await expect(layoutButton(page, "Computer only")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
 
   await page.keyboard.press("Escape")
-  await expect(strip).toBeHidden()
+  await expect(layoutButton(page, "Both")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
   await expect(page).not.toHaveURL(/[?&]full=/)
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible()
   await expect(review).toContainText("Add beside")

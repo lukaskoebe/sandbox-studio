@@ -1,5 +1,6 @@
 import {
   addTeammate,
+  layoutButton,
   openApprovals,
   expect,
   sandboxName,
@@ -178,7 +179,7 @@ test("an off computer starts from its card, its Terminal, or the folded screen",
   await expect.poll(status).toBe("running")
 
   // Folded, the screen's Start starts it and it stays folded.
-  await screen.getByRole("button", { name: "Fold the screen" }).click()
+  await layoutButton(page, "Home only").click()
   const folded = page.getByRole("region", { name: `${sandbox}, folded` })
   await expect(folded).toBeVisible()
   await expect(
@@ -254,9 +255,9 @@ test("a teammate's status counts what runs in its terminals", async ({
   await expect(row).toContainText("npm")
 })
 
-// Enlarged, the screen takes the page and the conversation is a strip beside it; the strip, the
-// bezel and folding each give the conversation back.
-test("the screen enlarges to take the page, and the conversation comes back", async ({
+// One switch in the top bar sets the layout: the conversation alone, both, or the computer
+// alone, which keeps the conversation mounted. The screen's rail opens a tab beside it.
+test("the top bar's layout switch gives the page to the conversation, both or the computer", async ({
   page,
   api,
   env,
@@ -272,33 +273,55 @@ test("the screen enlarges to take the page, and the conversation comes back", as
   const composer = page.getByPlaceholder(`Message ${name}…`)
   await composer.fill("a draft")
   const split = (await screen.boundingBox())!.width
+  await expect(layoutButton(page, "Both")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  // The bezel has no panel buttons of its own any more.
+  await expect(
+    screen.getByRole("button", { name: /Enlarge|Fold the screen/ })
+  ).toHaveCount(0)
 
-  const strip = page.getByRole("region", {
-    name: `${name}'s conversation, folded`,
-  })
-  await screen.getByRole("button", { name: "Enlarge the screen" }).click()
-  await expect(strip).toBeVisible()
+  await layoutButton(page, "Computer only").click()
   await expect(composer).toBeHidden()
   await expect(page).toHaveURL(/full=/)
   expect((await screen.boundingBox())!.width).toBeGreaterThan(split * 1.5)
+  await expect(layoutButton(page, "Computer only")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
 
-  await strip.getByRole("button", { name: "Show the conversation" }).click()
-  await expect(strip).toBeHidden()
+  await layoutButton(page, "Both").click()
   await expect(composer).toHaveValue("a draft")
   await expect(page).not.toHaveURL(/full=/)
 
-  await screen.getByRole("button", { name: "Enlarge the screen" }).click()
-  await screen.getByRole("button", { name: "Shrink the screen" }).click()
-  await expect(strip).toBeHidden()
+  await layoutButton(page, "Home only").click()
+  const folded = page.getByRole("region", { name: `${sandbox}, folded` })
+  await expect(folded).toBeVisible()
   await expect(composer).toBeVisible()
+  await expect(layoutButton(page, "Home only")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
 
-  await screen.getByRole("button", { name: "Enlarge the screen" }).click()
-  await screen.getByRole("button", { name: "Fold the screen" }).click()
+  // A tab on the rail opens it beside the conversation.
+  await folded.getByRole("button", { name: "Files" }).click()
+  await expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  await expect(layoutButton(page, "Both")).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+
+  // Off the teammate's page the switch goes.
+  await page.goto(`/e/${env}/secrets`)
   await expect(
-    page.getByRole("region", { name: `${sandbox}, folded` })
-  ).toBeVisible()
-  await expect(strip).toBeHidden()
-  await expect(composer).toBeVisible()
+    page
+      .getByRole("navigation", { name: "Where you are" })
+      .getByRole("group", { name: "Layout" })
+  ).toHaveCount(0)
 })
 
 // The conversation stays mounted while the screen takes the page or covers it on a phone, and
@@ -333,12 +356,7 @@ for (const phone of [false, true]) {
     await page.keyboard.press("Escape")
 
     // With the conversation back, its home shows the request in place again.
-    if (phone) await page.goto(`/e/${env}/teammates/${id}`)
-    else
-      await page
-        .getByRole("region", { name: `${name}'s conversation, folded` })
-        .getByRole("button", { name: "Show the conversation" })
-        .click()
+    await layoutButton(page, "Home only").click()
     await expect(
       page
         .getByRole("region", { name: "Waiting for you" })

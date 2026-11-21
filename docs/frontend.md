@@ -201,7 +201,7 @@ The rim between the home or the conversation and the screen drags. From the home
 drag opens the desk; past the panel's minimum the screen takes the page (`full`), and past its
 maximum the screen folds to the rail again (`fold`), so the same rim reaches all three. Review
 on a push waiting for review (`opensEnlarged` in `git-review.tsx`) opens it with `full` set, so
-the diff has the width; Esc or the folded conversation's strip brings the conversation back.
+the diff has the width; Esc or the layout switch brings the conversation back.
 Double-click resets the split; the arrows move it, and past either end fold or expand.
 
 - Home: first the **Now** card (`<name> now`): its presence word and since when, or what waits
@@ -258,7 +258,10 @@ switches it (on a teammate's page its "on …" chip, whose menu has the owner's 
 forks under the one they came from, Give … another computer and All computers), so the bezel
 has no switcher of its own. The bezel has the tabs Terminal, Browser (a teammate's own browser), Preview (while previews are on), Files
 and Changes, each with a dot while something on it waits for you; power (Stop, Start or Resume);
-⋯; enlarge (a teammate's page on a wide screen) and fold. Under it the display:
+and ⋯. On a teammate's page the layout switch at the right of the breadcrumb row
+(`components/teammate/layout-switch.tsx`, put there through `components/top-bar-slot.tsx`)
+gives the page to the home or the conversation, to both, or to the computer; a narrow window
+offers only the two alone. Under the bezel the display:
 
 - Terminal: the computer's tmux sessions as a strip of tabs (`components/computer/terminals.tsx`),
   with + for a new shell and the Terminal tab counting them when there is more than one. A tab
@@ -327,11 +330,11 @@ Delete. Beside the computer's name, a count of its waiting connections
 (`components/waiting-chip.tsx`) opens their hosts, with Allow all, Deny all and Review individually,
 which is the top of Connections (`components/waiting-requests.tsx`). A computer that is off shows dark glass with Start and the checkpoint it keeps, and a
 teammate's keeps its Browser tab, as the browser has a VM of its own; one being created shows
-its progress. Folded, the screen is a strip of tab icons. Enlarged, it takes the page, and the
-conversation is a strip with the teammate's face, a dot while something waits for you, and the
-way back; the conversation stays mounted behind it, so a draft and the scroll are kept, and Esc
-or the bezel's Shrink gives it back. Folding and enlarging undo each other. Below 1024px it
-is that strip, and opens over the conversation.
+its progress. Folded, the screen is a strip of tab icons, and a tab opens the screen beside the
+conversation. Given the page, the screen hides the conversation, which stays mounted behind it,
+so a draft and the scroll are kept; Esc or the switch gives it back, and meanwhile its approvals
+are in the top bar's list. Below 1024px the folded screen is that strip, and opens over the
+conversation.
 
 Review on a git approval's card or row, on Home or in the top bar's list, opens it on its
 computer's Changes tab (`useOpenGitReview` in `components/git-review.tsx`): beside the open
