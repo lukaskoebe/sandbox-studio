@@ -47,7 +47,7 @@ test("repositories picked in the setup are cloned into the first sandbox", async
   }, env)
 
   await page.goto("/setup")
-  await page.getByRole("button", { name: /^(\d+ )?First sandbox / }).click()
+  await page.getByRole("button", { name: /^(\d+ )?First computer / }).click()
   const repos = page.getByRole("group", { name: "Repositories" })
   await expect(repos).toContainText("other")
   await page.getByLabel("Clone repositories").fill("pro")
@@ -55,7 +55,7 @@ test("repositories picked in the setup are cloned into the first sandbox", async
   await repos.getByText("proj", { exact: true }).click()
   await expect(page.getByText("1 selected.")).toBeVisible()
   await page.getByLabel("Name", { exact: true }).fill("cloned")
-  await page.getByRole("button", { name: "Create sandbox" }).click()
+  await page.getByRole("button", { name: "Create computer" }).click()
 
   const clones = page.getByRole("list", { name: "Clones" })
   await expect(clones).toContainText("Cloned", { timeout: 30_000 })

@@ -462,10 +462,10 @@ export function TeammateForm({
                   <span className="font-mono">
                     {hostGit.name} &lt;{hostGit.email}&gt;
                   </span>
-                  , the identity in your git config on this computer.
+                  , the identity in your git config on this machine.
                 </>
               ) : (
-                "Your git config on this computer has no user.name and user.email yet, so the name and email below are used."
+                "Your git config on this machine has no user.name and user.email yet, so the name and email below are used."
               )}
             </p>
           </div>
@@ -527,7 +527,7 @@ export function TeammateForm({
               ))}
             </ToggleGroup>
             <FieldDescription>
-              Preselected on the approval cards for this teammate's sandboxes.
+              Preselected on the approval cards for this teammate's computers.
               The card still lets you pick another scope.
             </FieldDescription>
           </Field>

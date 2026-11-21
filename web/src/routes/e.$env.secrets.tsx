@@ -55,7 +55,7 @@ export const Route = createFileRoute("/e/$env/secrets")({
 })
 
 const intro =
-  "Sandboxes see each secret as an environment variable holding a placeholder, and Studio swaps in the real value only in requests to the secret's hosts. A teammate's or a sandbox's secret replaces the environment's of the same name there."
+  "Computers see each secret as an environment variable holding a placeholder, and Studio swaps in the real value only in requests to the secret's hosts. A teammate's or a computer's secret replaces the environment's of the same name there."
 
 const docsUrl = "https://lukaskoebe.github.io/sandbox-studio/secrets/"
 
@@ -113,7 +113,7 @@ function SecretsPage() {
               side="bottom"
               align="end"
             >
-              A sandbox sees only a placeholder. Studio swaps the real value in
+              A computer sees only a placeholder. Studio swaps the real value in
               on the way out, and only toward the hosts the secret is bound to.
               Add one, such as an API key your app needs.
             </FeatureTip>
@@ -151,7 +151,7 @@ function SecretsPage() {
             <EmptyHeader>
               <EmptyTitle>No secrets yet</EmptyTitle>
               <EmptyDescription>
-                Add one to let a sandbox use a credential without ever seeing
+                Add one to let a computer use a credential without ever seeing
                 its value.
               </EmptyDescription>
             </EmptyHeader>
@@ -194,11 +194,11 @@ function groupHeading(group: SecretGroup) {
       }
     case "sandbox":
       return {
-        label: `Sandbox ${name}`,
+        label: `Computer ${name}`,
         // The sandbox's name is an identifier, so it is set in mono.
         title: (
           <>
-            Sandbox <Ident>{name}</Ident>
+            Computer <Ident>{name}</Ident>
           </>
         ),
         icon: CubeIcon,
@@ -249,7 +249,7 @@ function ScopeSection({
         <p className="text-xs/relaxed text-muted-foreground">
           Filled into pages of their hosts, and sent to hosts that ask for a
           username and password, in {group.name || "the teammate"}'s browser
-          alone. No sandbox sees them.
+          alone. No computer sees them.
         </p>
       )}
       <div className="rounded-lg ring-1 ring-foreground/10">

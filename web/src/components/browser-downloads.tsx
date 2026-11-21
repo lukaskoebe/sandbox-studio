@@ -56,7 +56,7 @@ export function BrowserDownloads({
   const [target, setTarget] = useState("")
   const send = $api.useMutation("post", sendPath, {
     onSuccess: (file) => {
-      const sandbox = owned.find((s) => s.id === target)?.name ?? "the sandbox"
+      const sandbox = owned.find((s) => s.id === target)?.name ?? "the computer"
       toast.success(`Sent ${file.name} to ${sandbox}`, {
         description: `It is in ${file.path}`,
       })
@@ -76,7 +76,7 @@ export function BrowserDownloads({
           <EmptyTitle>No downloads</EmptyTitle>
           <EmptyDescription>
             Files the browser saves show here while it runs. Send one to a
-            sandbox to copy it into its downloads folder; the file is never
+            computer to copy it into its downloads folder; the file is never
             opened on Studio's host.
           </EmptyDescription>
         </EmptyHeader>
@@ -88,8 +88,8 @@ export function BrowserDownloads({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Send to</span>
         <Select value={target} onValueChange={(v) => setTarget(v ?? "")}>
-          <SelectTrigger size="sm" aria-label="Sandbox to send to">
-            <SelectValue placeholder="Choose a sandbox" />
+          <SelectTrigger size="sm" aria-label="Computer to send to">
+            <SelectValue placeholder="Choose a computer" />
           </SelectTrigger>
           <SelectContent>
             {owned.map((s) => (
@@ -142,7 +142,7 @@ export function BrowserDownloads({
                   }
                 >
                   {send.isPending ? <Spinner /> : <PaperPlaneTiltIcon />}
-                  Send to sandbox
+                  Send to computer
                 </Button>
               </TableCell>
             </TableRow>

@@ -105,7 +105,7 @@ function optionsSummary(
       ? "this environment"
       : scope === "teammate"
         ? `${owner ?? "the teammate"}'s computers`
-        : "this sandbox"
+        : "this computer"
   const how =
     lifetime === "hour" ? "1 hour" : lifetime === "once" ? "once" : "always"
   return `Options: ${who}, ${how}`
@@ -258,14 +258,12 @@ export function WaitingRequests({
             </h3>
             {gone.length > 1 && (
               <span className="flex gap-1.5">
-                {button("dismiss-all", gone, "dismiss", "Dismiss all")}
+                {button("dismiss-all", gone, "dismiss", "Ignore all")}
                 {button(
                   "later-all",
                   gone,
                   "allow",
-                  later === "always"
-                    ? "Allow all next time"
-                    : decisionLabel("allow", later, true)
+                  decisionLabel("allow", later, true)
                 )}
               </span>
             )}
@@ -273,14 +271,12 @@ export function WaitingRequests({
           <ul>
             {gone.map((a) => (
               <WaitingRow key={a.id} approval={a} status="stopped">
-                {button(`dismiss-${a.id}`, [a], "dismiss", "Dismiss")}
+                {button(`dismiss-${a.id}`, [a], "dismiss", "Ignore")}
                 {button(
                   `later-${a.id}`,
                   [a],
                   "allow",
-                  later === "always"
-                    ? "Allow next time"
-                    : decisionLabel("allow", later)
+                  decisionLabel("allow", later)
                 )}
               </WaitingRow>
             ))}

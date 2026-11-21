@@ -69,7 +69,7 @@ export function Terminals({
     if (previews.enabled)
       void openPreviewTab(env, sb.id, local.port, false, local.path)
     else
-      toast.info(`Port ${local.port} is in the sandbox`, {
+      toast.info(`Port ${local.port} is on the computer`, {
         description: "Turn on previews in Settings → General to open it.",
       })
     return true

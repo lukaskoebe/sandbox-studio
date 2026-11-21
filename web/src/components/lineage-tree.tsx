@@ -38,7 +38,7 @@ export function LineageTree({
     (template) => (template.sandboxes ?? []).length > 0
   )
   if (groups.length === 0) {
-    return <p className="text-xs text-muted-foreground">No sandboxes yet</p>
+    return <p className="text-xs text-muted-foreground">No computers yet</p>
   }
 
   const list = (

@@ -673,7 +673,7 @@ function ChatComposer({
   if (chat.state === "orphaned") {
     return (
       <div className="grid justify-items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-center text-xs text-muted-foreground">
-        This chat ended: its sandbox was reset or removed, so the agent can't
+        This chat ended: its computer was reset or removed, so the agent can't
         pick it up again.
         <Button
           size="sm"

@@ -11,7 +11,7 @@ Studio runs local microVMs, so the host needs hardware virtualization:
 - **macOS:** Apple Silicon. Intel Macs are not supported.
 - **Windows:** Windows 11 on amd64 with Windows Hypervisor Platform enabled. Windows support is a preview.
 
-Keep at least 5 GB free for the runtime, images, and sandbox disks. On first start Studio downloads the matching microsandbox runtime; it pulls the base image when the first sandbox needs it. The host needs internet access for these downloads.
+Keep at least 5 GB free for the runtime, images, and computers' disks. On first start Studio downloads the matching microsandbox runtime; it pulls the base image when the first computer needs it. The host needs internet access for these downloads.
 
 ## Install
 
@@ -38,7 +38,7 @@ make image
 make image-browser
 ```
 
-`make image` builds the local base image needed for new sandboxes. `make image-browser` builds the separate image for teammates' browsers; both development images must be loaded locally. The binary is `./bin/studio`.
+`make image` builds the local base image needed for new computers. `make image-browser` builds the separate image for teammates' browsers; both development images must be loaded locally. The binary is `./bin/studio`.
 
 ## Start Studio
 

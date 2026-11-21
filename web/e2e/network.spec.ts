@@ -132,10 +132,12 @@ test("requests that arrive together from one sandbox are one card; Allow all mak
   await expect(approvals(page).getByTestId("approval-card")).toHaveCount(0)
   // With Options folded, the card still says who its rules cover.
   await expect(group).toContainText(
-    /Each host gets a lasting rule for every sandbox in \S/
+    /Each host gets a lasting rule for every computer in \S/
   )
 
-  await group.getByRole("button", { name: "Allow all", exact: true }).click()
+  await group
+    .getByRole("button", { name: "Always allow all", exact: true })
+    .click()
   await expect(group).toBeHidden()
 
   // Each host got a rule of its own, made by an approval.
@@ -168,13 +170,15 @@ test("Allow all that loses a request on the way says so, and answers the rest", 
     lost = true
     return route.abort("connectionreset")
   })
-  await group.getByRole("button", { name: "Allow all", exact: true }).click()
+  await group
+    .getByRole("button", { name: "Always allow all", exact: true })
+    .click()
   await expect(page.getByText("Could not allow every host")).toBeVisible()
   // One host is left to answer, and its card answers again.
   const card = approvals(page).getByTestId("approval-card")
   await expect(card).toHaveCount(1)
   await expect(
-    card.getByRole("button", { name: "Allow", exact: true })
+    card.getByRole("button", { name: "Always allow", exact: true })
   ).toBeEnabled()
   await page.unroute("**/approvals/*/decide")
   await api.dismissApprovals()
@@ -330,7 +334,7 @@ test("an allowed navigation approves its site, and the page's requests pass", as
     .getByTestId("approval-card")
     .filter({ hasText: ruleHost })
   await card.getByRole("button", { name: ruleHost, exact: true }).click()
-  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await card.getByRole("button", { name: "Always allow", exact: true }).click()
   await expect(card).toBeHidden()
   await expect(decided).resolves.toEqual({ outcome: "allowed" })
   // The page is on an approved site: its requests to other hosts don't ask.
@@ -399,7 +403,7 @@ test("a browser request can be allowed for the session, or by a rule for the tea
     .getByRole("button", { name: `${name}'s browser`, exact: true })
     .click()
   await card.getByRole("button", { name: browserOnly, exact: true }).click()
-  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await card.getByRole("button", { name: "Always allow", exact: true }).click()
   await expect(card).toBeHidden()
   await expect(decided).resolves.toEqual({ outcome: "allowed" })
 
@@ -489,14 +493,16 @@ test("a rule made from an approval keeps the note written on it, or one that say
   await card
     .getByRole("textbox", { name: "Why? (saved on the rule)" })
     .fill("pip installs for the docs build")
-  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await card.getByRole("button", { name: "Always allow", exact: true }).click()
   await expect(card).toBeHidden()
 
   await api.connect(id, plain)
   const plainCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: plain })
-  await plainCard.getByRole("button", { name: "Allow", exact: true }).click()
+  await plainCard
+    .getByRole("button", { name: "Always allow", exact: true })
+    .click()
   await expect(plainCard).toBeHidden()
 
   await page.goto(`/e/${env}/network`)
@@ -580,10 +586,12 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
   await expect(otherCard).toContainText("The curated list allows only reads")
   await expect(card).not.toContainText(`/${owner}/other`)
 
-  await otherCard.getByRole("button", { name: "Deny", exact: true }).click()
+  await otherCard
+    .getByRole("button", { name: "Always deny", exact: true })
+    .click()
   await expect(other).resolves.toEqual({ outcome: "denied" })
 
-  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await card.getByRole("button", { name: "Always allow", exact: true }).click()
   await expect(card).toBeHidden()
   await expect(decided).resolves.toEqual({ outcome: "allowed" })
 
@@ -595,6 +603,8 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
   const thirdCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: `/someone-else-${owner}/` })
-  await thirdCard.getByRole("button", { name: "Deny", exact: true }).click()
+  await thirdCard
+    .getByRole("button", { name: "Always deny", exact: true })
+    .click()
   await expect(third).resolves.toEqual({ outcome: "denied" })
 })

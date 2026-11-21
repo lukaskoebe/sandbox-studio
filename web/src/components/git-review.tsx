@@ -611,7 +611,7 @@ function PushReview({
       <dd>
         <Ident>{`${git.push.forgeName}/${git.push.owner}/${git.push.repo}`}</Ident>
       </dd>
-      <dt className="text-muted-foreground">Sandbox</dt>
+      <dt className="text-muted-foreground">Computer</dt>
       <dd>
         {rv?.sandbox ?? <Ident>{git.push.sandboxId}</Ident>}
         {git.push.teammateName && (
@@ -657,7 +657,7 @@ function PushReview({
       />
       <p className="text-xs text-muted-foreground">
         {target === newChatTarget
-          ? "With a note or line comments, deciding starts a chat in the sandbox that tells the agent the outcome and your comments."
+          ? "With a note or line comments, deciding starts a chat on the computer that tells the agent the outcome and your comments."
           : target
             ? "Deciding sends the outcome, the note and your line comments there."
             : pr
@@ -1166,12 +1166,12 @@ export function gitReviewDescription(approval: Approval) {
   const upstream = git?.review?.upstream
   if (git?.review?.forced)
     return (
-      `The sandbox rewrote ${git.review.branch} and pushed it to Studio's git remote. Nothing reaches the forge until you force-push it, which drops the commits listed under Rewrites history` +
+      `The computer rewrote ${git.review.branch} and pushed it to Studio's git remote. Nothing reaches the forge until you force-push it, which drops the commits listed under Rewrites history` +
       (upstream ? `; Studio pushes it ${upstream}` : "") +
       "."
     )
   return (
-    "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch." +
+    "The computer pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch." +
     (upstream ? ` Approving pushes it ${upstream}` : " Approving pushes it") +
     (git?.review?.pullRequest
       ? ", and can open a pull request with it."

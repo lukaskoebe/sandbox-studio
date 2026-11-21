@@ -62,7 +62,7 @@ export const settingsGroups = [
     ],
   },
   {
-    title: "This computer",
+    title: "This machine",
     sections: [
       {
         id: "templates",

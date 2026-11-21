@@ -223,6 +223,6 @@ export function summarize(step: Step): string {
     case "fork":
       return step.child
         ? `Forked to ${step.child.name}, ${step.child.deleted ? "deleted" : step.child.status}`
-        : "Forked to a sandbox that is no longer listed"
+        : "Forked to a computer that is no longer listed"
   }
 }

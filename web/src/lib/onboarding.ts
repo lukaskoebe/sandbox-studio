@@ -14,7 +14,7 @@ export const onboardingFeatures: {
   {
     key: "network",
     title: "Network",
-    short: "You decide what leaves the sandbox.",
+    short: "You decide what leaves the computer.",
   },
   {
     key: "push",

@@ -448,7 +448,7 @@ export function Terminal({
       setConnected(false)
       ctrlArmedRef.current = false
       setCtrlArmed(false)
-      term.write("\r\n\x1b[2m[Sandbox suspended]\x1b[0m\r\n")
+      term.write("\r\n\x1b[2m[Computer suspended]\x1b[0m\r\n")
     }
 
     const send = (data: string | Uint8Array<ArrayBuffer>) => {

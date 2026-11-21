@@ -3,7 +3,7 @@ title: Teammates and providers
 description: Configure an agent identity and connect it to an API key or a subscription.
 ---
 
-A teammate is an agent identity in one environment. It has a name, role, avatar (a drawn pixel sprite, which a new teammate gets from its name until you pick another, or the initials, a shape or an emoji), optional Markdown instructions (“soul”), harness, provider, and a Git name and email, or **Use my git identity** to commit as you do on the Studio machine. Its **Default model** is the one its terminal sessions, check-ins and scheduled tasks use; **Also offered in chats** lists other models of its provider that a chat can pick instead. **New rules from approvals apply to** sets the scope its approval cards preselect: this sandbox, this teammate, or the environment.
+A teammate is an agent identity in one environment. It has a name, role, avatar (a drawn pixel sprite, which a new teammate gets from its name until you pick another, or the initials, a shape or an emoji), optional Markdown instructions (“soul”), harness, provider, and a Git name and email, or **Use my git identity** to commit as you do on the Studio machine. Its **Default model** is the one its terminal sessions, check-ins and scheduled tasks use; **Also offered in chats** lists other models of its provider that a chat can pick instead. **New rules from approvals apply to** sets the scope its approval cards preselect: this computer, this teammate, or the environment.
 
 One teammate can own several computers. A computer's teammate is picked when it is created or forked, and changes later in the computer's **Details** tab: choose **Change…** in its **Teammate** row while the computer is stopped. The new teammate's rules, secrets and harness settings apply from its next start, while its home, with the harness history and logins in it, stays as it is.
 
@@ -53,18 +53,18 @@ An OpenAI-compatible endpoint needs a base URL and a model; a key is optional. U
 
 Tick **The model can see images** if the endpoint's model takes images. It starts off, because many local models read text only. While it is off, the teammate is sent no images: notes you pin on its browser go as text alone, and a chat refuses an attached image with a message that says why.
 
-Claude Pro/Max and ChatGPT subscriptions sign in from the provider dialog: Studio runs the vendor's own login in a short-lived VM and keeps the token on the host; sandboxes get placeholders only. A Claude subscription works in terminal sessions and in chats.
+Claude Pro/Max and ChatGPT subscriptions sign in from the provider dialog: Studio runs the vendor's own login in a short-lived VM and keeps the token on the host; computers get placeholders only. A Claude subscription works in terminal sessions and in chats.
 
 A subscription is not an API key. With an API key you paste the key and are done; with a subscription you sign in with your account in the browser and there is no key to paste. Add the provider, or choose **Sign in** next to it under **Settings → AI providers**, then follow the steps in the dialog:
 
-- **Claude Pro/Max:** open the sign-in page, sign in and choose Authorize, copy the code the page shows, and paste it into the dialog's code field (or press **Paste**). Studio hands the code to Claude Code and saves the sign-in by itself; you don't type into the terminal. **Show the terminal Claude Code runs in** displays what Claude Code says, and opens by itself if it rejects the code. If you'd rather, run `claude setup-token` on your own computer and paste the `sk-ant-oat…` token it prints under **Use a token from claude setup-token instead**.
+- **Claude Pro/Max:** open the sign-in page, sign in and choose Authorize, copy the code the page shows, and paste it into the dialog's code field (or press **Paste**). Studio hands the code to Claude Code and saves the sign-in by itself; you don't type into the terminal. **Show the terminal Claude Code runs in** displays what Claude Code says, and opens by itself if it rejects the code. If you'd rather, run `claude setup-token` on your own machine and paste the `sk-ant-oat…` token it prints under **Use a token from claude setup-token instead**.
 - **ChatGPT Plus/Pro:** open the sign-in page, enter the code the dialog shows, and sign in. Studio notices when you're done; there is nothing to paste back.
 
-### Logins on this computer
+### Logins on this machine
 
-If Claude Code, Codex or opencode is signed in on the computer Studio runs on, the setup and **Settings → AI providers** list it under **On this computer**:
+If Claude Code, Codex or opencode is signed in on the machine Studio runs on, the setup and **Settings → AI providers** list it under **On this machine**:
 
-- **Use Claude subscription** and **Use ChatGPT subscription** open the provider dialog with the kind chosen. Studio still signs in on its own and never copies the computer's login, because a copied login that refreshes first signs the computer out. For ChatGPT, the dialog names the account Codex is signed in with, so you can sign in with the same one.
+- **Use Claude subscription** and **Use ChatGPT subscription** open the provider dialog with the kind chosen. Studio still signs in on its own and never copies the machine's login, because a copied login that refreshes first signs the machine out. For ChatGPT, the dialog names the account Codex is signed in with, so you can sign in with the same one.
 - **Import keys…** lists the credentials opencode stores. Anthropic and OpenAI API keys can be imported one by one; they're sealed in Studio's vault like a typed key, and opencode keeps its own. opencode's subscription sign-ins can't be imported; **Sign in** adds the matching subscription instead.
 
 Until you choose one of these, Studio only checks that the CLIs' files exist and reads nothing in them.

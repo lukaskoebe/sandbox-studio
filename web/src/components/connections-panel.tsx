@@ -213,7 +213,7 @@ function ConnectionLog({
         <EmptyHeader>
           <EmptyTitle>No connections yet</EmptyTitle>
           <EmptyDescription>
-            Connections from this sandbox show up here as it makes them.
+            Connections from this computer show up here as it makes them.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

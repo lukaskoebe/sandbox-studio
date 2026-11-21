@@ -127,7 +127,7 @@ func TestOpenVaultWaitsForALockedKeychainWithoutAskingItAgain(t *testing.T) {
 	})
 	resp, v := request(t, http.MethodGet, base+"/api/auth/status", "")
 	if resp.StatusCode != http.StatusServiceUnavailable || resp.Header.Get("X-Studio-Waiting") != "keychain" || v.Waiting != "keychain" ||
-		!strings.Contains(v.Error, "prompt dismissed") || !strings.Contains(v.Message, "logging in on this computer's desktop") {
+		!strings.Contains(v.Error, "prompt dismissed") || !strings.Contains(v.Message, "logging in on this machine's desktop") {
 		t.Fatalf("status while waiting: %d %q %+v", resp.StatusCode, resp.Header.Get("X-Studio-Waiting"), v)
 	}
 	if resp, _ := request(t, http.MethodGet, base+"/api/environments", ""); resp.StatusCode != http.StatusServiceUnavailable {
@@ -160,7 +160,7 @@ func TestOpenVaultWaitsForALockedKeychainWithoutAskingItAgain(t *testing.T) {
 		eventually(t, "retry reads the key again", func() bool { return k.reads.Load() == int32(2+i) })
 	}
 	time.Sleep(keychainRetryGap)
-	if _, v := request(t, http.MethodPost, base+"/api/keychain/retry", ""); !strings.Contains(v.Error, "unlock it on this computer's desktop") {
+	if _, v := request(t, http.MethodPost, base+"/api/keychain/retry", ""); !strings.Contains(v.Error, "unlock it on this machine's desktop") {
 		t.Errorf("a spent retry says %+v", v)
 	}
 	time.Sleep(2 * keychainRetryGap)

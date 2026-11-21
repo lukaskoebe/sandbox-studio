@@ -93,7 +93,7 @@ export function CopyTeammateDialog({
           <DialogDescription>
             The copy keeps the name (with a number if it is taken), role,
             avatar, soul, harness, model, git identity and approval setting.
-            Sandboxes, chats, memory, secrets and keys stay here.
+            Computers, chats, memory, secrets and keys stay here.
           </DialogDescription>
         </DialogHeader>
         {others.length ? (

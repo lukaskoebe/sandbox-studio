@@ -71,8 +71,8 @@ export function TeammateSecrets({
         }
       />
       <p className="text-xs/relaxed text-muted-foreground">
-        What {teammate.name}'s sandboxes see. Its own secrets replace the
-        environment's of the same name, and a sandbox's replace both. All
+        What {teammate.name}'s computers see. Its own secrets replace the
+        environment's of the same name, and a computer's replace both. All
         secrets are on the{" "}
         <Link
           to="/e/$env/secrets"
@@ -148,7 +148,7 @@ export function TeammateSecrets({
       ) : (
         <div className="flex flex-wrap items-center gap-3 rounded-(--radius) border border-dashed px-3 py-2.5 text-xs">
           <span className="text-muted-foreground">
-            No secrets reach {teammate.name}'s sandboxes yet.
+            No secrets reach {teammate.name}'s computers yet.
           </span>
         </div>
       )}
@@ -199,7 +199,7 @@ function ScopeNote({
     <span className="inline-flex flex-wrap items-center gap-x-1.5">
       {scope.kind === "sandbox" ? (
         <span>
-          Sandbox <Ident>{sandboxes.get(scope.id) ?? "…"}</Ident>
+          Computer <Ident>{sandboxes.get(scope.id) ?? "…"}</Ident>
         </span>
       ) : (
         <span>{teammate}</span>

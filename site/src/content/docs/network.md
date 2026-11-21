@@ -1,38 +1,38 @@
 ---
 title: Network rules and approvals
-description: Decide what sandbox traffic can reach, and what happens when a host is unknown.
+description: Decide what a computer's traffic can reach, and what happens when a host is unknown.
 ---
 
-Every TCP connection of a computer (a sandbox) goes through Studio's gateway, including connections made by Docker containers inside it. DNS uses Studio's resolver (see [Names and lookups](#names-and-lookups)). UDP and ICMP are blocked. Outbound connections go to public addresses only, unless you open a port of [this computer](#this-computer) or list a host on the [local network](#local-network).
+Every TCP connection of a computer (a small VM) goes through Studio's gateway, including connections made by Docker containers inside it. DNS uses Studio's resolver (see [Names and lookups](#names-and-lookups)). UDP and ICMP are blocked. Outbound connections go to public addresses only, unless you open a port of [this machine](#this-machine) or list a host on the [local network](#local-network).
 
 ## Unknown hosts wait for you
 
-When a sandbox reaches a host not covered by a rule, Studio holds the connection and asks you. The request waits on **Home** under **Needs you**, on the teammate's page and at the top of **Network** under **Needs you** too, and on Studio's other pages in the **needs you** list at the right of the top bar, whose rows have **Allow** and **Deny**. The computer's screen shows a count such as **2 requests need you**, and **Network** in the sidebar says how many wait. The request includes the host, port, sandbox, and teammate if there is one.
+When a computer reaches a host not covered by a rule, Studio holds the connection and asks you. The request waits on **Home** under **Needs you**, on the teammate's page and at the top of **Network** under **Needs you** too, and on Studio's other pages in the **needs you** list at the right of the top bar, whose rows have **Allow** and **Deny**. The computer's screen shows a count such as **2 requests need you**, and **Network** in the sidebar says how many wait. The request includes the host, port, computer, and teammate if there is one.
 
-**Allow** and **Deny** add a rule, so the next connection to the host doesn't ask. When the card offers several host patterns, such as `registry.npmjs.org` and `*.npmjs.org`, pick one first. **Options** on the card has two rows:
+**Always allow** and **Always deny** add a lasting rule, so the next connection to the host doesn't ask; the buttons follow **For** below, such as **Allow for 1 hour** or **Deny once**. When the card offers several host patterns, such as `registry.npmjs.org` and `*.npmjs.org`, pick one first. **Options** on the card has two rows:
 
-- **Who**: the whole **Environment**, the teammate's sandboxes, or only this sandbox. The teammate's **New rules from approvals apply to** setting picks the default. **Any port** makes the rule cover every port instead of the request's default ports.
+- **Who**: the whole **Environment**, the teammate's computers, or only this computer. The teammate's **New rules from approvals apply to** setting picks the default. **Any port** makes the rule cover every port instead of the request's default ports.
 - **For**: **Always**, **1 hour**, or **Once**, which answers this request, and other GET requests to the host that wait with it, and adds no rule; any other request asks again. **Once** is offered only while the connection is still held.
 
 **Why? (saved on the rule)** keeps a note with the rule. **Ignore** refuses the request this time without a rule. Which scope the card preselects is set per teammate, under **Approvals** in its settings.
 
-Studio holds the original connection for up to 60 seconds, and the card counts down, such as **Connection held, 42 s left**. If you allow it before the hold expires and the client is still waiting, Studio releases that same connection and the original operation continues. If the client gives up or the hold expires first, the connection closes, and the card says the client saw a failure: **Allow next time** makes the rule, so the client's next try goes through, and **Dismiss** drops the request.
+Studio holds the original connection for up to 60 seconds, and the card counts down, such as **Connection held, 42 s left**. If you allow it before the hold expires and the client is still waiting, Studio releases that same connection and the original operation continues. If the client gives up or the hold expires first, the connection closes, and the card says the client saw a failure: **Always allow** makes the rule, so the client's next try goes through, and **Ignore** drops the request.
 
-To answer many at once, choose the count on the computer's screen: **Allow all** and **Deny all** make lasting rules for that sandbox, and **Review individually** opens them one by one. A browser page's requests arrive as one card, such as *example.com wants 4 hosts*, with the same three. In the sandbox's **Connections**, requests that gave up are kept under **Gave up waiting**, with **Dismiss all** and **Allow all next time**.
+To answer many at once, choose the count on the computer's screen: **Always allow all** and **Always deny all** make lasting rules for that computer, and **Review individually** opens them one by one. A browser page's requests arrive as one card, such as *example.com wants 4 hosts*, with the same three. In the computer's **Connections**, requests that gave up are kept under **Gave up waiting**, with **Ignore all** and **Always allow all**.
 
 To hear of a held connection while Studio isn't in front, choose **Enable notifications** under **Settings → General → Notifications**. You can also answer in the [terminal UI](../tui/) or with `studio approve` and `studio deny` (see [CLI](../cli/)).
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
-The **Network** page, under **Environment** in the sidebar, starts with the requests that wait for you, if any; then it sets the security level, lists your rules, sorted by domain, with search and filters, then the curated list and the tracker list. The **Activity** page lists what was decided; its **Network** filter shows only connections. To see what one sandbox reached and what waits, open its computer's **Details** tab and choose **Show…** next to **Connections**.
+The **Network** page, under **Environment** in the sidebar, starts with the requests that wait for you, if any; then it sets the security level, lists your rules, sorted by domain, with search and filters, then the curated list and the tracker list. The **Activity** page lists what was decided; its **Network** filter shows only connections. To see what one computer reached and what waits, open its **Details** tab and choose **Show…** next to **Connections**.
 
 ## Names and lookups
 
-A lookup leaves Studio only for a name the sandbox may already connect to: one a rule covers, or that its security level allows. Any other name gets an address of Studio's, and connecting to it asks you as usual; until the name is allowed, `dig` shows that address. So a lookup can't carry data out to a domain nobody allowed.
+A lookup leaves Studio only for a name the computer may already connect to: one a rule covers, or that its security level allows. Any other name gets an address of Studio's, and connecting to it asks you as usual; until the name is allowed, `dig` shows that address. So a lookup can't carry data out to a domain nobody allowed.
 
 - TXT, MX and SRV lookups come back empty, and Connections says so. A tool that needs those records, such as `mongodb+srv://`, needs a rule for the name first.
 - A name under no real top-level domain, such as `metadata.google.internal` or `nas.local`, fails at once, unless a rule or the [local network](#local-network) list covers it.
-- A name a deny rule refuses doesn't exist for the sandbox.
+- A name a deny rule refuses doesn't exist for the computer.
 
 ## Security levels
 
@@ -59,11 +59,11 @@ On package and container registries (npm, crates.io, RubyGems, Docker Hub, GHCR,
 
 ## Assisted and the AI reviewer
 
-At Assisted, a host that no rule and no curated entry covers goes to an AI reviewer first. The reviewer answers from the host, the port, the request's method and path, the page a browser request belongs to, and the sandbox's last prompt. It never sees secrets, request bodies, or secret placeholders. Its allow or deny lasts a day and appears in **Activity**, with a **Revert** that undoes it. The level's card names the reviewer's model and provider. Without a provider that has a utility model, Assisted asks you like Guarded does.
+At Assisted, a host that no rule and no curated entry covers goes to an AI reviewer first. The reviewer answers from the host, the port, the request's method and path, the page a browser request belongs to, and the computer's last prompt. It never sees secrets, request bodies, or secret placeholders. Its allow or deny lasts a day and appears in **Activity**, with a **Revert** that undoes it. The level's card names the reviewer's model and provider. Without a provider that has a utility model, Assisted asks you like Guarded does.
 
 ## Add a rule
 
-On the **Network** page, choose **Add rule**. Enter a host such as `api.example.com` or `*.example.com`, an IP address, or `*`; a wildcard covers the root host and its subdomains. Add comma-separated ports, or leave ports empty to match every port. Choose whether the rule applies to the whole environment, one teammate, or one sandbox, and add a **Note** if you like.
+On the **Network** page, choose **Add rule**. Enter a host such as `api.example.com` or `*.example.com`, an IP address, or `*`; a wildcard covers the root host and its subdomains. Add comma-separated ports, or leave ports empty to match every port. Choose whether the rule applies to the whole environment, one teammate, or one computer, and add a **Note** if you like.
 
 ![The Add rule dialog for a Proxy rule, with host, ports, action, headers, scope and note](../../assets/screenshots/rule-dialog.jpg)
 
@@ -76,13 +76,13 @@ On the **Network** page, choose **Add rule**. Enter a host such as `api.example.
 
 A **Proxy** rule's **Advanced** options set the upstream, the Host header, the SNI and a CA; **Insert secret** puts a placeholder into a header. A **Caddy** rule offers **Insert example**.
 
-Check **Only in the browser** to limit a rule to the pages Studio's browser loads: the sandboxes' own connections to the host still ask, or follow their other rules. The rules list marks such rules **browser only**.
+Check **Only in the browser** to limit a rule to the pages Studio's browser loads: the computers' own connections to the host still ask, or follow their other rules. The rules list marks such rules **browser only**.
 
 The rules list shows each rule's scope, its note (**Add note** adds one), and where it came from: added by you, approved on a card, curated, or by the reviewer, with a countdown for a rule that expires. Filter it by scope, action and origin; **Unused** shows the rules that are 30 days old with no connection in 30 days, and **Delete unused** removes them. A teammate's settings list its own rules and the environment's under **Network rules**.
 
-An environment-wide deny always wins. Otherwise a sandbox's rules come first, then the teammate's, then the environment's. Within each, the most specific host wins, then a rule with ports, then a rule for a method and path, and a deny beats an allow.
+An environment-wide deny always wins. Otherwise a computer's rules come first, then the teammate's, then the environment's. Within each, the most specific host wins, then a rule with ports, then a rule for a method and path, and a deny beats an allow.
 
-Proxy and Caddy rules handle HTTP and HTTPS requests inside Studio. Studio installs a per-environment certificate authority in each sandbox so it can intercept TLS for these rules. A host-bound secret also uses this path when Studio needs to replace its placeholder.
+Proxy and Caddy rules handle HTTP and HTTPS requests inside Studio. Studio installs a per-environment certificate authority in each computer so it can intercept TLS for these rules. A host-bound secret also uses this path when Studio needs to replace its placeholder.
 
 ## Use a secret in a proxy rule
 
@@ -98,33 +98,33 @@ reverse_proxy https://api.example.com {
 
 Create the secret first and bind it to `api.example.com`. Studio checks Caddy rules before saving them. Rules support a limited set of request handlers and fixed public upstream hosts; imports, file access, environment lookups, extra listeners, and arbitrary Caddy modules are not available.
 
-## This computer
+## This machine
 
-Sandboxes never reach the computer Studio runs on, so `ssh you@192.168.178.63` or `curl localhost:3000` from a sandbox fails: `localhost` is the sandbox itself, and this computer's own addresses are refused. To let sandboxes reach a service here, open its port under **This computer** on **Settings → Ports and LAN**. Sandboxes then connect to `host.studio.internal` on that port, for example `ssh you@host.studio.internal`, and Studio connects them to the port on this computer's loopback, so a service listening on `127.0.0.1` or `0.0.0.0` answers. Each connection still needs a rule for `host.studio.internal` or an approval; a security level never allows it. Studio's own ports stay closed.
+Computers never reach the machine Studio runs on, so `ssh you@192.168.178.63` or `curl localhost:3000` from a computer fails: `localhost` is the computer itself, and this machine's own addresses are refused. To let computers reach a service here, open its port under **This machine** on **Settings → Ports and LAN**. Computers then connect to `host.studio.internal` on that port, for example `ssh you@host.studio.internal`, and Studio connects them to the port on this machine's loopback, so a service listening on `127.0.0.1` or `0.0.0.0` answers. Each connection still needs a rule for `host.studio.internal` or an approval; a security level never allows it. Studio's own ports stay closed.
 
 ## Local network
 
-Sandboxes reach public addresses only, so a NAS at `192.168.178.20` or a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let sandboxes reach one, add it under **Local network** on **Settings → Ports and LAN**:
+Computers reach public addresses only, so a NAS at `192.168.178.20` or a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let computers reach one, add it under **Local network** on **Settings → Ports and LAN**:
 
-- A **name** or a wildcard such as `*.company.local`. Sandboxes use the name as it is.
-- A **private IPv4 address**, such as `192.168.178.20`, or a **range**, such as `192.168.178.0/24`. Sandboxes can't connect to private addresses directly, so they use the name the list shows, `192-168-178-20.lan.studio.internal`; rules and approvals name the address itself.
+- A **name** or a wildcard such as `*.company.local`. Computers use the name as it is.
+- A **private IPv4 address**, such as `192.168.178.20`, or a **range**, such as `192.168.178.0/24`. Computers can't connect to private addresses directly, so they use the name the list shows, `192-168-178-20.lan.studio.internal`; rules and approvals name the address itself.
 
-Ports default to 80 and 443; list others, such as 22 for SSH. Each connection still needs a rule or an approval, never a security level. Approvals, rules, and imported environment files never add to the list, and loopback, link-local, and this computer's own addresses stay unreachable: use **This computer** for those.
+Ports default to 80 and 443; list others, such as 22 for SSH. Each connection still needs a rule or an approval, never a security level. Approvals, rules, and imported environment files never add to the list, and loopback, link-local, and this machine's own addresses stay unreachable: use **This machine** for those.
 
-## Rules no sandbox can reach
+## Rules no computer can reach
 
-A rule for an address no sandbox can reach, such as `127.0.0.1`, this computer's own address, or a private address that isn't on the local network list, is saved, but it never applies. The **Network** page marks such a rule with the reason and **Open Ports and LAN**.
+A rule for an address no computer can reach, such as `127.0.0.1`, this machine's own address, or a private address that isn't on the local network list, is saved, but it never applies. The **Network** page marks such a rule with the reason and **Open Ports and LAN**.
 
 ## Requests from the browser
 
-When the browser asks for a host, the request card shows the page's request, such as `GET /npm/lib.js`. **Allow** and **Deny** make a rule that covers only the browser, so the agent can browse a site without its sandbox being able to download from it. Next to the host patterns, the card offers the request's method and path, such as `GET /npm/*`; a rule for it covers only those requests, and a connection to that host that isn't web traffic is refused.
+When the browser asks for a host, the request card shows the page's request, such as `GET /npm/lib.js`. **Always allow** and **Always deny** make a rule that covers only the browser, so the agent can browse a site without its computer being able to download from it. Next to the host patterns, the card offers the request's method and path, such as `GET /npm/*`; a rule for it covers only those requests, and a connection to that host that isn't web traffic is refused.
 
 When you allow the browser to open a site, the site is allowed for the rest of the browser session too: the page's own requests, such as its scripts and images on the same site, no longer ask. Requests to other hosts, such as a CDN, still ask once each.
 
 **Options** on the card has two rows:
 
-- **Who**: the teammate's browser, **All browsers** of the environment, or **Browsers and sandboxes**, which also lets the sandboxes connect to the host. The default is **All browsers** when the teammate's approval scope is the environment, and its own browser otherwise.
-- **For**: **Always**, **1 hour**, **This session** or **Once**. **This session** allows the site, or the host or pattern you picked on the card, in that teammate's browser until the browser stops, and adds no rule; with it, **Deny** denies once. **Once** answers only this request. **This session** and **Once** make no rule, so **Who** is off for them.
+- **Who**: the teammate's browser, **All browsers** of the environment, or **Browsers and computers**, which also lets the computers connect to the host. The default is **All browsers** when the teammate's approval scope is the environment, and its own browser otherwise.
+- **For**: **Always**, **1 hour**, **This session** or **Once**. **This session** allows the site, or the host or pattern you picked on the card, in that teammate's browser until the browser stops, and adds no rule; with it, the deny button is **Deny once**. **Once** answers only this request. **This session** and **Once** make no rule, so **Who** is off for them.
 
 The Allow and Deny buttons say how long they last, such as **Allow for 1 hour**.
 
@@ -132,4 +132,4 @@ Reports that Chromium sends sites on its own, such as Network Error Logging, are
 
 ## Browser and Git approvals are separate
 
-The network policy controls which hosts a sandbox can reach. Browser actions that change a page can also need a **browser action** approval. Git pushes to a forge configured in **Settings → Git forges** use **Git push** review. A network allow does not approve either of those actions. When git connects over SSH to a forge's host, the card says *This is git over SSH*, points to the repository's `https://` URL, and offers **Add forge for** the host when Studio has none. See [Browser](../browser/) and [Git review](../git-review/).
+The network policy controls which hosts a computer can reach. Browser actions that change a page can also need a **browser action** approval. Git pushes to a forge configured in **Settings → Git forges** use **Git push** review. A network allow does not approve either of those actions. When git connects over SSH to a forge's host, the card says *This is git over SSH*, points to the repository's `https://` URL, and offers **Add forge for** the host when Studio has none. See [Browser](../browser/) and [Git review](../git-review/).

@@ -266,7 +266,7 @@ test("a repository folder on this computer becomes a local forge", async ({
   await expect(dialog).toBeHidden()
 
   const row = page.getByRole("row").filter({ hasText: folder })
-  await expect(row).toContainText("Folder on this computer")
+  await expect(row).toContainText("Folder on this machine")
   await expect(row.getByRole("button", { name: "Replace token" })).toHaveCount(
     0
   )
@@ -288,7 +288,7 @@ test("the first step picks a local repository or its folder", async ({
 
   const dialog = await addForge(page, env)
   await dialog
-    .getByRole("button", { name: "Pick a folder on this computer…" })
+    .getByRole("button", { name: "Pick a folder on this machine…" })
     .click()
   const picker = page.getByRole("dialog", { name: "Choose a folder" })
   await expect(picker).toContainText(
@@ -298,7 +298,7 @@ test("the first step picks a local repository or its folder", async ({
   await picker.getByRole("button", { name: "Cancel" }).click()
   await dialog.getByLabel("Repository", { exact: true }).fill(folder)
   await dialog
-    .getByRole("button", { name: "Pick a folder on this computer…" })
+    .getByRole("button", { name: "Pick a folder on this machine…" })
     .click()
   const folders = picker.getByRole("list", { name: "Folders" })
   await folders.getByRole("listitem").filter({ hasText: "proj" }).click()
@@ -309,7 +309,7 @@ test("the first step picks a local repository or its folder", async ({
 
   await dialog.getByRole("button", { name: "Back" }).click()
   await dialog
-    .getByRole("button", { name: "Pick a folder on this computer…" })
+    .getByRole("button", { name: "Pick a folder on this machine…" })
     .click()
   await picker.getByRole("button", { name: "Up one folder" }).click()
   await picker.getByRole("button", { name: "Use this folder" }).click()
@@ -333,7 +333,7 @@ test("a local forge's folder can be picked by browsing", async ({
     .getByRole("button", { name: "Set it up by hand instead" })
     .click()
   await dialog
-    .getByRole("radio", { name: "Folder on this computer", exact: true })
+    .getByRole("radio", { name: "Folder on this machine", exact: true })
     .click()
   await dialog.getByLabel("Folder", { exact: true }).fill(folder)
   await dialog.getByRole("button", { name: "Browse…" }).click()

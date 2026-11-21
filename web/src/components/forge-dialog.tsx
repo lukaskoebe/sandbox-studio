@@ -274,7 +274,7 @@ export function TokenHint({ kind, baseUrl }: { kind: Kind; baseUrl: string }) {
           >
             fine-grained token
           </a>{" "}
-          for the repositories sandboxes may use, with Contents and Pull
+          for the repositories computers may use, with Contents and Pull
           requests read and write.
         </>
       ) : kind === "forgejo" ? (
@@ -284,7 +284,7 @@ export function TokenHint({ kind, baseUrl }: { kind: Kind; baseUrl: string }) {
       ) : (
         "Needs read and write access to the repositories."
       )}{" "}
-      Studio keeps it; sandboxes never see it.
+      Studio keeps it; computers never see it.
     </>
   )
 }
@@ -701,8 +701,8 @@ function ForgeForm({
       </div>
       {step === 1 && (
         <DialogDescription>
-          A git host, or a folder of repositories on this computer, that Studio
-          fetches from and pushes to for the sandboxes.
+          A git host, or a folder of repositories on this machine, that Studio
+          fetches from and pushes to for the computers.
         </DialogDescription>
       )}
     </DialogHeader>
@@ -757,7 +757,7 @@ function ForgeForm({
                   onClick={() => setBrowsing(true)}
                 >
                   <FolderOpenIcon />
-                  Pick a folder on this computer…
+                  Pick a folder on this machine…
                 </Button>
               </>
             )}
@@ -862,7 +862,7 @@ function ForgeForm({
       </div>
       <FieldDescription>
         {local
-          ? "The folder the repositories are in. Sandboxes can fetch every repository in it; nothing goes in without your approval."
+          ? "The folder the repositories are in. Computers can fetch every repository in it; nothing goes in without your approval."
           : ssh
             ? "user@host, or ssh://user@host:port. The user is git if you leave it out. A clone URL such as git@github.com:owner/repo.git works too."
             : manual
@@ -1102,7 +1102,7 @@ function ForgeForm({
               onBlur={() => name.trim() === "" && setNameEdited(false)}
             />
             <FieldDescription>
-              How sandboxes refer to this forge, in URLs like{" "}
+              How computers refer to this forge, in URLs like{" "}
               <Ident>
                 {`https://${remoteHost}/${forgeName || "<name>"}/${repoPath || (local ? "repo" : "owner/repo")}.git`}
               </Ident>

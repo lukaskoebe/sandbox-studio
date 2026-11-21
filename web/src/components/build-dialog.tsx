@@ -215,7 +215,7 @@ export function BuildDialog({
             <DialogTitle>New template build</DialogTitle>
             <DialogDescription>
               Build a reusable template from a YAML spec. A ready build does not
-              start a sandbox.
+              start a computer.
             </DialogDescription>
           </DialogHeader>
           <Field data-invalid={Boolean(visibleError) || undefined}>

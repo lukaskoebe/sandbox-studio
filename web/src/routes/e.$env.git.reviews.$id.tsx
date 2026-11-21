@@ -63,7 +63,7 @@ function GitReviewPage() {
                   <EmptyDescription>
                     {approval.isError && errorStatus(approval.error) !== 404
                       ? errorMessage(approval.error)
-                      : "This push or pull request isn't in this environment. Its sandbox may have been deleted."}
+                      : "This push or pull request isn't in this environment. Its computer may have been deleted."}
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>

@@ -80,19 +80,21 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
 
     // First sandbox: created by Iris, with its progress shown until it can be opened, on Iris's
     // page.
-    await open("First sandbox")
+    await open("First computer")
     await page.getByLabel("Name", { exact: true }).fill("first")
-    await page.getByRole("button", { name: "Create sandbox" }).click()
-    await expect(page.getByRole("link", { name: "Open sandbox" })).toBeVisible({
-      timeout: 30_000,
-    })
-    await page.getByRole("link", { name: "Open sandbox" }).click()
+    await page.getByRole("button", { name: "Create computer" }).click()
+    await expect(page.getByRole("link", { name: "Open computer" })).toBeVisible(
+      {
+        timeout: 30_000,
+      }
+    )
+    await page.getByRole("link", { name: "Open computer" }).click()
     await expect(page).toHaveURL(/\/teammates\/[^/?]+\?.*computer=/)
     await expect(
       page.getByRole("region", { name: "first's screen" })
     ).toBeVisible()
     await page.getByRole("link", { name: "Back to setup" }).click()
-    await open("First sandbox")
+    await open("First computer")
 
     // Every step is done or skipped now, so the setup is complete and Home has no card.
     await page.goto("/")

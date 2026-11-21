@@ -135,11 +135,15 @@ function NewChatPage() {
         ) : !sandbox ? (
           <Empty className="m-auto">
             <EmptyHeader>
-              <EmptyTitle>No sandbox to chat in</EmptyTitle>
+              <EmptyTitle>No computer to chat in</EmptyTitle>
               <EmptyDescription>
-                Chats happen in a teammate's sandbox. Create one on the{" "}
-                <Link to="/e/$env" params={{ env }} className="underline">
-                  Sandboxes
+                Chats happen on a teammate's computer. Create one on the{" "}
+                <Link
+                  to="/e/$env/computers"
+                  params={{ env }}
+                  className="underline"
+                >
+                  Computers
                 </Link>{" "}
                 page and pick a teammate for it.
               </EmptyDescription>

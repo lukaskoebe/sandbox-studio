@@ -44,7 +44,7 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   // The agent waits for the answer.
   await expect(main).not.toContainText(done)
 
-  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await main.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(main).toContainText(done)
   // The closing message's markdown table is a table.
   const table = main.getByRole("table")
@@ -67,7 +67,7 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   // Closing the popup while it loads can hang in CI; it closes with the context.
   await popup
   await expect(
-    main.getByRole("button", { name: "Allow", exact: true })
+    main.getByRole("button", { name: "Allow once", exact: true })
   ).toHaveCount(0)
   // Once the agent writes again, its steps fold into a row that opens to them, the answer
   // among them.
@@ -185,11 +185,11 @@ test("a message sent while the agent works goes into its turn, or with Alt waits
   await box.fill("")
 
   // Once the turn ends, the queued message goes as the next turn.
-  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await main.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(main).toContainText(done)
   await expect(queued).toBeHidden()
   await expect(
-    main.getByRole("button", { name: "Allow", exact: true })
+    main.getByRole("button", { name: "Allow once", exact: true })
   ).toHaveCount(1)
   const agents = (await api.guest(id)).acp
   expect(JSON.stringify(agents[0].steers)).toContain("Then fix the lint")
@@ -217,7 +217,7 @@ test("sending in a long chat takes it to its end, and it follows the reply", asy
   await page.goto(`/e/${env}/chats/${chat.id}`)
   const main = page.getByRole("main")
   const box = main.getByRole("textbox", { name: "Message" })
-  const allow = main.getByRole("button", { name: "Allow", exact: true })
+  const allow = main.getByRole("button", { name: "Allow once", exact: true })
   for (const [i, text] of ["First request", "Second request"].entries()) {
     await box.fill(text)
     await box.press("Enter")
@@ -439,7 +439,7 @@ test("the composer says how full the agent's context is, and compacts it", async
 
   await box.fill("Please run the tests")
   await box.press("Enter")
-  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await main.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(main.getByText(done)).toHaveCount(1)
   const meter = main.getByRole("button", { name: "Context: 26% full" })
   await expect(meter).toBeVisible()
@@ -651,7 +651,7 @@ test("a teammate's home says each thing once while a thread waits", async ({
 
   // Once answered, the thread's card and the Now card let it go.
   await now.getByRole("button", { name: "Answer" }).click()
-  await now.getByRole("button", { name: "Allow", exact: true }).click()
+  await now.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(thread).toContainText("Done", { timeout: 20_000 })
   await expect(now).toHaveCount(0)
 })
@@ -673,7 +673,7 @@ test("a message's changes show each file's diff", async ({
   const main = page.getByRole("main")
   await main.getByRole("textbox", { name: "Message" }).fill("Edit the file")
   await main.getByRole("button", { name: "Send" }).click()
-  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await main.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(main).toContainText(done)
 
   // The scripted agent edits nothing, so the turn comes as if it had.
@@ -735,7 +735,7 @@ test("a request's steps fold into a row whose file chip opens the file's diff, u
   const main = page.getByRole("main")
   await main.getByRole("textbox", { name: "Message" }).fill("Edit the file")
   await main.getByRole("button", { name: "Send" }).click()
-  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await main.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(main).toContainText(done)
 
   // The scripted agent edits nothing, so its command comes as if it had edited a file, by its
@@ -839,7 +839,7 @@ test("typing in a stopped computer's chat starts it, and the message waits for i
   await expect
     .poll(async () => (await api.json<{ status: string }>("GET", base))!.status)
     .toBe("running")
-  await main.getByRole("button", { name: "Allow", exact: true }).click()
+  await main.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(main.getByText(done)).toHaveCount(1)
   await expect(main.getByText("Typing a message starts it.")).toBeHidden()
 })

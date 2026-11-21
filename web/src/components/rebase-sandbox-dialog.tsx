@@ -157,7 +157,7 @@ function RebaseForm({
             title="The current base image"
             detail={[
               updates.data?.current,
-              "what new sandboxes get",
+              "what new computers get",
               sandbox.templateId && "without the template's tools",
             ]
               .filter(Boolean)
@@ -293,13 +293,13 @@ function RebaseForm({
 
       {sandbox.oldDiskLayout && (
         <p role="alert" className="text-destructive">
-          microsandbox must move this sandbox&apos;s disks to its new layout
+          microsandbox must move this computer&apos;s disks to its new layout
           before it can copy them. Move disks, on Home or Computers, does that.
         </p>
       )}
       {failure && !pending && (
         <p role="alert" className="text-destructive">
-          Could not rebase the sandbox: {failure}
+          Could not rebase the computer: {failure}
         </p>
       )}
 
@@ -492,7 +492,7 @@ export function RebaseAllDialog({
           <DialogHeader>
             <DialogTitle>
               Rebase {sandboxes.length}{" "}
-              {sandboxes.length === 1 ? "sandbox" : "sandboxes"}
+              {sandboxes.length === 1 ? "computer" : "computers"}
             </DialogTitle>
             <DialogDescription>
               Each gets a new generation from the current base, with its work
@@ -509,7 +509,7 @@ export function RebaseAllDialog({
             </div>
           ) : (
             <ul
-              aria-label="Sandboxes to rebase"
+              aria-label="Computers to rebase"
               className="grid max-h-64 divide-y overflow-y-auto border"
             >
               {plans.map((p) => (
@@ -534,9 +534,9 @@ export function RebaseAllDialog({
           )}
           {plans.some((p) => "skip" in p && p.skip !== "busy") && (
             <p className="text-muted-foreground">
-              A sandbox on a template keeps the template&apos;s tools only on
+              A computer on a template keeps the template&apos;s tools only on
               that template rebuilt: rebuild it in Settings → Templates, or
-              rebase the sandbox from its computer&apos;s menu.
+              rebase the computer from its menu.
             </p>
           )}
 
@@ -549,9 +549,9 @@ export function RebaseAllDialog({
           />
           <p className="text-muted-foreground">
             Each keeps /workspace, /home/agent, its chats and checkpoints, and
-            loses apt packages and running terminals. A running sandbox restarts
-            after its copy; a stopped one stays stopped. One that fails stays as
-            it was.
+            loses apt packages and running terminals. A running computer
+            restarts after its copy; a stopped one stays stopped. One that fails
+            stays as it was.
           </p>
 
           {failures.length > 0 && !pending && (

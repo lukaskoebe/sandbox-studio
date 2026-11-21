@@ -123,7 +123,7 @@ export function NetworkGroupCard({
           </CardDescription>
         </div>
         <CardTitle className="min-w-0 break-words">
-          {`${site ?? sandbox ?? "A sandbox"} wants ${approvals.length} hosts`}
+          {`${site ?? sandbox ?? "A computer"} wants ${approvals.length} hosts`}
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2">
@@ -204,9 +204,7 @@ export function NetworkGroupCard({
             onClick={() => void decideAll("allow")}
           >
             {working === "allow" && <Spinner />}
-            {gaveUp && lifetime === "always"
-              ? "Allow all next time"
-              : decisionLabel("allow", lifetime, true)}
+            {decisionLabel("allow", lifetime, true)}
           </Button>
         </div>
       </CardContent>

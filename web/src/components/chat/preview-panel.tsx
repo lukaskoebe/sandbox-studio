@@ -108,8 +108,8 @@ export function PreviewPanel({
           <EmptyTitle>Nothing to preview yet</EmptyTitle>
           <EmptyDescription>
             {ports.isError
-              ? `Can't check the sandbox: ${errorMessage(ports.error)}`
-              : "When your teammate starts a website or app in the sandbox, it shows up here. Ask it to start one, for example “run the app so I can see it”."}
+              ? `Can't check the computer: ${errorMessage(ports.error)}`
+              : "When your teammate starts a website or app on the computer, it shows up here. Ask it to start one, for example “run the app so I can see it”."}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -145,7 +145,7 @@ export function PreviewPanel({
           </Button>
         </div>
         <p className="text-muted-foreground">
-          Previews only open on the computer running Studio.
+          Previews only open on the machine running Studio.
         </p>
       </div>
     )
@@ -243,7 +243,7 @@ export function PreviewsOff({
         <EmptyTitle>Previews are off</EmptyTitle>
         <EmptyDescription>
           {port ? `Port ${port} can't open here` : "Ports can't open here"}{" "}
-          while previews of sandbox ports are off in{" "}
+          while previews of computer ports are off in{" "}
           <Link
             to="/e/$env/settings/general"
             params={{ env }}
@@ -253,9 +253,9 @@ export function PreviewsOff({
           </Link>
           .{" "}
           {list.length
-            ? `The sandbox listens on ${list.map((p) => `:${p}`).join(", ")}.`
+            ? `The computer listens on ${list.map((p) => `:${p}`).join(", ")}.`
             : port && ports.data
-              ? "The sandbox doesn't listen on any port now."
+              ? "The computer doesn't listen on any port now."
               : ""}
         </EmptyDescription>
       </EmptyHeader>
@@ -399,7 +399,7 @@ function PreviewFrame({
         if (sibling === port) go(path)
         else onPort(sibling, path)
       } else {
-        toast(`Port ${sibling} isn't listening in the sandbox.`)
+        toast(`Port ${sibling} isn't listening on the computer.`)
       }
       return
     }

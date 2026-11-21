@@ -52,7 +52,7 @@ export function SecretRejectedDecision({ approval }: { approval: Approval }) {
               <span className="font-mono text-foreground">{r.name}</span>
             </>
           )}
-          . The value is probably wrong or expired; the sandbox can't tell,
+          . The value is probably wrong or expired; the computer can't tell,
           since it only sees the placeholder.
         </p>
       )}

@@ -143,7 +143,7 @@ function TaskForm({
     (s) => s.teammateId === teammateId
   )
   const sandboxItems: Record<string, string> = {
-    [latest]: "Latest sandbox",
+    [latest]: "Latest computer",
     ...Object.fromEntries(owned.map((s) => [s.id, s.name])),
   }
 
@@ -449,7 +449,7 @@ function TaskForm({
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="task-sandbox">Sandbox</FieldLabel>
+              <FieldLabel htmlFor="task-sandbox">Computer</FieldLabel>
               <Select
                 value={sandboxId}
                 onValueChange={(v) => {

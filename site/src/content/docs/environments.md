@@ -16,7 +16,7 @@ Each environment has its own:
 
 For example, keep work credentials and network rules in a **Work** environment and personal projects in **Private**. A computer belongs to one environment, and an agent can use only that environment's providers, secrets, rules, and memory. The sidebar's **Environment** group, with **Computers**, **Network**, **Secrets**, **Memory** and **Activity**, always shows the environment you are in.
 
-In **Settings**, **This environment** and **Accounts** (AI providers and Git forges) belong to the environment you are in, and so do the templates listed under **This computer**. The rest of **This computer**, the runtime, ports and the LAN, and updates, is for the whole of Studio, as are most of the **Studio** settings under **General**, such as Start at login, SSH, previews and the terminal shell. **This browser** holds the style, which each browser keeps for itself.
+In **Settings**, **This environment** and **Accounts** (AI providers and Git forges) belong to the environment you are in, and so do the templates listed under **This machine**. The rest of **This machine**, the runtime, ports and the LAN, and updates, is for the whole of Studio, as are most of the **Studio** settings under **General**, such as Start at login, SSH, previews and the terminal shell. **This browser** holds the style, which each browser keeps for itself.
 
 ![The environment switcher open at the top of the sidebar, listing Default and Private](../../assets/screenshots/environments.jpg)
 
@@ -28,7 +28,7 @@ See [Network rules](../network/) for rule actions and [Teammates and providers](
 
 ## Export and import an environment
 
-To set up the same environment on another Studio, or share it, choose **Export environment** under **Settings → General**. The `.studio-environment` file holds the environment's providers, teammates, environment and teammate rules, secret names with their hosts, and template specs. It leaves out provider keys, secret values, forge tokens, sandboxes, sandbox-scoped rules and secrets, memory, chats, approvals, and built templates. Template setup scripts and souls are in the file as you wrote them, so read it before you share it.
+To set up the same environment on another Studio, or share it, choose **Export environment** under **Settings → General**. The `.studio-environment` file holds the environment's providers, teammates, environment and teammate rules, secret names with their hosts, and template specs. It leaves out provider keys, secret values, forge tokens, computers, rules and secrets scoped to a computer, memory, chats, approvals, and built templates. Template setup scripts and souls are in the file as you wrote them, so read it before you share it.
 
 **Import environment** creates a new environment from such a file. Studio checks every value first, and an invalid file creates nothing. Afterwards it lists what the file left out: add each provider's key and each secret's value, and build the templates from their specs.
 

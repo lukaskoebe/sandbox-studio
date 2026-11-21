@@ -40,7 +40,7 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
   await page.getByRole("textbox", { name: "Ports" }).fill("22")
   await page.getByRole("button", { name: "Add", exact: true }).click()
   await expect(list).toContainText(
-    `Sandboxes connect to 192-168-231-${octet}.lan.studio.internal`
+    `Computers connect to 192-168-231-${octet}.lan.studio.internal`
   )
 
   // A wildcard over a top-level domain is refused, and the list keeps its entries.
@@ -65,7 +65,7 @@ test("Settings > Ports and LAN opens and closes ports of this computer", async (
 }) => {
   await page.goto(`/e/${env}/settings/ports`)
   await expect(
-    page.getByRole("heading", { name: "This computer", exact: true })
+    page.getByRole("heading", { name: "This machine", exact: true })
   ).toBeVisible()
   await expect(page.getByText("No ports open.")).toBeVisible()
   await page.getByLabel("Port", { exact: true }).fill("2222")
@@ -99,7 +99,7 @@ test("a rule no sandbox can reach says so, and why", async ({
   await dialog.getByLabel("Ports").fill("5432")
   await dialog.getByRole("button", { name: "Add rule", exact: true }).click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByText("No sandbox can reach this rule")).toBeVisible()
+  await expect(page.getByText("No computer can reach this rule")).toBeVisible()
   const row = page.getByRole("row").filter({ hasText: "5432" })
   await expect(row).toContainText("stay inside the sandbox")
   await expect(

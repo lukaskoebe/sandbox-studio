@@ -154,7 +154,7 @@ export function MoveDisksDialog({
         toast.success(
           done === 1
             ? `Moved the disks of ${moved.find((m) => !m.error)?.name}`
-            : `Moved the disks of ${done} sandboxes`
+            : `Moved the disks of ${done} computers`
         )
       if (failed.length === 0) onOpenChange(false)
     } catch (err) {
@@ -186,26 +186,26 @@ export function MoveDisksDialog({
             <DialogTitle>Move disks to the new layout</DialogTitle>
             <DialogDescription>
               The microsandbox this Studio runs keeps disks in a new layout, and
-              starts or copies a sandbox only once its disks are moved. On a Mac
-              it moves them only while nothing from before the update writes to
-              them.
+              starts or copies a computer only once its disks are moved. On a
+              Mac it moves them only while nothing from before the update writes
+              to them.
             </DialogDescription>
           </DialogHeader>
 
           {sandboxes.isPending ? (
             <div
               className="grid min-h-12 place-items-center"
-              aria-label="Loading sandboxes"
+              aria-label="Loading computers"
             >
               <Spinner />
             </div>
           ) : old.length === 0 ? (
             <p className="text-muted-foreground">
-              Every sandbox&apos;s disks are in the new layout already.
+              Every computer&apos;s disks are in the new layout already.
             </p>
           ) : (
             <ul
-              aria-label="Sandboxes whose disks move"
+              aria-label="Computers whose disks move"
               className="grid max-h-64 divide-y overflow-y-auto border"
             >
               {old.map((d) => (
@@ -242,13 +242,13 @@ export function MoveDisksDialog({
             <span>
               No Studio or msb from before the update still runs
               <span className="block text-muted-foreground">
-                Quit any other Studio, and stop sandboxes started with msb
-                itself. Start nothing with them until the move is done.
+                Quit any other Studio, and stop VMs started with msb itself.
+                Start nothing with them until the move is done.
               </span>
             </span>
           </label>
           <p className="text-muted-foreground">
-            Studio stops the sandboxes that run, then moves every one&apos;s
+            Studio stops the computers that run, then moves every one&apos;s
             disks. The originals are kept beside them and nothing on them
             changes. Large disks can take a while.
           </p>

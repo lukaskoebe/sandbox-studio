@@ -500,7 +500,7 @@ function PreviewLink({
   return (
     <button
       type="button"
-      title={`Open port ${port} of the sandbox in Studio's preview`}
+      title={`Open port ${port} of the computer in Studio's preview`}
       onClick={() =>
         void openPreviewTab(sandbox.env, sandbox.sandboxId, port, false, path)
       }

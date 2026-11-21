@@ -123,7 +123,7 @@ function ForkForm({
       <DialogHeader>
         <DialogTitle>Fork {sandbox.name}</DialogTitle>
         <DialogDescription>
-          Copies this sandbox into a new one with the same template and
+          Copies this computer into a new one with the same template and
           resources, then starts it.
         </DialogDescription>
       </DialogHeader>
@@ -149,7 +149,7 @@ function ForkForm({
         {sandbox.status === "running" && (
           <p className="mt-3 flex gap-2 text-amber-700 dark:text-amber-400">
             <WarningIcon className="mt-0.5 size-3 shrink-0" />
-            This sandbox is running, so it is copied live. Files written during
+            This computer is running, so it is copied live. Files written during
             the copy may be inconsistent.
           </p>
         )}
@@ -190,7 +190,7 @@ function ForkForm({
           </FieldError>
         ) : (
           <FieldDescription>
-            Also the new sandbox&apos;s hostname.
+            Also the new computer&apos;s hostname.
           </FieldDescription>
         )}
       </Field>
@@ -206,7 +206,7 @@ function ForkForm({
 
       {failure && (
         <p role="alert" className="text-destructive">
-          Could not fork the sandbox: {failure}
+          Could not fork the computer: {failure}
         </p>
       )}
 

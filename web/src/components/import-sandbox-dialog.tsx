@@ -26,7 +26,7 @@ type SandboxImport = components["schemas"]["SandboxImport"]
 const stateLabel: Record<SandboxImport["state"], string> = {
   uploading: "Uploading",
   building: "Building the template",
-  creating: "Creating the sandbox",
+  creating: "Creating the computer",
   importing: "Copying the workspace and home",
   ready: "Ready",
   failed: "Failed",
@@ -159,10 +159,10 @@ export function ImportSandboxDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Import sandbox</DialogTitle>
+            <DialogTitle>Import computer</DialogTitle>
             <DialogDescription>
-              Create a sandbox from a .studio-sandbox file exported from this or
-              another Studio. Its template is rebuilt here if needed.
+              Create a computer from a .studio-sandbox file exported from this
+              or another Studio. Its template is rebuilt here if needed.
             </DialogDescription>
           </DialogHeader>
           <Field

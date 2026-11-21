@@ -127,7 +127,7 @@ export function MemorySessionsTab({
             <TableHeader>
               <TableRow>
                 <TableHead>Teammate</TableHead>
-                <TableHead>Sandbox</TableHead>
+                <TableHead>Computer</TableHead>
                 <TableHead>Session</TableHead>
                 <TableHead>Repository</TableHead>
                 <TableHead className="text-right">Injected</TableHead>

@@ -31,7 +31,7 @@ var (
 	// keychainBlindRetry is how often it reads the key again where it can't tell.
 	keychainBlindRetry = time.Minute
 	// keychainAsks is how many reads Retry makes while the keychain says it is still locked.
-	// Anything on this computer can press it, and each read of a locked keychain prompts: past
+	// Anything on this machine can press it, and each read of a locked keychain prompts: past
 	// these, only its unlocking reads the key.
 	keychainAsks = 5
 
@@ -160,14 +160,14 @@ func (w *keychainWait) view(now time.Time) keychainView {
 	defer w.mu.Unlock()
 	v := keychainView{
 		Waiting: "keychain",
-		Message: "Studio keeps the key to your secrets in the OS keychain, which is locked. Unlock it, such as by logging in on this computer's desktop, and Studio starts by itself.",
+		Message: "Studio keeps the key to your secrets in the OS keychain, which is locked. Unlock it, such as by logging in on this machine's desktop, and Studio starts by itself.",
 		Since:   w.since,
 	}
 	if w.err != nil {
 		v.Error = w.err.Error()
 	}
 	if w.asks >= keychainAsks {
-		v.Error = "Retry asked the keychain to unlock " + strconv.Itoa(keychainAsks) + " times; unlock it on this computer's desktop, and Studio starts by itself."
+		v.Error = "Retry asked the keychain to unlock " + strconv.Itoa(keychainAsks) + " times; unlock it on this machine's desktop, and Studio starts by itself."
 	}
 	if left := keychainRetryGap - now.Sub(w.last); left > 0 {
 		v.RetryIn = int(left.Round(time.Second) / time.Second)

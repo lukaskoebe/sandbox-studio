@@ -110,7 +110,7 @@ export function GitSettings({
         }
         intro={
           <>
-            Sandboxes reach your forges through Studio, which keeps their
+            Computers reach your forges through Studio, which keeps their
             credentials and holds their pushes for your review.{" "}
             <a
               href="https://lukaskoebe.github.io/sandbox-studio/git-review/"
@@ -161,7 +161,7 @@ export function GitSettings({
             <div className="flex flex-wrap items-center gap-3 rounded-(--radius) border border-dashed px-3 py-2.5 text-xs">
               <p className="min-w-0 flex-1 text-muted-foreground">
                 No forges yet. Add GitHub, a Forgejo instance such as Codeberg,
-                or any git host over HTTPS or SSH; sandboxes then use it through
+                or any git host over HTTPS or SSH; computers then use it through
                 Studio.
               </p>
               <Button
@@ -177,7 +177,7 @@ export function GitSettings({
         </section>
 
         <p className="text-xs text-muted-foreground">
-          The pushes and pull requests sandboxes made are in{" "}
+          The pushes and pull requests computers made are in{" "}
           <Link
             to="/e/$env/activity"
             params={{ env }}

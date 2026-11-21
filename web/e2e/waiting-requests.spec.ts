@@ -157,13 +157,13 @@ test("a connection that gave up is answered for the next attempt", async ({
   await gone
     .getByTestId("waiting-request")
     .filter({ hasText: dismissed })
-    .getByRole("button", { name: "Dismiss" })
+    .getByRole("button", { name: "Ignore" })
     .click()
   await expect(gone).toContainText("Gave up waiting · 1")
   await gone
     .getByTestId("waiting-request")
     .filter({ hasText: later })
-    .getByRole("button", { name: "Allow next time" })
+    .getByRole("button", { name: "Always allow" })
     .click()
   await expect(gone).toBeHidden()
 
@@ -190,7 +190,7 @@ test("a row in the top bar's list says when its connection gave up", async ({
     .getByTestId("approval-card")
     .filter({ hasText: host })
   await expect(card.getByTestId("hold-status")).toContainText("No longer held")
-  await card.getByRole("button", { name: "Allow next time" }).click()
+  await card.getByRole("button", { name: "Allow" }).click()
   await expect(card).toBeHidden()
 })
 

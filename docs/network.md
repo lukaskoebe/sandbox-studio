@@ -12,7 +12,7 @@ DNS only to the sandbox's resolver, TCP only to public addresses and only throug
 gateway's SOCKS5 port, everything else denied. UDP is blocked, so QUIC falls back to TCP.
 Private and host addresses are unreachable; host services are virtual hosts (below) or the
 [agent channel](guest-agent.md). The environment's opt-ins are the exceptions, and the gateway
-dials them: the ports of [this computer](#this-computer) it opened, as `host.studio.internal`,
+dials them: the ports of [this machine](#this-machine) it opened, as `host.studio.internal`,
 and the entries of its [local network](#local-network) list.
 
 ## DNS
@@ -86,7 +86,7 @@ stops the gateway: it tries again after 5 ms, doubling up to a second, and logs 
 
 Upstream dials refuse non-public addresses, so neither the gateway nor Caddy upstreams reach
 the host or private networks. The exceptions are the environment's opt-ins:
-[this computer](#this-computer)'s open ports and the [local network](#local-network) list.
+[this machine](#this-machine)'s open ports and the [local network](#local-network) list.
 `DialPublic`, which Studio uses for its own forge connections, never makes them.
 
 ## Rules
@@ -108,7 +108,7 @@ VMs and none of the sandboxes' own connections: the policy leaves it out of matc
 connection or request that isn't a browser VM's (`Engine.active`), so it settles only
 `network.request` approvals, doesn't terminate a sandbox's connections, and doesn't refuse a
 sandbox's lookups. A browser request's card makes its rule browser-only unless the user picks
-"Browser and sandboxes" in Options; the rule dialog has "Only in the browser", Settings → Network
+"Browsers and computers" in Options; the rule dialog has "Only in the browser", Settings → Network
 marks such rules "browser only", and environment files keep the flag.
 
 A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
@@ -265,7 +265,7 @@ the user denied it.
 A timeout leaves the approval pending. While a connection is held, the approval's `heldUntil` says
 when the last one gives up (`Engine.HeldUntil`, in memory, so a restart ends it along with the
 connections). Without it nothing holds the request open and the client has seen a failure, so
-pages offer "Allow next time" and Dismiss rather than Once. A retry holds it again. Studio doesn't
+pages offer Always allow and Ignore rather than Once. A retry holds it again. Studio doesn't
 notice a client that disconnects early: the gateway waits on the answer, not on the client, so
 such a request shows as held until its time runs out.
 
@@ -307,7 +307,7 @@ session: when the browser VM stops, idles out or is removed. The pending request
 page's site are approved with it.
 
 The card's Options choose who a rule covers ("<teammate>'s browser", "All browsers" or
-"Browsers and sandboxes"; the teammate's approval scope picks the default) and for how long
+"Browsers and computers"; the teammate's approval scope picks the default) and for how long
 ("Always", "1 hour", "This session" or "Once"); the Allow and Deny buttons name the lifetime.
 "This session" on a request that isn't a navigation (`allow_session`, with the host pattern
 picked on the card) allows the hosts the pattern covers in the teammate's browser until the
@@ -355,7 +355,7 @@ No level does these things:
   link-local. The dialer refuses them anyway, unless the [local network](#local-network) list
   covers them;
 - allow a name on the [local network](#local-network) list or
-  [this computer](#this-computer), even at `open`: the AI reviewer never sees one either. Only a
+  [this machine](#this-machine), even at `open`: the AI reviewer never sees one either. Only a
   rule you make or an approval reaches them;
 - lift the tracker list for a browser VM, or an explicit deny rule;
 - send a secret to a host it isn't bound to. Secrets reach bound hosts at every level.
@@ -460,10 +460,10 @@ name nothing refuses gets [a virtual address or real answers](#dns), so that it 
 Connections are still checked when they are made, so a refusal here is only the faster answer. A refused lookup goes in the
 sandbox's connection log, once a minute per name, with the rule that refused it.
 
-## This computer
+## This machine
 
 The fence refuses the host's addresses, and a sandbox's `localhost` is the sandbox. An
-environment's host ports (Settings → Ports and LAN → This computer; `store.HostPorts`,
+environment's host ports (Settings → Ports and LAN → This machine; `store.HostPorts`,
 `gateway/host.go`) are the opt-in to a service on the computer Studio runs on:
 
 - A sandbox connects to `host.studio.internal` on an open port. Its resolver answers
@@ -499,7 +499,7 @@ hosts" in the code and the API) is the opt-in for such hosts:
 - Stays refused for every entry: loopback, link-local (including the cloud metadata address
   169.254.169.254), unspecified and multicast addresses, `198.18.0.0/15` (Studio's virtual
   services), the host's own addresses, public ones included (so a dev server on `0.0.0.0`
-  stays out of reach; [this computer](#this-computer) opens such a port) and Studio's own
+  stays out of reach; [this machine](#this-machine) opens such a port) and Studio's own
   ports.
 - A name not on the list stays refused private addresses and this computer's own, whatever DNS
   says, so a name that rebinds to a private address is still blocked, and a site this computer

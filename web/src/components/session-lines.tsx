@@ -359,7 +359,7 @@ export function SessionLines({
             id="session-lines"
             className="section-label text-muted-foreground"
           >
-            Sandboxes
+            Computers
           </h2>
           <span className="text-caption text-muted-foreground">
             sessions branch off as they open and rejoin as they close
@@ -417,7 +417,7 @@ export function SessionLines({
             <p className="px-3 py-3 text-xs text-muted-foreground">
               {lines.isPending
                 ? "Loading…"
-                : `No sandbox ran in the last ${windowWords(hours)}.`}
+                : `No computer ran in the last ${windowWords(hours)}.`}
             </p>
           ) : (
             rows.rows.map((r) => (
@@ -458,8 +458,8 @@ export function SessionLines({
           {rows.quiet > 0 && (
             <span className="ml-auto">
               {rows.quiet === 1
-                ? "1 more sandbox had nothing open"
-                : `${rows.quiet} more sandboxes had nothing open`}
+                ? "1 more computer had nothing open"
+                : `${rows.quiet} more computers had nothing open`}
             </span>
           )}
         </div>

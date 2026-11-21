@@ -92,7 +92,7 @@ change it.
   page title and records arrivals (`web/src/lib/approval-arrivals.ts`): one that comes after
   the first load flashes the count, and its card slides into Home's list.
 - A network approval's Options have two rows: who the decision covers and for how long. For a
-  browser request, Who is "<teammate>'s browser", "All browsers" or "Browsers and sandboxes"
+  browser request, Who is "<teammate>'s browser", "All browsers" or "Browsers and computers"
   (only the last leaves out `browserOnly`), and For is "Always", "1 hour", "This session" or
   "Once". "This session" makes no rule (`allow_site` for a navigation, `allow_session` with the
   card's host pattern otherwise; see [network](network.md#hold-and-ask)) and so turns Who off.

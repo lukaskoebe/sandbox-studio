@@ -195,8 +195,8 @@ function PreviewsNotice({ env }: { env: string }) {
         </>
       }
     >
-      Previews of sandbox ports are off by default since v0.6. Turn them on here
-      or in{" "}
+      Previews of computer ports are off by default since v0.6. Turn them on
+      here or in{" "}
       <Link
         to="/e/$env/settings/general"
         params={{ env }}
@@ -273,7 +273,7 @@ function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
     >
       {release ? `${current} brings` : "Studio has"} a new base image.{" "}
       <span className="font-medium">
-        {outdated.length} {outdated.length === 1 ? "sandbox" : "sandboxes"}
+        {outdated.length} {outdated.length === 1 ? "computer" : "computers"}
       </span>{" "}
       still {outdated.length === 1 ? "uses" : "use"} the old one:{" "}
       {outdated.map((sb, i) => (
@@ -364,9 +364,9 @@ function GetStarted({ env }: { env: string }) {
     >
       <h2 className="text-sm font-medium">Start with a teammate</h2>
       <p className="text-xs text-muted-foreground">
-        A teammate is an agent with its own computer: a sandbox, a Linux VM with
-        Docker and a persistent workspace. Chat with it, and it asks you here
-        before it reaches the network or pushes code.
+        A teammate is an agent with its own computer: a Linux VM with Docker and
+        a persistent workspace. Chat with it, and it asks you here before it
+        reaches the network or pushes code.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => setAdding(true)}>
@@ -375,7 +375,7 @@ function GetStarted({ env }: { env: string }) {
         </Button>
         <Button variant="outline" onClick={() => setCreating(true)}>
           <PlusIcon />
-          New sandbox
+          New computer
         </Button>
       </div>
       <TeammateDialog

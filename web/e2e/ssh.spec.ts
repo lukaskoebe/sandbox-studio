@@ -63,7 +63,7 @@ test("SSH access names each sandbox in Studio's SSH config, and the user's confi
 
   // Settings turns it off again, and the user's config loses the line.
   await page.goto(`/e/${env}/settings/general`)
-  const ssh = page.getByRole("switch", { name: "Reach sandboxes over SSH" })
+  const ssh = page.getByRole("switch", { name: "Reach computers over SSH" })
   await expect(ssh).toBeChecked()
   await ssh.click()
   await expect(ssh).not.toBeChecked()

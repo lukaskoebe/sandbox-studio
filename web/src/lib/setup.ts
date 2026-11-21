@@ -9,7 +9,7 @@ export const setupSteps = [
   { key: "teammate", title: "Teammate" },
   { key: "git", title: "Git" },
   { key: "network", title: "Network level" },
-  { key: "sandbox", title: "First sandbox" },
+  { key: "sandbox", title: "First computer" },
 ] as const
 
 export type SetupKey = (typeof setupSteps)[number]["key"]

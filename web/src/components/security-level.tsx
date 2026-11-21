@@ -258,7 +258,7 @@ export function SecurityLevelPicker({
       </div>
       <p className="text-xs text-muted-foreground">
         At every level your rules come first, and no level lets through the
-        local network, this computer, or a secret sent to a host it isn't bound
+        local network, this machine, or a secret sent to a host it isn't bound
         to.
       </p>
     </fieldset>
@@ -276,7 +276,7 @@ export function LevelSection({ env }: { env: string }) {
         area="network"
       />
       <p className="text-xs text-muted-foreground">
-        What happens when a sandbox connects to a host that no rule covers.
+        What happens when a computer connects to a host that no rule covers.
       </p>
       <SecurityLevelPicker
         env={env}

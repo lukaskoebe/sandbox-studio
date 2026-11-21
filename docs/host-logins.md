@@ -2,7 +2,7 @@
 
 Studio runs on the user's own computer, where Claude Code, Codex or opencode are often signed in
 already. The setup's provider step and **Settings → AI providers** offer the providers that
-match those logins under **On this computer** (`internal/hostlogins`, `web/src/components/host-logins.tsx`).
+match those logins under **On this machine** (`internal/hostlogins`, `web/src/components/host-logins.tsx`).
 
 ## Never a copied sign-in
 

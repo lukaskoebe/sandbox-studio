@@ -68,10 +68,10 @@ function duration(d: string) {
 /** What a scope means for the sandboxes that see the secret. */
 function scopeHelp(scope: string) {
   if (scope === "environment")
-    return "Every sandbox sees it, unless a narrower secret has the same name."
+    return "Every computer sees it, unless a narrower secret has the same name."
   if (scope.startsWith("teammate:"))
-    return "Every sandbox the teammate owns sees it, unless a narrower secret has the same name."
-  return "Only this sandbox sees it."
+    return "Every computer the teammate owns sees it, unless a narrower secret has the same name."
+  return "Only this computer sees it."
 }
 
 export function SecretDialog({
@@ -285,7 +285,7 @@ function SecretForm({
         <DialogDescription>
           {kind
             ? kind.description
-            : "Sandboxes only see the placeholder. Studio sends the real value over HTTPS to these hosts."}
+            : "Computers only see the placeholder. Studio sends the real value over HTTPS to these hosts."}
         </DialogDescription>
       </DialogHeader>
       {(kinds.length > 0 || secret?.kind) && (
@@ -318,8 +318,8 @@ function SecretForm({
           )}
           <FieldDescription>
             {kind
-              ? `Sandboxes get credentials made from it, for ${duration(kind.lifetime)} at a time, through their tools' own helpers, and no placeholder.`
-              : "Sandboxes get a placeholder that Studio swaps for the value. Pick a kind for keys that tools sign with, such as AWS's."}
+              ? `Computers get credentials made from it, for ${duration(kind.lifetime)} at a time, through their tools' own helpers, and no placeholder.`
+              : "Computers get a placeholder that Studio swaps for the value. Pick a kind for keys that tools sign with, such as AWS's."}
           </FieldDescription>
         </Field>
       )}

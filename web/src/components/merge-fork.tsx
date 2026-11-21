@@ -74,7 +74,7 @@ export function MergeForkDialog({
             Merge {sandbox.name} into {source.name}
           </DialogTitle>
           <DialogDescription>
-            Studio forks {source.name} into a scratch sandbox and merges what
+            Studio forks {source.name} into a scratch computer and merges what
             changed in {sandbox.name} there. {source.name} isn&apos;t touched
             until you accept the result.
           </DialogDescription>
@@ -145,10 +145,10 @@ export function MergeBanner({
   if (!open) return null
   const role =
     open.scratchId === sandbox.id
-      ? `This sandbox is where ${open.forkName || "a fork"} is merged into ${open.sourceName || "its source"}.`
+      ? `This computer is where ${open.forkName || "a fork"} is merged into ${open.sourceName || "its source"}.`
       : open.sourceId === sandbox.id
-        ? `${open.forkName || "A fork"} is being merged into this sandbox.`
-        : `This sandbox is being merged into ${open.sourceName || "its source"}.`
+        ? `${open.forkName || "A fork"} is being merged into this computer.`
+        : `This computer is being merged into ${open.sourceName || "its source"}.`
   return (
     <div
       role="status"

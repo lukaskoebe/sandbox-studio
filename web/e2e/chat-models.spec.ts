@@ -55,7 +55,7 @@ test("a thread picks one of the models its teammate offers, from the next messag
   await page.goto(`/e/${env}/chats/${chat.id}`)
   const main = page.getByRole("main")
   const box = main.getByRole("textbox", { name: "Message" })
-  const allow = main.getByRole("button", { name: "Allow", exact: true })
+  const allow = main.getByRole("button", { name: "Allow once", exact: true })
 
   // A new thread starts on the default.
   const picker = main.getByRole("button", { name: /^Model: / })

@@ -497,7 +497,7 @@ export function CopyTeammate({
     <>
       <p className="text-xs text-muted-foreground">
         The copy keeps its name, role, avatar, soul, agent, model, git identity
-        and approval setting. Its sandboxes, chats, memory, secrets and keys
+        and approval setting. Its computers, chats, memory, secrets and keys
         stay here.
       </p>
       <div>

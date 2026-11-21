@@ -71,7 +71,7 @@ to an environment.
 | Route | Page |
 |---|---|
 | `/e/$env` | Home, one narrow column: what needs you (the approvals waiting, decided on the spot), Lead's Today so far card, each sandbox as a line its sessions branch off as they open and rejoin as they close (chats, terminals, browser sessions and previews; `docs/design/session-lines.md`), and earlier: decisions and chats started, each linking to its page or thread, with All chats and All activity. The setup card shows until the setup is complete or dismissed, and an environment with neither a teammate nor a sandbox offers to make the first |
-| `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome, or at `?step=`; it works on the environment last opened, or the first. The teammate's Edit and the sandbox's Open sandbox add `?from=setup`, and those pages then link back to their step |
+| `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome, or at `?step=`; it works on the environment last opened, or the first. The teammate's Edit and the sandbox's Open computer add `?from=setup`, and those pages then link back to their step |
 | `/e/$env/sandboxes/$id` | a computer without a teammate: its screen at full width (below). `?tab=` (`terminal`, `preview`, `changes`), `?term=` and `?review=` pick what it shows. A teammate's computer redirects to the teammate's page with `?computer=` |
 | `/e/$env/sandboxes/$id/work` | the old workspace: redirects to the screen, on the tab its `?terminal=`, `?session=`, `?review=` or `?panel=` named |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)): all of them, linked from Home. A chat is a thread on its teammate's page, so `/chats/$chat` redirects there with `?thread=`, and is left only for a chat the list doesn't know, such as one just deleted. `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox, and opens the thread it creates |
@@ -82,7 +82,7 @@ to an environment.
 | `/e/$env/teammates/$id/$view` | the old tabs: `chats` opens the teammate's home, `settings` (with its `?open=`) the settings page, `tasks` and `memory` their sheets, `browser` the screen's Browser tab |
 | `/e/$env/git/reviews/$id` | one git push review: the diff, commits and comments in tabs, decided there while it waits, its outcome after |
 | `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
-| `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |
+| `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create computer" once it is done |
 
 Settings is one page (`routes/e.$env.settings.tsx`, the sections in `components/settings/`):
 a nav on the left with the sections grouped by what they belong to, and the section in view at
@@ -99,7 +99,7 @@ sideways. Its sections:
 | | Activity (`activity`) | every decided approval of the environment (network requests, git pushes and pull requests, chat tool permissions, browser actions, memory), newest first, with chips for All, Network, Git, Chats, Browser and Memory kept in `?kind=`. Its columns: Decided, What (the kind and the host or a summary; a push links to its review page), From, Decision (with Revert for a reviewer's network decision) and Details (the reason, or a push's outcome) |
 | Accounts | AI providers (`providers`) | AI providers of the environment |
 | | Git forges (`forges`) | the git forges of the environment |
-| This computer | Templates (`templates`) | template builds and templates of the environment |
+| This machine | Templates (`templates`) | template builds and templates of the environment |
 | | Runtime (`runtime`) | host checks (doctor) |
 | | Ports and LAN (`ports`) | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
 | | Updates (`updates`) | the update check (the whole installation) |

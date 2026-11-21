@@ -108,7 +108,7 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
           disabled={decide.isPending}
           onClick={() => send("deny")}
         >
-          Deny
+          {remember && !alwaysAsked ? "Always deny" : "Deny once"}
         </Button>
         <Button
           size="sm"
@@ -116,7 +116,7 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
           onClick={() => send("allow")}
         >
           {decide.isPending && <Spinner />}
-          Allow
+          {remember && !alwaysAsked ? "Always allow" : "Allow once"}
         </Button>
       </div>
     </div>
@@ -174,7 +174,7 @@ export function BrowserCredentialDecision({
           onClick={() => send("deny")}
         >
           {busy("deny") && <Spinner />}
-          Deny
+          Deny once
         </Button>
         <Button
           size="sm"

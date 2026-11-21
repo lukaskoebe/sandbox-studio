@@ -1651,8 +1651,8 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
   ].filter(Boolean)
   const owner =
     p.scope === sharedScope
-      ? "every teammate's sandboxes"
-      : `${ctx.names.get(p.scope.slice("teammate:".length)) ?? "the teammate"}'s sandboxes`
+      ? "every teammate's computers"
+      : `${ctx.names.get(p.scope.slice("teammate:".length)) ?? "the teammate"}'s computers`
   const dir = p.scope === sharedScope ? "~/memory/shared" : "~/memory"
 
   return (

@@ -163,7 +163,7 @@ export function TeammateSettings({
             )}
           >
             <p className="text-xs text-muted-foreground">
-              The security level of this teammate's sandboxes: what happens when
+              The security level of this teammate's computers: what happens when
               one connects to a host that no rule covers.
             </p>
             <TeammateLevelPicker env={env} teammate={teammate} />
@@ -193,7 +193,7 @@ export function TeammateSettings({
               "secrets",
               KeyIcon,
               "Secrets",
-              "Its own, its sandboxes' and the environment's"
+              "Its own, its computers' and the environment's"
             )}
           >
             <TeammateSecrets env={env} teammate={teammate} />
@@ -203,7 +203,7 @@ export function TeammateSettings({
               "copy",
               CopyIcon,
               "Copy to another environment",
-              "Its profile, without its memory or sandboxes"
+              "Its profile, without its memory or computers"
             )}
           >
             <CopyTeammate env={env} teammate={teammate} />
@@ -215,7 +215,7 @@ export function TeammateSettings({
               "delete",
               TrashIcon,
               `Delete ${teammate.name}`,
-              "Its sandboxes must be deleted first"
+              "Its computers must be deleted first"
             )}
             destructive
           >
@@ -292,7 +292,7 @@ function DeleteTeammate({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {teammate.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Network rules scoped to {teammate.name} are deleted too. Sandboxes
+            Network rules scoped to {teammate.name} are deleted too. Computers
             it owns must be deleted first.
           </AlertDialogDescription>
         </AlertDialogHeader>

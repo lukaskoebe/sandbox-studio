@@ -721,8 +721,8 @@ function PreviewTip({
       align="center"
       action={{ label: "Open the preview", onClick: onOpen }}
     >
-      The Preview tab shows it here, with its own address bar. It runs in the
-      sandbox, not on your computer.
+      The Preview tab shows it here, with its own address bar. It runs on the
+      computer, not on your machine.
     </FeatureTip>
   )
 }

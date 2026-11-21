@@ -51,7 +51,7 @@ const kindHints: Record<ProviderKind, string> = {
   openai_api:
     "Pay per use with a key from platform.openai.com. Paste the key below; there is no sign-in.",
   openai_compatible:
-    "Any server that speaks the OpenAI API, with its URL and model, and a key if it takes one: a hosted service, or one on this computer or the local network.",
+    "Any server that speaks the OpenAI API, with its URL and model, and a key if it takes one: a hosted service, or one on this machine or the local network.",
   claude_subscription:
     "Use your Claude Pro or Max plan. You sign in with your Claude account in the browser; there is no key to paste.",
   chatgpt_subscription:
@@ -61,10 +61,10 @@ const kindHints: Record<ProviderKind, string> = {
 // The base URL's hint, by where its server is.
 const endpointHints: Record<EndpointPlace | "unknown", string> = {
   unknown:
-    "https:// for a hosted service; http:// for a server on this computer, such as http://localhost:11434/v1, or on the local network.",
+    "https:// for a hosted service; http:// for a server on this machine, such as http://localhost:11434/v1, or on the local network.",
   public: "A hosted service. The key is only sent there.",
   computer:
-    "A server on this computer. Saving opens its port to this environment's sandboxes; each connection still asks for approval until a rule allows it.",
+    "A server on this machine. Saving opens its port to this environment's computers; each connection still asks for approval until a rule allows it.",
   network:
     "A server on the local network. Saving adds it to the environment's local network list; each connection still asks for approval until a rule allows it.",
 }
@@ -233,7 +233,7 @@ function ProviderForm({
         </DialogTitle>
         <DialogDescription>
           How teammates reach a model. API keys and subscription logins are
-          stored as secrets, so sandboxes only ever see a placeholder.
+          stored as secrets, so computers only ever see a placeholder.
         </DialogDescription>
       </DialogHeader>
       <div className="grid items-start gap-4 sm:grid-cols-2">

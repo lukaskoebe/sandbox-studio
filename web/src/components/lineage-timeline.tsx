@@ -126,7 +126,7 @@ export function LineageTimeline({
         <div className="relative" style={{ width, height: CANVAS_H }}>
           <svg
             role="img"
-            aria-label="Sandbox history"
+            aria-label="Computer history"
             width={width}
             height={CANVAS_H}
             className="absolute inset-0 text-muted-foreground/40"
@@ -607,7 +607,7 @@ function restoreBlock(
   if (checkpoint.state === "deleting") return "This checkpoint is being deleted"
   if (!checkpoint.restoreAllowed)
     return "Restore is available once this checkpoint is ready"
-  if (status !== "stopped") return "Stop the sandbox first"
+  if (status !== "stopped") return "Stop the computer first"
   return undefined
 }
 
@@ -741,7 +741,7 @@ function RestoreCheckpointDialog({
     "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}/restore",
     {
       onSuccess: () => {
-        toast.success("Sandbox restored")
+        toast.success("Computer restored")
         onClose()
       },
       onSettled: () => refreshCheckpoints(queryClient),
@@ -763,7 +763,7 @@ function RestoreCheckpointDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Restore {checkpoint.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This replaces the sandbox&apos;s root filesystem, workspace, home
+            This replaces the computer&apos;s root filesystem, workspace, home
             directory, and Docker state with the saved checkpoint. Any work done
             since this checkpoint will be lost.
           </AlertDialogDescription>
@@ -833,8 +833,8 @@ function DeleteCheckpointDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {checkpoint.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently deletes this disk checkpoint. The sandbox itself is
-            not changed.
+            This permanently deletes this disk checkpoint. The computer itself
+            is not changed.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

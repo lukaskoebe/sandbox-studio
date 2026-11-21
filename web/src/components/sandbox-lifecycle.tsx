@@ -30,7 +30,7 @@ export function useSandboxLifecycle(env: string, sb: Sandbox) {
   const invalidate = useInvalidateSandboxes()
   const path = { params: { path: { env, id: sb.id } } }
   const onError = (what: string) => (err: unknown) =>
-    toast.error(`Could not ${what} the sandbox`, {
+    toast.error(`Could not ${what} the computer`, {
       description: errorMessage(err),
     })
   const start = $api.useMutation(
@@ -132,8 +132,8 @@ export function useWakeOnType(env: string, sandbox?: Sandbox) {
  */
 export function lostVM(sb: Sandbox) {
   return sb.repairable
-    ? "microsandbox lost the record of this sandbox's VM, so it can't start. Its disks are kept: Repair gives the VM a new record around them, unchanged, and starts it."
-    : "microsandbox lost the record of this sandbox's VM, and its disks aren't in microsandbox's home either, so it can't start."
+    ? "microsandbox lost the record of this computer's VM, so it can't start. Its disks are kept: Repair gives the VM a new record around them, unchanged, and starts it."
+    : "microsandbox lost the record of this computer's VM, and its disks aren't in microsandbox's home either, so it can't start."
 }
 
 /** Repair, for a sandbox whose VM microsandbox lost while its disks are kept. */

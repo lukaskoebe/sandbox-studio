@@ -116,7 +116,7 @@ test("rules group by registrable domain, and the filters live in the URL", async
   await expect(page).not.toHaveURL(/[?&]q=/)
 
   await page.getByRole("combobox", { name: "Scope" }).click()
-  await page.getByRole("option", { name: "Sandbox", exact: true }).click()
+  await page.getByRole("option", { name: "Computer", exact: true }).click()
   await expect(page).toHaveURL(/[?&]scope=sandbox/)
   await expect(host(rules.cdn)).toBeVisible()
   await expect(host(rules.api)).toBeHidden()

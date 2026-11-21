@@ -34,7 +34,7 @@ still change between releases.
 | Docker container | Namespaces and control groups of your computer's own kernel.[^docker-security] |
 | Docker Sandboxes | A microVM for each sandbox.[^ds-arch] |
 | agents-sandbox | A [microsandbox](https://github.com/superradcompany/microsandbox) microVM for each project and agent.[^as] |
-| Sandbox Studio | A microsandbox microVM for each sandbox, and one more for each teammate's browser. |
+| Sandbox Studio | A microsandbox microVM for each of its [computers](../sandboxes/), and one more for each teammate's browser. |
 
 ## Which of your files it sees
 
@@ -45,7 +45,7 @@ still change between releases.
 | Docker container | What you mount, usually the project, read-write. |
 | Docker Sandboxes | The workspace, read-write at the same path as on your computer; or the repository read-only with a private clone to work in; or nothing.[^ds-security] |
 | agents-sandbox | The project, read-write at `/workspace`. By default it also copies the agent's configuration in, which can hold credential files.[^as] |
-| Sandbox Studio | None is mounted: the workspace lives in the VM, and the agent clones repositories through Studio. If you add a folder of repositories as a forge, sandboxes can fetch from it, and a push into it waits for you. |
+| Sandbox Studio | None is mounted: the workspace lives in the VM, and the agent clones repositories through Studio. If you add a folder of repositories as a forge, the VMs can fetch from it, and a push into it waits for you. |
 
 ## Where its connections go
 
@@ -56,7 +56,7 @@ still change between releases.
 | Docker container | Anywhere: containers can connect out by default.[^docker-network] |
 | Docker Sandboxes | Through a proxy on your computer, denied unless a policy allows it. The default policy allows broad wildcards such as `*.googleapis.com`. UDP and ICMP are blocked.[^ds-security] |
 | agents-sandbox | Denied unless a profile or rule allows it.[^as] |
-| Sandbox Studio | Every TCP connection, Docker's included, goes through Studio's gateway. A [security level](../network/) decides what connects without asking: nothing, a curated list of development hosts, an AI reviewer's choice, or every public host. A host on your local network or your computer itself is never allowed by a level. A name is looked up outside only when the sandbox may already connect to it, so a lookup can't carry data out. The curated list allows reads only: a push or publish to GitHub, npm or Docker Hub asks. UDP and ICMP are blocked. |
+| Sandbox Studio | Every TCP connection, Docker's included, goes through Studio's gateway. A [security level](../network/) decides what connects without asking: nothing, a curated list of development hosts, an AI reviewer's choice, or every public host. A host on your local network or your computer itself is never allowed by a level. A name is looked up outside only when the VM may already connect to it, so a lookup can't carry data out. The curated list allows reads only: a push or publish to GitHub, npm or Docker Hub asks. UDP and ICMP are blocked. |
 
 ## Where your keys are
 
@@ -78,7 +78,7 @@ still change between releases.
 | Docker container | Sent with the credentials you pass in. |
 | Docker Sandboxes | Its documentation describes no review before a push.[^ds-faq] |
 | agents-sandbox | Its README describes no review before a push.[^as] |
-| Sandbox Studio | The sandbox holds no forge credentials. A push goes to Studio, you [read the diff](../git-review/), and Studio pushes upstream once you approve. Opening a pull request, and posting a review or a comment on one, wait for you too. |
+| Sandbox Studio | The VM holds no forge credentials. A push goes to Studio, you [read the diff](../git-review/), and Studio pushes upstream once you approve. Opening a pull request, and posting a review or a comment on one, wait for you too. |
 
 ## Browsing the web
 

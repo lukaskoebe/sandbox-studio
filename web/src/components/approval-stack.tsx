@@ -309,13 +309,7 @@ function ApprovalRow({
   else if (a.kind === "chat.permission" && a.chatPermission)
     actions = <PermissionRowActions approval={a} />
   else if (isNetworkApproval(a))
-    actions = (
-      <NetworkRowActions
-        approval={a}
-        envName={envName(a)}
-        gaveUp={connection && left === undefined}
-      />
-    )
+    actions = <NetworkRowActions approval={a} envName={envName(a)} />
   else if (isGitApproval(a) || a.kind === "memory.conflict")
     actions = (
       <Button size="sm" variant="outline" onClick={() => onReview(a)}>
@@ -381,6 +375,7 @@ function PermissionRowActions({ approval }: { approval: Approval }) {
       <Button
         size="sm"
         variant="outline"
+        title="Deny this request once"
         disabled={decide.isPending || !has("reject_once")}
         onClick={() => send("deny")}
       >
@@ -389,6 +384,7 @@ function PermissionRowActions({ approval }: { approval: Approval }) {
       </Button>
       <Button
         size="sm"
+        title="Allow this request once"
         disabled={decide.isPending || !has("allow_once")}
         onClick={() => send("allow")}
       >
@@ -406,11 +402,9 @@ function PermissionRowActions({ approval }: { approval: Approval }) {
 function NetworkRowActions({
   approval,
   envName,
-  gaveUp,
 }: {
   approval: Approval
   envName?: string
-  gaveUp: boolean
 }) {
   const decide = useDecideApproval()
   const d = initialDecision(approval)
@@ -449,7 +443,7 @@ function NetworkRowActions({
         onClick={() => send("allow")}
       >
         {busy("allow") && <Spinner />}
-        {gaveUp ? "Allow next time" : "Allow"}
+        Allow
       </Button>
     </>
   )
@@ -840,7 +834,7 @@ const noticeId = (sandboxId: string) => `connections-${sandboxId}`
 /** One sandbox's held connections as one notification, which replaces the one before it. */
 function notifyConnections(sandboxId: string, held: Approval[]) {
   const id = noticeId(sandboxId)
-  const title = `${approvalSource(held[0]) ?? "A sandbox"} is waiting on a connection`
+  const title = `${approvalSource(held[0]) ?? "A computer"} is waiting on a connection`
   const names = held.slice(0, noticeHosts).map(approvalHost).join(", ")
   const more = held.length - noticeHosts
   const body = more > 0 ? `${names} and ${more} more` : names

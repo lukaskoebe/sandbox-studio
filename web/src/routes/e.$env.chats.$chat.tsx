@@ -104,7 +104,7 @@ function ChatPage() {
           <EmptyHeader>
             <EmptyTitle>This chat was deleted</EmptyTitle>
             <EmptyDescription>
-              Its messages are gone; the work it did stays in the sandbox.
+              Its messages are gone; the work it did stays on the computer.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -152,7 +152,7 @@ function ChatPage() {
           <Button
             variant="ghost"
             size="sm"
-            title="The sandbox this chat works in"
+            title="The computer this chat works in"
             render={
               <Link
                 to="/e/$env/sandboxes/$id"
@@ -161,7 +161,7 @@ function ChatPage() {
             }
           >
             <CubeIcon />
-            <span className="max-sm:sr-only">Sandbox</span>
+            <span className="max-sm:sr-only">Computer</span>
             {sandbox.data && (
               <StatusDot {...phaseDot(phase(sandbox.data))} compact />
             )}
@@ -285,8 +285,8 @@ function DeleteChat({ env, chat }: { env: string; chat: Chat }) {
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {chatTitle(chat)}?</AlertDialogTitle>
           <AlertDialogDescription>
-            The conversation is gone for good. What the agent changed in the
-            sandbox stays.
+            The conversation is gone for good. What the agent changed on the
+            computer stays.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

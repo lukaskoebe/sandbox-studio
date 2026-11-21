@@ -143,7 +143,7 @@ function EnvironmentNameSection({ env }: { env: string }) {
     <SettingRow
       icon={PencilSimpleIcon}
       title="Name"
-      description="What the environment switcher calls this environment. Its sandboxes, teammates and links stay as they are."
+      description="What the environment switcher calls this environment. Its computers, teammates and links stay as they are."
       control={
         <form
           className="flex items-center gap-2"
@@ -325,7 +325,7 @@ function EnvironmentFilesSection({ env }: { env: string }) {
     <SettingRow
       icon={DownloadSimpleIcon}
       title="Environment file"
-      description="A file of this environment's providers, teammates, rules, secret names and template specs, without keys, secret values, sandboxes, memory or approvals. Read it before you share it: template setup and soul text are included."
+      description="A file of this environment's providers, teammates, rules, secret names and template specs, without keys, secret values, computers, memory or approvals. Read it before you share it: template setup and soul text are included."
       control={
         <>
           <Button
@@ -429,7 +429,7 @@ function ImportReport({
               <span className="text-muted-foreground">
                 {" "}
                 for {item.hosts?.join(", ")}
-                {item.teammate ? `, ${item.teammate}'s sandboxes` : ""}
+                {item.teammate ? `, ${item.teammate}'s computers` : ""}
               </span>
             </li>
           ))}
@@ -503,7 +503,7 @@ function NotificationsSection() {
               Tell me when a connection is held and Studio isn't in front
             </span>
             <span className="text-muted-foreground">
-              One notification per sandbox, gathered over a few seconds. Never
+              One notification per computer, gathered over a few seconds. Never
               while you are looking at Studio.
             </span>
           </span>
@@ -604,7 +604,7 @@ function TerminalShellSection() {
     <SettingRow
       icon={TerminalWindowIcon}
       title="Terminal shell"
-      description="The shell a new terminal starts in every sandbox. Terminals that are open keep theirs, agents run bash either way, and a sandbox whose image has no zsh starts bash."
+      description="The shell a new terminal starts in every computer. Terminals that are open keep theirs, agents run bash either way, and a computer whose image has no zsh starts bash."
       control={
         <ToggleGroup
           aria-label="Terminal shell"
@@ -656,10 +656,10 @@ function PreviewsSection() {
     <SettingRow
       icon={BroadcastIcon}
       title="Previews"
-      description="Open a sandbox's ports in a tab of this browser, from a sandbox's Previews menu, the Preview tab next to a chat and the links to ports in an agent's messages; the terminal UI shows their addresses. When this is off, all of these are hidden and the ports are only listed."
+      description="Open a computer's ports in a tab of this browser, from a computer's Previews menu, the Preview tab next to a chat and the links to ports in an agent's messages; the terminal UI shows their addresses. When this is off, all of these are hidden and the ports are only listed."
       control={
         <Switch
-          aria-label="Offer previews of sandbox ports"
+          aria-label="Offer previews of computer ports"
           checked={previews.enabled}
           disabled={!previews.loaded || previews.pending}
           onCheckedChange={previews.setEnabled}
@@ -730,10 +730,10 @@ function SSHSection() {
     <SettingRow
       icon={TerminalIcon}
       title="SSH access"
-      description="Reach each sandbox as <name>.studio from ssh, scp, rsync and editors that work over SSH, such as VS Code, Cursor, Zed and JetBrains Gateway. It adds one Include line at the top of your SSH config, for Studio's config with a host per sandbox and Studio's own key. Studio starts or resumes a sandbox you connect to."
+      description="Reach each computer as <name>.studio from ssh, scp, rsync and editors that work over SSH, such as VS Code, Cursor, Zed and JetBrains Gateway. It adds one Include line at the top of your SSH config, for Studio's config with a host per computer and Studio's own key. Studio starts or resumes a computer you connect to."
       control={
         <Switch
-          aria-label="Reach sandboxes over SSH"
+          aria-label="Reach computers over SSH"
           checked={!!st?.enabled}
           disabled={!st || set.isPending}
           onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}

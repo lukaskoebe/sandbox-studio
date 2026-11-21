@@ -116,7 +116,7 @@ export function WaitingChip({
               })}
             </ul>
             <p className="text-caption text-muted-foreground">
-              Each host gets a lasting rule for this sandbox.
+              Each host gets a lasting rule for this computer.
             </p>
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               <Button
@@ -125,7 +125,7 @@ export function WaitingChip({
                 onClick={() => void answer("allow", waiting, "allow", choice)}
               >
                 {working === "allow" && <Spinner className="size-3" />}
-                Allow all
+                Always allow all
               </Button>
               <Button
                 variant="outline"
@@ -134,7 +134,7 @@ export function WaitingChip({
                 onClick={() => void answer("deny", waiting, "deny", choice)}
               >
                 {working === "deny" && <Spinner className="size-3" />}
-                Deny all
+                Always deny all
               </Button>
               <Button
                 variant="ghost"

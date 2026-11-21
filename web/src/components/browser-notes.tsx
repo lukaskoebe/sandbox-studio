@@ -416,7 +416,7 @@ export function NotesBar({
         !chats.isPending &&
         !sandboxes.isPending && (
           <span className="text-muted-foreground">
-            {name} has no sandbox to chat in yet.
+            {name} has no computer to chat in yet.
           </span>
         )
       )}

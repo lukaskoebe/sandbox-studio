@@ -64,7 +64,7 @@ const conflictLabel: Record<string, string> = {
 /** The prompt that asks the scratch sandbox's teammate to resolve the conflicts. */
 function resolvePrompt(m: Merge) {
   return (
-    `This sandbox merges ${m.forkName} into ${m.sourceName}. Resolve the merge conflicts listed in ` +
+    `This computer merges ${m.forkName} into ${m.sourceName}. Resolve the merge conflicts listed in ` +
     `/workspace/.studio-merge/report.json. In a text file, edit the conflict markers away. Any other ` +
     `conflict has an artifact under /workspace/.studio-merge, named in the report: the fork's version, or ` +
     `a note that the fork deleted the file. Settle it, then delete the artifact. Run the tests, then tell me what you decided.`
@@ -146,7 +146,7 @@ function MergePage() {
                 </KindChip>
                 <h2 className="text-sm font-medium">
                   {m.forkName || "A deleted fork"} into{" "}
-                  {m.sourceName || "a deleted sandbox"}
+                  {m.sourceName || "a deleted computer"}
                 </h2>
                 <p className="text-muted-foreground">{mergeStateText(m)}</p>
               </div>
@@ -155,7 +155,7 @@ function MergePage() {
                 <p className="flex items-center gap-2 rounded-md border px-3 py-2.5">
                   <Spinner />
                   Forking {m.sourceName} into{" "}
-                  {m.scratchName || "a scratch sandbox"} and merging{" "}
+                  {m.scratchName || "a scratch computer"} and merging{" "}
                   {m.forkName}&apos;s changes there. This takes a few minutes.
                 </p>
               )}
@@ -281,7 +281,7 @@ function MergePage() {
               <AlertDialogDescription>
                 {confirm === "accept"
                   ? `Studio copies everything that changed in ${m.scratchName} into ${m.sourceName} and deletes ${m.scratchName}. This can't be undone: no checkpoint is taken. If ${m.sourceName} changed a file since the merge started, nothing is copied.`
-                  : `Deletes ${m.scratchName || "the scratch sandbox"} with what was resolved in it. ${m.sourceName} stays as it is.`}
+                  : `Deletes ${m.scratchName || "the scratch computer"} with what was resolved in it. ${m.sourceName} stays as it is.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

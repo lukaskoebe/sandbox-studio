@@ -82,7 +82,7 @@ function FolderBrowser({
       <DialogHeader>
         <DialogTitle>Choose a folder</DialogTitle>
         <DialogDescription>
-          Folders on this computer.{" "}
+          Folders on this machine.{" "}
           {repositories
             ? "Pick a repository, or the folder your repositories are in."
             : "Pick the one your repositories are in."}

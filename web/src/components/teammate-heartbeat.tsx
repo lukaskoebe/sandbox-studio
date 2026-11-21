@@ -99,8 +99,8 @@ export function TeammateHeartbeat({
       <SectionHeader title="Check-ins" icon={HeartbeatIcon} area="chat" />
       <p className="text-xs text-muted-foreground">
         When {teammate.name} has open tasks, Studio starts a chat turn for it in
-        its latest sandbox at these times, with the tasks to work on. A check-in
-        that can't run is logged in its Tasks tab.
+        its latest computer at these times, with the tasks to work on. A
+        check-in that can't run is logged in its Tasks tab.
       </p>
       <label className="flex items-center gap-2 text-xs">
         <Switch

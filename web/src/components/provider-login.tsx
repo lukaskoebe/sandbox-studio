@@ -534,7 +534,7 @@ function TokenFallback({
           </div>
           <FieldDescription>
             Run <span className="font-mono">claude setup-token</span> on your
-            computer and paste the token it prints at the end. It starts with{" "}
+            machine and paste the token it prints at the end. It starts with{" "}
             <span className="font-mono">sk-ant-oat</span>, and is sealed on
             arrival. This is not the code from the sign-in page.
           </FieldDescription>

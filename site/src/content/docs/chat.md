@@ -48,9 +48,9 @@ To see every step as its own card, as before, turn on **Show every step** in **S
 
 ## Approve steps
 
-When the agent wants to do something that needs your permission, a card appears in the chat: the step, such as **Run make test**, what it asks and for how long (**asks before running · 0:12**), what **Allow** would run, and **Allow**, **Deny**, and **Ignore**. The top bar shows **needs you** beside the thread's title meanwhile. The same request also shows on Home under **Needs you**, and as a card at the bottom right of Studio's other pages, so you can answer from any page.
+When the agent wants to do something that needs your permission, a card appears in the chat: the step, such as **Run make test**, what it asks and for how long (**asks before running · 0:12**), what **Allow once** would run, and **Allow once**, **Deny once**, and **Ignore**. The top bar shows **needs you** beside the thread's title meanwhile. The same request also shows on Home under **Needs you**, and as a card at the bottom right of Studio's other pages, so you can answer from any page.
 
-- **Don't ask again for this** appears when the agent offers to remember the decision.
+- **Don't ask again for this** appears when the agent offers to remember the decision; ticked, the buttons say **Always allow** and **Always deny**.
 - **Ignore** says no without an answer; the agent stops waiting.
 
 Network requests to hosts without a rule still go through [network approvals](../network/), as in a terminal session.

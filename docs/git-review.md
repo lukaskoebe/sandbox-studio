@@ -28,7 +28,7 @@ an API for pull requests.
   host, no credentials, query or fragment.
 - The **Add forge** dialog has two steps. The first takes a repository: its clone URL, HTTPS
   or SSH, its page in the browser, a forge's own address such as `https://codeberg.org`, or a
-  folder here, typed or picked with **Pick a folder on this computer…**. **Detect**
+  folder here, typed or picked with **Pick a folder on this machine…**. **Detect**
   (`POST …/forges/parse-url` with `detect`) reads it and asks a host Studio doesn't know
   which forge it runs. The second step says what Studio found (`git.example.org runs
   Forgejo`, the repository, whether pull requests work) and asks only for what is left: the
@@ -185,7 +185,7 @@ here, reviewed like any other push.
   marks the git repositories (a `.git`, or `HEAD` and `objects`), and gives its parent. It
   starts at the home directory, or at the folder the field names, and refuses the root, as
   a forge's folder does. Like every `/api` route it needs the owner's session. The dialog's
-  first step offers the same picker as **Pick a folder on this computer…**. A repository's
+  first step offers the same picker as **Pick a folder on this machine…**. A repository's
   path, picked or pasted (`~/git/app`), makes the folder it is in the forge, named `local`,
   path `app`; a folder with repositories in it (`~/git`) is the forge itself.
 - `https://git.studio.internal/<forge>/<path>.git` is `<folder>/<path>.git` (bare) or

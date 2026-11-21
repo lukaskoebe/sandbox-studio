@@ -475,7 +475,7 @@ const pushStates: Record<LeadPush["state"], string> = {
   pending: "waits for review",
   pushed: "pushed",
   failed: "failed",
-  rejected: "declined",
+  rejected: "rejected",
   superseded: "superseded",
 }
 

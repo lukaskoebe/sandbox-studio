@@ -101,7 +101,7 @@ function NetworkSettings() {
       title="Network"
       intro={
         <>
-          Sandboxes reach the internet only through Studio, and connections that
+          Computers reach the internet only through Studio, and connections that
           no rule allows wait for your approval. A teammate can have a level of
           its own in its settings.{" "}
           <a
@@ -229,7 +229,7 @@ function RulesTab() {
                     any: "Any scope",
                     environment: "Environment",
                     teammate: "Teammate",
-                    sandbox: "Sandbox",
+                    sandbox: "Computer",
                   }}
                   onChange={(v) =>
                     setFilter({ scope: ruleScopes.find((s) => s === v) })
@@ -362,7 +362,7 @@ function RulesTab() {
                                     }
                                   />
                                   {r.browserOnly && (
-                                    <RuleChip title="Covers what the browsers load, not the sandboxes' own connections">
+                                    <RuleChip title="Covers what the browsers load, not the computers' own connections">
                                       browser only
                                     </RuleChip>
                                   )}
@@ -640,7 +640,7 @@ function RuleScope({
           className="size-3.5 shrink-0 text-muted-foreground"
           aria-hidden
         />
-        <span className="truncate">{sandbox ?? "Other sandbox"}</span>
+        <span className="truncate">{sandbox ?? "Other computer"}</span>
       </span>
     )
   if (rule.teammateId)

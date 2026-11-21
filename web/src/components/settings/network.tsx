@@ -111,8 +111,8 @@ function LocalNetworkSection({ env }: { env: string }) {
         anchor="local-network"
         warning="Only list hosts you trust: approvals, rules and imported environment files never add them here."
       >
-        Sandboxes reach public addresses only. List the devices on your local
-        network or behind this computer's VPN that they may reach too, such as a
+        Computers reach public addresses only. List the devices on your local
+        network or behind this machine's VPN that they may reach too, such as a
         NAS at 192.168.178.20 or git.company.local. Each connection still needs
         a rule or an approval.
       </TrustNote>
@@ -129,7 +129,7 @@ function LocalNetworkSection({ env }: { env: string }) {
           </p>
         ) : hosts.length === 0 ? (
           <p className="px-3 py-2.5 text-muted-foreground">
-            Nothing listed. Sandboxes reach public addresses only.
+            Nothing listed. Computers reach public addresses only.
           </p>
         ) : (
           <ul className="divide-y" aria-label="Local network">
@@ -281,7 +281,7 @@ function LANNameHint({ host }: { host: string }) {
     : `${host.replaceAll(".", "-")}.lan.studio.internal`
   return (
     <span className="text-caption break-all text-muted-foreground">
-      Sandboxes connect to <span className="font-mono">{name}</span>
+      Computers connect to <span className="font-mono">{name}</span>
     </span>
   )
 }
@@ -321,16 +321,16 @@ function HostPortsSection({ env }: { env: string }) {
   return (
     <section className="grid gap-2">
       <SectionHeader
-        title="This computer"
+        title="This machine"
         icon={DesktopIcon}
         area="network"
         count={ports.length || undefined}
       />
       <TrustNote
-        anchor="this-computer"
-        warning="Only open the ports of services you trust sandboxes with."
+        anchor="this-machine"
+        warning="Only open the ports of services you trust computers with."
       >
-        Sandboxes never reach the computer Studio runs on. Open a port to let
+        Computers never reach the machine Studio runs on. Open a port to let
         them connect to a service here, such as SSH on 22 or a database, at{" "}
         <span className="font-mono">host.studio.internal</span>. Each connection
         still needs a rule or an approval, and Studio's own ports stay closed.
@@ -347,7 +347,7 @@ function HostPortsSection({ env }: { env: string }) {
           </p>
         ) : ports.length === 0 ? (
           <p className="px-3 py-2.5 text-muted-foreground">
-            No ports open. Sandboxes can't reach this computer.
+            No ports open. Computers can't reach this machine.
           </p>
         ) : (
           <ul className="divide-y" aria-label="Open ports">

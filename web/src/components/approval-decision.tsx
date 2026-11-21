@@ -67,14 +67,14 @@ function SSHForgeHint({ approval }: { approval: Approval }) {
           This is git over SSH. Studio has the forge{" "}
           <span className="text-foreground">{forge.name}</span> for {host}: the
           repository's <span className="font-mono">https://{host}/</span> URL
-          goes through Studio's git remote, with no key in the sandbox.
+          goes through Studio's git remote, with no key in the computer.
         </p>
       ) : (
         <>
           <p>
             This is git over SSH. With a forge for {host}, the repository's{" "}
             <span className="font-mono">https://{host}/</span> URL goes through
-            Studio's git remote instead, with no key in the sandbox.
+            Studio's git remote instead, with no key in the computer.
           </p>
           <div>
             <Button
@@ -300,12 +300,12 @@ export function ruleSummary({
         : "this browser"
       : reach === "browsers"
         ? `every browser in ${env}`
-        : `every browser and sandbox in ${env}`
+        : `every browser and computer in ${env}`
     : scope === "environment"
-      ? `every sandbox in ${env}`
+      ? `every computer in ${env}`
       : scope === "teammate" && owner
-        ? `${owner}'s sandboxes`
-        : (sandboxName ?? "this sandbox")
+        ? `${owner}'s computers`
+        : (sandboxName ?? "this computer")
   const rule = lifetime === "hour" ? "a rule for 1 hour" : "a lasting rule"
   return many
     ? `Each host gets ${rule} for ${who}.`
@@ -326,7 +326,7 @@ export function decisionLabel(
     case "once":
       return `${verb} once`
   }
-  return verb
+  return `Always ${verb.toLowerCase()}`
 }
 
 /** The scope choice of a network decision, as two toggles. */
@@ -367,19 +367,19 @@ export function ScopeToggle({
         <ToggleGroupItem
           value="teammate"
           size="sm"
-          title={`${owner}'s sandboxes`}
+          title={`${owner}'s computers`}
           className="min-w-0 flex-1 shrink"
         >
-          <span className="truncate">{owner}&apos;s sandboxes</span>
+          <span className="truncate">{owner}&apos;s computers</span>
         </ToggleGroupItem>
       )}
       <ToggleGroupItem
         value="sandbox"
         size="sm"
-        title={`Only ${sandboxName ?? "this sandbox"}`}
+        title={`Only ${sandboxName ?? "this computer"}`}
         className="min-w-0 flex-1 shrink"
       >
-        <span className="truncate">Only {sandboxName ?? "this sandbox"}</span>
+        <span className="truncate">Only {sandboxName ?? "this computer"}</span>
       </ToggleGroupItem>
     </ToggleGroup>
   )
@@ -429,9 +429,9 @@ export function ReachToggle({
     },
     {
       value: "everywhere",
-      label: "Browsers and sandboxes",
+      label: "Browsers and computers",
       title:
-        "The rule covers the browsers and the sandboxes' own connections too",
+        "The rule covers the browsers and the computers' own connections too",
     },
   ]
   return (
@@ -483,7 +483,7 @@ export function LifetimeToggle({
             value: "session" as const,
             label: "This session",
             title:
-              "Until the browser stops, without a rule; the sandboxes still ask",
+              "Until the browser stops, without a rule; the computers still ask",
           },
         ]
       : []),
@@ -782,7 +782,7 @@ export function ApprovalDecision({
             }
           >
             {busy("dismiss") && <Spinner className="size-3" />}
-            {gaveUp ? "Dismiss" : "Ignore"}
+            Ignore
           </TooltipTrigger>
           <TooltipContent>
             {gaveUp
@@ -829,9 +829,7 @@ export function ApprovalDecision({
           onClick={() => act("allow")}
         >
           {busy("allow") && <Spinner />}
-          {gaveUp && lifetime === "always"
-            ? "Allow next time"
-            : decisionLabel("allow", lifetime)}
+          {decisionLabel("allow", lifetime)}
         </Button>
       </div>
     </div>

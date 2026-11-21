@@ -118,7 +118,7 @@ export function ApprovalTip({
       when="first request"
       title="A request needs you"
     >
-      Nothing leaves a sandbox unless a rule or you allow it, and the request
+      Nothing leaves a computer unless a rule or you allow it, and the request
       waits while you decide. Allow lets it through; Options make your answer a
       rule, and Network lists the rules.
     </FeatureTip>

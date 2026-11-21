@@ -34,7 +34,7 @@ export const Route = createFileRoute("/e/$env/teammates/")({
 })
 
 const explanation =
-  "Teammates are the agents of an environment: a name, a role and a soul, the harness they run in, the provider and model they use, and the identity they commit under. Sandboxes can belong to a teammate, and network rules can be scoped to one."
+  "Teammates are the agents of an environment: a name, a role and a soul, the harness they run in, the provider and model they use, and the identity they commit under. Computers can belong to a teammate, and network rules can be scoped to one."
 
 function TeammatesPage() {
   const { env } = Route.useParams()

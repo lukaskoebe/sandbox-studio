@@ -79,7 +79,7 @@ export function CheckpointsSection({
     "post",
     "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}/restore",
     {
-      onSuccess: () => toast.success("Sandbox restored"),
+      onSuccess: () => toast.success("Computer restored"),
       onSettled: () => refresh(queryClient),
       onError: (err) =>
         toast.error("Could not restore checkpoint", {
@@ -95,7 +95,7 @@ export function CheckpointsSection({
   const hint = !sandbox.checkpointRestoreSupported
     ? "Restoring needs a newer runtime."
     : sandbox.status !== "stopped" && list.length > 0
-      ? "Stop the sandbox to restore one."
+      ? "Stop the computer to restore one."
       : undefined
 
   return (
@@ -115,7 +115,7 @@ export function CheckpointsSection({
             title={
               canSave
                 ? undefined
-                : "Save checkpoints while the sandbox is running or stopped"
+                : "Save checkpoints while the computer is running or stopped"
             }
             onClick={() => setSaving(true)}
           >
@@ -196,7 +196,7 @@ export function CheckpointsSection({
                           Restore {checkpoint.name}?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                          This replaces the sandbox&apos;s root filesystem,
+                          This replaces the computer&apos;s root filesystem,
                           workspace, home directory, and Docker state with the
                           saved checkpoint. Any work done since this checkpoint
                           will be lost.
@@ -248,7 +248,7 @@ export function CheckpointsSection({
                       </AlertDialogTitle>
                       <AlertDialogDescription>
                         This permanently deletes this disk checkpoint. The
-                        sandbox itself is not changed.
+                        computer itself is not changed.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -386,9 +386,9 @@ function CheckpointSchedule({
         <p className="text-muted-foreground">
           {choice === "tasks"
             ? "Taken when an agent finishes a task that changed files."
-            : "Taken while the sandbox runs, or once after it stopped."}{" "}
+            : "Taken while the computer runs, or once after it stopped."}{" "}
           Studio keeps the newest 3 and the last of each day for a week; the
-          ones you save stay. Each holds a copy of the sandbox&apos;s disks.
+          ones you save stay. Each holds a copy of the computer&apos;s disks.
         </p>
       )}
       {choice !== "0" && schedule.data?.note && (

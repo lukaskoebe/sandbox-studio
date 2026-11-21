@@ -104,7 +104,7 @@ export function FileRequestCard({
             The page asks for {request.multiple ? "files" : "a file"}
           </span>
           <span className="text-xs text-muted-foreground">
-            From this computer, to {name}&apos;s browser. {name} sees what the
+            From this device, to {name}&apos;s browser. {name} sees what the
             page shows of {request.multiple ? "them" : "it"}.
           </span>
         </span>

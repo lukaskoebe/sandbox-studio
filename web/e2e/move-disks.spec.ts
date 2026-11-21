@@ -74,7 +74,7 @@ test("disks in microsandbox's old layout are moved from Home after the person co
   const dialog = page.getByRole("dialog", {
     name: "Move disks to the new layout",
   })
-  const rows = dialog.getByRole("list", { name: "Sandboxes whose disks move" })
+  const rows = dialog.getByRole("list", { name: "Computers whose disks move" })
   await expect(
     rows.getByRole("listitem").filter({ hasText: running })
   ).toContainText("stops, then starts again")
@@ -91,7 +91,7 @@ test("disks in microsandbox's old layout are moved from Home after the person co
     .click()
   await move.click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByText("Moved the disks of 2 sandboxes")).toBeVisible()
+  await expect(page.getByText("Moved the disks of 2 computers")).toBeVisible()
   await expect(notice).toBeHidden()
 
   const after = await api.json<{ status: string; oldDiskLayout?: boolean }>(

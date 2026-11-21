@@ -196,8 +196,8 @@ export function ComputersPage({ env }: { env: string }) {
             <EmptyHeader>
               <EmptyTitle>No computers yet</EmptyTitle>
               <EmptyDescription>
-                A computer is a sandbox: a small VM where you or a teammate
-                work, with its own terminal, browser and files.
+                A computer is a small VM where you or a teammate work, with its
+                own terminal, browser and files.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>

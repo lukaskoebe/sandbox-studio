@@ -3,7 +3,7 @@ title: Developer guide
 description: Build Sandbox Studio from source and find the project’s implementation and release guides.
 ---
 
-Sandbox Studio is a Go application with an embedded web UI. The UI, API, gateway, sandbox manager, guest agent, and local catalog live in this repository.
+Sandbox Studio is a Go application with an embedded web UI. The UI, API, gateway, computer manager, guest agent, and local catalog live in this repository; the code calls a computer a sandbox.
 
 ## Requirements
 
@@ -33,7 +33,7 @@ For UI work, run `make agent` once, so the guest agents are there to embed, then
 A development build migrates the database of the data directory it opens, and the release you have installed then refuses it as being from a newer version of Studio. Don't point a development build at the data of the Studio you use: give it a `SANDBOX_STUDIO_HOME` of its own.
 :::
 
-For an isolated second instance, set a separate `SANDBOX_STUDIO_HOME` and `MSB_HOME`, and pass a different loopback `-addr`; without its own `MSB_HOME`, Studio refuses to start while another one uses microsandbox's home. The gateway and image registry use the next two ports. Keep that address stable for its data directory: existing sandbox configurations and template references store those ports.
+For an isolated second instance, set a separate `SANDBOX_STUDIO_HOME` and `MSB_HOME`, and pass a different loopback `-addr`; without its own `MSB_HOME`, Studio refuses to start while another one uses microsandbox's home. The gateway and image registry use the next two ports. Keep that address stable for its data directory: existing computers' configurations and template references store those ports.
 
 ## Where to look
 
@@ -47,7 +47,7 @@ For an isolated second instance, set a separate `SANDBOX_STUDIO_HOME` and `MSB_H
 | DNS, secrets and credentials | `internal/dnsproxy`, `internal/secrets`, `internal/credentials` |
 | Git review | `internal/gitreview` |
 | Memory | `internal/memory`, `internal/agentmem` |
-| Sandboxes and runtime | `internal/sandboxes`, `internal/runtime`, `images/base` |
+| Computers and runtime | `internal/sandboxes`, `internal/runtime`, `images/base` |
 | Browser broker | `internal/browser`, `images/browser` |
 | Web UI | `web/` |
 | Tests | `internal/e2e`, `web/e2e`, `web/e2e-live` |
@@ -58,7 +58,7 @@ Start with the [developer docs index](https://github.com/lukaskoebe/sandbox-stud
 
 ## Checks
 
-`make check` runs the formatters, linters and tests, and `make e2e` the browser tests against a Studio with fake sandboxes. After changing the API, `make api` regenerates `web/openapi.json` and the UI's types. [CONTRIBUTING.md](https://github.com/lukaskoebe/sandbox-studio/blob/main/CONTRIBUTING.md) lists the rest, such as the smoke workflow and the fuzz targets.
+`make check` runs the formatters, linters and tests, and `make e2e` the browser tests against a Studio with fake computers. After changing the API, `make api` regenerates `web/openapi.json` and the UI's types. [CONTRIBUTING.md](https://github.com/lukaskoebe/sandbox-studio/blob/main/CONTRIBUTING.md) lists the rest, such as the smoke workflow and the fuzz targets.
 
 ## Release process
 

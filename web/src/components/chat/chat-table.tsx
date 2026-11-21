@@ -37,7 +37,7 @@ export function ChatTable({
   const avatar = (id: string) =>
     teammates.data?.find((t) => t.id === id)?.avatar
   const sandbox = (id: string) =>
-    sandboxes.data?.find((s) => s.id === id)?.name ?? "removed sandbox"
+    sandboxes.data?.find((s) => s.id === id)?.name ?? "removed computer"
 
   return (
     <Table>
@@ -45,7 +45,7 @@ export function ChatTable({
         <TableRow>
           <TableHead>Chat</TableHead>
           {showTeammate && <TableHead>Teammate</TableHead>}
-          <TableHead>Sandbox</TableHead>
+          <TableHead>Computer</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="text-right">Last active</TableHead>
         </TableRow>

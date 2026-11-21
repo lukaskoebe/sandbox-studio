@@ -249,7 +249,7 @@ function BuildJobContents({
           </time>
         </div>
         <p className="text-xs/relaxed text-muted-foreground">
-          A ready template can start a new sandbox with fresh workspace and
+          A ready template can start a new computer with fresh workspace and
           Docker disks.
         </p>
         {job.status === "cancelled" && (
@@ -284,7 +284,7 @@ function BuildJobContents({
         <section className="border-b pb-4">
           <Button onClick={() => onCreate(readyTemplateId)}>
             <PlusIcon />
-            Create sandbox
+            Create computer
           </Button>
         </section>
       )}

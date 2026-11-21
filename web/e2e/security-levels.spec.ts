@@ -1,4 +1,4 @@
-import { expect, openApprovals, sandboxName, test } from "./fixtures"
+import { expect, sandboxName, test } from "./fixtures"
 
 test("the security level decides what no rule covers, and a curated entry can be switched off", async ({
   page,
@@ -11,13 +11,14 @@ test("the security level decides what no rule covers, and a curated entry can be
     page
       .getByRole("group", { name: "Security level" })
       .getByRole("radio", { name, exact: true })
-  // Held requests wait in the top bar's list; this checks one is there and closes the list.
+  // On the Network page, held requests wait under Needs you rather than in the top bar.
   const held = async (host: string) => {
-    const list = await openApprovals(page)
     await expect(
-      list.getByTestId("approval-card").filter({ hasText: host })
+      page
+        .getByRole("region", { name: "Needs you" })
+        .getByTestId("approval-card")
+        .filter({ hasText: host })
     ).toBeVisible()
-    await page.keyboard.press("Escape")
   }
 
   await page.goto(`/e/${env}/network`)

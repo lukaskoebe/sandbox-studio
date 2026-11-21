@@ -61,7 +61,10 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
   // Create the computer the way a user does, from the sidebar.
   const name = `live-${Math.random().toString(36).slice(2, 8)}`
   await page.goto(`/e/${env}`)
-  await page.getByRole("button", { name: "New computer" }).click()
+  await page
+    .locator("[data-sidebar=sidebar]")
+    .getByRole("button", { name: "New computer" })
+    .click()
   await page.getByRole("menuitem", { name: /^New computer/ }).click()
   const create = page.getByRole("dialog", { name: "New computer" })
   await create.getByLabel("Name", { exact: true }).fill(name)

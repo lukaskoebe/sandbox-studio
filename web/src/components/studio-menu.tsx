@@ -147,7 +147,7 @@ export function StudioMenu({ version }: { version?: string }) {
             Studio has stopped
           </h1>
           <p className="text-sm text-muted-foreground">
-            The sandboxes keep running. To start it again, run{" "}
+            The computers keep running. To start it again, run{" "}
             <Ident>studio</Ident> or <Ident>studio app</Ident>.
           </p>
         </div>
@@ -221,13 +221,13 @@ export function StudioMenu({ version }: { version?: string }) {
             <DialogDescription>
               {kind === "restart" ? (
                 <>
-                  Chats in the middle of a turn stop. The sandboxes keep
+                  Chats in the middle of a turn stop. The computers keep
                   running, and this page reconnects once Studio is back.
                 </>
               ) : (
                 <>
                   This page and every other one stop working until you start it
-                  again with <Ident>studio</Ident>. The sandboxes keep running.
+                  again with <Ident>studio</Ident>. The computers keep running.
                 </>
               )}
             </DialogDescription>

@@ -22,7 +22,7 @@ its sandboxes when an agent session starts and when the sandbox's guest connects
   - `https://` on a public name or address: a hosted service, reached like any public host.
   - `http://` on `localhost` or a loopback address: this computer. Sandboxes get the URL with
     `host.studio.internal` instead, and saving the provider opens its port
-    ([This computer](network.md#this-computer)).
+    ([This machine](network.md#this-machine)).
   - `http://` on a private (RFC 1918) or CGNAT address, or on a name outside the public
     suffix list such as `gpu.home.arpa` or `llm.lan`: the local network. Sandboxes get an
     address as its `lan.studio.internal` name, and saving adds the host with its port to the

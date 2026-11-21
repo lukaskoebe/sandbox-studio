@@ -45,7 +45,7 @@ import { harnessLabels, isSubscription, kindLabels } from "@/lib/teammates"
 import { formatAge } from "@/lib/utils"
 
 const explanation =
-  "Providers give teammates access to a model. An API key is stored as a secret bound to the provider's API host, so sandboxes see only its placeholder."
+  "Providers give teammates access to a model. An API key is stored as a secret bound to the provider's API host, so computers see only its placeholder."
 
 export function ProvidersSettings({ env }: { env: string }) {
   // The open dialog: an empty object adds a provider, an offer adds one from a login on this

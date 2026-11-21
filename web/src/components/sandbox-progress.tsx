@@ -31,7 +31,7 @@ type StepState = "done" | "running" | "failed" | "pending"
 
 /** What each step of a create, fork, rebase or disk resize is called on screen. */
 const stepLabels: Record<Step, string> = {
-  prepare: "Preparing the sandbox for the copy",
+  prepare: "Preparing the computer for the copy",
   pull: "Pulling the image",
   vm: "Starting the VM",
   copy: "Copying the files",
@@ -101,19 +101,19 @@ export function SandboxProgress({
           {failed ? <WarningIcon /> : <CubeIcon />}
         </EmptyMedia>
         <EmptyTitle>
-          {failed ? `${verb} the sandbox failed` : `${verb} the sandbox`}
+          {failed ? `${verb} the computer failed` : `${verb} the computer`}
         </EmptyTitle>
         <EmptyDescription>
           {failed
             ? rebase
               ? run.operation === "disks"
-                ? "The sandbox keeps its disks, in the state it was in."
-                : "The sandbox stays on its old template, in the state it was in."
-              : "Delete the sandbox to try again."
+                ? "The computer keeps its disks, in the state it was in."
+                : "The computer stays on its old template, in the state it was in."
+              : "Delete the computer to try again."
             : run?.queued
-              ? "Sandboxes copy one at a time, so this one waits for the copy before it. It keeps running meanwhile."
+              ? "Computers copy one at a time, so this one waits for the copy before it. It keeps running meanwhile."
               : rebase && (run.step === "pull" || run.step === "vm")
-                ? "The new VM is made first, and the sandbox stays as it is until the copy. This can take a few minutes."
+                ? "The new VM is made first, and the computer stays as it is until the copy. This can take a few minutes."
                 : "This can take a few minutes. The work keeps going in the background."}
         </EmptyDescription>
       </EmptyHeader>
@@ -133,7 +133,7 @@ export function SandboxProgress({
                   >
                     <StepIcon state={state} />
                     {state === "running" && run?.queued
-                      ? "Waiting for another sandbox's copy to finish"
+                      ? "Waiting for another computer's copy to finish"
                       : stepLabels[step]}
                   </div>
                   {state === "running" && step === "pull" && (
@@ -301,8 +301,8 @@ export function RebaseFailedAlert({
         </AlertTitle>
         <AlertDescription>
           {run.operation === "disks"
-            ? "The sandbox keeps its disks."
-            : "The sandbox stays on its old template."}{" "}
+            ? "The computer keeps its disks."
+            : "The computer stays on its old template."}{" "}
           {run.error || "No details were recorded."}
         </AlertDescription>
         <DismissRebaseButton env={env} sandbox={sb} />

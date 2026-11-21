@@ -75,7 +75,7 @@ export function PermissionDecision({
           onClick={() => send("deny")}
         >
           {busy("deny") && <Spinner />}
-          Deny
+          {remember && has("reject_always") ? "Always deny" : "Deny once"}
         </Button>
         <Button
           size="sm"
@@ -83,7 +83,7 @@ export function PermissionDecision({
           onClick={() => send("allow")}
         >
           {busy("allow") && <Spinner />}
-          Allow
+          {remember && has("allow_always") ? "Always allow" : "Allow once"}
         </Button>
       </div>
     </div>

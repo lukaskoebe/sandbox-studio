@@ -31,7 +31,7 @@ export const approvalScopes: Teammate["approvalScope"][] = [
 ]
 
 export const approvalScopeLabels: Record<Teammate["approvalScope"], string> = {
-  sandbox: "This sandbox",
+  sandbox: "This computer",
   teammate: "This teammate",
   environment: "The environment",
 }

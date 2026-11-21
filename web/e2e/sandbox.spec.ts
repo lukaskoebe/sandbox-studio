@@ -7,7 +7,10 @@ test("computer lifecycle: create, terminal, stop, start, delete", async ({
 }) => {
   const name = sandboxName("life")
   await page.goto(`/e/${env}`)
-  await page.getByRole("button", { name: "New computer" }).click()
+  await page
+    .locator("[data-sidebar=sidebar]")
+    .getByRole("button", { name: "New computer" })
+    .click()
   await page.getByRole("menuitem", { name: /^New computer/ }).click()
   const create = page.getByRole("dialog", { name: "New computer" })
   await create.getByLabel("Name", { exact: true }).fill(name)

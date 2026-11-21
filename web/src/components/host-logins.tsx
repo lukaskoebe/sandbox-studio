@@ -52,7 +52,7 @@ export function HostLoginOffers({
       !has("claude_subscription") && {
         key: "claude",
         title: "Claude Code",
-        text: "is set up on this computer. Use your Claude plan: Studio makes a token of its own, and this computer stays signed in.",
+        text: "is set up on this machine. Use your Claude plan: Studio makes a token of its own, and this machine stays signed in.",
         action: "Use Claude subscription",
         onClick: () => onUse({ kind: "claude_subscription", name: "Claude" }),
       },
@@ -60,24 +60,24 @@ export function HostLoginOffers({
       !has("chatgpt_subscription") && {
         key: "codex",
         title: "Codex",
-        text: "is signed in on this computer. Use your ChatGPT plan: Studio signs in on its own, and this computer stays signed in.",
+        text: "is signed in on this machine. Use your ChatGPT plan: Studio signs in on its own, and this machine stays signed in.",
         action: "Use ChatGPT subscription",
         onClick: () => onUse({ kind: "chatgpt_subscription", name: "ChatGPT" }),
       },
     found?.opencode && {
       key: "opencode",
       title: "opencode",
-      text: "has API keys on this computer. Studio can import them one by one; opencode keeps its own.",
+      text: "has API keys on this machine. Studio can import them one by one; opencode keeps its own.",
       action: "Import keys…",
       onClick: () => setImporting(true),
     },
   ].filter((r) => !!r)
   if (!rows.length) return null
   return (
-    <section aria-label="On this computer" className="grid gap-2">
+    <section aria-label="On this machine" className="grid gap-2">
       <h3 className="flex items-center gap-1.5 text-xs font-medium">
         <DesktopIcon className="size-3.5" />
-        On this computer
+        On this machine
       </h3>
       <ul className="divide-y rounded-md ring-1 ring-foreground/10">
         {rows.map((r) => (
@@ -121,10 +121,10 @@ export function HostCodexAccount() {
   if (!account?.email) return null
   return (
     <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
-      This computer's Codex is signed in as{" "}
+      This machine's Codex is signed in as{" "}
       <span className="font-medium text-foreground">{account.email}</span>
       {account.plan && <> ({account.plan})</>}. Studio doesn't copy that login:
-      it would sign this computer out. Add the provider and sign in once more
+      it would sign this machine out. Add the provider and sign in once more
       with the same account.
     </p>
   )
@@ -149,7 +149,7 @@ function OpencodeImportDialog({
         <DialogHeader>
           <DialogTitle>Import keys from opencode</DialogTitle>
           <DialogDescription>
-            Studio reads opencode's stored credentials on this computer. An API
+            Studio reads opencode's stored credentials on this machine. An API
             key you import is sealed in Studio's vault like a typed one;
             opencode keeps its own.
           </DialogDescription>

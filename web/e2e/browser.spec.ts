@@ -873,7 +873,7 @@ test("an agent's question shows on the page, and its step replays from the activ
   await expect(ask.getByText(/wants to click/)).toBeVisible()
   await expect(page.getByTitle(`${name} needs you`)).toBeVisible()
   await expect(page.getByTestId("approval-card")).toHaveCount(0)
-  await ask.getByRole("button", { name: "Allow", exact: true }).click()
+  await ask.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(ask).toBeHidden()
   // The held call goes on once allowed, and the click lands.
   await expect

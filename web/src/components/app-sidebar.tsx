@@ -311,7 +311,7 @@ export function AppSidebar({
                 <DropdownMenuItem onClick={() => setCreating(true)}>
                   <MenuText
                     title="New computer"
-                    hint="A sandbox of your own, without a teammate"
+                    hint="A computer of your own, without a teammate"
                   />
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setImporting(true)}>
@@ -890,7 +890,7 @@ function EnvironmentSwitcher({ env }: { env: string }) {
             <DialogHeader>
               <DialogTitle>New environment</DialogTitle>
               <DialogDescription>
-                Environments don't share sandboxes, network rules, secrets or
+                Environments don't share computers, network rules, secrets or
                 memory.
               </DialogDescription>
             </DialogHeader>

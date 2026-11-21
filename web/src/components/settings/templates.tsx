@@ -113,8 +113,8 @@ function BuildsWorkspace({ env }: { env: string }) {
         }
         intro={
           <>
-            Build reusable sandbox templates from YAML, then start fresh
-            sandboxes from ready templates.
+            Build reusable computer templates from YAML, then start fresh
+            computers from ready templates.
           </>
         }
       >
@@ -219,7 +219,7 @@ function BuildsWorkspace({ env }: { env: string }) {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      title="The template is built on an older base image. Build it again on the current one, then rebase its sandboxes onto the new version."
+                                      title="The template is built on an older base image. Build it again on the current one, then rebase its computers onto the new version."
                                       disabled={rebuild.isPending}
                                       onClick={() =>
                                         job.templateId &&

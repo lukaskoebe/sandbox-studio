@@ -105,7 +105,7 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
   )
   await expect(teammateSection.getByRole("row", { name: shared })).toBeVisible()
   await expect(
-    section(`Sandbox ${sbName}`).getByRole("row", { name: own })
+    section(`Computer ${sbName}`).getByRole("row", { name: own })
   ).toBeVisible()
 
   // The teammate's settings list its secrets, its sandbox's and the inherited ones.
@@ -121,7 +121,9 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
     rows.filter({ hasText: shared }).filter({ hasNotText: "Inherited" })
   ).toContainText("replaces the environment's")
   await expect(rows.filter({ hasText: plain })).toContainText("Inherited")
-  await expect(rows.filter({ hasText: own })).toContainText(`Sandbox ${sbName}`)
+  await expect(rows.filter({ hasText: own })).toContainText(
+    `Computer ${sbName}`
+  )
 
   // A secret added here is the teammate's.
   const added = `E2E_MINE_${suffix.toUpperCase()}`
@@ -267,8 +269,10 @@ test("an AWS access key gives a sandbox a profile, and its credentials are asked
     const card = approvals(page)
       .getByTestId("approval-card")
       .filter({ hasText: `asks for credentials from ${secret}` })
-    await expect(card.getByRole("button", { name: "Always" })).toBeVisible()
-    await card.getByRole("button", { name: "Deny" }).click()
+    await expect(
+      card.getByRole("button", { name: "Always allow", exact: true })
+    ).toBeVisible()
+    await card.getByRole("button", { name: "Deny once" }).click()
     await expect(card).toHaveCount(0)
     await expect
       .poll(

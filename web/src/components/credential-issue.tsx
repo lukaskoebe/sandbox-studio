@@ -40,7 +40,7 @@ export function CredentialIssueDecision({ approval }: { approval: Approval }) {
           disabled={decide.isPending}
           onClick={() => send("deny")}
         >
-          Deny
+          Deny once
         </Button>
         <Button
           variant="outline"
@@ -49,12 +49,14 @@ export function CredentialIssueDecision({ approval }: { approval: Approval }) {
           disabled={decide.isPending || !p}
           title={
             p?.teammateName
-              ? `Every sandbox of ${p.teammateName} gets them without asking`
-              : "This sandbox gets them without asking"
+              ? `Every computer of ${p.teammateName} gets them without asking`
+              : "This computer gets them without asking"
           }
           onClick={() => send("allow", true)}
         >
-          {p?.teammateName ? `Always for ${p.teammateName}` : "Always"}
+          {p?.teammateName
+            ? `Always allow for ${p.teammateName}`
+            : "Always allow"}
         </Button>
         <Button
           size="sm"

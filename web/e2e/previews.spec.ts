@@ -251,7 +251,7 @@ test("previews: the screen offers them once Settings turns them on", async ({
 
     await page.goto(`/e/${env}/settings/general`)
     const toggle = page.getByRole("switch", {
-      name: "Offer previews of sandbox ports",
+      name: "Offer previews of computer ports",
     })
     await expect(toggle).not.toBeChecked()
     await toggle.click()

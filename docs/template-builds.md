@@ -256,7 +256,7 @@ age-based lock expiry or automatic takeover of a possibly live worker.
 
 ## Create a sandbox from a ready template
 
-A ready build that has a template offers **Create sandbox** on its sheet (opened from
+A ready build that has a template offers **Create computer** on its sheet (opened from
 Settings → Templates) and on its page (`/e/$env/builds/$id`). The
 dialog loads that same-environment ready template, displays its resource sizes, and sends
 only a sandbox name. Resource limits are fixed by the template's canonical spec; the

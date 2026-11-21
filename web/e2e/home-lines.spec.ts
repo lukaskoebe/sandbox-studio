@@ -32,7 +32,7 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     path: "/workspace",
   })
 
-  const lines = page.getByRole("region", { name: "Sandboxes" })
+  const lines = page.getByRole("region", { name: "Computers" })
   // Other tests' sandboxes have a main terminal and a preview on :3000 too.
   const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(
@@ -216,7 +216,7 @@ test("a terminal stored under keys a second apart is one branch on home", async 
     })
   )
   await page.goto(`/e/${env}`)
-  const lines = page.getByRole("region", { name: "Sandboxes" })
+  const lines = page.getByRole("region", { name: "Computers" })
   await lines.getByRole("button", { name: "2h", exact: true }).click()
   const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(

@@ -36,12 +36,12 @@ Quote tool versions. The currently supported tools are `go`, `node`, `nix`, and 
 
 As you type, the editor highlights the YAML, suggests keys, tool names, and size units, and marks each problem at its line and column. These checks use the same parser as the build and create nothing.
 
-After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on **Settings → Templates**. A successful template is cached for later builds. **A ready build does not start a computer**; choose **Create sandbox** separately when you want to use it.
+After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on **Settings → Templates**. A successful template is cached for later builds. **A ready build does not start a computer**; choose **Create computer** separately when you want to use it.
 
 **Download YAML** saves the draft or the source submitted for a build. It does not export a built image, secrets, or a computer's disks.
 
 ## Create a computer from a template
 
-On **Settings → Templates**, open a ready build and choose **Create sandbox** on its sheet or its page. Studio boots a new computer using the template's root filesystem. The new computer has a fresh, empty `/workspace` and Docker disk, and a home directory seeded from the template; it does not inherit another computer's files or containers.
+On **Settings → Templates**, open a ready build and choose **Create computer** on its sheet or its page. Studio boots a new computer using the template's root filesystem. The new computer has a fresh, empty `/workspace` and Docker disk, and a home directory seeded from the template; it does not inherit another computer's files or containers.
 
 Template builds and ready templates belong to one environment. A ready template can also be used when rebasing a computer: choose **Rebase…** under **Maintenance** on its **Details** tab. Rebase carries over `/workspace`, the home folder and the tools from `mise use`, but drops terminal sessions, and Docker's data unless you ask to keep it. A template built on an older base image than this Studio's has **Rebuild on the current base**, which builds the same spec again as the template's next version. See [Computers](../sandboxes/#rebase-onto-a-newer-base).

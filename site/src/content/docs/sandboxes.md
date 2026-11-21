@@ -3,7 +3,7 @@ title: Computers, terminals, and previews
 description: Create a Linux computer for yourself or a teammate, keep work across sessions, and view a service running inside it.
 ---
 
-A computer is a sandbox: a Linux microVM with Docker, a persistent `/workspace`, and its own terminals. A teammate's computer is the one it works in, and **Your computers** in the sidebar are the ones without a teammate. **Computers** under **Environment** lists them all. Creating a computer boots it, and its name is also its hostname.
+A computer is a Linux microVM with Docker, a persistent `/workspace`, and its own terminals. A teammate's computer is the one it works in, and **Your computers** in the sidebar are the ones without a teammate. **Computers** under **Environment** lists them all. Creating a computer boots it, and its name is also its hostname.
 
 ## Create one
 
@@ -82,7 +82,7 @@ The power button stops a running computer and starts one that is off; a computer
 | **Export** | **Maintenance** | Saves a portable copy (see [Export a workspace](#export-a-workspace)). |
 | **Delete** | **⋯**, or **Maintenance** | Permanently removes the computer, its disks and its checkpoints. Export it first if you need a portable backup. |
 
-If microsandbox loses the record of a computer's VM, the screen says so and offers **Repair**, which gives the VM a new record around the disks it kept. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm).
+If microsandbox loses the record of a computer's VM, the screen says so and offers **Repair**, which gives the VM a new record around the disks it kept. See [Troubleshooting](../troubleshooting/#a-computer-says-microsandbox-lost-its-vm).
 
 A running computer takes a change of CPUs or memory right away, up or down, while it fits the room it started with: twice its memory, and its CPUs plus as many again (at most 4 more). The dialog says per resource whether a value applies now or needs a restart. A change past that room waits for the next start, and the **State** card shows it, such as *2 CPU · 4 GiB · 12 GiB after restart*. **Save and restart** applies all of it now; programs and terminal sessions end, files stay. A stopped or suspended computer takes any change at its next start.
 

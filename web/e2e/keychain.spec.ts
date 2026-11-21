@@ -19,7 +19,7 @@ test("Studio waits for a locked keychain, says so, and starts once it unlocks", 
     await expect(heading).toBeVisible()
     await expect(
       page.getByText(
-        /Unlock it, such as by logging in on this computer's desktop/
+        /Unlock it, such as by logging in on this machine's desktop/
       )
     ).toBeVisible()
     await expect(page.getByText(/not reachable \(e2e\)/)).toBeVisible()

@@ -294,9 +294,9 @@ test("a computer on an older base says so and rebases onto the current one", asy
   )
   // Rebase all lists where each goes, with the same choices as one rebase.
   await notice.getByRole("button", { name: "Rebase all…" }).click()
-  const all = page.getByRole("dialog", { name: /^Rebase \d+ sandbox/ })
+  const all = page.getByRole("dialog", { name: /^Rebase \d+ computer/ })
   const row = all
-    .getByRole("list", { name: "Sandboxes to rebase" })
+    .getByRole("list", { name: "Computers to rebase" })
     .getByRole("listitem")
     .filter({ hasText: name })
   await expect(row).toContainText("onto current base")
@@ -510,7 +510,10 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await expect(fork.getByRole("checkbox", { name: /on-fork/ })).toBeChecked()
   await page.keyboard.press("Escape")
 
-  await page.getByRole("button", { name: "New computer" }).click()
+  await page
+    .locator("[data-sidebar=sidebar]")
+    .getByRole("button", { name: "New computer" })
+    .click()
   await page.getByRole("menuitem", { name: /^New computer/ }).click()
   const create = page.getByRole("dialog", { name: "New computer" })
   await expect(create.getByLabel("Teammate")).toBeVisible()
@@ -550,7 +553,10 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await page.keyboard.press("Escape")
 
   // New computer leaves the choices to the base.
-  await page.getByRole("button", { name: "New computer" }).click()
+  await page
+    .locator("[data-sidebar=sidebar]")
+    .getByRole("button", { name: "New computer" })
+    .click()
   await page.getByRole("menuitem", { name: /^New computer/ }).click()
   await create.getByLabel("Name").fill(`${name}-task`)
   await create.getByLabel("Start from").click()
@@ -574,7 +580,10 @@ test("a computer becomes a base, and new computers and forks start from it", asy
   await expect(settings).toBeHidden()
   await expect(mark).toHaveCount(0)
 
-  await page.getByRole("button", { name: "New computer" }).click()
+  await page
+    .locator("[data-sidebar=sidebar]")
+    .getByRole("button", { name: "New computer" })
+    .click()
   await page.getByRole("menuitem", { name: /^New computer/ }).click()
   await expect(create.getByLabel("Name")).toBeVisible()
   await expect(create.getByLabel("Start from")).toHaveCount(0)

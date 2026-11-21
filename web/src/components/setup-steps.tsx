@@ -82,7 +82,7 @@ function NetworkLevelStep({ env }: { env: string }) {
   return (
     <Column>
       <Hint>
-        Sandboxes reach the internet through Studio. This sets how many hosts
+        Computers reach the internet through Studio. This sets how many hosts
         may connect without asking. Change it later in Network.
       </Hint>
       <SecurityLevelPicker
@@ -117,7 +117,7 @@ function ProviderStep({ env }: { env: string }) {
     <Column>
       <Hint>
         Teammates reach a model through a provider: an API key, or a
-        subscription login. Keys are sealed on arrival, and sandboxes only ever
+        subscription login. Keys are sealed on arrival, and computers only ever
         see a placeholder.
       </Hint>
       {list.length ? (
@@ -243,9 +243,9 @@ function GitStep({ env }: { env: string }) {
   return (
     <Column>
       <Hint>
-        Sandboxes fetch and push through Studio, which holds the credentials and
+        Computers fetch and push through Studio, which holds the credentials and
         keeps each push for your review. Without a forge, git stays local to the
-        sandbox.
+        computer.
       </Hint>
       {status && (
         <p className="text-xs">
@@ -312,7 +312,7 @@ function SandboxStep({ env }: { env: string }) {
       queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
     },
     onError: (err) =>
-      toast.error("Could not create the sandbox", {
+      toast.error("Could not create the computer", {
         description: errorMessage(err),
       }),
   })
@@ -353,7 +353,7 @@ function SandboxStep({ env }: { env: string }) {
                 />
               }
             >
-              Open sandbox
+              Open computer
             </Button>
           </div>
         )}
@@ -397,7 +397,9 @@ function SandboxStep({ env }: { env: string }) {
             Lowercase letters, digits and dashes; up to 40 characters.
           </FieldError>
         ) : (
-          <FieldDescription>Also the sandbox&apos;s hostname.</FieldDescription>
+          <FieldDescription>
+            Also the computer&apos;s hostname.
+          </FieldDescription>
         )}
       </Field>
       <RepositoryChecklist
@@ -413,7 +415,7 @@ function SandboxStep({ env }: { env: string }) {
           disabled={!name || invalid || create.isPending}
         >
           {create.isPending && <Spinner />}
-          Create sandbox
+          Create computer
         </Button>
       </div>
     </form>

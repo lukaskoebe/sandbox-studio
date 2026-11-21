@@ -198,7 +198,7 @@ export function DeleteSecret({ env, secret }: { env: string; secret: Secret }) {
             {secret.browserOnly
               ? "The browser no longer fills it in or sends it to the sites that ask for it."
               : secret.kind
-                ? "Sandboxes get no more credentials made from it."
+                ? "Computers get no more credentials made from it."
                 : "Requests that use its placeholder will fail until you add it again."}
           </AlertDialogDescription>
         </AlertDialogHeader>

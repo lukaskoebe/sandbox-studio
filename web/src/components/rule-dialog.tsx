@@ -213,7 +213,7 @@ function RuleForm({
   const onSaved = (saved: Rule) => {
     // The rule is saved either way; it just never applies (an address of this computer, say).
     if (saved.unreachable)
-      toast.warning("No sandbox can reach this rule", {
+      toast.warning("No computer can reach this rule", {
         description: saved.unreachable,
         duration: 12_000,
       })
@@ -307,7 +307,7 @@ function RuleForm({
         <DialogTitle>{rule ? "Edit rule" : "Add rule"}</DialogTitle>
         <DialogDescription>
           Allow or deny a host, proxy its requests to set headers, or handle
-          them with a Caddyfile. An environment rule covers every sandbox.{" "}
+          them with a Caddyfile. An environment rule covers every computer.{" "}
           <a
             href="https://lukaskoebe.github.io/sandbox-studio/network/"
             target="_blank"
@@ -428,7 +428,7 @@ function RuleForm({
               <Input
                 id="rule-host-header"
                 autoComplete="off"
-                placeholder="The host the sandbox asked for"
+                placeholder="The host the computer asked for"
                 value={hostHeader}
                 onChange={(e) => {
                   setHostHeader(e.target.value)
@@ -523,7 +523,7 @@ function RuleForm({
         </Select>
         {teammateList.length > 0 && (
           <FieldDescription>
-            A teammate rule covers every sandbox the teammate owns.
+            A teammate rule covers every computer the teammate owns.
           </FieldDescription>
         )}
       </Field>
@@ -539,7 +539,7 @@ function RuleForm({
           Only in the browser
         </label>
         <FieldDescription>
-          Covers what the browsers load, not the sandboxes&apos; own
+          Covers what the browsers load, not the computers&apos; own
           connections.
         </FieldDescription>
       </Field>
@@ -763,7 +763,7 @@ function HeadersField({
         <FieldError>{error}</FieldError>
       ) : (
         <FieldDescription>
-          Set on every request, replacing the sandbox's own.{" "}
+          Set on every request, replacing the computer's own.{" "}
           <code>{"{secret.NAME}"}</code> is replaced by the secret's value, but
           only for hosts the secret is bound to.
         </FieldDescription>

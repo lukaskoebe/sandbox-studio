@@ -1448,7 +1448,7 @@ function WaitingRow({
   const group = card.kind === "group" ? card.approvals : undefined
   const site = group && groupSite(group)
   const title = group
-    ? `${site ?? approvalSource(a) ?? "A sandbox"} wants ${group.length} hosts`
+    ? `${site ?? approvalSource(a) ?? "A computer"} wants ${group.length} hosts`
     : kind.summary(a)
   const details = [
     kind.title,

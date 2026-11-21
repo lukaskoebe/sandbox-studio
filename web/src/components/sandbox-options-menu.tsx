@@ -41,7 +41,7 @@ export function DeleteSandboxDialog({
         navigate({ to: "/e/$env", params: { env } })
       },
       onError: (err) =>
-        toast.error("Could not delete the sandbox", {
+        toast.error("Could not delete the computer", {
           description: errorMessage(err),
         }),
     }

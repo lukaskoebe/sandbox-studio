@@ -132,7 +132,8 @@ function UndoTurn({
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            The files in the sandbox go back to how they were before “{prompt}”.
+            The files on the computer go back to how they were before “{prompt}
+            ”.
             {later > 0 &&
               ` Everything changed after it is undone as well: ${
                 later === 1

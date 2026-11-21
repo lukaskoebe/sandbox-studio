@@ -17,9 +17,9 @@ If creating a computer or signing in says that `ghcr.io` refused the login saved
 
 Studio's console window must stay open: closing it stops Studio. Studio turns off the console's selection mode (QuickEdit), which used to freeze it after a click in the window. A page that lost Studio connects again by itself once Studio runs. The log is `%LOCALAPPDATA%\Sandbox Studio\logs\studio.log`.
 
-## A sandbox says microsandbox lost its VM
+## A computer says microsandbox lost its VM
 
-microsandbox keeps its list of sandboxes in its own database, `~/.microsandbox/db/msb.db`. When Studio starts and finds that database damaged, it moves it aside as `msb.db.broken-<time>`, keeping it, and rebuilds it from the rows it can still read, even when the file's first page, which SQLite needs to read it at all, is lost ("file is not a database"). If it could read none, microsandbox starts with an empty list, and the computers it lost can't start, although their disks are kept. Each one's screen says so and offers **Repair**, which gives the VM a new record around the disks it kept, and `studio doctor`'s **Sandbox VMs** check names them. Studio also keeps backups of the database, as `msb.db.backup-<time>`.
+microsandbox keeps the record of each computer's VM in its own database, `~/.microsandbox/db/msb.db`. When Studio starts and finds that database damaged, it moves it aside as `msb.db.broken-<time>`, keeping it, and rebuilds it from the rows it can still read, even when the file's first page, which SQLite needs to read it at all, is lost ("file is not a database"). If it could read none, microsandbox starts with an empty list, and the computers it lost can't start, although their disks are kept. Each one's screen says so and offers **Repair**, which gives the VM a new record around the disks it kept, and `studio doctor`'s **Sandbox VMs** check names them. Studio also keeps backups of the database, as `msb.db.backup-<time>`.
 
 Studio doesn't repair the database while another process has it open, such as a computer's VM that kept running after Studio quit, or a second Studio: moving it aside under them damages the new one. Settings and `studio doctor` then name those processes; stop them, for example with `kill <pid>`, and start Studio again. Only one Studio runs on a microsandbox home: a second one, even with its own data directory, stops with an error. Give it a home of its own with `MSB_HOME`. Keep `~/.microsandbox/db` out of sync and backup tools that replace files while they are open.
 
@@ -29,7 +29,7 @@ To get the lost records back instead, quit Studio and run:
 studio restore-msb-db
 ```
 
-It looks at every copy kept next to the database: the broken ones, including one an earlier Studio couldn't read, the ones it replaced before, and Studio's backups. It counts how many of the computers Studio expects each one knows, and restores the one that knows the most, the newer on a tie. If none knows more than the database in place, it keeps that one and says so. The one in place is moved aside as `msb.db.replaced-<time>`. If it knows sandboxes, the command names them and stops; run it with `-replace` to restore anyway. Afterwards it names the computers still missing: start Studio and choose **Repair** on each. To restore from an older file, name it: `studio restore-msb-db ~/.microsandbox/db/msb.db.broken-20261022T072947Z`.
+It looks at every copy kept next to the database: the broken ones, including one an earlier Studio couldn't read, the ones it replaced before, and Studio's backups. It counts how many of the computers Studio expects each one knows, and restores the one that knows the most, the newer on a tie. If none knows more than the database in place, it keeps that one and says so. The one in place is moved aside as `msb.db.replaced-<time>`. If it knows computers, the command names them and stops; run it with `-replace` to restore anyway. Afterwards it names the computers still missing: start Studio and choose **Repair** on each. To restore from an older file, name it: `studio restore-msb-db ~/.microsandbox/db/msb.db.broken-20261022T072947Z`.
 
 ## An agent cannot start
 
@@ -46,7 +46,7 @@ Answer the request: on the computer's screen, **1 request needs you** opens it; 
 
 ## A computer cannot reach this machine or a host on the local network
 
-Computers reach public addresses only, so `localhost`, the Studio machine's own addresses, a NAS or a host behind a VPN fail by default, and a rule alone does not open them: **Network** marks such a rule with the reason. Open the port under **This computer** on **Settings → Ports and LAN** and connect to `host.studio.internal`, or add the host under **Local network**. See [Network rules](../network/#this-computer).
+Computers reach public addresses only, so `localhost`, the Studio machine's own addresses, a NAS or a host behind a VPN fail by default, and a rule alone does not open them: **Network** marks such a rule with the reason. Open the port under **This machine** on **Settings → Ports and LAN** and connect to `host.studio.internal`, or add the host under **Local network**. See [Network rules](../network/#this-machine).
 
 ## A page says "Is Studio older than this page?"
 
@@ -82,7 +82,7 @@ When a computer's disk is nearly full, the strip above its screen or chat says s
 
 ## Studio asks you to unlock your keychain
 
-Studio keeps the key to your secrets in the OS keychain. On Linux the keychain usually unlocks when you log in on the desktop, so after a restart of the computer with only SSH logins it stays locked. Studio then waits instead of starting, and its page says **Unlock your keychain**. Log in on the computer's desktop, or unlock the keychain another way, and Studio starts by itself; the page goes on with your session. **Retry** asks the keychain again at most every 15 seconds, which may show its password prompt on the desktop, and five times in all while it stays locked; after that, unlock it on the desktop. A Studio that waits like this right after an update isn't undone for waiting: the 15 minutes an update has to start count from when the keychain unlocks.
+Studio keeps the key to your secrets in the OS keychain. On Linux the keychain usually unlocks when you log in on the desktop, so after a restart of the machine with only SSH logins it stays locked. Studio then waits instead of starting, and its page says **Unlock your keychain**. Log in on the machine's desktop, or unlock the keychain another way, and Studio starts by itself; the page goes on with your session. **Retry** asks the keychain again at most every 15 seconds, which may show its password prompt on the desktop, and five times in all while it stays locked; after that, unlock it on the desktop. A Studio that waits like this right after an update isn't undone for waiting: the 15 minutes an update has to start count from when the keychain unlocks.
 
 ## Move the data directory
 

@@ -42,7 +42,7 @@ function ChatsPage() {
         viewportClassName="flex flex-col gap-4 p-4"
       >
         <p className="max-w-3xl text-xs/relaxed text-muted-foreground">
-          Talk to a teammate about the work in one of its sandboxes; it asks you
+          Talk to a teammate about the work on one of its computers; it asks you
           before anything risky.{" "}
           <a
             href="https://lukaskoebe.github.io/sandbox-studio/chat/"

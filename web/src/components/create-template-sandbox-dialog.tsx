@@ -97,10 +97,10 @@ export function CreateTemplateSandboxDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>New sandbox from template</DialogTitle>
+            <DialogTitle>New computer from template</DialogTitle>
             <DialogDescription>
               Start with the template image and resources. The workspace and
-              Docker disks are fresh and contain no data from earlier sandboxes.
+              Docker disks are fresh and contain no data from earlier computers.
             </DialogDescription>
           </DialogHeader>
 
@@ -153,7 +153,7 @@ export function CreateTemplateSandboxDialog({
                   </FieldError>
                 ) : (
                   <FieldDescription>
-                    Also the sandbox&apos;s hostname.
+                    Also the computer&apos;s hostname.
                   </FieldDescription>
                 )}
               </Field>
@@ -169,7 +169,7 @@ export function CreateTemplateSandboxDialog({
               />
               {serverError && (
                 <p role="alert" className="text-destructive">
-                  Could not create the sandbox: {serverError}
+                  Could not create the computer: {serverError}
                 </p>
               )}
             </>
@@ -195,7 +195,7 @@ export function CreateTemplateSandboxDialog({
               }
             >
               {pending && <Spinner />}
-              Create sandbox
+              Create computer
             </Button>
           </DialogFooter>
         </form>

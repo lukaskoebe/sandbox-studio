@@ -177,7 +177,7 @@ export function SaveLoginCard({
           </p>
           <p className="text-muted-foreground">
             Studio keeps it in the vault and fills it in only here, in {name}'s
-            browser; no sandbox sees it. Copy it from the site info when you
+            browser; no computer sees it. Copy it from the site info when you
             need it.
           </p>
         </div>

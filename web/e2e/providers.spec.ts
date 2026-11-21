@@ -118,7 +118,7 @@ test("a server on this computer or the local network needs no key and opens the 
       .getByRole("option", { name: "OpenAI-compatible endpoint" })
       .click()
     await dialog.getByLabel("Base URL").fill("http://localhost:4532/v1")
-    await expect(dialog.getByText(/A server on this computer/)).toBeVisible()
+    await expect(dialog.getByText(/A server on this machine/)).toBeVisible()
     await expect(dialog.getByLabel("API key (optional)")).toHaveValue("")
     await dialog.getByLabel("Model", { exact: true }).fill("qwen3-coder")
     await dialog.getByRole("button", { name: "Add provider" }).click()
@@ -206,7 +206,7 @@ test("logins on this computer become providers without copying a sign-in", async
   )
   try {
     await page.goto(`/e/${env}/settings/providers`)
-    const offers = page.getByRole("region", { name: "On this computer" })
+    const offers = page.getByRole("region", { name: "On this machine" })
     await expect(offers.getByText("Codex", { exact: true })).toBeVisible()
 
     // ChatGPT: the dialog names the computer's account, and Studio signs in on its own.

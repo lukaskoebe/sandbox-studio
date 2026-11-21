@@ -385,7 +385,7 @@ function MentionChip({ mention }: { mention: Mention }) {
         to="/e/$env/sandboxes/$id"
         params={{ env: sandbox.env, id: sandbox.sandboxId }}
         search={{ tab: "files", file: mention.path }}
-        title={`${title}\nOpens in the sandbox's Files`}
+        title={`${title}\nOpens in the computer's Files`}
         className={className}
       >
         {body}
