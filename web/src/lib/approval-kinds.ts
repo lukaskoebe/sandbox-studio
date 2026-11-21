@@ -39,7 +39,7 @@ export type ApprovalKind = {
 
 /**
  * Whether an approval is a network request: a connection (network) or a request on a connection
- * the gateway terminates (network.request). Both show on the Network page and the stack.
+ * the gateway terminates (network.request). Both wait on Home and on the Network page.
  */
 export function isNetworkApproval(a: Approval): boolean {
   return a.kind === "network" || a.kind === "network.request"

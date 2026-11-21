@@ -1,6 +1,7 @@
 import { useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
+import { ThreadDot } from "@/components/thread-status"
 import { toast } from "sonner"
 import {
   BrainIcon,
@@ -260,7 +261,7 @@ function FullHome({
       node: (
         <ThreadCard
           chat={chat}
-          asks={chatApprovals(chat, waiting, chats)}
+          asks={chatApprovals(chat, waiting)}
           turns={turns.get(chat.id) ?? []}
           computer={
             computers.length > 1
@@ -543,7 +544,7 @@ function NowCard({
         <>
           <h2 className="flex items-center gap-2.5 text-sm font-medium">
             <PresenceDot presence="waiting" />
-            Waiting for you · {waiting.length}
+            Needs you · {waiting.length}
           </h2>
           <Waiting env={env} approvals={waiting} onReview={onReview} inCard />
         </>
@@ -593,41 +594,6 @@ function NowRow({
         Open
       </Button>
     </div>
-  )
-}
-
-/** A thread's state as a dot, the way the sidebar and the desk list threads. */
-export function ThreadDot({
-  status,
-  className,
-}: {
-  status: ThreadStatus
-  className?: string
-}) {
-  if (status === "terminal")
-    return (
-      <span
-        aria-hidden
-        className={cn(
-          "shrink-0 font-mono text-meta leading-none font-semibold text-muted-foreground",
-          className
-        )}
-      >
-        &gt;_
-      </span>
-    )
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "size-2 shrink-0 rounded-full",
-        status === "working" && "animate-pulse bg-(--st-running)",
-        status === "waiting" && "bg-(--st-waiting)",
-        (status === "done" || status === "ended") &&
-          "ring-1 ring-muted-foreground/60 ring-inset",
-        className
-      )}
-    />
   )
 }
 
@@ -863,8 +829,7 @@ function DeskHome({
   const sorted = [...chats].sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt)
   )
-  const status = (c: Chat) =>
-    chatStatus(c, chatApprovals(c, asks, chats).length)
+  const status = (c: Chat) => chatStatus(c, chatApprovals(c, asks).length)
   const live = sorted.filter(
     (c) => status(c) !== "done" && status(c) !== "ended"
   )
@@ -1417,13 +1382,13 @@ function Waiting({
     })
   return (
     <section
-      aria-label="Waiting for you"
+      aria-label="Needs you"
       className={cn("grid gap-2", !inCard && "pt-3")}
     >
       {!inCard && (
         <span className="flex items-center gap-2 section-label text-(--st-waiting)">
           <span className="size-1.5 rounded-full bg-(--st-waiting)" />
-          Waiting for you
+          Needs you
         </span>
       )}
       {cards.map((card) => {

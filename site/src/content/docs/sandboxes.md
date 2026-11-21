@@ -24,7 +24,7 @@ You can also start from a ready template under **Settings → Templates**. A tem
 
 On a teammate's page, its home is on the left: what waits for you, its threads, and its computers. Open one of its computers and it shows on the right, beside the home; open a thread and the chat takes the home's place. Drag the line between the two sides, or fold either one. A computer without a teammate, under **Your computers**, has the page to itself. **on my-app** at the top of the page switches between the teammate's computers and lists each fork under the computer it came from.
 
-The screen's tabs are **Terminal**, **Browser** (the teammate's own [browser](../browser/)), **Preview** while [previews](#open-a-preview) are on, **Files**, **Changes** and **Details**. A dot on a tab marks something there that waits for you, and **1 request waiting** at the edge of the screen opens the [network requests](../network/) the computer holds. Beside the tabs are the power button, which stops or starts the computer, and the **⋯** menu. On a teammate's page, the layout switch at the right of the top bar folds the screen, shows it beside the conversation, or gives it the page.
+The screen's tabs are **Terminal**, **Browser** (the teammate's own [browser](../browser/)), **Preview** while [previews](#open-a-preview) are on, **Files**, **Changes** and **Details**. A dot on a tab marks something there that waits for you, and **1 request needs you** at the edge of the screen opens the [network requests](../network/) the computer holds. Beside the tabs are the power button, which stops or starts the computer, and the **⋯** menu. On a teammate's page, the layout switch at the right of the top bar folds the screen, shows it beside the conversation, or gives it the page.
 
 ### Terminals
 
@@ -48,7 +48,7 @@ To copy files into the computer, drop them on the folder shown, or choose **Uplo
 
 **Changes** lists what changed beside the change you pick:
 
-- **Waiting for you**: pushes that wait for your [review](../git-review/).
+- **Needs you**: pushes that wait for your [review](../git-review/).
 - **Pushed**: the last day's pushes, with their pull request, its checks and its comments.
 - **Repositories**: each repository's branch, with the files that are staged, not staged and untracked.
 - **This thread**: the files each request of the open thread created, changed or deleted, which you can [undo](../chat/#undo-a-change).

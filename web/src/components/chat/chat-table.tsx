@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router"
-import { ChatStateBadge } from "@/components/chat/chat-items"
+import { ChatStatusChip } from "@/components/thread-status"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -99,7 +99,7 @@ export function ChatTable({
               {sandbox(c.sandboxId)}
             </TableCell>
             <TableCell>
-              <ChatStateBadge chat={c} />
+              <ChatStatusChip chat={c} />
             </TableCell>
             <TableCell className="text-right text-muted-foreground">
               {formatAge(c.updatedAt)}

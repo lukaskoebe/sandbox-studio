@@ -13,7 +13,7 @@ Studio can recall relevant notes when a supported agent session starts or when y
 
 Open **Memory** under **Environment** in the sidebar for shared memory, which every teammate sees. Each teammate also keeps private memory: in its settings, under **Knowledge → Memory**, choose **Open Iris's memory**, or search for *Iris's memory* with ⌘K. Both show an index on the left and what you pick in it on the right, and the address names what is open, so a link opens it again:
 
-- **Needs you**: conflicts to resolve, suggestions to accept or dismiss, and loose ends: pages that are linked but don't exist yet, pages nothing links to, and topics with several facts but no page. **Create page** starts the missing page.
+- **To review**: conflicts to resolve, suggestions to accept or dismiss, and loose ends: pages that are linked but don't exist yet, pages nothing links to, and topics with several facts but no page. **Create page** starts the missing page.
 - **This week**: pages updated and facts learned.
 - **Sessions**: what memory gave each agent session and what it learned.
 - **Pages**, by kind, and **Facts on no page**, by kind. A pin marks a core page, which loads into every session. Click a page to open it; the **⋯** on a row edits, promotes, retracts or deletes, and a page's **⋯** makes it a core page or stops loading it everywhere.
@@ -24,7 +24,7 @@ Under **Knowledge → Memory** in a teammate's settings, **Learn from its chats*
 
 - Teammate facts and pages are visible in that teammate's scope.
 - A teammate can propose a fact for shared memory. The proposal waits on Home under **Needs you**; it becomes shared only after you approve it.
-- If facts disagree, Studio records a conflict for you to resolve, on Home and with **Resolve…** under **Needs you**. Ignoring its card does not resolve the conflict.
+- If facts disagree, Studio records a conflict for you to resolve, on Home and with **Resolve…** under **To review**. Ignoring its card does not resolve the conflict.
 - A fact can hold only in a **Context**, such as one project. Search then finds it only for questions that name that context.
 - **Suggestions** list what Studio's consolidation proposes but never applies on its own: **Promote** proposes a teammate fact that keeps coming back for shared memory, and **Make core** makes a page that sessions often need a core page. **Dismiss** drops a suggestion for good.
 - The **Memory** page shows **Quality** numbers: facts by status, conflicts, open suggestions, the last consolidation, and what the last week's sessions recalled and wrote.

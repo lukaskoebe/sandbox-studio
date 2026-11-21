@@ -80,7 +80,7 @@ export function BrowsingCard({
           <span className="text-muted-foreground">
             {" "}
             · {steps.length} {steps.length === 1 ? "step" : "steps"}
-            {waiting && " · waiting for you below"}
+            {waiting && " · needs you below"}
           </span>
         </span>
         {!watching && (

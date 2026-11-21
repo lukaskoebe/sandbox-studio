@@ -518,7 +518,7 @@ const SandboxRow = memo(function SandboxLine({
   const fork = row.depth > 0
   const closed = row.sessions - row.open
   const status = waiting
-    ? "⏸ waiting on you"
+    ? "⏸ needs you"
     : working
       ? `▶ ${working} is working`
       : s.status === "running"

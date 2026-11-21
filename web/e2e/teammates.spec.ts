@@ -363,9 +363,7 @@ for (const phone of [false, true]) {
     // With the conversation back, its home shows the request in place again.
     await layoutButton(page, "Home only").click()
     await expect(
-      page
-        .getByRole("region", { name: "Waiting for you" })
-        .filter({ hasText: host })
+      page.getByRole("region", { name: "Needs you" }).filter({ hasText: host })
     ).toBeVisible()
     await expect(card).toBeHidden()
     await api.dismissApprovals()

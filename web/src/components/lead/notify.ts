@@ -29,7 +29,7 @@ export function useLeadNotify(env: string) {
     if (!shouldNotify()) return
     const title =
       waiting > 0
-        ? `Your day is written · ${plural(waiting, "thing waits", "things wait")} for you`
+        ? `Your day is written · ${plural(waiting, "thing needs", "things need")} you`
         : "Your day is written"
     const body = v.today.summary || `${name} wrote up today.`
     const id = `lead-${env}-${v.today.day}`

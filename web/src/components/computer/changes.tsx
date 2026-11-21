@@ -442,7 +442,7 @@ export function ChangesView({
           <div ref={railRef} className="grid min-w-0 text-xs">
             {reviews.length > 0 && (
               <RailSection
-                label="Waiting for you"
+                label="Needs you"
                 count={reviews.length}
                 {...fold("waiting")}
               >

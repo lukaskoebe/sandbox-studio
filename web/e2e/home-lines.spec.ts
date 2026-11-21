@@ -38,7 +38,7 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   await expect(
     lines.getByRole("link", { name: `chat · ${name} · Please run the tests` })
   ).toBeVisible()
-  await expect(lines.getByText(/is working|waiting on you/)).toBeVisible()
+  await expect(lines.getByText(/is working|needs you/)).toBeVisible()
   const main = lines.getByRole("link", {
     name: /^main · go test \.\/\.\.\. · you, /,
   })

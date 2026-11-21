@@ -52,7 +52,7 @@ export function WaitingChip({
   const { permission, request } = useNotificationPermission()
   const anyHeld = waiting.some((a) => heldFor(a, now) !== undefined)
   const words = anyHeld
-    ? `${waiting.length} ${waiting.length === 1 ? "request" : "requests"} waiting`
+    ? `${waiting.length} ${waiting.length === 1 ? "request needs" : "requests need"} you`
     : `${waiting.length} gave up waiting`
   const choice = { scope: "sandbox", lifetime: "always" } as const
   return (

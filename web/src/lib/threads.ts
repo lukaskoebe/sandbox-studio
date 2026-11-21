@@ -8,29 +8,12 @@ import type { Chat } from "@/lib/chats"
 export type ThreadStatus = "working" | "waiting" | "terminal" | "done" | "ended"
 
 /**
- * The approvals a chat waits on: its own permission asks, and its computer's other asks while
- * it is the teammate's latest chat there, as a push it asks for is.
+ * The approvals a chat waits on: its own permission asks, which its page answers. Its
+ * computer's other asks, a push or a connection, name no chat: they count on the teammate and
+ * wait on its home and Home.
  */
-export function chatApprovals(
-  chat: Chat,
-  approvals: Approval[],
-  chats: Chat[]
-): Approval[] {
-  const latest = chats
-    .filter(
-      (c) => c.teammateId === chat.teammateId && c.sandboxId === chat.sandboxId
-    )
-    .reduce<Chat | undefined>(
-      (a, c) => (!a || c.updatedAt > a.updatedAt ? c : a),
-      undefined
-    )
-  return approvals.filter((a) =>
-    a.chatPermission
-      ? a.chatPermission.chatId === chat.id
-      : latest?.id === chat.id &&
-        a.sandboxId === chat.sandboxId &&
-        (!a.teammate || a.teammate.id === chat.teammateId)
-  )
+export function chatApprovals(chat: Chat, approvals: Approval[]): Approval[] {
+  return approvals.filter((a) => a.chatPermission?.chatId === chat.id)
 }
 
 export function chatStatus(chat: Chat, waiting: number): ThreadStatus {
@@ -43,7 +26,7 @@ export function chatStatus(chat: Chat, waiting: number): ThreadStatus {
 
 export const statusLabels: Record<ThreadStatus, string> = {
   working: "working",
-  waiting: "waiting",
+  waiting: "needs you",
   terminal: "in the terminal",
   done: "done",
   ended: "ended",

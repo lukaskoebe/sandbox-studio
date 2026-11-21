@@ -193,13 +193,13 @@ export function WaitingRequests({
     <div className="grid gap-3 px-4 pb-3">
       {held.length > 0 && (
         <section
-          aria-label="Waiting for you"
+          aria-label="Needs you"
           data-testid="waiting-held"
           className="rounded-md border bg-card px-3 py-2"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
             <h3 className="section-label text-muted-foreground">
-              Waiting for you · {held.length}
+              Needs you · {held.length}
             </h3>
             {held.length > 1 && (
               <span className="flex gap-1.5">

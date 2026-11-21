@@ -63,7 +63,7 @@ import { cn } from "@/lib/utils"
 
 type Group =
   | "Recent"
-  | "Waiting for you"
+  | "Needs you"
   | "Teammates"
   | "Computers"
   | "Threads"
@@ -579,7 +579,7 @@ export function CommandPalette({
         const who = teammates.find((t) => t.id === approvalTeammateId(a))
         return {
           id: `ap:${a.id}`,
-          group: "Waiting for you",
+          group: "Needs you",
           title: kind.summary(a),
           place: [kind.title, who?.name].filter(Boolean).join(" · "),
           keys: "",
@@ -666,7 +666,7 @@ export function CommandPalette({
         .map((i) => ({ ...i, group: "Recent" as const }))
       return [
         ["Recent", last],
-        ["Waiting for you", waiting],
+        ["Needs you", waiting],
       ]
     }
     const hits = items
@@ -769,7 +769,7 @@ export function CommandPalette({
                       : `No file of ${inView.name} matches “${query.slice(1).trim()}”.`
                 : query.trim()
                   ? `Nothing matches “${query.trim()}”. Try a teammate, a computer, a thread, a setting or an action.`
-                  : "Nothing opened yet, and nothing waits for you."}
+                  : "Nothing opened yet, and nothing needs you."}
             </p>
           ) : (
             groups

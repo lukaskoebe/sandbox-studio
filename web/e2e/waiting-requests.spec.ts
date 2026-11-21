@@ -28,7 +28,7 @@ test("a sandbox's held connections show as a count, answered there and in Connec
   for (const host of hosts) await api.connect(id, host)
 
   // A count on the sandbox, and nothing that opens by itself or floats over the page.
-  const chip = page.getByRole("button", { name: "3 requests waiting" })
+  const chip = page.getByRole("button", { name: "3 requests need you" })
   await expect(chip).toBeVisible()
   await expect(page.getByTestId("waiting-popover")).toBeHidden()
   await expect(approvals(page).getByTestId("approval-group")).toHaveCount(0)
@@ -43,13 +43,13 @@ test("a sandbox's held connections show as a count, answered there and in Connec
   // Reviewing them is the list in Connections, with its own answers.
   await popover.getByRole("button", { name: "Review individually" }).click()
   const held = page.getByTestId("waiting-held")
-  await expect(held).toContainText("Waiting for you · 3")
+  await expect(held).toContainText("Needs you · 3")
   const row = (host: string) =>
     held.getByTestId("waiting-request").filter({ hasText: host })
   await expect(row(hosts[0])).toContainText(/\d+ s left/)
 
   await row(hosts[0]).getByRole("button", { name: "Allow" }).click()
-  await expect(held).toContainText("Waiting for you · 2")
+  await expect(held).toContainText("Needs you · 2")
   await expect
     .poll(async () =>
       (await api.guest(id)).connections.find((c) => c.host === hosts[0])
@@ -76,7 +76,7 @@ test("a sandbox's held connections show as a count, answered there and in Connec
     )
     .toBe(3)
   await expect(
-    page.getByRole("button", { name: /requests? waiting/ })
+    page.getByRole("button", { name: /requests? needs? you/ })
   ).toHaveCount(0)
 })
 
@@ -91,18 +91,18 @@ test("the count's Allow all answers them, and the next request finds it closed",
 
   await page.goto(`/e/${env}/sandboxes/${id}`)
   for (const host of hosts) await api.connect(id, host)
-  await page.getByRole("button", { name: "2 requests waiting" }).click()
+  await page.getByRole("button", { name: "2 requests need you" }).click()
   const popover = page.getByTestId("waiting-popover")
   await expect(popover).toContainText("Each host gets a lasting rule")
   await popover.getByRole("button", { name: "Allow all" }).click()
   await expect(
-    page.getByRole("button", { name: /requests? waiting/ })
+    page.getByRole("button", { name: /requests? needs? you/ })
   ).toHaveCount(0)
 
   // Nothing opens by itself: the next request is a count again, closed.
   await api.connect(id, freshHost("later"))
   await expect(
-    page.getByRole("button", { name: "1 request waiting" })
+    page.getByRole("button", { name: "1 request needs you" })
   ).toBeVisible()
   await expect(popover).toBeHidden()
   await api.dismissApprovals()

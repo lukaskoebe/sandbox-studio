@@ -79,7 +79,8 @@ import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { LeadSidebarRow } from "@/components/lead/sidebar-row"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
-import { teammateApprovals, ThreadDot } from "@/components/teammate/home"
+import { teammateApprovals } from "@/components/teammate/home"
+import { ThreadDot } from "@/components/thread-status"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
@@ -376,11 +377,7 @@ export function AppSidebar({
                         <span className="min-w-0 flex-1 truncate">
                           {page.label}
                         </span>
-                        {waiting > 0 && (
-                          <span className="text-caption text-(--st-waiting-fg)">
-                            {waiting} waiting
-                          </span>
-                        )}
+                        <WaitingCount count={waiting} />
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )
@@ -524,7 +521,7 @@ function TeammateRow({
           ? programName(terminal.program)
           : undefined
         : phaseDot(phase(computers[0])).label.toLowerCase()
-  const asks = (c: Chat) => chatApprovals(c, pending, mine).length
+  const asks = (c: Chat) => chatApprovals(c, pending).length
   const listed = sidebarChats(mine, asks, onPage ? search.thread : undefined)
   const nameOf = (id?: string) => computers.find((sb) => sb.id === id)?.name
   const openTerminal = (t: AgentTerminal) =>

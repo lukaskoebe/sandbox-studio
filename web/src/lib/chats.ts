@@ -16,14 +16,6 @@ const pageTurns = 40
 /** At most this many bytes of attachments per prompt, as the server enforces. */
 export const maxAttachmentBytes = 10 << 20
 
-/** What a chat's state means for the person using it. */
-export const chatStateLabels: Record<Chat["state"], string> = {
-  idle: "Ready",
-  running: "Working",
-  terminal: "Open in the terminal",
-  orphaned: "Ended",
-}
-
 /** A chat's title, or a stand-in until the agent names it. */
 export function chatTitle(c: Chat) {
   return c.title || "New chat"

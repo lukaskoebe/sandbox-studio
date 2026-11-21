@@ -1087,7 +1087,7 @@ function TabStrip({ w }: { w: Win }) {
           {!active && waiting(id) && (
             <span
               className="ml-auto size-1.5 shrink-0 rounded-full bg-(--st-waiting)"
-              aria-label="Waiting for you"
+              aria-label="Needs you"
             />
           )}
         </button>
@@ -1468,8 +1468,8 @@ function Driver({ w }: { w: Win }) {
       ]
     : waiting
       ? [
-          words(`${w.name} is waiting for you`, "font-medium"),
-          `${w.name} is waiting for you: answer on the page.`,
+          words(`${w.name} needs you`, "font-medium"),
+          `${w.name} needs you: answer on the page.`,
         ]
       : w.st?.driver
         ? [

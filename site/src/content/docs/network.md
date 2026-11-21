@@ -7,7 +7,7 @@ Every TCP connection of a computer (a sandbox) goes through Studio's gateway, in
 
 ## Unknown hosts wait for you
 
-When a sandbox reaches a host not covered by a rule, Studio holds the connection and asks you. The request waits on **Home** under **Needs you**, on the teammate's page under **Waiting for you**, and on Studio's other pages in the **needs you** list at the right of the top bar, whose rows have **Allow** and **Deny**. The computer's screen shows a count such as **2 requests waiting**, and **Network** in the sidebar says how many wait. The request includes the host, port, sandbox, and teammate if there is one.
+When a sandbox reaches a host not covered by a rule, Studio holds the connection and asks you. The request waits on **Home** under **Needs you**, on the teammate's page and at the top of **Network** under **Needs you** too, and on Studio's other pages in the **needs you** list at the right of the top bar, whose rows have **Allow** and **Deny**. The computer's screen shows a count such as **2 requests need you**, and **Network** in the sidebar says how many wait. The request includes the host, port, sandbox, and teammate if there is one.
 
 **Allow** and **Deny** add a rule, so the next connection to the host doesn't ask. When the card offers several host patterns, such as `registry.npmjs.org` and `*.npmjs.org`, pick one first. **Options** on the card has two rows:
 
@@ -24,7 +24,7 @@ To hear of a held connection while Studio isn't in front, choose **Enable notifi
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
-The **Network** page, under **Environment** in the sidebar, sets the security level, lists your rules, sorted by domain, with search and filters, then the curated list and the tracker list. The **Activity** page lists what was decided; its **Network** filter shows only connections. To see what one sandbox reached and what waits, open its computer's **Details** tab and choose **Show…** next to **Connections**.
+The **Network** page, under **Environment** in the sidebar, starts with the requests that wait for you, if any; then it sets the security level, lists your rules, sorted by domain, with search and filters, then the curated list and the tracker list. The **Activity** page lists what was decided; its **Network** filter shows only connections. To see what one sandbox reached and what waits, open its computer's **Details** tab and choose **Show…** next to **Connections**.
 
 ## Names and lookups
 

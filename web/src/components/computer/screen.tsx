@@ -260,7 +260,7 @@ export function ComputerScreen({
                     )}
                     {dots[t] && (
                       <span
-                        aria-label="waiting for you"
+                        aria-label="needs you"
                         className="size-1.5 rounded-full bg-(--st-waiting)"
                       />
                     )}

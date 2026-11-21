@@ -7,7 +7,7 @@ export type Presence = "working" | "waiting" | "idle" | "offline"
 
 export const presenceLabels: Record<Presence, string> = {
   working: "Working",
-  waiting: "Waiting for you",
+  waiting: "Needs you",
   idle: "Idle",
   offline: "Offline",
 }

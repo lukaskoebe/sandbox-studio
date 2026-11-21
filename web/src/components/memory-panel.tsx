@@ -467,7 +467,7 @@ function Index({
         <IndexList>
           <IndexRow
             icon={WarningIcon}
-            label="Needs you"
+            label="To review"
             count={waiting}
             warn={waiting > 0}
             active={view?.kind === "needs"}
@@ -717,7 +717,7 @@ function Reader({ ctx }: { ctx: PanelContext }) {
     default:
       return (
         <div className="space-y-5">
-          <ReaderHeader ctx={ctx} title="Needs you" />
+          <ReaderHeader ctx={ctx} title="To review" />
           <NeedsYou ctx={ctx} />
           <LooseEnds ctx={ctx} />
         </div>
@@ -1047,7 +1047,7 @@ function NeedsYou({ ctx }: { ctx: PanelContext }) {
         sg.kind === "promote"
           ? toast.success("Proposed for shared memory", {
               description:
-                "It waits for you on Home: approve it to share it with every teammate.",
+                "It's under Needs you on Home: approve it to share it with every teammate.",
             })
           : toast.success("Core page set", {
               description: "Its page loads into every session of this scope.",
@@ -1081,7 +1081,7 @@ function NeedsYou({ ctx }: { ctx: PanelContext }) {
   return (
     <section className="space-y-2">
       <SectionHeader
-        title="Needs you"
+        title="To review"
         icon={WarningIcon}
         area="memory"
         count={open.length + list.length}
@@ -1399,7 +1399,7 @@ function FactMenu({ ctx, fact: f }: { ctx: PanelContext; fact: MemoryFact }) {
       onSuccess: () =>
         toast.success("Proposed for shared memory", {
           description:
-            "It waits for you on Home: approve it to share it with every teammate.",
+            "It's under Needs you on Home: approve it to share it with every teammate.",
         }),
       onSettled: () =>
         queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] }),

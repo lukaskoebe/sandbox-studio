@@ -38,7 +38,7 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   await expect(ask.getByTestId("ask-status")).toHaveText(
     /^asks before running · \d+:\d\d$/
   )
-  await expect(main.getByText(/^Waiting for you/)).toHaveCount(0)
+  await expect(main.getByText(/^Needs you/)).toHaveCount(0)
   // The card shows what Allow runs, not only the agent's title for it.
   await expect(main.locator("pre", { hasText: command })).toBeVisible()
   // The agent waits for the answer.
@@ -633,7 +633,7 @@ test("a teammate's home says each thing once while a thread waits", async ({
     "working on 1 chat"
   )
   const now = main.getByRole("region", { name: "Now" })
-  await expect(now.getByRole("heading")).toHaveText("Waiting for you · 1")
+  await expect(now.getByRole("heading")).toHaveText("Needs you · 1")
   const thread = main
     .getByRole("region", { name: `Threads with ${name}` })
     .getByRole("button", { name: /Please run the tests/ })

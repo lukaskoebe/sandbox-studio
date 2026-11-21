@@ -77,7 +77,7 @@ export function MemorySummary({ env, id }: { env: string; id: string }) {
       {m.needYou > 0 && (
         <span className="text-amber-700 dark:text-amber-400">
           {" "}
-          · {m.needYou} need you
+          · {m.needYou} to review
         </span>
       )}
     </>

@@ -336,8 +336,8 @@ function summary(waiting: number, working: number) {
     working === 0
       ? "No one is working right now."
       : working === 1
-        ? "1 chat is running."
-        : `${working} chats are running.`
+        ? "1 chat is working."
+        : `${working} chats are working.`
   return `${needs} ${busy}`
 }
 
@@ -412,8 +412,8 @@ function NeedsYou({ env, approvals }: { env: string; approvals: Approval[] }) {
       <Label id="needs-you">Needs you</Label>
       {cards.length === 0 ? (
         <p className="rounded-(--radius) border border-dashed p-5 text-muted-foreground">
-          Nothing waits for you. Teammates keep working; this list fills when
-          one of them asks.
+          Nothing needs you. Teammates keep working; this list fills when one of
+          them asks.
         </p>
       ) : (
         <ApprovalCardList

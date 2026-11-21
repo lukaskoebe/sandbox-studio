@@ -12,7 +12,7 @@ import { RebaseAllDialog } from "@/components/rebase-sandbox-dialog"
 import { formatMiB } from "@/components/sandbox-details"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
-import { ThreadDot } from "@/components/teammate/home"
+import { ThreadDot } from "@/components/thread-status"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -233,7 +233,7 @@ export function ComputersPage({ env }: { env: string }) {
                     owner={ownerOf(sb)}
                     chats={allChats.filter((c) => c.sandboxId === sb.id)}
                     terminal={agents.find((t) => t.sandboxId === sb.id)}
-                    waiting={(c) => chatApprovals(c, asks, allChats).length}
+                    waiting={(c) => chatApprovals(c, asks).length}
                     onOpen={() => open(sb)}
                     onDetails={() =>
                       void navigate(

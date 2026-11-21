@@ -109,7 +109,7 @@ test("a feature's tip shows the first time it happens, once, and Settings shows 
   const tip = page.getByTestId("feature-tip")
   await expect(tip).toHaveAttribute("data-feature", "network")
   await expect(tip).toContainText("1 of 5 · Network")
-  await expect(tip).toContainText("A request waits for you")
+  await expect(tip).toContainText("A request needs you")
   await tip.getByRole("button", { name: "Got it" }).click()
   await expect(tip).toBeHidden()
   await page.reload()

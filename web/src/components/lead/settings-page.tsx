@@ -41,7 +41,7 @@ import {
 } from "@/lib/lead"
 
 const notifyChoices: Record<LeadSettings["notify"], string> = {
-  waiting: "Only if something waits for you",
+  waiting: "Only if something needs you",
   always: "Every time",
   never: "Never",
 }

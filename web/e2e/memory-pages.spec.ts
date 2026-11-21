@@ -29,7 +29,7 @@ test("memory pages link each other: a link opens its page, which lists what link
   await page.goto(`/e/${id}/memory`)
   const index = page.getByRole("navigation", { name: "Memory index" })
   // The link to a page that doesn't exist is a loose end, with what needs the user.
-  await index.getByRole("button", { name: /^Needs you/ }).click()
+  await index.getByRole("button", { name: /^To review/ }).click()
   await expect(page.getByText("Wanted page · from The webshop")).toBeVisible()
 
   await index.getByRole("button", { name: /^The webshop/ }).click()
@@ -60,7 +60,7 @@ test("memory pages link each other: a link opens its page, which lists what link
     page.getByRole("button", { name: /^The webshop project\/webshop/ })
   ).toBeVisible()
 
-  await index.getByRole("button", { name: /^Needs you/ }).click()
+  await index.getByRole("button", { name: /^To review/ }).click()
   await expect(page.getByText("Wanted page")).toBeHidden()
 })
 

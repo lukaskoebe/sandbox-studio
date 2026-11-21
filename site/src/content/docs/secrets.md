@@ -35,7 +35,7 @@ For **AWS access key**, enter the access key ID and secret access key, and optio
 
 The secret's name becomes an AWS profile, in lower case, in the sandbox's `~/.aws/config`; Studio adds it there without touching the rest of the file. When a sandbox sees one AWS secret, `AWS_PROFILE` selects it, so `aws` and the SDKs use it without further setup; with several, choose one with `--profile` or `AWS_PROFILE`.
 
-The first time a sandbox asks for credentials, a **Credentials** card waits for you on Home and over Studio's other pages: **Allow until it stops** lets that sandbox have them until it stops, **Always for** a teammate lets every sandbox of that teammate have them, and **Deny** refuses; for a sandbox without a teammate, **Always** is for that sandbox only. The credentials last an hour and the tools renew them on their own; the sandbox never sees the access key itself.
+The first time a sandbox asks for credentials, a **Credentials** card waits for you on Home, and the count at the top right of Studio's other pages lists it: **Allow until it stops** lets that sandbox have them until it stops, **Always for** a teammate lets every sandbox of that teammate have them, and **Deny** refuses; for a sandbox without a teammate, **Always** is for that sandbox only. The credentials last an hour and the tools renew them on their own; the sandbox never sees the access key itself.
 
 Kinds for other services that sign their requests will follow.
 

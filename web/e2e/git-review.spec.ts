@@ -269,7 +269,7 @@ test("a pending push review has a page of its own and is decided there", async (
     page
       .locator('[data-sidebar="sidebar"]')
       .getByRole("link", { name: new RegExp(`^${name}`) })
-      .getByTitle("1 waiting for you")
+      .getByTitle("Needs you: 1")
   ).toBeVisible()
 
   // Review opens it in the computer's Changes tab; its id is also the address of its page.
@@ -1546,43 +1546,32 @@ test("a review link opens Changes on its section, and the allowed push moves to 
       .getByRole("button", { name: new RegExp(`^${label}`) })
   // Folded before the link, its section opens; the others stay as they were.
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes`)
-  await header("Waiting for you").click()
-  await expect(header("Waiting for you")).toHaveAttribute(
-    "aria-expanded",
-    "false"
-  )
+  await header("Needs you").click()
+  await expect(header("Needs you")).toHaveAttribute("aria-expanded", "false")
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&review=${review.id}`)
-  await expect(header("Waiting for you")).toHaveAttribute(
-    "aria-expanded",
-    "true"
-  )
+  await expect(header("Needs you")).toHaveAttribute("aria-expanded", "true")
   await expect(header("Repositories")).toHaveAttribute("aria-expanded", "true")
   await expect(rail.getByRole("status")).toHaveCount(0)
   // Away to Details and back, the folds are the user's.
   await header("Repositories").click()
   await screen.getByRole("tab", { name: "Details" }).click()
   await screen.getByRole("tab", { name: /^Changes/ }).click()
-  await expect(header("Waiting for you")).toHaveAttribute(
-    "aria-expanded",
-    "true"
-  )
+  await expect(header("Needs you")).toHaveAttribute("aria-expanded", "true")
   await expect(header("Repositories")).toHaveAttribute("aria-expanded", "false")
   await header("Repositories").click()
   await header("Repositories").blur()
 
   // [ and ] move between the sections' headers.
   await page.locator("body").press("]")
-  await expect(header("Waiting for you")).toBeFocused()
+  await expect(header("Needs you")).toBeFocused()
   await page.keyboard.press("]")
   await expect(header("Repositories")).toBeFocused()
   await page.keyboard.press("[")
-  await expect(header("Waiting for you")).toBeFocused()
+  await expect(header("Needs you")).toBeFocused()
 
   await page.getByRole("button", { name: "Approve and push" }).click()
   await expect(header("Pushed")).toBeVisible()
-  await expect(
-    rail.getByRole("region", { name: "Waiting for you" })
-  ).toHaveCount(0)
+  await expect(rail.getByRole("region", { name: "Needs you" })).toHaveCount(0)
   await expect(rail.getByRole("region", { name: "Pushed" })).toContainText(
     "Push to main"
   )

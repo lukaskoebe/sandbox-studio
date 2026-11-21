@@ -32,7 +32,7 @@ import {
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { TeammateAvatar } from "@/components/teammate-avatar"
-import { ThreadDot } from "@/components/teammate/home"
+import { ThreadDot, ThreadStatusChip } from "@/components/thread-status"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -60,12 +60,7 @@ import { openPalette } from "@/lib/palette"
 import { teammateSettings } from "@/lib/teammate-settings"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { useThreadActions } from "@/lib/thread-actions"
-import {
-  chatApprovals,
-  chatStatus,
-  statusLabels,
-  type ThreadStatus,
-} from "@/lib/threads"
+import { chatApprovals, chatStatus, type ThreadStatus } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 
 /** One entry of a crumb's menu: a heading, a rule, or a place to go or thing to do. */
@@ -441,8 +436,7 @@ export function Breadcrumbs({ env }: { env: string }) {
           thread,
           chatApprovals(
             thread,
-            (pending.data ?? []).filter((a) => a.environmentId === env),
-            allChats
+            (pending.data ?? []).filter((a) => a.environmentId === env)
           ).length
         )
       const a = threadActions
@@ -699,7 +693,7 @@ export function Breadcrumbs({ env }: { env: string }) {
         })}
         {threadStatus && (
           <li className="ml-1.5 flex shrink-0">
-            <ThreadStatusChip status={threadStatus} />
+            <ThreadStatusChip status={threadStatus} compact />
           </li>
         )}
         <TopBarSlot name="status" />
@@ -807,28 +801,5 @@ function CrumbMenu({ entries }: { entries: MenuEntry[] }) {
         </Fragment>
       ))}
     </DropdownMenuContent>
-  )
-}
-
-/** The open thread's state after its title: one chip, in the waiting colour when it needs you. */
-function ThreadStatusChip({ status }: { status: ThreadStatus }) {
-  return (
-    <span
-      data-testid="thread-status"
-      className={cn(
-        "inline-flex h-5 items-center gap-1.5 rounded-full border px-2 text-caption font-normal text-muted-foreground max-md:px-1.5",
-        status === "waiting" &&
-          "border-(--st-waiting)/45 bg-(--st-waiting)/12 text-foreground"
-      )}
-    >
-      {/* A narrow window shows the dot alone. */}
-      <ThreadDot
-        status={status}
-        className={cn(status === "waiting" && "md:hidden")}
-      />
-      <span className="max-md:sr-only">
-        {status === "waiting" ? "needs you" : statusLabels[status]}
-      </span>
-    </span>
   )
 }

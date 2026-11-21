@@ -382,7 +382,7 @@ test("an agent shows the user a page, to watch or to take the wheel", async ({
   // On the teammate's page the request waits on its home, and Answer opens its card there.
   await call("browser_show", { url: "https://example.com/a" })
   await page
-    .getByRole("region", { name: "Waiting for you" })
+    .getByRole("region", { name: "Needs you" })
     .getByRole("button", { name: "Answer" })
     .click()
   await page
@@ -871,7 +871,7 @@ test("an agent's question shows on the page, and its step replays from the activ
   const ask = page.getByRole("alertdialog", { name: `${name} is asking` })
   await expect(ask).toBeVisible()
   await expect(ask.getByText(/wants to click/)).toBeVisible()
-  await expect(page.getByTitle(`${name} is waiting for you`)).toBeVisible()
+  await expect(page.getByTitle(`${name} needs you`)).toBeVisible()
   await expect(page.getByTestId("approval-card")).toHaveCount(0)
   await ask.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(ask).toBeHidden()

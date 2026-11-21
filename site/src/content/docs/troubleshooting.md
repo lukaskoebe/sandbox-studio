@@ -42,7 +42,7 @@ Claude Pro/Max and ChatGPT subscriptions sign in from Settings → AI providers.
 
 ## A command says it is waiting for network approval
 
-Answer the request: on the computer's screen, **1 request waiting** opens it; elsewhere it shows as a card at the bottom right, and on Home and **Network**. Studio holds the connection for a minute, and an answer in that time lets it through. After that the command sees a failure: choose **Allow next time** and run it again. If a rule denies the host, change it on **Network**.
+Answer the request: on the computer's screen, **1 request needs you** opens it; on other pages the count at the top right lists it, and Home and **Network** show its card. Studio holds the connection for a minute, and an answer in that time lets it through. After that the command sees a failure: choose **Allow next time** and run it again. If a rule denies the host, change it on **Network**.
 
 ## A computer cannot reach this machine or a host on the local network
 
@@ -58,7 +58,7 @@ Studio was updated while the page was open, so a part of the old version is gone
 
 ## A Git push is still pending
 
-A push waits on Home and in the computer's **Changes** tab under **Waiting for you**, with a dot on the tab; **Review** opens its diff. Studio does not push it upstream before approval. If you intended to use a forge but see no push to review, check that the forge is configured in this environment and that the computer's remote routes through it.
+A push waits on Home and in the computer's **Changes** tab under **Needs you**, with a dot on the tab; **Review** opens its diff. Studio does not push it upstream before approval. If you intended to use a forge but see no push to review, check that the forge is configured in this environment and that the computer's remote routes through it.
 
 ## A checkpoint cannot be restored
 

@@ -15,7 +15,7 @@ export function WaitingCount({
   return (
     <span
       data-status="waiting"
-      title={`${count} waiting for you`}
+      title={`Needs you: ${count}`}
       className={cn(
         "inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-(--st-waiting)/25 px-1 font-mono text-meta font-semibold text-foreground",
         className

@@ -14,7 +14,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { ThreadDot } from "@/components/teammate/home"
+import { ThreadDot } from "@/components/thread-status"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, errorStatus, isReady } from "@/lib/api/client"

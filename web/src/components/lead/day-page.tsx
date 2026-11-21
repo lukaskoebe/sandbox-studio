@@ -197,7 +197,7 @@ function Day({
       <dl className="grid grid-cols-2 overflow-hidden rounded-(--radius) border sm:grid-cols-4">
         <Number
           value={String(waiting)}
-          label={isToday ? "wait for you" : "waited for you"}
+          label={isToday ? "need you" : "needed you"}
           tone={waiting > 0 ? "waiting" : undefined}
         />
         <Number
@@ -227,7 +227,7 @@ function Day({
             <WaitingNow env={env} />
           ) : (
             (f.waiting?.length ?? 0) > 0 && (
-              <Section title="Waited for you">
+              <Section title="Needed you">
                 <ul className="divide-y rounded-(--radius) border">
                   {(f.waiting ?? []).map((w) => (
                     <li key={w.id} className="px-3 py-2 text-xs">
@@ -351,7 +351,7 @@ function WaitingNow({ env }: { env: string }) {
   const cards = approvalCards(approvals, split)
   if (cards.length === 0) return null
   return (
-    <Section title="Waiting on you">
+    <Section title="Needs you">
       <div className="grid gap-2.5">
         <ApprovalCardList
           cards={cards}

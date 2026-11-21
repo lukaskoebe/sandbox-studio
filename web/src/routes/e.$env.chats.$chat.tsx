@@ -15,7 +15,7 @@ import {
   WarningIcon,
 } from "@phosphor-icons/react"
 import { LowDiskStatus } from "@/components/low-disk"
-import { ChatStateBadge } from "@/components/chat/chat-items"
+import { ChatStatusChip } from "@/components/thread-status"
 import { ChatThread, requestLabel } from "@/components/chat/chat-thread"
 import {
   useWorkspacePanel,
@@ -147,7 +147,7 @@ function ChatPage() {
         >
           {chatTitle(chat)}
         </h1>
-        <ChatStateBadge chat={chat} />
+        <ChatStatusChip chat={chat} />
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
