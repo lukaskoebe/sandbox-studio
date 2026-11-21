@@ -1,4 +1,11 @@
-import { approvals, expect, sandboxName, test, type Api } from "./fixtures"
+import {
+  openRow,
+  approvals,
+  expect,
+  sandboxName,
+  test,
+  type Api,
+} from "./fixtures"
 
 type Posted = { repo: string; body: Record<string, unknown> }
 
@@ -136,7 +143,7 @@ test("a teammate's pull request review waits for approval and posts as edited", 
   await expect(card).toContainText(
     "Review acme/web#1: request changes, 1 comment"
   )
-  await card.getByRole("button", { name: "Review" }).click()
+  await card.getByRole("button", { name: "Review", exact: true }).click()
 
   const pane = page.getByTestId("git-review")
   await expect(pane).toContainText("Apply coupon codes")
@@ -218,7 +225,7 @@ test("discarding a review posts nothing and keeps the note", async ({
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: "acme/web#1" })
-  await card.getByRole("button", { name: "Review" }).click()
+  await card.getByRole("button", { name: "Review", exact: true }).click()
   const pane = page.getByTestId("git-review")
   await pane.getByRole("button", { name: "Discard…" }).click()
   await page
@@ -274,8 +281,9 @@ test("a teammate's ask to resolve a review thread waits for approval", async ({
   await expect(card).toContainText(
     "Resolve 1 review thread on acme/web#1: Apply coupon codes"
   )
+  await openRow(card)
   await expect(card).toContainText("web/coupon.ts:22")
-  await card.getByRole("button", { name: "Review" }).click()
+  await card.getByRole("button", { name: "Review", exact: true }).click()
   const pane = page.getByTestId("git-review")
   await expect(pane).toContainText("Resolves as e2e-user")
   await expect(pane).toContainText("Validate against finalTotal(cart).")
@@ -326,8 +334,9 @@ test("a teammate's comment on a pull request waits for approval and posts as edi
     .getByTestId("approval-card")
     .filter({ hasText: "acme/web#1" })
   await expect(card).toContainText("Comment on acme/web#1: Apply coupon codes")
+  await openRow(card)
   await expect(card).toContainText("The coupon tests fail on main too.")
-  await card.getByRole("button", { name: "Review" }).click()
+  await card.getByRole("button", { name: "Review", exact: true }).click()
   const pane = page.getByTestId("git-review")
   await expect(pane).toContainText("Posts as e2e-user")
   await pane

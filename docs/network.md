@@ -112,7 +112,7 @@ sandbox's lookups. A browser request's card makes its rule browser-only unless t
 marks such rules "browser only", and environment files keep the flag.
 
 A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
-within a minute. The approval card's Options offer "1 hour"; the API takes
+within a minute. A request's Allow arrow and its Options offer "1 hour"; the API takes
 `expiresAt` when a rule is created and on an allow or deny decision (it must be in the
 future). Settings → Network counts down the time left.
 
@@ -269,11 +269,11 @@ pages offer Always allow and Ignore rather than Once. A retry holds it again. St
 notice a client that disconnects early: the gateway waits on the answer, not on the client, so
 such a request shows as held until its time runs out.
 
-Connections from one sandbox that arrive within 3 seconds of each other show as one card on
-Home (one row in the top bar's list), with Allow all, Review individually and Deny all (see
+Connections from one sandbox that arrive within 3 seconds of each other show as one row on
+Home and in the top bar's list, with Each, Allow all, and Deny all behind its arrow (see
 [approvals](approvals.md#realtime-and-ui)). A browser's requests group by the page they belong
-to instead: one sandbox's pending requests to one top-level site are one card, titled with the
-site. A navigation keeps its own card, since it needs the site decision.
+to instead: one sandbox's pending requests to one top-level site are one row, titled with the
+site. A navigation keeps its own row, since it needs the site decision.
 
 A sandbox has at most 100 network cards waiting (`store.MaxWaitingNetwork`, `network` and
 `network.request` together). A sandbox reaches new hosts as fast as it likes, and each would be a

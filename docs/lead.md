@@ -215,8 +215,8 @@ it and on the approvals and chats topics.
 - `/e/$env/lead` is today, by Studio's date (`today.day`), not the browser's; `/lead/$day` a
   written day, `/lead/settings` its settings, saved one after another. A day:
   the caption (written when, on request or not, the model, the cost), the summary, four
-  numbers (today's waiting count is the live one, as the cards below), what waits for you
-  (today's live approval cards; a past day's snapshot), each
+  numbers (today's waiting count is the live one), what waits for you (today: the live count
+  and a link to Home's Needs you, which answers them; a past day's snapshot), each
   teammate's lines with links to its threads, and beside them what shipped, blockers, costs
   and suggestions for tomorrow. **Copy as Markdown** copies the day.
 - Under the day, the questions asked about it with Lead's answers (`ask.tsx`), and a box to

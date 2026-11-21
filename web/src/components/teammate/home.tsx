@@ -28,11 +28,7 @@ import {
   wakeAction,
 } from "@/components/sandbox-lifecycle"
 import { StatusDot } from "@/components/status-dot"
-import {
-  ApprovalCardList,
-  approvalIds,
-  useApprovalReview,
-} from "@/components/approval-stack"
+import { NeedsYouList, useApprovalReview } from "@/components/needs-you"
 import { BrowsingCard, useBrowsing } from "@/components/browser-browsing"
 import { isGitApproval } from "@/components/git-review"
 import { ChatContextMenu } from "@/components/chat/chat-actions"
@@ -68,18 +64,7 @@ import {
 } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { useClaimApprovals } from "@/lib/approval-claims"
-import {
-  approvalCards,
-  cardApproval,
-  groupSite,
-  type ApprovalCard,
-} from "@/lib/approval-groups"
-import {
-  approvalKind,
-  approvalSource,
-  isBrowserAsk,
-} from "@/lib/approval-kinds"
-import { tileClass } from "@/lib/accents"
+import { approvalKind, isBrowserAsk } from "@/lib/approval-kinds"
 import { hasNews, useChatsSeen } from "@/lib/chat-seen"
 import { chatTitle, useChat, type Chat } from "@/lib/chats"
 import type { ScreenTab } from "@/lib/computer"
@@ -91,7 +76,7 @@ import {
   type AgentTerminal,
   type ThreadStatus,
 } from "@/lib/threads"
-import { cn, formatAge } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useNewThreadFocus } from "@/lib/new-thread"
 
 type Event = components["schemas"]["TeammateEvent"]
@@ -329,16 +314,17 @@ function FullHome({
             chats={chats}
             quiet={inTerminals.length > 0 || !!browsing}
           />
+          {shownWaiting.length > 0 && (
+            <Waiting approvals={shownWaiting} onReview={onReview} />
+          )}
           <NowCard
             teammate={teammate}
             env={env}
             computers={computers}
-            waiting={shownWaiting}
             terminals={inTerminals}
             browsing={!!browsing}
             browserWaiting={browserWaiting}
             watching={watching}
-            onReview={onReview}
             onWatch={onWatch}
             onOpenComputer={onOpenComputer}
           />
@@ -401,7 +387,7 @@ function FullHome({
 /**
  * What the teammate does, in the top bar after its name: working on its chats, its agent at
  * work in a terminal, idle since when, or offline, and what keeps it from working. What waits
- * for you is the Now card's to say and the threads at work are the cards below; while the Now
+ * for you is Needs you's to say and the threads at work are the cards below; while the Now
  * card lists its agents in terminals or its browser, the line leaves those to it.
  */
 function HomeStatus({
@@ -486,32 +472,27 @@ function HomeStatus({
 }
 
 /**
- * The top of the teammate's home, while something needs you or goes on outside its threads:
- * what waits for you, each with the button that answers it, then its agents in terminals and
- * its browser. Its threads at work are the cards below, and its status is in the top bar.
+ * What goes on outside the teammate's threads, under Needs you: its agents in terminals and its
+ * browser. Its threads at work are the cards below, and its status is in the top bar.
  */
 function NowCard({
   env,
   teammate,
   computers,
-  waiting,
   terminals,
   browsing,
   browserWaiting,
   watching,
-  onReview,
   onWatch,
   onOpenComputer,
 }: {
   env: string
   teammate: Teammate
   computers: Sandbox[]
-  waiting: Approval[]
   terminals: AgentTerminal[]
   browsing: boolean
   browserWaiting: boolean
   watching: boolean
-  onReview: (a: Approval) => void
   onWatch: () => void
   onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
 }) {
@@ -528,28 +509,12 @@ function NowCard({
       />,
     ]
   })
-  const alive = rows.length > 0 || browsing
-  if (waiting.length === 0 && !alive) return null
+  if (rows.length === 0 && !browsing) return null
   return (
     <section
       aria-label="Now"
-      className={cn(
-        "grid gap-2 rounded-xl border border-l-3 bg-card px-3.5 py-3 shadow-xs",
-        waiting.length > 0
-          ? "border-l-(--st-waiting)"
-          : "border-l-(--st-running)"
-      )}
+      className="grid gap-2 rounded-xl border border-l-3 border-l-(--st-running) bg-card px-3.5 py-3 shadow-xs"
     >
-      {waiting.length > 0 && (
-        <>
-          <h2 className="flex items-center gap-2.5 text-sm font-medium">
-            <PresenceDot presence="waiting" />
-            Needs you · {waiting.length}
-          </h2>
-          <Waiting env={env} approvals={waiting} onReview={onReview} inCard />
-        </>
-      )}
-      {waiting.length > 0 && alive && <hr className="border-border" />}
       {rows}
       {browsing && (
         <BrowsingCard
@@ -848,7 +813,7 @@ function DeskHome({
       </header>
       <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-3 pb-3">
         {shownWaiting.length > 0 && (
-          <Waiting env={env} approvals={shownWaiting} onReview={onReview} />
+          <Waiting approvals={shownWaiting} onReview={onReview} />
         )}
         <section aria-label="Threads" className="grid gap-1">
           <span className="px-1 section-label text-muted-foreground">
@@ -1351,147 +1316,31 @@ function Learned({
 }
 
 /**
- * What waits for you on this teammate, one line each: what is asked, from where and when. A push
- * opens on the screen's Changes; anything else opens its card here, with all its choices.
+ * What waits for you on this teammate, as the Needs you rows of every page
+ * (components/needs-you.tsx): a push opens on the screen's Changes, a memory conflict in a sheet,
+ * and anything else answers in its row or opens there with all its choices.
  */
 function Waiting({
-  env,
   approvals,
   onReview,
-  inCard,
 }: {
-  env: string
   approvals: Approval[]
   onReview: (a: Approval) => void
-  /** On the home's Now card, whose status line says that they wait: rows without a frame. */
-  inCard?: boolean
 }) {
   useClaimApprovals(approvals.map((a) => a.id))
-  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
-  const envs = $api.useQuery("get", "/api/environments")
   const { sheet, review } = useApprovalReview()
-  const cards = approvalCards(approvals, split)
-  // Each opened card is a list of its own; all of them settle when any card comes or goes.
-  const settleKey = approvalIds(cards)
-  const toggle = (key: string) =>
-    setOpen((prev) => {
-      const next = new Set(prev)
-      if (!next.delete(key)) next.add(key)
-      return next
-    })
   return (
-    <section
-      aria-label="Needs you"
-      className={cn("grid gap-2", !inCard && "pt-3")}
-    >
-      {!inCard && (
-        <span className="flex items-center gap-2 section-label text-(--st-waiting)">
-          <span className="size-1.5 rounded-full bg-(--st-waiting)" />
-          Needs you
-        </span>
-      )}
-      {cards.map((card) => {
-        const a = cardApproval(card)
-        if (!open.has(a.id))
-          return (
-            <WaitingRow
-              key={a.id}
-              card={card}
-              inCard={inCard}
-              onOpen={() =>
-                isGitApproval(a)
-                  ? onReview(a)
-                  : a.kind === "memory.conflict"
-                    ? review(a)
-                    : toggle(a.id)
-              }
-            />
-          )
-        return (
-          <div key={a.id} className="grid gap-1">
-            <ApprovalCardList
-              cards={[card]}
-              max={1}
-              settleKey={settleKey}
-              envName={() => envs.data?.find((e) => e.id === env)?.name}
-              onReview={(r) => (isGitApproval(r) ? onReview(r) : review(r))}
-              onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
-            />
-            <button
-              type="button"
-              onClick={() => toggle(a.id)}
-              className="justify-self-end px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Show less
-            </button>
-          </div>
-        )
-      })}
+    <section aria-label="Needs you" className="grid gap-2">
+      <h2 className="px-1 section-label text-muted-foreground">
+        Needs you · {approvals.length}
+      </h2>
+      <NeedsYouList
+        approvals={approvals}
+        tips
+        onReview={(a) => (isGitApproval(a) ? onReview(a) : review(a))}
+      />
       {sheet}
     </section>
-  )
-}
-
-/** One thing waiting, folded to a line, with the button that answers or reviews it. */
-function WaitingRow({
-  card,
-  inCard,
-  onOpen,
-}: {
-  card: ApprovalCard
-  inCard?: boolean
-  onOpen: () => void
-}) {
-  const a = cardApproval(card)
-  const kind = approvalKind(a)
-  const group = card.kind === "group" ? card.approvals : undefined
-  const site = group && groupSite(group)
-  const title = group
-    ? `${site ?? approvalSource(a) ?? "A computer"} wants ${group.length} hosts`
-    : kind.summary(a)
-  const details = [
-    kind.title,
-    approvalSource(a),
-    formatAge(a.createdAt),
-    a.attempts > 1 ? `${a.attempts} attempts` : undefined,
-  ]
-    .filter(Boolean)
-    .join(" · ")
-  return (
-    <div
-      data-testid="waiting-row"
-      className={cn(
-        "flex items-center gap-3",
-        !inCard && "rounded-2xl border bg-card py-2.5 pr-2.5 pl-3"
-      )}
-    >
-      <span
-        className={cn(
-          "grid size-7 shrink-0 place-items-center rounded-md",
-          tileClass(kind.area)
-        )}
-      >
-        <kind.icon weight="bold" className="size-3.5" aria-hidden />
-      </span>
-      <span className="grid min-w-0 flex-1 gap-0.5">
-        <span
-          title={title}
-          className={cn(
-            "truncate text-title font-medium",
-            kind.mono && !group && "font-mono"
-          )}
-        >
-          {title}
-        </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {details}
-        </span>
-      </span>
-      <Button size="sm" variant="outline" onClick={onOpen}>
-        {isGitApproval(a) || a.kind === "memory.conflict" ? "Review" : "Answer"}
-      </Button>
-    </div>
   )
 }
 

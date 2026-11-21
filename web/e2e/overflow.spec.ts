@@ -4,6 +4,7 @@ import {
   approvals,
   expect,
   openApprovals,
+  openRow,
   sandboxName,
   test,
 } from "./fixtures"
@@ -59,9 +60,10 @@ for (const [width, path] of [
     await expect(card).toBeVisible()
     expect(await overflowing(card)).toEqual([])
 
-    // Home's card has the other choices behind Options.
+    // Opened, Home's row has the other choices behind Options.
     if (!path) {
-      await card.getByRole("button", { name: "Options" }).click()
+      await openRow(card)
+      await card.getByRole("button", { name: "Options", exact: true }).click()
       await expect(card.getByRole("group", { name: "Scope" })).toBeVisible()
       expect(await overflowing(card)).toEqual([])
     }
@@ -94,6 +96,7 @@ test("a browser request's Options fit its card on a phone", async ({
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: host })
+  await openRow(card)
   await card.getByRole("button", { name: "Options", exact: true }).click()
   await expect(card.getByRole("group", { name: "Who" })).toBeVisible()
   expect(await overflowing(card)).toEqual([])

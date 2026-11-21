@@ -33,8 +33,6 @@ export type ApprovalKind = {
   area?: Area
   /** Whether the summary is a host or similar and reads best in monospace. */
   mono?: boolean
-  /** The environment page that lists approvals of this kind: a teammate's is its browser. */
-  page: "/e/$env" | "/e/$env/teammates/$id" | "/e/$env/chats"
 }
 
 /**
@@ -108,42 +106,36 @@ const kinds: Record<string, ApprovalKind> = {
     icon: GlobeIcon,
     area: "network",
     mono: true,
-    page: "/e/$env",
   },
   "git.push": {
     title: "Git push",
     summary: gitSummary,
     icon: GitBranchIcon,
     area: "git",
-    page: "/e/$env",
   },
   "git.pr": {
     title: "Pull request",
     summary: gitSummary,
     icon: GitPullRequestIcon,
     area: "git",
-    page: "/e/$env",
   },
   "git.review": {
     title: "Pull request review",
     summary: gitSummary,
     icon: GitPullRequestIcon,
     area: "git",
-    page: "/e/$env",
   },
   "git.comment": {
     title: "Pull request comment",
     summary: gitSummary,
     icon: ChatCircleTextIcon,
     area: "git",
-    page: "/e/$env",
   },
   "git.resolve": {
     title: "Resolve review threads",
     summary: gitSummary,
     icon: ChecksIcon,
     area: "git",
-    page: "/e/$env",
   },
   "git.credential": {
     title: "Git access",
@@ -155,7 +147,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: KeyIcon,
     area: "git",
-    page: "/e/$env",
   },
   "secret.rejected": {
     title: "Secret refused",
@@ -165,7 +156,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: KeyIcon,
     area: "network",
-    page: "/e/$env",
   },
   "credential.issue": {
     title: "Credentials",
@@ -177,7 +167,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: KeyIcon,
     area: "network",
-    page: "/e/$env",
   },
   "memory.share": {
     title: "Memory share",
@@ -185,7 +174,6 @@ const kinds: Record<string, ApprovalKind> = {
       `${a.memoryShare?.teammateName ?? "A teammate"} wants to share a fact with every teammate`,
     icon: BrainIcon,
     area: "memory",
-    page: "/e/$env",
   },
   "memory.conflict": {
     title: "Memory conflict",
@@ -194,7 +182,6 @@ const kinds: Record<string, ApprovalKind> = {
       "Two memory facts disagree",
     icon: ScalesIcon,
     area: "memory",
-    page: "/e/$env",
   },
   "lead.plan": {
     title: "Plan",
@@ -208,7 +195,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: CompassIcon,
     area: "chat",
-    page: "/e/$env",
   },
   "browser.action": {
     title: "Browser action",
@@ -225,7 +211,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: CursorClickIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id",
   },
   "browser.credential": {
     title: "Browser credential",
@@ -237,7 +222,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: KeyIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id",
   },
   "browser.control": {
     title: "Browser handback",
@@ -249,7 +233,6 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: HandIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id",
   },
   "browser.show": {
     title: "Browser",
@@ -261,14 +244,12 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: EyeIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id",
   },
   "chat.permission": {
     title: "Agent permission",
     summary: (a) => a.chatPermission?.title ?? a.subject,
     icon: ChatCircleDotsIcon,
     area: "chat",
-    page: "/e/$env/chats",
   },
 }
 
@@ -279,7 +260,6 @@ const unknownKind: ApprovalKind = {
   title: "Approval",
   summary: (a) => a.subject,
   icon: ShieldIcon,
-  page: "/e/$env",
 }
 
 export function approvalKind(a: Approval): ApprovalKind {

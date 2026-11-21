@@ -77,20 +77,27 @@ change it.
 - `internal/events` publishes change notices as SSE at `/api/events`, with topics such as
   `approvals`, `rules`, `secrets`, `builds`, `teammates`, `chats` and `tasks`. Events say what
   changed; clients refetch. Slow subscribers are disconnected.
+- Every place lists pending approvals as the same rows (`NeedsYouList` in
+  `web/src/components/needs-you.tsx`): Home, a teammate's home, Network and the top bar. A
+  folded row answers without more choices: Deny and Allow for a network request (as the opened
+  row would decide untouched, `initialDecisionBody`; the arrow beside Allow overrides its
+  lifetime, scope or reach), Allow all for a group (each host's own initial decision,
+  `decideEach`), Deny and Allow once for an agent's permission ask, Review for git and memory
+  conflicts, and the kind's own word for the browser's questions and shares. Anything else
+  opens the row in place, which shows the old card's body (`ApprovalBody`,
+  `NetworkGroupBody`) with every choice.
 - The top bar's approvals button (`ApprovalsButton` in
   `web/src/components/approval-stack.tsx`) shows on every page and at every width, for every
-  environment, with the environment's name on rows from other environments. It opens a compact
-  list, one row per card: Allow and Deny for a network request (as its card decides
-  untouched, `initialDecisionBody`) and an agent's permission ask, Review for git and memory
-  kinds, and Open for the rest, which links to the card's page. Every place that shows an
-  approval card itself claims its ID while it is on screen (`useClaimApprovals` in
-  `web/src/lib/approval-claims.ts`): Home, a teammate's conversation, a chat's permission card
-  and the browser window's questions. The list leaves claimed IDs out, so a card shows in one
+  environment, with the environment's name on rows from other environments. Every place that
+  shows an approval itself claims its ID while it is on screen (`useClaimApprovals` in
+  `web/src/lib/approval-claims.ts`): Home, a teammate's home and conversation, a chat's
+  permission card and the browser window's questions. Lead's day only counts them and links
+  to Home, so it claims none. The list leaves claimed IDs out, so a request shows in one
   place; when every pending approval is claimed, the button is only a count. Nothing floats
   over a composer or the terminal's keys ([UI style](design/ui-style.md)). `ApprovalNotices`,
   mounted once by the root route, sends the notifications, puts the pending count into the
   page title and records arrivals (`web/src/lib/approval-arrivals.ts`): one that comes after
-  the first load flashes the count, and its card slides into Home's list.
+  the first load flashes the count, and its row slides into Home's list.
 - A network approval's Options have two rows: who the decision covers and for how long. For a
   browser request, Who is "<teammate>'s browser", "All browsers" or "Browsers and computers"
   (only the last leaves out `browserOnly`), and For is "Always", "1 hour", "This session" or

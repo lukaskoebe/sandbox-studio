@@ -213,9 +213,9 @@ Double-click resets the split; the arrows move it, and past either end fold or e
 - Home: its status goes into the top bar's status slot (`<name> now`): working on N chats, else
   its presence word and since when, with what keeps it from working
   (`hooks/use-teammate-presence.ts`); with nothing on the Now card it names a harness or
-  program in a terminal and links to it. Each thing shows once: the **Now** card is there only
-  while something waits for you (the waiting rows: Answer opens the card in place, Review opens
-  a push on Changes) or its agents work in terminals (each with Open) or it browses. Below it
+  program in a terminal and links to it. Each thing shows once: **Needs you** lists what waits
+  for you as Home's rows (`NeedsYouList`; Review opens a push on Changes), and the **Now** card
+  is there only while its agents work in terminals (each with Open) or it browses. Below it
   the threads as cards, newest day first (title, a chip for another computer, the last answer,
   and what waits in it in words, "Asks to run make test", else the number of requests and its
   state; New while it has changes this browser hasn't seen: `lib/chat-seen.ts`, revs in
@@ -335,7 +335,7 @@ and uptime, CPU and memory meters while it runs (polled every 5 seconds), Checkp
 Checkpoints (lineage and checkpoints in a sheet), Fork, Merge into its source for a fork,
 Connections (a sheet), Resources, Rebase, Export, Another computer, Suspend or Resume, and
 Delete. Beside the computer's name, a count of its waiting connections
-(`components/waiting-chip.tsx`) opens their hosts, with Allow all, Deny all and Review individually,
+(`components/waiting-chip.tsx`) opens their hosts, with Always allow all, Always deny all and Review individually,
 which is the top of Connections (`components/waiting-requests.tsx`). A computer that is off shows dark glass with Start and the checkpoint it keeps, and a
 teammate's keeps its Browser tab, as the browser has a VM of its own; one being created shows
 its progress. Folded, the screen is a strip of tab icons, and a tab opens the screen beside the

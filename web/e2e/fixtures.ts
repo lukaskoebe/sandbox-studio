@@ -3,6 +3,7 @@ import {
   expect,
   request,
   type APIRequestContext,
+  type Locator,
   type Page,
 } from "@playwright/test"
 import { startStudio, studioPort, type Studio } from "./studio"
@@ -307,7 +308,6 @@ export function approvals(page: Page) {
   return page.getByRole("region", { name: "Approvals" })
 }
 
-/** The top bar's count of approvals, which opens their list. */
 /** A layout of the teammate page's switch in the top bar: "Chat only", "Both", "Computer only". */
 export function layoutButton(page: Page, name: string) {
   return page
@@ -316,10 +316,24 @@ export function layoutButton(page: Page, name: string) {
     .getByRole("button", { name, exact: true })
 }
 
+/** The top bar's count of approvals, which opens their list. */
 export function approvalsButton(page: Page) {
   return page
     .getByRole("navigation", { name: "Where you are" })
     .getByRole("button", { name: /needs? you/ })
+}
+
+/**
+ * Opens a Needs you row in place, unless it is open, for the choices its folded row doesn't
+ * have (components/needs-you.tsx), and returns it.
+ */
+export async function openRow(row: Locator) {
+  const opener = row.locator("[data-slot=approval-open]")
+  await expect(opener).toBeVisible()
+  if ((await opener.getAttribute("aria-expanded")) !== "true")
+    await opener.click()
+  await expect(opener).toHaveAttribute("aria-expanded", "true")
+  return row
 }
 
 /** Opens the top bar's list of approvals, unless it is open, and returns it. */

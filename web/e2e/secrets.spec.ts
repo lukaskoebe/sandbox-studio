@@ -1,5 +1,6 @@
 import type { Response } from "@playwright/test"
 import {
+  openRow,
   addTeammate,
   approvals,
   expect,
@@ -196,6 +197,7 @@ test("a secret a host keeps refusing asks to be updated", async ({
     const card = approvals(page)
       .getByTestId("approval-card")
       .filter({ hasText: `registry.example.org keeps refusing ${secret}` })
+    await openRow(card)
     await expect(card.getByText(/probably wrong or expired/)).toBeVisible()
     await card.getByRole("button", { name: "Update secret" }).click()
     await expect(page).toHaveURL(/\/e\/[^/]+\/secrets\?edit=/)
@@ -269,6 +271,7 @@ test("an AWS access key gives a sandbox a profile, and its credentials are asked
     const card = approvals(page)
       .getByTestId("approval-card")
       .filter({ hasText: `asks for credentials from ${secret}` })
+    await openRow(card)
     await expect(
       card.getByRole("button", { name: "Always allow", exact: true })
     ).toBeVisible()

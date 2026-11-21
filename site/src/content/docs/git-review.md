@@ -5,7 +5,7 @@ description: Keep forge credentials on the host and approve pushes before Studio
 
 For a forge added in **Settings → Git forges**, Studio can act as the virtual Git remote. When a computer pushes through Studio, the change is staged in a private per-computer repository and waits for your review. The upstream branch does not change until you approve the push.
 
-Pushes and pull requests waiting for you are on **Home** under **Needs you**, in a card at the bottom right of Studio's other pages, and under **Waiting for you** in the computer's **Changes** tab, where each one opens its review. The **Activity** page, under **Environment** in the sidebar, lists the decided ones; its **Git** filter shows only them.
+Pushes and pull requests waiting for you are on **Home** under **Needs you**, in the **needs you** list at the right of the top bar on Studio's other pages, and in the computer's **Changes** tab, where each one opens its review. Their rows have **Review**. The **Activity** page, under **Environment** in the sidebar, lists the decided ones; its **Git** filter shows only them.
 
 ![Settings → Git forges showing configured forges](../../assets/screenshots/git.jpg)
 

@@ -600,7 +600,7 @@ test("a chat says when its sandbox is suspended or stopped, and starts it", asyn
   await expect(header).not.toContainText("offline", { timeout: 20_000 })
 })
 
-// Each thing shows once on the home: the status in the top bar, what waits on the Now card and
+// Each thing shows once on the home: the status in the top bar, what waits under Needs you and
 // in words on its thread's card, and the computer card only the computer.
 test("a teammate's home says each thing once while a thread waits", async ({
   page,
@@ -632,8 +632,10 @@ test("a teammate's home says each thing once while a thread waits", async ({
   await expect(crumbs.getByRole("group", { name: `${name} now` })).toHaveText(
     "working on 1 chat"
   )
-  const now = main.getByRole("region", { name: "Now" })
-  await expect(now.getByRole("heading")).toHaveText("Needs you · 1")
+  const needs = main.getByRole("region", { name: "Needs you" })
+  await expect(needs.getByRole("heading")).toHaveText("Needs you · 1")
+  // The row says what Allow runs.
+  await expect(needs.getByTestId("approval-card")).toContainText("make test")
   const thread = main
     .getByRole("region", { name: `Threads with ${name}` })
     .getByRole("button", { name: /Please run the tests/ })
@@ -649,11 +651,10 @@ test("a teammate's home says each thing once while a thread waits", async ({
     computers.getByRole("button", { name: `Give ${name} another computer` })
   ).toHaveText("Another computer")
 
-  // Once answered, the thread's card and the Now card let it go.
-  await now.getByRole("button", { name: "Answer" }).click()
-  await now.getByRole("button", { name: "Allow once", exact: true }).click()
+  // Answered in its row, the thread's card and Needs you let it go.
+  await needs.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(thread).toContainText("Done", { timeout: 20_000 })
-  await expect(now).toHaveCount(0)
+  await expect(needs).toHaveCount(0)
 })
 
 test("a message's changes show each file's diff", async ({

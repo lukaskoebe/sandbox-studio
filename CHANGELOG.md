@@ -17,6 +17,14 @@
 - The Network page starts with the requests that wait for you, so the sidebar's Network count
   leads somewhere you can answer them. A thread no longer counts its computer's network
   requests and pushes; those count on the teammate and on Home.
+- Needs you is a list of rows everywhere: on Home, a teammate's home, Network and the top bar.
+  Each row says the kind with its icon, who asks, from where and how long ago, then what it
+  asks, and answers in place: Deny and Allow for a host and for an agent's permission, Allow
+  all or Each for hosts asked together, Review for a push. The arrow beside Allow picks an hour,
+  once, or a rule for only this computer or everyone. Choosing a row opens every choice in
+  place.
+- Lead's day says how many requests need you and links to Home, instead of a second copy of
+  them.
 
 ## v0.28.0 — 2026-11-21
 

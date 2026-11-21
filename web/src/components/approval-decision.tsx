@@ -232,7 +232,6 @@ export function decisionBody(
   }
 }
 
-/** The label of the allow or deny button for a lifetime, such as "Allow for 1 hour". */
 /**
  * Answers the approvals in turn. A host that an earlier rule of this run already covers answers
  * 409 and is skipped. Gives the first failure, if there is one, and never throws: a request
@@ -292,26 +291,46 @@ export function ruleSummary({
     return many
       ? "Each host for this browser session, with no lasting rule."
       : "For this browser session, with no lasting rule."
-  const env = envName ?? "this environment"
-  const who = browser
-    ? reach === "browser"
-      ? owner
-        ? `${owner}'s browser`
-        : "this browser"
-      : reach === "browsers"
-        ? `every browser in ${env}`
-        : `every browser and computer in ${env}`
-    : scope === "environment"
-      ? `every computer in ${env}`
-      : scope === "teammate" && owner
-        ? `${owner}'s computers`
-        : (sandboxName ?? "this computer")
+  const who = ruleWho({ scope, reach, browser, sandboxName, owner, envName })
   const rule = lifetime === "hour" ? "a rule for 1 hour" : "a lasting rule"
   return many
     ? `Each host gets ${rule} for ${who}.`
     : `${rule.charAt(0).toUpperCase()}${rule.slice(1)} for ${who}.`
 }
 
+/** Who a rule covers, as "Ada's computers" or "every browser in Default". */
+export function ruleWho({
+  scope,
+  reach,
+  browser,
+  sandboxName,
+  owner,
+  envName,
+}: {
+  scope: DecisionScope
+  reach: BrowserReach
+  browser: boolean
+  sandboxName?: string
+  owner?: string
+  envName?: string
+}) {
+  const env = envName ?? "this environment"
+  if (browser)
+    return reach === "browser"
+      ? owner
+        ? `${owner}'s browser`
+        : "this browser"
+      : reach === "browsers"
+        ? `every browser in ${env}`
+        : `every browser and computer in ${env}`
+  return scope === "environment"
+    ? `every computer in ${env}`
+    : scope === "teammate" && owner
+      ? `${owner}'s computers`
+      : (sandboxName ?? "this computer")
+}
+
+/** The label of the allow or deny button for a lifetime, such as "Allow for 1 hour". */
 export function decisionLabel(
   action: "allow" | "deny",
   lifetime: Lifetime,
@@ -547,17 +566,25 @@ export function initialDecision(approval: Approval) {
   }
 }
 
-/** The body of deciding a network approval as it starts (initialDecision), untouched. */
+/**
+ * The body of deciding a network approval as it starts (initialDecision), or with another
+ * lifetime or scope, as the quick choices of a row in a Needs you list pick.
+ */
 export function initialDecisionBody(
   approval: Approval,
-  action: "allow" | "deny"
+  action: "allow" | "deny",
+  over: {
+    lifetime?: Lifetime
+    scope?: DecisionScope
+    reach?: BrowserReach
+  } = {}
 ) {
   const d = initialDecision(approval)
   const net = approval.network
   return decisionBody(approval, action, {
-    lifetime: d.lifetime,
-    scope: d.scope,
-    reach: d.reach,
+    lifetime: over.lifetime ?? d.lifetime,
+    scope: over.scope ?? d.scope,
+    reach: over.reach ?? d.reach,
     host: d.pattern,
     note: "",
     ...(d.requestLevel && net?.method && net.pathPattern

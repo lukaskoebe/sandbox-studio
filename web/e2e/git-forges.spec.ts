@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Locator, Page } from "@playwright/test"
-import { expect, sandboxName, test } from "./fixtures"
+import { openRow, expect, sandboxName, test } from "./fixtures"
 
 /** Opens the Add forge dialog in Settings → Git. */
 async function addForge(page: Page, env: string) {
@@ -382,6 +382,7 @@ test("git asking for credentials offers to add the forge", async ({
   const card = page
     .getByTestId("approval-card")
     .filter({ hasText: `${name} needs access to github.com` })
+  await openRow(card)
   await expect(card.getByText("https://github.com/acme/web.git")).toBeVisible()
   await card.getByRole("button", { name: "Add forge" }).click()
   await expect(page).toHaveURL(/\/settings\/forges\?add=/)

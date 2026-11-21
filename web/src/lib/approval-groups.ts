@@ -85,3 +85,11 @@ export function approvalCards(
   }
   return cards
 }
+
+/** The IDs of every approval the cards show, in order, as one key. */
+export function approvalIds(cards: ApprovalCard[]) {
+  return cards
+    .flatMap((c) => (c.kind === "single" ? [c.approval] : c.approvals))
+    .map((a) => a.id)
+    .join(" ")
+}

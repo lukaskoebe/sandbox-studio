@@ -42,7 +42,7 @@ Claude Pro/Max and ChatGPT subscriptions sign in from Settings → AI providers.
 
 ## A command says it is waiting for network approval
 
-Answer the request: on the computer's screen, **1 request needs you** opens it; on other pages the count at the top right lists it, and Home and **Network** show its card. Studio holds the connection for a minute, and an answer in that time lets it through. After that the command sees a failure: choose **Allow next time** and run it again. If a rule denies the host, change it on **Network**.
+Answer the request: on the computer's screen, **1 request needs you** opens it; on other pages the count at the top right lists it, and Home and **Network** list it under **Needs you**. Studio holds the connection for a minute, and an answer in that time lets it through. After that the command sees a failure: choose **Allow** to make the rule and run it again. If a rule denies the host, change it on **Network**.
 
 ## A computer cannot reach this machine or a host on the local network
 

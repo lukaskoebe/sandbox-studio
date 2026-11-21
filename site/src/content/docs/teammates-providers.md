@@ -15,7 +15,8 @@ Each teammate is listed under **Teammates** in the sidebar, where a word says wh
 
 The teammate's page starts on its home. The bar at the top says what it does after its name, such as *working on 2 chats* or *idle since 10:42*, and what keeps it from working, such as **No provider**. Below:
 
-- What waits for you, its agents in terminals, and its browser while it browses, with **Watch**.
+- **Needs you**: what waits for you, as the same rows as on Home, each with its answer.
+- Its agents in terminals, and its browser while it browses, with **Watch**.
 - Its threads as cards by day, marked **New** while one has something you haven't seen, with what it learned and its tasks between them. A thread that waits for you says for what, such as *Asks to run make test*.
 - Its computers, each with **Terminal**, **Browser** and **Files**, and **Another computer**. A computer that is off says **Off** and has **Start** (**Resume** for a suspended one); its **Terminal** and **Files** start it too and open once it is up.
 

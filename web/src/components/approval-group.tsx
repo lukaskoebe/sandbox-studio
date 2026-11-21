@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
@@ -21,41 +21,26 @@ import {
 } from "@/components/approval-decision"
 import { HoldStatus } from "@/components/hold-status"
 import { Ident } from "@/components/ident"
-import { ApprovalTip } from "@/components/feature-tip"
-import { KindChip } from "@/components/kind-chip"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import type { Approval } from "@/lib/api/client"
-import { ruleClass } from "@/lib/accents"
-import { groupSite } from "@/lib/approval-groups"
-import { approvalKind, approvalSource } from "@/lib/approval-kinds"
+import { approvalSource } from "@/lib/approval-kinds"
 import { heldFor, isConnection, useHoldClock } from "@/lib/connection-holds"
-import { cn, formatAge, hostPort } from "@/lib/utils"
+import { cn, hostPort } from "@/lib/utils"
 
 /**
- * The network requests one sandbox made close together, as one card: the hosts, then Allow all,
- * Deny all, or Review individually for the per-host cards. Allow all and Deny all decide each
- * host as a single card would, for who and how long Options say: with a rule of its own, for
- * the browser session, or once. A browser page's requests say which site the page is on, and
- * the card is titled with it.
+ * The network requests one sandbox made close together, as a Needs you row shows them opened
+ * (components/needs-you.tsx): the hosts, then Allow all, Deny all, or Review individually for a
+ * row per host. Allow all and Deny all decide each host as its own row would, for who and how
+ * long Options say: with a rule of its own, for the browser session, or once.
  */
-export function NetworkGroupCard({
+export function NetworkGroupBody({
   approvals,
   envName,
   onReview,
-  inert,
   className,
 }: {
   approvals: Approval[]
   envName?: string
   onReview: () => void
-  /** Ignores clicks, as for a moment after the list it's in changed. */
-  inert?: boolean
   className?: string
 }) {
   const queryClient = useQueryClient()
@@ -75,14 +60,7 @@ export function NetworkGroupCard({
     connections && approvals.every((a) => heldFor(a, now) === undefined)
   const lifetime = gaveUp && picked === "once" ? "always" : picked
   const [optionsOpen, setOptionsOpen] = useState(false)
-  const card = useRef<HTMLDivElement>(null)
   const [working, setWorking] = useState<"allow" | "deny">()
-  const kind = approvalKind(first)
-  const sandbox = approvalSource(first)
-  const site = groupSite(approvals)
-  const details = [site && sandbox, envName, formatAge(first.createdAt)]
-    .filter(Boolean)
-    .join(" · ")
   const hosts = approvals.map((a) =>
     a.network ? hostPort(a.network.host, a.network.port) : a.subject
   )
@@ -104,110 +82,89 @@ export function NetworkGroupCard({
     setWorking(undefined)
   }
 
-  return (
-    <Card
-      ref={card}
-      size="sm"
-      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area), className)}
-      data-testid="approval-group"
-      inert={inert}
-    >
-      <ApprovalTip env={first.environmentId} feature="network" anchor={card} />
-      <CardHeader>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <KindChip area={kind.area} icon={kind.icon}>
-            {kind.title}
-          </KindChip>
-          <CardDescription className="min-w-0 break-words">
-            {details}
-          </CardDescription>
-        </div>
-        <CardTitle className="min-w-0 break-words">
-          {`${site ?? sandbox ?? "A computer"} wants ${approvals.length} hosts`}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-2">
-        {connections && <HoldStatus approvals={approvals} now={now} />}
-        <ScrollArea viewportClassName="max-h-28">
-          <ul className="flex flex-wrap gap-1 text-xs">
-            {hosts.map((host, i) => (
-              <li key={`${host}-${i}`} className="max-w-full">
-                <Ident>{host}</Ident>
-              </li>
-            ))}
-          </ul>
-        </ScrollArea>
-        {!optionsOpen && (
-          <p className="text-caption text-muted-foreground">
-            {ruleSummary({
-              lifetime,
-              scope,
-              reach,
-              browser,
-              sandboxName: first.network?.sandboxName,
-              owner: owner?.name,
-              envName,
-              many: true,
-            })}
-          </p>
-        )}
-        {optionsOpen && (
-          <>
-            {browser ? (
-              <ReachToggle
-                value={reach}
-                onChange={setReach}
-                owner={owner?.name}
-                disabled={lifetime === "session" || lifetime === "once"}
-              />
-            ) : (
-              <ScopeToggle
-                value={scope}
-                onChange={setScope}
-                sandboxName={sandbox}
-                owner={owner?.name}
-              />
-            )}
-            <LifetimeToggle
-              value={lifetime}
-              onChange={setLifetime}
-              browser={browser}
-              once={!gaveUp}
+  const body = (
+    <>
+      {connections && <HoldStatus approvals={approvals} now={now} />}
+      <ScrollArea viewportClassName="max-h-28">
+        <ul className="flex flex-wrap gap-1 text-xs">
+          {hosts.map((host, i) => (
+            <li key={`${host}-${i}`} className="max-w-full">
+              <Ident>{host}</Ident>
+            </li>
+          ))}
+        </ul>
+      </ScrollArea>
+      {!optionsOpen && (
+        <p className="text-caption text-muted-foreground">
+          {ruleSummary({
+            lifetime,
+            scope,
+            reach,
+            browser,
+            sandboxName: first.network?.sandboxName,
+            owner: owner?.name,
+            envName,
+            many: true,
+          })}
+        </p>
+      )}
+      {optionsOpen && (
+        <>
+          {browser ? (
+            <ReachToggle
+              value={reach}
+              onChange={setReach}
+              owner={owner?.name}
+              disabled={lifetime === "session" || lifetime === "once"}
             />
-          </>
-        )}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button variant="ghost" size="xs" onClick={onReview}>
-            Review individually
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            aria-expanded={optionsOpen}
-            onClick={() => setOptionsOpen(!optionsOpen)}
-          >
-            Options
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            disabled={working !== undefined}
-            onClick={() => void decideAll("deny")}
-          >
-            {working === "deny" && <Spinner />}
-            {decisionLabel("deny", lifetime, true)}
-          </Button>
-          <Button
-            size="sm"
-            disabled={working !== undefined}
-            onClick={() => void decideAll("allow")}
-          >
-            {working === "allow" && <Spinner />}
-            {decisionLabel("allow", lifetime, true)}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          ) : (
+            <ScopeToggle
+              value={scope}
+              onChange={setScope}
+              sandboxName={approvalSource(first)}
+              owner={owner?.name}
+            />
+          )}
+          <LifetimeToggle
+            value={lifetime}
+            onChange={setLifetime}
+            browser={browser}
+            once={!gaveUp}
+          />
+        </>
+      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button variant="ghost" size="xs" onClick={onReview}>
+          Review individually
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          aria-expanded={optionsOpen}
+          onClick={() => setOptionsOpen(!optionsOpen)}
+        >
+          Options
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          disabled={working !== undefined}
+          onClick={() => void decideAll("deny")}
+        >
+          {working === "deny" && <Spinner />}
+          {decisionLabel("deny", lifetime, true)}
+        </Button>
+        <Button
+          size="sm"
+          disabled={working !== undefined}
+          onClick={() => void decideAll("allow")}
+        >
+          {working === "allow" && <Spinner />}
+          {decisionLabel("allow", lifetime, true)}
+        </Button>
+      </div>
+    </>
   )
+  return <div className={cn("grid gap-2", className)}>{body}</div>
 }

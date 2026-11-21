@@ -4,6 +4,7 @@ import {
   approvalsButton,
   expect,
   openApprovals,
+  openRow,
   sandboxName,
   test,
 } from "./fixtures"
@@ -33,7 +34,7 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
   await expect(card).toBeVisible()
   await expect(otherCard).toBeVisible()
 
-  await card.getByRole("button", { name: "Allow" }).click()
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(card).toBeHidden()
   await expect(otherCard).toBeHidden()
 
@@ -127,17 +128,17 @@ test("requests that arrive together from one sandbox are one card; Allow all mak
   for (const host of hosts) await api.connect(id, host)
 
   const group = approvals(page).getByTestId("approval-group")
-  await expect(group).toContainText("wants 3 hosts")
+  await expect(group).toContainText("Network access · 3")
   for (const host of hosts) await expect(group).toContainText(host)
   await expect(approvals(page).getByTestId("approval-card")).toHaveCount(0)
-  // With Options folded, the card still says who its rules cover.
-  await expect(group).toContainText(
+  // The row's Allow all says who its rules cover.
+  const allowAll = group.getByRole("button", { name: "Allow all", exact: true })
+  await expect(allowAll).toHaveAttribute(
+    "title",
     /Each host gets a lasting rule for every computer in \S/
   )
 
-  await group
-    .getByRole("button", { name: "Always allow all", exact: true })
-    .click()
+  await allowAll.click()
   await expect(group).toBeHidden()
 
   // Each host got a rule of its own, made by an approval.
@@ -161,7 +162,8 @@ test("Allow all that loses a request on the way says so, and answers the rest", 
   await page.goto(`/e/${env}`)
   for (const host of hosts) await api.connect(id, host)
   const group = approvals(page).getByTestId("approval-group")
-  await expect(group).toContainText("wants 2 hosts")
+  await expect(group).toContainText("Network access · 2")
+  await openRow(group)
 
   // The first answer doesn't get through, as while Studio restarts.
   let lost = false
@@ -174,7 +176,7 @@ test("Allow all that loses a request on the way says so, and answers the rest", 
     .getByRole("button", { name: "Always allow all", exact: true })
     .click()
   await expect(page.getByText("Could not allow every host")).toBeVisible()
-  // One host is left to answer, and its card answers again.
+  // One host is left to answer, still open as its group was, and it answers again.
   const card = approvals(page).getByTestId("approval-card")
   await expect(card).toHaveCount(1)
   await expect(
@@ -184,11 +186,7 @@ test("Allow all that loses a request on the way says so, and answers the rest", 
   await api.dismissApprovals()
 })
 
-test("Review individually turns a group into the cards of its hosts", async ({
-  page,
-  api,
-  env,
-}) => {
+test("Each turns a group into a row per host", async ({ page, api, env }) => {
   await api.dismissApprovals()
   const id = await api.createSandbox(sandboxName("review"))
   const hosts = [freshHost("one"), freshHost("two")]
@@ -196,9 +194,9 @@ test("Review individually turns a group into the cards of its hosts", async ({
   await page.goto(`/e/${env}`)
   for (const host of hosts) await api.connect(id, host)
   const group = approvals(page).getByTestId("approval-group")
-  await expect(group).toContainText("wants 2 hosts")
+  await expect(group).toContainText("Network access · 2")
 
-  await group.getByRole("button", { name: "Review individually" }).click()
+  await group.getByRole("button", { name: "Each", exact: true }).click()
   await expect(group).toBeHidden()
   for (const host of hosts) {
     await expect(
@@ -224,11 +222,9 @@ test("an approval can allow a host for one hour, and the Rules tab counts the ru
     .getByTestId("approval-card")
     .filter({ hasText: host })
   await expect(card).toBeVisible()
-  await card.getByRole("button", { name: "Options", exact: true }).click()
-  await card.getByRole("button", { name: "1 hour", exact: true }).click()
-  await card
-    .getByRole("button", { name: "Allow for 1 hour", exact: true })
-    .click()
+  // The arrow beside the row's Allow picks the hour, and answers at once.
+  await card.getByRole("button", { name: "Other ways to allow" }).click()
+  await page.getByRole("menuitem", { name: "For 1 hour" }).click()
   await expect(card).toBeHidden()
 
   await page.goto(`/e/${env}/network`)
@@ -252,9 +248,8 @@ test("allow once and deny once answer the held connection without a rule; Activi
   let card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: allowed })
-  await card.getByRole("button", { name: "Options", exact: true }).click()
-  await card.getByRole("button", { name: "Once", exact: true }).click()
-  await card.getByRole("button", { name: "Allow once", exact: true }).click()
+  await card.getByRole("button", { name: "Other ways to allow" }).click()
+  await page.getByRole("menuitem", { name: "Once, with no rule" }).click()
   await expect(card).toBeHidden()
   await expect
     .poll(async () =>
@@ -266,6 +261,7 @@ test("allow once and deny once answer the held connection without a rule; Activi
   card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: denied })
+  await openRow(card)
   await card.getByRole("button", { name: "Options", exact: true }).click()
   await card.getByRole("button", { name: "Once", exact: true }).click()
   await card.getByRole("button", { name: "Deny once", exact: true }).click()
@@ -317,6 +313,7 @@ test("an allowed navigation approves its site, and the page's requests pass", as
   let card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: sessionHost })
+  await openRow(card)
   await card.getByRole("button", { name: "Options", exact: true }).click()
   await card.getByRole("button", { name: "This session", exact: true }).click()
   await expect(card).toContainText(
@@ -333,6 +330,7 @@ test("an allowed navigation approves its site, and the page's requests pass", as
   card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: ruleHost })
+  await openRow(card)
   await card.getByRole("button", { name: ruleHost, exact: true }).click()
   await card.getByRole("button", { name: "Always allow", exact: true }).click()
   await expect(card).toBeHidden()
@@ -379,6 +377,7 @@ test("a browser request can be allowed for the session, or by a rule for the tea
   let card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: session })
+  await openRow(card)
   await card.getByRole("button", { name: "Options", exact: true }).click()
   await card.getByRole("button", { name: session, exact: true }).click()
   await card.getByRole("button", { name: "This session", exact: true }).click()
@@ -394,6 +393,7 @@ test("a browser request can be allowed for the session, or by a rule for the tea
   card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: browserOnly })
+  await openRow(card)
   await card.getByRole("button", { name: "Options", exact: true }).click()
   // The teammate's approval scope, the environment, preselects all browsers.
   await expect(
@@ -432,7 +432,7 @@ function freshLabel() {
   return Math.random().toString(36).slice(2, 8)
 }
 
-test("an approval shows once: in the teammate's conversation, not also in the top bar's list", async ({
+test("an approval shows once: on the teammate's home, not also in the top bar's list", async ({
   page,
   api,
   env,
@@ -445,10 +445,7 @@ test("an approval shows once: in the teammate's conversation, not also in the to
   await page.goto(`/e/${env}/teammates/${teammate}`)
   await api.connect(id, host)
   const cards = page.getByTestId("approval-card").filter({ hasText: host })
-  await expect(
-    page.getByTestId("waiting-row").filter({ hasText: host })
-  ).toHaveCount(1)
-  await expect(cards).toHaveCount(0)
+  await expect(cards).toHaveCount(1)
   // Up there it is only counted.
   await expect(approvalsButton(page)).toHaveCount(0)
   // Elsewhere the list has it.
@@ -489,6 +486,7 @@ test("a rule made from an approval keeps the note written on it, or one that say
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: noted })
+  await openRow(card)
   await card.getByRole("button", { name: "Options", exact: true }).click()
   await card
     .getByRole("textbox", { name: "Why? (saved on the rule)" })
@@ -500,9 +498,7 @@ test("a rule made from an approval keeps the note written on it, or one that say
   const plainCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: plain })
-  await plainCard
-    .getByRole("button", { name: "Always allow", exact: true })
-    .click()
+  await plainCard.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(plainCard).toBeHidden()
 
   await page.goto(`/e/${env}/network`)
@@ -533,6 +529,7 @@ test("a connection to a forge's SSH port offers a forge", async ({
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: "codeberg.org" })
+  await openRow(card)
   await expect(card.getByText(/This is git over SSH/)).toBeVisible()
   await card.getByRole("button", { name: "Add forge for codeberg.org" }).click()
   await expect(page).toHaveURL(/\/settings\/forges\?add=/)
@@ -576,13 +573,14 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: push })
+  await openRow(card)
   await expect(card).toContainText("The curated list allows only reads")
   // Another write doesn't join the card: it has its own.
   const other = request("PUT", `/${owner}/other`)
   const otherCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: `/${owner}/other` })
-  await expect(otherCard).toBeVisible()
+  await openRow(otherCard)
   await expect(otherCard).toContainText("The curated list allows only reads")
   await expect(card).not.toContainText(`/${owner}/other`)
 
@@ -603,6 +601,7 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
   const thirdCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: `/someone-else-${owner}/` })
+  await openRow(thirdCard)
   await thirdCard
     .getByRole("button", { name: "Always deny", exact: true })
     .click()

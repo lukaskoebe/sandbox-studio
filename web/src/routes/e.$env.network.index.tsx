@@ -56,14 +56,10 @@ import { TrackerBlocking } from "@/components/tracker-blocking"
 import { CuratedList } from "@/components/curated-list"
 import { LevelSection } from "@/components/security-level"
 import { SectionHeader } from "@/components/section-header"
-import {
-  ApprovalCardList,
-  useApprovalReview,
-} from "@/components/approval-stack"
+import { NeedsYouList } from "@/components/needs-you"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import { useClaimApprovals } from "@/lib/approval-claims"
-import { approvalCards } from "@/lib/approval-groups"
 import { isNetworkApproval } from "@/lib/approval-kinds"
 import {
   expiryText,
@@ -439,9 +435,8 @@ function RulesTab() {
   )
 }
 
-/** Why no sandbox reaches a rule's connections, with the way to the settings that change it. */
 /**
- * The environment's connections and requests that wait for an answer, as Home's cards, so the
+ * The environment's connections and requests that wait for an answer, as Home's rows, so the
  * count beside Network in the sidebar leads to them. Nothing shows while none waits.
  */
 function NetworkNeedsYou({ env }: { env: string }) {
@@ -449,12 +444,8 @@ function NetworkNeedsYou({ env }: { env: string }) {
   const approvals = (pending.data ?? []).filter(
     (a) => a.environmentId === env && isNetworkApproval(a)
   )
-  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
-  const envs = $api.useQuery("get", "/api/environments")
   useClaimApprovals(approvals.map((a) => a.id))
-  const { sheet, review } = useApprovalReview()
-  const cards = approvalCards(approvals, split)
-  if (cards.length === 0) return null
+  if (approvals.length === 0) return null
   return (
     <section aria-labelledby="needs-you-heading" className="grid gap-2">
       <SectionHeader
@@ -463,20 +454,12 @@ function NetworkNeedsYou({ env }: { env: string }) {
         area="network"
         count={approvals.length}
       />
-      <div className="grid gap-2.5">
-        <ApprovalCardList
-          cards={cards}
-          max={cards.length}
-          envName={() => envs.data?.find((e) => e.id === env)?.name}
-          onReview={review}
-          onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
-        />
-      </div>
-      {sheet}
+      <NeedsYouList approvals={approvals} who tips />
     </section>
   )
 }
 
+/** Why no sandbox reaches a rule's connections, with the way to the settings that change it. */
 function Unreachable({ reason }: { reason: string }) {
   return (
     <p className="mt-1 flex max-w-96 gap-1.5 text-caption/relaxed whitespace-normal text-amber-700 dark:text-amber-400">

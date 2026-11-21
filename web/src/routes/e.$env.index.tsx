@@ -13,10 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/notice"
 import { DisksNotice } from "@/components/move-disks"
 import { LowDiskAdvice, lowDiskText } from "@/components/low-disk"
-import {
-  ApprovalCardList,
-  useApprovalReview,
-} from "@/components/approval-stack"
+import { NeedsYouList } from "@/components/needs-you"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { RebaseAllDialog } from "@/components/rebase-sandbox-dialog"
 import { Ident } from "@/components/ident"
@@ -32,7 +29,6 @@ import { $api, type Approval, type Sandbox } from "@/lib/api/client"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { useNotificationPermission } from "@/lib/notifications"
 import { usePreviewSetting } from "@/lib/preview-setting"
-import { approvalCards } from "@/lib/approval-groups"
 import {
   approvalDecision,
   approvalKind,
@@ -95,7 +91,7 @@ function Home() {
             chats={chats.data ?? undefined}
             sandboxes={sandboxes.data ?? undefined}
           />
-          <NeedsYou env={env} approvals={waiting} />
+          <NeedsYou approvals={waiting} />
           <LeadTodayCard env={env} />
           <SessionLines
             env={env}
@@ -394,37 +390,27 @@ function GetStarted({ env }: { env: string }) {
 }
 
 /**
- * The environment's approvals, as the same cards the stack shows, answered here. Requests from
- * one sandbox that came together share a card, and "Review individually" splits them.
+ * The environment's approvals, as every teammate's Needs you rows (components/needs-you.tsx),
+ * each saying whose it is, answered here.
  */
-function NeedsYou({ env, approvals }: { env: string; approvals: Approval[] }) {
-  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
-  const envs = $api.useQuery("get", "/api/environments")
+function NeedsYou({ approvals }: { approvals: Approval[] }) {
   useClaimApprovals(approvals.map((a) => a.id))
-  const { sheet, review } = useApprovalReview()
-  const cards = approvalCards(approvals, split)
-  const envName = () => envs.data?.find((e) => e.id === env)?.name
   return (
     <section
       aria-label="Approvals"
       className="grid min-w-0 content-start gap-2.5"
     >
-      <Label id="needs-you">Needs you</Label>
-      {cards.length === 0 ? (
+      <Label id="needs-you">
+        Needs you{approvals.length > 0 && ` · ${approvals.length}`}
+      </Label>
+      {approvals.length === 0 ? (
         <p className="rounded-(--radius) border border-dashed p-5 text-muted-foreground">
           Nothing needs you. Teammates keep working; this list fills when one of
           them asks.
         </p>
       ) : (
-        <ApprovalCardList
-          cards={cards}
-          max={cards.length}
-          envName={envName}
-          onReview={review}
-          onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
-        />
+        <NeedsYouList approvals={approvals} who tips />
       )}
-      {sheet}
     </section>
   )
 }

@@ -125,7 +125,7 @@ test("another page lists a sandbox's request in the top bar, with how long it is
   await expect(card.getByTestId("hold-status")).toContainText(
     /Held, \d+ s left/
   )
-  await card.getByRole("button", { name: "Allow" }).click()
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(card).toBeHidden()
 })
 
@@ -190,7 +190,7 @@ test("a row in the top bar's list says when its connection gave up", async ({
     .getByTestId("approval-card")
     .filter({ hasText: host })
   await expect(card.getByTestId("hold-status")).toContainText("No longer held")
-  await card.getByRole("button", { name: "Allow" }).click()
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(card).toBeHidden()
 })
 

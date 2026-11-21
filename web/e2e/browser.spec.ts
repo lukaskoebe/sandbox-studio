@@ -1,5 +1,12 @@
 import type { Page } from "@playwright/test"
-import { addTeammate, expect, sandboxName, test, type Api } from "./fixtures"
+import {
+  addTeammate,
+  expect,
+  openRow,
+  sandboxName,
+  test,
+  type Api,
+} from "./fixtures"
 
 type Pattern = { id: string; origin: string; action: string; verdict: string }
 
@@ -370,6 +377,7 @@ test("an agent shows the user a page, to watch or to take the wheel", async ({
   const card = page
     .getByTestId("approval-card")
     .filter({ hasText: `${name} wants to show you: Login page` })
+  await openRow(card)
   await expect(card.getByText("Try a wrong password")).toBeVisible()
   await card.getByRole("button", { name: "Watch" }).click()
   await expect(page).toHaveURL(new RegExp(`/teammates/${tm}\\?tab=browser$`))
@@ -379,17 +387,14 @@ test("an agent shows the user a page, to watch or to take the wheel", async ({
   )
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
 
-  // On the teammate's page the request waits on its home, and Answer opens its card there.
+  // On the teammate's page the request waits on its home, and its row opens there.
   await call("browser_show", { url: "https://example.com/a" })
-  await page
+  const asked = page
     .getByRole("region", { name: "Needs you" })
-    .getByRole("button", { name: "Answer" })
-    .click()
-  await page
     .getByTestId("approval-card")
     .filter({ hasText: `${name} wants to show you: https://example.com/a` })
-    .getByRole("button", { name: "Take the wheel" })
-    .click()
+  await openRow(asked)
+  await asked.getByRole("button", { name: "Take the wheel" }).click()
   await expect(page.getByTitle(/^You're driving/)).toBeVisible()
   expect((await api.json<Status>("GET", base))!.takeover).toBe(true)
 })

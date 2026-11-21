@@ -85,24 +85,29 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   out of context, such as a memory conflict, and each of those has "Open as page" for an
   address of its own that can be linked. A git review is not one of them: Review opens it on
   its computer's Changes tab.
-- **Approvals.** Every kind has the same card: the rule on the left edge in the area's hue, a
-  `KindChip` with the kind's name, a details line (source, environment, age), a title sentence
-  (hosts in `Ident`), and Deny / Allow. Grouped requests list their hosts and allow the
-  whole site at once. Browser URLs are in mono.
+- **Approvals.** Every kind is the same row (`NeedsYouRow` in `components/needs-you.tsx`;
+  2026-11-20 round, item 7, mock A1), on Home, a teammate's home, Network and in the top bar:
+  a first line of the kind (its icon in the label's grey at the letters' size, then the kind
+  word in small capitals, `KindLabel`), the owner's avatar and name, then source,
+  environment and age in muted text, and for a held connection the time left at its right;
+  the title under it, mono for hosts, wrapping at spaces, and a permission's command in muted
+  mono; the answer that needs no more choices at the right. Folded rows are a divided list in
+  one bordered card. A network row has Deny and a split Allow, whose arrow picks the length
+  (an hour, once while held) or the reach (this computer, the owner's computers, everyone)
+  and has More, which opens the row. A group of hosts has Each, a split Allow all, and Deny
+  all in its arrow. A permission has Deny / Allow (once). Choosing the row elsewhere opens it
+  in place with every choice the old card had, and Show less folds it. Hue stays off rows.
 - **Approvals in the top bar.** The breadcrumb row ends with "N need you", a small outline
   button with the count chip (`WaitingCount`) and a caret, on every page and at every width
   (`ApprovalsButton` in `approval-stack.tsx`; 2026-11-20 round, mock 6 A). It replaced a pill
   that floated bottom right, which covered a terminal's last lines, table rows and a composer's
   Send, and whose open cards covered half the page. Click opens a compact list under the bar,
-  as menus do, and a click outside or Escape closes it. Each row is a `KindChip`, a details
-  line, the title and the answer that needs no more choices: Deny / Allow for a permission and
-  a single network request (as its card starts, `initialDecision`; the button's tooltip says
-  for whom and how long), Review for a git ask, Resolve for a memory conflict, Show each for
-  grouped requests, and Open for the rest, which goes where its card is. The list's foot says
-  that Home has the cards with every choice, links there, and offers Enable notifications.
-  It leaves out what the page on screen already shows (`useClaimApprovals`); where the page
-  shows all of them, as Home and a teammate's home do, the button is only the count. A new
-  approval flashes the count once, and its card slides into Home's list with a ring in the
+  as menus do, and a click outside or Escape closes it. It lists the same rows as Home
+  (`NeedsYouList`), with the environment on each, and a row opens in place there too. Its
+  foot says to choose a request for all its choices, links to Home, and offers Enable
+  notifications. It leaves out what the page on screen already shows (`useClaimApprovals`);
+  where the page shows all of them, as Home and a teammate's home do, the button is only the
+  count. A new approval flashes the count once, and its row slides into Home's list with a ring in the
   waiting colour that fades (`lib/approval-arrivals.ts`); those already waiting when the page
   loads don't move. Both animations keep still under reduced motion.
 
@@ -187,8 +192,9 @@ teammates shown as people.
   above it where it helps ("What's happening").
 - **People.** Teammates have avatars with a presence dot (working, waiting for you, idle) on
   Home and in the sidebar. Sandboxes show their owner's avatar without a dot.
-- **Cards only for actions.** "Needs you", approvals, the setup checklist and waiting
-  connections are cards. Everything else is a divided list.
+- **Cards only for actions.** "Needs you", the setup checklist and waiting connections are
+  cards; Needs you holds its requests as a divided list inside its card. Everything else is a
+  divided list.
 - **Panels.** The workspace toggles panels with a segmented control. The Connections panel
   groups "Waiting for you" as cards and keeps "Allowed" and "Blocked" as plain lists.
 - **Tokens.** Background `oklch(0.983 0.006 85)` / `oklch(0.192 0.008 65)`. Card `oklch(0.997

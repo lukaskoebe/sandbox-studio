@@ -250,14 +250,14 @@ for (const width of [390, 1280])
     await expect
       .poll(async () => (await row.boundingBox())!.y)
       .toBeGreaterThanOrEqual(bar.y + bar.height - 0.5)
-    await expect(list).toContainText("Cards with the full detail are on Home.")
+    await expect(list).toContainText("Choose a request to see all its choices.")
     // Escape closes it, as it does a menu.
     await page.keyboard.press("Escape")
     await expect(row).toBeHidden()
 
-    // Allow in the row decides as the card would untouched.
+    // Allow in the row decides as the opened row would untouched.
     await button.click()
-    await row.getByRole("button", { name: "Allow" }).click()
+    await row.getByRole("button", { name: "Allow", exact: true }).click()
     await expect(button).toHaveCount(0)
     await expect
       .poll(async () =>
@@ -266,9 +266,9 @@ for (const width of [390, 1280])
       .toMatchObject({ done: true, status: 200 })
   })
 
-// Home lists the cards itself, so up there the button is only the count; a card that arrives
+// Home lists the rows itself, so up there the button is only the count; a row that arrives
 // slides into the list.
-test("on Home the approvals' count opens nothing, and a new card slides in", async ({
+test("on Home the approvals' count opens nothing, and a new row slides in", async ({
   page,
   api,
   env,
@@ -287,7 +287,7 @@ test("on Home the approvals' count opens nothing, and a new card slides in", asy
   await expect(crumbs.getByText(/^1 needs you$/)).toBeVisible()
   await expect(approvalsButton(page)).toHaveCount(0)
 
-  // Cards already waiting when the page loads don't move.
+  // Rows already waiting when the page loads don't move.
   await page.reload()
   await expect(card).toBeVisible()
   await expect(card).not.toHaveClass(/animate-card-arrival/)

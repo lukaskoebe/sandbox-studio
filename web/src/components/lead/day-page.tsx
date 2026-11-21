@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -10,18 +10,12 @@ import {
   GearIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
-import {
-  ApprovalCardList,
-  useApprovalReview,
-} from "@/components/approval-stack"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, errorMessage } from "@/lib/api/client"
-import { useClaimApprovals } from "@/lib/approval-claims"
-import { approvalCards } from "@/lib/approval-groups"
 import { approvalKind } from "@/lib/approval-kinds"
 import { copyText } from "@/lib/clipboard"
 import {
@@ -340,28 +334,29 @@ function Day({
   )
 }
 
-/** Today's approvals, answered in place as on Home. */
+/**
+ * How many of today's approvals wait, as a line with the way to Home, where they are listed and
+ * answered; the top bar lists them here too. The report stays the page's first thing.
+ */
 function WaitingNow({ env }: { env: string }) {
-  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const pending = usePendingApprovals()
-  const envs = $api.useQuery("get", "/api/environments")
-  const approvals = (pending.data ?? []).filter((a) => a.environmentId === env)
-  useClaimApprovals(approvals.map((a) => a.id))
-  const { sheet, review } = useApprovalReview()
-  const cards = approvalCards(approvals, split)
-  if (cards.length === 0) return null
+  const n = (pending.data ?? []).filter((a) => a.environmentId === env).length
+  if (n === 0) return null
   return (
     <Section title="Needs you">
-      <div className="grid gap-2.5">
-        <ApprovalCardList
-          cards={cards}
-          max={cards.length}
-          envName={() => envs.data?.find((e) => e.id === env)?.name}
-          onReview={review}
-          onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
-        />
-      </div>
-      {sheet}
+      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-(--radius) border bg-card px-3 py-2.5 text-xs">
+        <span className="min-w-0 flex-1">
+          {n === 1 ? "1 request needs you" : `${n} requests need you`}
+        </span>
+        <Link
+          to="/e/$env"
+          params={{ env }}
+          hash="needs-you"
+          className="font-medium underline-offset-4 hover:underline"
+        >
+          Answer on Home →
+        </Link>
+      </p>
     </Section>
   )
 }
