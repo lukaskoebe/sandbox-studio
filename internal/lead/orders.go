@@ -2,6 +2,7 @@ package lead
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -131,6 +132,8 @@ func (s *Service) AddOrder(ctx context.Context, env string, in OrderInput) (Orde
 	if err != nil {
 		return OrderView{}, err
 	}
+	s.orderMu.Lock() // two at once can't both pass the limit
+	defer s.orderMu.Unlock()
 	orders, err := s.Store.LeadOrders(ctx, env)
 	if err != nil {
 		return OrderView{}, err
@@ -165,6 +168,11 @@ func (s *Service) SetOrder(ctx context.Context, env, id string, in OrderInput) (
 	retimed := o.At != in.At || o.Days != in.Days || !o.Enabled && in.Enabled
 	o.Text, o.At, o.Days, o.Enabled, o.UpdatedAt = in.Text, in.At, in.Days, in.Enabled, now
 	if retimed {
+		// Moved to later today, it still comes due today, unless it already drafted today.
+		today := now.Format(time.DateOnly)
+		if o.LastDay == today && !s.draftedOn(ctx, env, o, today) {
+			o.LastDay = ""
+		}
 		settle(&o, now)
 	}
 	if err := s.Store.SaveLeadOrder(ctx, o); err != nil {
@@ -172,6 +180,15 @@ func (s *Service) SetOrder(ctx context.Context, env, id string, in OrderInput) (
 	}
 	s.publishOrders(env)
 	return s.orderView(ctx, o), nil
+}
+
+// draftedOn is whether the order's last plan was drafted that day.
+func (s *Service) draftedOn(ctx context.Context, env string, o store.LeadOrder, day string) bool {
+	if o.LastPlanID == "" {
+		return false
+	}
+	p, err := s.Store.GetLeadPlan(ctx, env, o.LastPlanID)
+	return err == nil && p.CreatedAt.In(s.now().Location()).Format(time.DateOnly) == day
 }
 
 // DeleteOrder removes a standing order. The plans it drafted stay.
@@ -229,7 +246,7 @@ func (s *Service) orders(ctx context.Context, env string, now time.Time) {
 		}
 		o.LastDay, o.UpdatedAt = today, now
 		if o.LastPlanID != "" {
-			if p, err := s.Store.GetLeadPlan(ctx, env, o.LastPlanID); err == nil && openPlan(p.State) {
+			if p, err := s.Store.GetLeadPlan(ctx, env, o.LastPlanID); err == nil && s.openPlan(ctx, p) {
 				o.Note = "Skipped " + now.Format("Mon 15:04") + ": the plan from last time is still open."
 				if err := s.Store.SaveLeadOrder(ctx, o); err != nil {
 					s.log().Warn("lead: saving a standing order failed", "env", env, "err", err)
@@ -248,10 +265,26 @@ func (s *Service) orders(ctx context.Context, env string, now time.Time) {
 	}
 }
 
-// openPlan is whether a plan in this state still waits on Lead, the user or the teammates.
-func openPlan(state string) bool {
-	switch state {
+// openPlan is whether a plan still waits on Lead, the user or the teammates. One that asks
+// waits only while Lead's question is the last word: a draft that failed, or a reply without
+// steps, leaves it asking with nothing to answer, and the order goes on the next time.
+func (s *Service) openPlan(ctx context.Context, p store.LeadPlan) bool {
+	switch p.State {
 	case store.LeadPlanDone, store.LeadPlanCancelled, store.LeadPlanFailed:
+		return false
+	case store.LeadPlanAsking:
+		items, err := s.Store.LeadPlanItems(ctx, p.ID)
+		if err != nil {
+			return true
+		}
+		for i := len(items) - 1; i >= 0; i-- {
+			if items[i].Kind == ItemNote {
+				continue
+			}
+			var d itemData
+			_ = json.Unmarshal(items[i].Data, &d)
+			return items[i].Kind == ItemLead && d.Question != nil
+		}
 		return false
 	}
 	return true

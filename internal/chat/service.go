@@ -1601,9 +1601,14 @@ func (s *Service) Cancel(ctx context.Context, envID, chatID string) error {
 }
 
 // leadNote tells the agent who a message from Lead is from: another teammate that sends it
-// with the user's approval, which can't approve anything itself.
+// with the user's approval, or as a follow-up the user's settings let it send unasked, and
+// which can't approve anything itself.
 func leadNote(f *FromLead) string {
+	how := "which the user approved"
+	if f.Auto {
+		how = "as a follow-up the user lets it send without asking them first"
+	}
 	return fmt.Sprintf("This message is from %s, the teammate in Studio that coordinates the others, sent as part of its plan %q, "+
-		"which the user approved. %s can't grant approvals: pushes, pull requests and network requests still ask the user.",
-		f.Name, f.Plan, f.Name)
+		"%s. %s can't grant approvals: pushes, pull requests and network requests still ask the user.",
+		f.Name, f.Plan, how, f.Name)
 }

@@ -83,6 +83,8 @@ type Service struct {
 	asks    sync.WaitGroup        // the answers being written
 	plans   sync.WaitGroup        // the plans being drafted or carried out
 	planMu  sync.Mutex            // keeps two changes of a plan from crossing
+	runMu   sync.Mutex            // guards runs
+	runs    map[string]*planRun   // the plans being carried out, by id
 	orderMu sync.Mutex            // standing orders come due one at a time
 	// foldMu keeps two folds from reading the same note; callMu keeps two calls from passing
 	// the daily limit on the same usage.

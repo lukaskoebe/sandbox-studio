@@ -333,6 +333,58 @@ func TestStandingOrderComesDueOnceADay(t *testing.T) {
 	}
 }
 
+// An order moved to later the same day comes due at its new time; a draft that failed leaves
+// nothing for the user to answer, so the order goes on the next day, while a question waits.
+func TestStandingOrderMovedLaterAndPastAFailedDraft(t *testing.T) {
+	f, _ := planFixture(t)
+	ctx := context.Background()
+	f.turn(t, "Write the coupon importer", "Done.", 1)
+	monday := time.Date(2026, 11, 16, 10, 0, 0, 0, time.Local)
+	now := monday
+	f.svc.Now = func() time.Time { return now }
+	every := 0b1111111
+	o, err := f.svc.AddOrder(ctx, f.env, OrderInput{Text: "Check the coupon tests", At: 9 * 60, Days: every, Enabled: true})
+	if err != nil || o.LastDay != "2026-11-16" {
+		t.Fatalf("made after its time = %+v, %v", o, err)
+	}
+	if o, err = f.svc.SetOrder(ctx, f.env, o.ID, OrderInput{Text: o.Text, At: 11 * 60, Days: every, Enabled: true}); err != nil ||
+		o.LastDay != "" || o.Next == nil || !o.Next.Equal(monday.Add(time.Hour)) {
+		t.Fatalf("moved to 11:00 = %+v, %v", o, err)
+	}
+
+	// 11:05: the draft fails.
+	f.llm.err = errors.New("overloaded")
+	now = monday.Add(65 * time.Minute)
+	f.svc.orders(ctx, f.env, now)
+	f.svc.plans.Wait()
+	ps, _ := f.svc.Plans(ctx, f.env)
+	if len(ps) != 1 || ps[0].State != store.LeadPlanAsking {
+		t.Fatalf("after a failed draft = %+v", ps)
+	}
+	// Moved later again the same day, it doesn't come due twice.
+	if o, err = f.svc.SetOrder(ctx, f.env, o.ID, OrderInput{Text: o.Text, At: 12 * 60, Days: every, Enabled: true}); err != nil || o.LastDay != "2026-11-16" {
+		t.Fatalf("moved after it drafted = %+v, %v", o, err)
+	}
+
+	// Tuesday: nothing to answer, so a new plan; it asks a question.
+	f.llm.err = nil
+	f.llm.plan = `{"reply": "Which branch?", "question": {"text": "Which branch should Ada test?", "options": ["main", "release"]}}`
+	now = monday.AddDate(0, 0, 1).Add(3 * time.Hour)
+	f.svc.orders(ctx, f.env, now)
+	f.svc.plans.Wait()
+	if ps, _ = f.svc.Plans(ctx, f.env); len(ps) != 2 {
+		t.Fatalf("Tuesday: %+v", ps)
+	}
+	// Wednesday: the question waits for the user, so no plan.
+	now = monday.AddDate(0, 0, 2).Add(3 * time.Hour)
+	f.svc.orders(ctx, f.env, now)
+	f.svc.plans.Wait()
+	views, _ := f.svc.Orders(ctx, f.env)
+	if ps, _ = f.svc.Plans(ctx, f.env); len(ps) != 2 || !strings.Contains(views[0].Note, "still open") {
+		t.Fatalf("Wednesday: %d plans, note %q", len(ps), views[0].Note)
+	}
+}
+
 func TestStandingOrderWithNothingToDoIsDone(t *testing.T) {
 	f, m := planFixture(t)
 	ctx := context.Background()

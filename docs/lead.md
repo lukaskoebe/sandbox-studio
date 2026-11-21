@@ -118,7 +118,10 @@ messages as they stand and a digest of them. Every message the user sends to the
 (`PlanMessage`) withdraws that approval and has Lead write the plan again, so an approval only
 ever allows what the user saw. Allowing it (on the plan page, its card or Home) runs
 `Approve`, which checks the digest; denying or dismissing it cancels the plan with nothing
-sent. **Cancel** cancels at any point; messages already sent stay.
+sent. **Cancel** cancels at any point; messages already sent stay. One still waiting in a
+thread's queue is taken back (`Messenger.Unqueue`), and one waiting for its computer to start
+never goes: the plan's steps run under a context the cancel ends (`planRun`). Either step
+ends `skipped`.
 
 Approved, the plan runs its steps in order. A message goes in with `chat.Queue`, so it waits
 behind a turn that runs, and a start makes a titled thread; both start or resume the
@@ -142,8 +145,11 @@ plan has at most 2 rounds of follow-ups after its first messages, and the report
 many are left. A follow-up is a round of its own: by default the plan goes back to
 `proposed` with a new `lead.plan` approval for just those messages, and allowing it sends
 them, waits and reports again. With `follow_ups` on, a follow-up whose threads were all
-started by this plan's own start steps goes at once, marked as sent without asking; one in
-any other thread still waits for approval. A message sent without asking carries `auto` in
+started by this plan's own start steps goes at once, marked as sent without asking, as long
+as the round spoke to one teammate: a follow-up may carry what one teammate answered, and that
+reaches another only with the user's approval. One in any other thread still waits for
+approval. The report reads the settings as they are when it runs, since a plan can wait for
+hours. A message sent without asking carries `auto` in
 the thread's `lead`, so the thread says so. A change the user asks for while a follow-up
 waits redrafts only that round; the rounds already sent stay.
 

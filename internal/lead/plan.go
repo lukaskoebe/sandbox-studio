@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
@@ -94,10 +95,14 @@ var (
 // Messenger sends Lead's messages: the api layer, which plans the teammates' agents.
 type Messenger interface {
 	// Queue sends text to a thread as from Lead, now or once its running turn ends; sent is
-	// called when it is in the thread.
-	Queue(ctx context.Context, env, chatID, text string, from chat.FromLead, sent func()) error
+	// called when it is in the thread. It returns the id the message waits under in the
+	// thread's queue, or "" once it is in the thread. A ctx ended before the message goes
+	// sends nothing.
+	Queue(ctx context.Context, env, chatID, text string, from chat.FromLead, sent func()) (queued string, err error)
+	// Unqueue takes a message that still waits off the thread's queue; false once it went.
+	Unqueue(env, chatID, queued string) bool
 	// Start opens a thread on a teammate's computer, starting the computer if it is off, and
-	// sends text as from Lead.
+	// sends text as from Lead. A ctx ended before the thread opens sends nothing.
 	Start(ctx context.Context, env, sandboxID, title, text string, from chat.FromLead) (chatID string, err error)
 }
 
@@ -118,6 +123,7 @@ type PlanStep struct {
 	ApprovedAt *time.Time `json:"approvedAt,omitempty" doc:"When the user approved the message"`
 	Auto       bool       `json:"auto,omitempty" doc:"A follow-up sent without asking, in a thread the plan started, as Lead's settings allow"`
 	Began      *time.Time `json:"began,omitempty" doc:"When a wait began"`
+	Sending    *time.Time `json:"sending,omitempty" doc:"When Lead began sending the message; its turn starts after"`
 }
 
 // PlanThread is a thread a plan's report speaks of.
@@ -370,6 +376,7 @@ func (s *Service) CancelPlan(ctx context.Context, env, id string) (LeadPlanView,
 	if err != nil {
 		return LeadPlanView{}, err
 	}
+	s.stopRun(env, id)
 	s.withdraw(ctx, env, approval)
 	s.note(ctx, env, id, "Cancelled. Messages already sent stay in their threads.")
 	return s.Plan(ctx, env, id)
@@ -1006,11 +1013,111 @@ func (s *Service) Refuse(ctx context.Context, a store.Approval, status string) e
 // --- carrying out -------------------------------------------------------------------------
 
 func (s *Service) runPlan(ctx context.Context, env, id string) {
+	ctx, done := s.planRun(ctx, id)
 	s.plans.Add(1)
 	go func() {
 		defer s.plans.Done()
-		s.execute(context.WithoutCancel(ctx), env, id)
+		defer done()
+		s.execute(ctx, env, id)
 	}()
+}
+
+// planRun is the context a plan's steps run under, which CancelPlan ends: a message waiting
+// for its computer to start then never goes. A follow-up's approval runs execute again while
+// the first may still run; both share it.
+func (s *Service) planRun(ctx context.Context, id string) (context.Context, func()) {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	r := s.run(id)
+	if r.users == 0 {
+		r.ctx, r.cancel = context.WithCancel(context.WithoutCancel(ctx))
+	}
+	r.users++
+	return r.ctx, func() {
+		s.runMu.Lock()
+		defer s.runMu.Unlock()
+		if r.users--; r.users == 0 {
+			r.cancel()
+			s.dropRun(id, r)
+		}
+	}
+}
+
+// planRun is what of a plan is in flight: its steps' context, and its messages that wait in
+// a thread's queue for the turn there to end.
+type planRun struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	users  int
+	queued map[int][2]string // step → the thread and the id the message waits under
+}
+
+// run is the plan's planRun, made if it has none; runMu is held.
+func (s *Service) run(id string) *planRun {
+	if s.runs == nil {
+		s.runs = map[string]*planRun{}
+	}
+	r := s.runs[id]
+	if r == nil {
+		r = &planRun{queued: map[int][2]string{}}
+		s.runs[id] = r
+	}
+	return r
+}
+
+// dropRun forgets a plan's run once nothing of it is in flight; runMu is held.
+func (s *Service) dropRun(id string, r *planRun) {
+	if r.users == 0 && len(r.queued) == 0 && s.runs[id] == r {
+		delete(s.runs, id)
+	}
+}
+
+// waiting notes a message of the plan that waits in a thread's queue.
+func (s *Service) waiting(env, id string, step int, chatID, queued string) {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	s.run(id).queued[step] = [2]string{chatID, queued}
+}
+
+// unwait forgets a waiting message once it went.
+func (s *Service) unwait(id string, step int) {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	if r := s.runs[id]; r != nil {
+		delete(r.queued, step)
+		s.dropRun(id, r)
+	}
+}
+
+// stopRun ends a cancelled plan's steps in flight, and takes back its waiting messages.
+func (s *Service) stopRun(env, id string) {
+	s.runMu.Lock()
+	if r := s.runs[id]; r != nil && r.users > 0 {
+		r.cancel()
+	}
+	s.runMu.Unlock()
+	s.takeBack(env, id)
+}
+
+// takeBack takes a cancelled plan's waiting messages off their threads' queues.
+func (s *Service) takeBack(env, id string) {
+	s.runMu.Lock()
+	var queued map[int][2]string
+	if r := s.runs[id]; r != nil {
+		queued, r.queued = r.queued, map[int][2]string{}
+		s.dropRun(id, r)
+	}
+	s.runMu.Unlock()
+	for step, q := range queued {
+		if !s.Send.Unqueue(env, q[0], q[1]) {
+			continue // it went meanwhile
+		}
+		s.setStep(context.Background(), env, id, step, func(st *PlanStep) {
+			if st.State == StepRunning {
+				st.State, st.Note = StepSkipped, notSent
+			}
+		})
+	}
 }
 
 // execute carries out a running plan's steps in order, from the first that isn't done.
@@ -1046,27 +1153,56 @@ func (s *Service) execute(ctx context.Context, env, id string) {
 		}
 		switch st.Kind {
 		case StepMessage:
-			s.setStep(ctx, env, id, i, func(st *PlanStep) { st.State = StepRunning })
-			n := i
-			err := s.Send.Queue(ctx, env, st.ChatID, st.Text, from, func() {
+			// The turn starts before the message is in the thread, once the computer's files
+			// are snapshotted, so it is found from when the sending began (leadTurn).
+			began := s.now()
+			s.setStep(ctx, env, id, i, func(st *PlanStep) { st.State, st.Sending = StepRunning, &began })
+			n, chatID := i, st.ChatID
+			var went atomic.Bool
+			queued, err := s.Send.Queue(ctx, env, chatID, st.Text, from, func() {
+				went.Store(true)
+				s.unwait(id, n)
 				s.setStep(context.WithoutCancel(ctx), env, id, n, func(st *PlanStep) {
 					t := s.now()
 					st.State, st.At = StepDone, &t
 				})
 			})
-			if err != nil {
-				s.setStep(ctx, env, id, i, func(st *PlanStep) { st.State, st.Note = StepFailed, failNote(err) })
+			switch {
+			case err != nil:
+				s.setStep(context.WithoutCancel(ctx), env, id, i, func(st *PlanStep) {
+					if st.State != StepRunning {
+						return
+					}
+					st.State, st.Note = StepFailed, failNote(err)
+					if ctx.Err() != nil {
+						st.State, st.Note = StepSkipped, notSent
+					}
+				})
+			case queued != "":
+				// It waits for the thread's turn to end; a cancel takes it back.
+				s.waiting(env, id, n, chatID, queued)
+				if went.Load() { // it went before it was noted
+					s.unwait(id, n)
+				}
+				if ctx.Err() != nil {
+					s.takeBack(env, id)
+				}
 			}
 		case StepStart:
-			s.setStep(ctx, env, id, i, func(st *PlanStep) { st.State = StepRunning })
+			began := s.now()
+			s.setStep(ctx, env, id, i, func(st *PlanStep) { st.State, st.Sending = StepRunning, &began })
 			chatID, err := s.Send.Start(ctx, env, st.SandboxID, st.Thread, st.Text, from)
 			t := s.now()
-			s.setStep(ctx, env, id, i, func(st *PlanStep) {
-				if err != nil {
+			s.setStep(context.WithoutCancel(ctx), env, id, i, func(st *PlanStep) {
+				switch {
+				case err == nil: // sent, even if the plan was cancelled as it went
+					st.State, st.ChatID, st.At = StepDone, chatID, &t
+				case st.State != StepRunning: // skipped by a cancel
+				case ctx.Err() != nil:
+					st.State, st.Note = StepSkipped, notSent
+				default:
 					st.State, st.Note = StepFailed, failNote(err)
-					return
 				}
-				st.State, st.ChatID, st.At = StepDone, chatID, &t
 			})
 		case StepWait:
 			s.wait(ctx, env, id, i)
@@ -1077,6 +1213,9 @@ func (s *Service) execute(ctx context.Context, env, id string) {
 }
 
 func failNote(err error) string { return clip(oneLine(err.Error()), 300) }
+
+// notSent is the note of a message a cancel kept from going.
+const notSent = "Not sent: the plan was cancelled first."
 
 // setStep changes one step of a plan.
 func (s *Service) setStep(ctx context.Context, env, id string, i int, f func(st *PlanStep)) {
@@ -1188,7 +1327,14 @@ func (s *Service) leadTurn(ctx context.Context, planID string, st PlanStep) ([]s
 	if err != nil {
 		return nil, false
 	}
-	since := st.At.Truncate(time.Second).Add(-time.Second) // turns keep whole seconds
+	from := st.At
+	if st.Sending != nil {
+		from = st.Sending
+	}
+	if from == nil {
+		return nil, false
+	}
+	since := from.Truncate(time.Second).Add(-time.Second) // turns keep whole seconds
 	for i := len(turns) - 1; i >= 0 && !turns[i].StartedAt.Before(since); i-- {
 		items, err := s.Store.ChatItems(ctx, st.ChatID, turns[i].ID)
 		if err != nil {
@@ -1257,6 +1403,10 @@ You can't approve requests, push, merge or change settings, and neither can a fo
 // tell writes Lead's report of what the teammates answered in the round, with a model when one
 // can be called and from the threads alone otherwise. When Lead follows up, the plan goes on.
 func (s *Service) tell(ctx context.Context, env, id string, i int, set store.LeadSettings) {
+	// A plan can wait for hours: the report and its follow-ups go by the settings as they are now.
+	if now, err := s.Store.LeadSettings(ctx, env); err == nil {
+		set = now
+	}
 	s.setStep(ctx, env, id, i, func(st *PlanStep) { st.State = StepRunning })
 	p, err := s.Store.GetLeadPlan(ctx, env, id)
 	if err != nil {
@@ -1394,6 +1544,12 @@ func (s *Service) followUp(ctx context.Context, env, id string, i int, set store
 		auto = set.FollowUps
 		for _, f := range follow {
 			auto = auto && started[f.ChatID]
+		}
+		// A follow-up may carry what one teammate answered to another: that goes past the user
+		// only when the round spoke to one teammate.
+		threads, _ := sentThreads(steps, steps[i].Round)
+		for _, st := range threads {
+			auto = auto && st.TeammateID == threads[0].TeammateID
 		}
 		round := steps[i].Round + 1
 		for k := range follow {

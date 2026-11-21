@@ -51,27 +51,38 @@ func (m leadMessenger) ready(ctx context.Context, env, sandboxID string) error {
 	return nil
 }
 
-func (m leadMessenger) Queue(ctx context.Context, env, chatID, text string, from chat.FromLead, sent func()) error {
+func (m leadMessenger) Queue(ctx context.Context, env, chatID, text string, from chat.FromLead, sent func()) (string, error) {
 	chats, err := m.s.chats()
 	if err != nil {
-		return err
+		return "", err
 	}
 	c, err := m.s.Store.Chat(ctx, env, chatID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if c.State == store.ChatTerminal {
-		return errors.New("the thread runs in a terminal, so Studio can't write in it")
+		return "", errors.New("the thread runs in a terminal, so Studio can't write in it")
 	}
 	if err := m.ready(ctx, env, c.SandboxID); err != nil {
-		return err
+		return "", err
 	}
 	launch, err := m.s.chatLaunchFor(ctx, env, chatID)
 	if err != nil {
-		return err
+		return "", err
 	}
-	_, err = chats.Queue(ctx, env, chatID, launch, chat.Prompt{Text: text, Lead: &from}, sent)
-	return err
+	if err := ctx.Err(); err != nil { // the plan was cancelled while the computer started
+		return "", err
+	}
+	q, queued, err := chats.Enqueue(ctx, env, chatID, launch, chat.Prompt{Text: text, Lead: &from}, sent)
+	if err != nil || !queued {
+		return "", err
+	}
+	return q.ID, nil
+}
+
+func (m leadMessenger) Unqueue(env, chatID, queued string) bool {
+	chats, err := m.s.chats()
+	return err == nil && chats.Unqueue(env, chatID, queued) == nil
 }
 
 func (m leadMessenger) Start(ctx context.Context, env, sandboxID, title, text string, from chat.FromLead) (string, error) {
@@ -91,6 +102,9 @@ func (m leadMessenger) Start(ctx context.Context, env, sandboxID, title, text st
 	}
 	launch, err := m.s.chatLaunch(ctx, sb)
 	if err != nil {
+		return "", err
+	}
+	if err := ctx.Err(); err != nil { // the plan was cancelled while the computer started
 		return "", err
 	}
 	c, err := chats.CreateTitled(ctx, sb, launch.Harness.Name(), title)

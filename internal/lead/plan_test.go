@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -25,35 +26,65 @@ type messenger struct {
 	quiet bool
 	open  string
 	err   error
+	// lag runs between a turn's start and its message being in the thread, as a snapshot does.
+	lag func()
+	// hold keeps the messages in their threads' queues, as a turn that runs would.
+	hold      bool
+	held      map[string]bool // queued ids still waiting
+	unqueued  []string
+	startWait bool // Start waits for the computer until ctx ends
 }
 
-func (m *messenger) Queue(_ context.Context, _ string, chatID, text string, from chat.FromLead, sent func()) error {
+func (m *messenger) Queue(_ context.Context, _ string, chatID, text string, from chat.FromLead, sent func()) (string, error) {
 	m.mu.Lock()
 	if m.err != nil {
 		m.mu.Unlock()
-		return m.err
+		return "", m.err
 	}
 	m.sent, m.from = append(m.sent, chatID+": "+text), append(m.from, from)
-	quiet := m.quiet
+	quiet, lag := m.quiet, m.lag
+	if m.hold {
+		if m.held == nil {
+			m.held = map[string]bool{}
+		}
+		id := fmt.Sprintf("q%d", len(m.sent))
+		m.held[id] = true
+		m.mu.Unlock()
+		return id, nil
+	}
 	m.mu.Unlock()
-	ctx := context.Background()
+	ctx := context.Background() // a message in the thread is there for good
 	turn, err := m.f.st.StartChatTurn(ctx, chatID, "chat", "")
 	if err != nil {
-		return err
+		return "", err
+	}
+	if lag != nil {
+		lag()
 	}
 	body, _ := json.Marshal(chat.UserBody{Text: text, Lead: &from})
 	if _, err := m.f.st.AddChatItem(ctx, store.ChatItem{ChatID: chatID, TurnID: turn.ID, Kind: chat.KindUser, Body: body}); err != nil {
-		return err
+		return "", err
 	}
 	sent()
 	if quiet {
 		m.mu.Lock()
 		m.open = turn.ID
 		m.mu.Unlock()
-		return nil
+		return "", nil
 	}
 	m.f.answerIn(m.t, chatID, turn.ID, "The coupon tests pass on main.")
-	return nil
+	return "", nil
+}
+
+func (m *messenger) Unqueue(_, _, queued string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.unqueued = append(m.unqueued, queued)
+	if !m.held[queued] {
+		return false
+	}
+	delete(m.held, queued)
+	return true
 }
 
 // answer ends a turn of the fixture's chat with Ada's answer.
@@ -78,7 +109,12 @@ func (m *messenger) Start(ctx context.Context, env, sandboxID, title, text strin
 		return "", m.err
 	}
 	m.sent, m.from = append(m.sent, "new "+sandboxID+" "+title+": "+text), append(m.from, from)
+	wait := m.startWait
 	m.mu.Unlock()
+	if wait {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	c, err := m.f.st.CreateChat(ctx, store.Chat{EnvironmentID: env, SandboxID: sandboxID, TeammateID: m.f.ada.ID, Harness: "claude", Title: title})
 	if err != nil {
 		return "", err
@@ -319,6 +355,106 @@ func TestPlanWaitsForTheAnswerAndRecovers(t *testing.T) {
 	v, _ := f.svc.Plan(ctx, f.env, stuck.ID)
 	if v.State != store.LeadPlanAsking || len(v.Items) != 1 || !strings.Contains(v.Items[0].Text, "Studio stopped") {
 		t.Errorf("recovered = %+v", v)
+	}
+}
+
+// waitPlans waits for the plans in flight, failing after a while.
+func (f *fixture) waitPlans(t *testing.T) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { f.svc.plans.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the plan never finished")
+	}
+}
+
+// A message whose turn starts long before it is in the thread, as when its computer's files
+// take a while to snapshot, still finds the answer to it.
+func TestPlanFindsTheAnswerAfterASlowStart(t *testing.T) {
+	f, m := planFixture(t)
+	ctx := context.Background()
+	var mu sync.Mutex
+	var skew time.Duration
+	f.svc.Now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return time.Now().Add(skew)
+	}
+	m.lag = func() {
+		mu.Lock()
+		skew += 30 * time.Second
+		mu.Unlock()
+	}
+	f.turn(t, "Write the coupon importer", "Done.", 1)
+	f.llm.plan = twoSteps
+	f.llm.report = "Ada says they pass."
+	p := f.draft(t, "Have Ada check the coupon tests")
+	if err := f.decide(t, p.ApprovalID, integrations.Allow); err != nil {
+		t.Fatal(err)
+	}
+	f.waitPlans(t)
+	p, _ = f.svc.Plan(ctx, f.env, p.ID)
+	last := p.Items[len(p.Items)-1]
+	if p.State != store.LeadPlanDone || len(last.Threads) != 1 || !last.Threads[0].Answered {
+		t.Fatalf("plan = %+v, report = %+v", p, last)
+	}
+}
+
+// Cancel takes back a message that still waits for its thread's turn to end, and stops a new
+// thread whose computer is still starting.
+func TestPlanCancelTakesBackWhatHasntGone(t *testing.T) {
+	f, m := planFixture(t)
+	ctx := context.Background()
+	f.turn(t, "Write the coupon importer", "Done.", 1)
+	f.llm.plan = twoSteps
+	m.hold = true
+	p := f.draft(t, "Have Ada check the coupon tests")
+	if err := f.decide(t, p.ApprovalID, integrations.Allow); err != nil {
+		t.Fatal(err)
+	}
+	until := func(what string, ok func(LeadPlanView) bool) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+			if v, _ := f.svc.Plan(ctx, f.env, p.ID); ok(v) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal(what)
+			}
+		}
+	}
+	until("the plan never waited", func(v LeadPlanView) bool { return len(v.Steps) == 3 && v.Steps[1].State == StepRunning })
+	if _, err := f.svc.CancelPlan(ctx, f.env, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.waitPlans(t)
+	p, _ = f.svc.Plan(ctx, f.env, p.ID)
+	m.mu.Lock()
+	unqueued, held := m.unqueued, len(m.held)
+	m.mu.Unlock()
+	if p.State != store.LeadPlanCancelled || p.Steps[0].State != StepSkipped || p.Steps[0].Note != notSent || held != 0 || len(unqueued) != 1 {
+		t.Fatalf("plan = %+v, unqueued %v, held %d", p, unqueued, held)
+	}
+
+	f.llm.plan = `{"reply": "Then a new thread.", "title": "Coupon tests", "steps": [{"kind": "start", "teammate": "tm1", "computer": "pc1", "title": "Coupon tests", "text": "Run them."}]}`
+	m.startWait = true
+	p = f.draft(t, "Have Ada check them in a new thread")
+	if err := f.decide(t, p.ApprovalID, integrations.Allow); err != nil {
+		t.Fatal(err)
+	}
+	until("the start never ran", func(v LeadPlanView) bool { return len(v.Steps) > 0 && v.Steps[0].State == StepRunning })
+	if _, err := f.svc.CancelPlan(ctx, f.env, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.waitPlans(t)
+	p, _ = f.svc.Plan(ctx, f.env, p.ID)
+	if p.State != store.LeadPlanCancelled || p.Steps[0].State != StepSkipped {
+		t.Fatalf("plan = %+v", p)
+	}
+	if len(f.svc.runs) != 0 {
+		t.Errorf("runs left: %v", f.svc.runs)
 	}
 }
 
