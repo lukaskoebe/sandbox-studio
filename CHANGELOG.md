@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- The UI calls the VM a teammate or you work in a computer everywhere, where it said "sandbox"
+  in many places: Create computer, Import computer, the Computer column. The machine Studio
+  runs on is "this machine", as in the Settings group This machine (was This computer), On
+  this machine under AI providers and Folder on this machine for a forge.
+- Decision buttons say how long they decide for: Always allow, Deny once, Allow for 1 hour.
+  On an agent's permission ask and a browser action they say Allow once and Deny once, or
+  Always allow and Always deny once "Don't ask again" is ticked. A request that gave up offers
+  Ignore and Always allow instead of Dismiss and Allow next time, and Lead says a rejected
+  push was rejected, not declined.
+- A thread's state is one word everywhere: working, needs you, in the terminal, done or ended.
+  "Needs you" names every list of what waits for you, and Memory's filter of facts to curate
+  is "To review".
+- The Network page starts with the requests that wait for you, so the sidebar's Network count
+  leads somewhere you can answer them. A thread no longer counts its computer's network
+  requests and pushes; those count on the teammate and on Home.
+
 ## v0.28.0 — 2026-11-21
 
 - A thread's title lives in the top bar only. Its menu there holds Rename, Copy link, Continue
