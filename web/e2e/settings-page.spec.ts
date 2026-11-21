@@ -320,27 +320,74 @@ test("the terminal shell is bash until zsh is picked, for every browser", async 
   )
 })
 
-test("Shut down asks first, then says Studio has stopped", async ({
+test("the Studio menu checks for updates, restarts and quits Studio, asking first", async ({
   page,
   env,
 }) => {
-  // The route is the Go tests'; here it would stop the Studio all the tests share.
-  let asked = 0
-  await page.route("**/api/system/shutdown", async (route) => {
-    asked++
-    await route.fulfill({ status: 202 })
-  })
-  await page.goto(`/e/${env}/settings/general`)
-  await page.getByRole("button", { name: "Shut down Studio" }).click()
+  // The routes are the Go tests'; here they would stop the Studio all the tests share.
+  const asked = { restart: 0, shutdown: 0 }
+  for (const path of ["restart", "shutdown"] as const)
+    await page.route(`**/api/system/${path}`, async (route) => {
+      asked[path]++
+      await route.fulfill({ status: 202 })
+    })
+  await page.route("**/api/system/updates/check", (route) =>
+    route.fulfill({
+      json: {
+        mode: "tell",
+        enabled: true,
+        current: "v1.0.0",
+        latest: "v1.1.0",
+        available: true,
+        canInstall: false,
+      },
+    })
+  )
+  await page.goto(`/e/${env}`)
+  const menu = page.getByRole("button", { name: /^Sandbox Studio/ })
+  const item = (name: string) => page.getByRole("menuitem", { name })
+
+  await menu.click()
+  await expect(item("What's new")).toHaveAttribute(
+    "href",
+    /github\.com\/lukaskoebe\/sandbox-studio\/releases/
+  )
+  await item("Check for updates").click()
+  await expect(page.getByText("Studio v1.1.0 is out")).toBeVisible()
+  await page.getByRole("button", { name: "Update…" }).click()
+  await expect(page).toHaveURL(/\/settings\/updates$/)
+
+  // Restarting asks first, then waits for Studio to go away and come back.
+  let down = 0
+  await page.route("**/api/health", (route) =>
+    down++ < 2 ? route.abort() : route.continue()
+  )
+  await menu.click()
+  await item("Restart Studio…").click()
   const dialog = page.getByRole("dialog")
   await dialog.getByRole("button", { name: "Cancel" }).click()
   await expect(dialog).toBeHidden()
-  expect(asked).toBe(0)
+  expect(asked.restart).toBe(0)
+  await menu.click()
+  await item("Restart Studio…").click()
+  await dialog.getByRole("button", { name: "Restart" }).click()
+  await expect(page.getByText("Studio restarted")).toBeVisible({
+    timeout: 15_000,
+  })
+  expect(asked.restart).toBe(1)
 
-  await page.getByRole("button", { name: "Shut down Studio" }).click()
-  await dialog.getByRole("button", { name: "Shut down" }).click()
+  // Settings no longer has a Shut down row: quitting is the menu's.
+  await page.goto(`/e/${env}/settings/general`)
+  await expect(page.getByRole("button", { name: /Shut down/ })).toHaveCount(0)
+  await menu.click()
+  await item("Quit Studio…").click()
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  expect(asked.shutdown).toBe(0)
+  await menu.click()
+  await item("Quit Studio…").click()
+  await dialog.getByRole("button", { name: "Quit" }).click()
   await expect(page.getByText("Studio has stopped")).toBeVisible()
-  expect(asked).toBe(1)
+  expect(asked.shutdown).toBe(1)
 })
 
 test("Check for updates asks now and says what it found", async ({

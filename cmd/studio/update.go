@@ -164,3 +164,27 @@ func restartForUpdate(resume updates.Resume, log *slog.Logger) int {
 	}
 	return 0
 }
+
+// errRestart ends run so that Studio starts again, as Restart in the Studio menu asks.
+var errRestart = errors.New("restarting")
+
+// startAgain starts Studio again after errRestart: its service manager does, or this process
+// becomes Studio's binary again (on Windows, it starts that detached).
+func startAgain(log *slog.Logger) int {
+	if updates.Supervised() {
+		return updates.ExitRestart
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		exe, err = filepath.EvalSymlinks(exe)
+	}
+	if err == nil {
+		// The restarted Studio doesn't open the browser again.
+		err = updates.StartAgain(exe, append([]string{"-no-browser"}, os.Args[1:]...))
+	}
+	if err != nil {
+		log.Error("starting Studio again", "err", err)
+		return 1
+	}
+	return 0
+}

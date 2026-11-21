@@ -56,7 +56,7 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 | `studio login-url` | Prints a fresh one-time login link for the running Studio. |
 | `studio tui` | Opens the [terminal UI](../tui/). |
 | `studio app` | Opens Studio in [a window of its own](../getting-started/#studio-in-a-window-of-its-own), starting Studio if it isn't running. Without the app or a display it opens the browser. |
-| `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. **Shut down** under **Settings → General** does the same from the browser. |
+| `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. **Quit Studio…** in the Studio menu, which the version line at the foot of the sidebar opens, does the same from the browser. |
 | `studio restart` | Stops the running Studio and starts this binary in its place. The installer runs it. Sandboxes keep running. |
 | `studio uninstall [-keep-data] [-keep-microsandbox] [-yes]` | Removes Studio, its data and its sandboxes, and microsandbox unless that has sandboxes of its own. It lists what goes and asks you to type `uninstall`. It also removes the start-at-login entry, the line in your SSH config and, on Linux, the launcher entry. `-keep-data` keeps the data and sandboxes for installing again, `-keep-microsandbox` keeps microsandbox and its images but not Studio's VMs, and `-yes` doesn't ask, for scripts. |
 | `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |

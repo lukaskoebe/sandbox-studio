@@ -28023,6 +28023,30 @@
         ]
       }
     },
+    "/api/system/restart": {
+      "post": {
+        "operationId": "restart",
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Restart Studio, as `studio restart` does. Sandboxes keep running; chats in the middle of a turn stop.",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/api/system/shutdown": {
       "post": {
         "operationId": "shutdown",

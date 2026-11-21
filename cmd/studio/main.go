@@ -204,6 +204,9 @@ func main() {
 	if errors.As(err, &restart) {
 		os.Exit(restartForUpdate(restart.resume, log))
 	}
+	if errors.Is(err, errRestart) {
+		os.Exit(startAgain(log))
+	}
 	if err != nil {
 		log.Error("studio stopped", "err", err)
 		os.Exit(1)
@@ -594,7 +597,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	}()
 
 	checker := &updates.Checker{Settings: st, Current: version.Version, Log: log}
-	system := api.System{Shutdown: stop, Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
+	// Restart in the Studio menu: run ends, and main starts Studio again.
+	var restartAgain atomic.Bool
+	system := api.System{Shutdown: stop, Restart: func() { restartAgain.Store(true); stop() }, Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
 		agentForges, err := st.AgentForges(ctx)
 		if err != nil {
 			log.Warn("doctor: count SSH agent forges", "err", err)
@@ -710,6 +715,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	<-shutdownDone
 	if restarting.Load() {
 		return &updateRestart{resume}
+	}
+	if restartAgain.Load() {
+		return errRestart
 	}
 	return nil
 }

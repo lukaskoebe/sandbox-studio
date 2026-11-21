@@ -65,24 +65,31 @@ func TestSystemSettings(t *testing.T) {
 	}
 }
 
-// SSH access adds Studio's config to the user's, and names a host per sandbox.
-func TestShutdown(t *testing.T) {
+// Shut down and Restart in the Studio menu call the System's funcs, where it has them.
+func TestShutdownAndRestart(t *testing.T) {
 	h, s := newTestServer(t)
-	if rec := do(h, "POST", "http://localhost:7878/api/system/shutdown", ""); rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("without a Shutdown func: %d %s", rec.Code, rec.Body)
-	}
-	stopped := make(chan struct{})
-	s.System.Shutdown = func() { close(stopped) }
-	if rec := do(h, "POST", "http://localhost:7878/api/system/shutdown", ""); rec.Code != http.StatusAccepted {
-		t.Fatalf("shutdown: %d %s", rec.Code, rec.Body)
-	}
-	select {
-	case <-stopped:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Shutdown was not called")
+	for path, set := range map[string]func(func()){
+		"shutdown": func(f func()) { s.System.Shutdown = f },
+		"restart":  func(f func()) { s.System.Restart = f },
+	} {
+		url := "http://localhost:7878/api/system/" + path
+		if rec := do(h, "POST", url, ""); rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s without its func: %d %s", path, rec.Code, rec.Body)
+		}
+		called := make(chan struct{})
+		set(func() { close(called) })
+		if rec := do(h, "POST", url, ""); rec.Code != http.StatusAccepted {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body)
+		}
+		select {
+		case <-called:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s's func was not called", path)
+		}
 	}
 }
 
+// SSH access adds Studio's config to the user's, and names a host per sandbox.
 func TestSSHAccess(t *testing.T) {
 	h, s := newTestServer(t)
 	dir := t.TempDir()

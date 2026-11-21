@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The version line at the foot of the sidebar opens a Studio menu: Check for updates, What's
+  new, Restart Studio and Quit Studio. Restart had only the command line before; Quit moved
+  here from Settings → General, which drops its Shut down row.
 - Agents can ask to mark a pull request's review threads resolved, on GitHub and GitLab, once
   they have dealt with them (`studio pr resolve`). Nothing changes until you approve the card,
   which lists each thread with its first comment. `pr read` now names each review comment's
