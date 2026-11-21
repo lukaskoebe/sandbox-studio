@@ -194,15 +194,30 @@ func (r Resume) Served(log *slog.Logger) *InstallProgress {
 // watches it: it puts the old binary and the database back, then exits with ExitRestart for
 // the service manager, or becomes the old binary where it replaced it in place. The database
 // stays open in this process, which on Unix doesn't stop the restore.
-func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) {
+//
+// pause stops the count while Studio waits on the user, such as for the OS keychain to
+// unlock; the func it returns starts the count afresh.
+func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) (pause func() (resume func())) {
 	if r.waiting == nil || !r.waiting.Supervised && !r.waiting.InPlace {
-		return
+		return func() func() { return func() {} }
 	}
 	p := *r.waiting
+	hold, done := make(chan bool), make(chan struct{})
 	go func() {
-		select {
-		case <-served:
-		case <-time.After(healthWait):
+		defer close(done)
+		t := time.NewTimer(healthWait)
+		defer t.Stop()
+		for {
+			select {
+			case <-served:
+				return
+			case paused := <-hold:
+				if t.Stop(); !paused {
+					t.Reset(healthWait)
+				}
+				continue
+			case <-t.C:
+			}
 			p, ok := rollback(p, fmt.Sprintf("Studio %s didn't serve within %d minutes", p.To, int(healthWait.Minutes())), log)
 			if !ok {
 				return
@@ -214,6 +229,16 @@ func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) {
 			os.Exit(ExitRestart)
 		}
 	}()
+	set := func(paused bool) {
+		select {
+		case hold <- paused:
+		case <-done:
+		}
+	}
+	return func() func() {
+		set(true)
+		return func() { set(false) }
+	}
 }
 
 // StoppedBeforeServing rolls back a new binary that replaced the old one in place and stopped

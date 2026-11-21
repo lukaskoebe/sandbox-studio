@@ -226,7 +226,8 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent
   binaries, open the catalog and vault (while the OS keychain that holds the vault key is
   locked, as after a reboot with only SSH logins, Studio serves a page that says so and waits:
-  `cmd/studio/keychain.go`), make sure an environment exists, start the
+  `cmd/studio/keychain.go`; the wait pauses an update's watchdog, and Retry reads the key at
+  most `keychainAsks` times while the keychain says it is locked), make sure an environment exists, start the
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI. Once it listens,
   Studio prints the login banner (the link as an OSC 8 hyperlink) and, when stderr is a terminal

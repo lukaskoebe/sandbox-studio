@@ -82,7 +82,7 @@ When a computer's disk is nearly full, the strip above its screen or chat says s
 
 ## Studio asks you to unlock your keychain
 
-Studio keeps the key to your secrets in the OS keychain. On Linux the keychain usually unlocks when you log in on the desktop, so after a restart of the computer with only SSH logins it stays locked. Studio then waits instead of starting, and its page says **Unlock your keychain**. Log in on the computer's desktop, or unlock the keychain another way, and Studio starts by itself; the page goes on with your session. **Retry** asks the keychain again at most every 15 seconds, which may show its password prompt on the desktop. A Studio that waits like this right after an update counts as not working, and after 15 minutes the update is undone.
+Studio keeps the key to your secrets in the OS keychain. On Linux the keychain usually unlocks when you log in on the desktop, so after a restart of the computer with only SSH logins it stays locked. Studio then waits instead of starting, and its page says **Unlock your keychain**. Log in on the computer's desktop, or unlock the keychain another way, and Studio starts by itself; the page goes on with your session. **Retry** asks the keychain again at most every 15 seconds, which may show its password prompt on the desktop, and five times in all while it stays locked; after that, unlock it on the desktop. A Studio that waits like this right after an update isn't undone for waiting: the 15 minutes an update has to start count from when the keychain unlocks.
 
 ## Move the data directory
 

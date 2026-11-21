@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,10 @@ var (
 	keychainPoll = 3 * time.Second
 	// keychainBlindRetry is how often it reads the key again where it can't tell.
 	keychainBlindRetry = time.Minute
+	// keychainAsks is how many reads Retry makes while the keychain says it is still locked.
+	// Anything on this computer can press it, and each read of a locked keychain prompts: past
+	// these, only its unlocking reads the key.
+	keychainAsks = 5
 
 	openSecrets    = secrets.Open
 	keychainLocked = secrets.KeychainLocked
@@ -43,6 +48,7 @@ type keychainWait struct {
 	err   error     // the last read's
 	last  time.Time // when the key was last read
 	asked bool      // the user asked to read it again
+	asks  int       // the reads Retry made while the keychain said it was locked
 }
 
 // keychainView is the wait as /api/auth/status, and every other API path, answers it.
@@ -61,10 +67,14 @@ type keychainView struct {
 // addr that says so instead, and opens the vault once the keychain unlocks or the user
 // retries. The vault is nil when ctx ends first; opened says whether it opened Studio in the
 // browser or the app.
-func openVault(ctx context.Context, st *store.Store, data, addr string, auth *webauth.Auth, open bool, log *slog.Logger) (v *secrets.Vault, opened bool, err error) {
+func openVault(ctx context.Context, st *store.Store, data, addr string, auth *webauth.Auth, open bool, pause func() func(), log *slog.Logger) (v *secrets.Vault, opened bool, err error) {
 	v, err = openSecrets(ctx, st, data, log)
 	if !errors.Is(err, secrets.ErrKeychainLocked) {
 		return v, false, err
+	}
+	// An update waiting to serve doesn't roll back while the user is yet to unlock the keychain.
+	if pause != nil {
+		defer pause()()
 	}
 	now := time.Now()
 	w := &keychainWait{since: now, last: now, err: err, nudge: make(chan struct{}, 1)}
@@ -115,14 +125,26 @@ func (w *keychainWait) due(now time.Time) bool {
 	w.mu.Lock()
 	last, asked := w.last, w.asked
 	w.mu.Unlock()
-	switch {
-	case now.Sub(last) < keychainRetryGap:
+	if now.Sub(last) < keychainRetryGap {
 		return false
+	}
+	locked, ok := keychainLocked()
+	switch {
+	case ok && !locked:
+		return true
+	case asked && ok:
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if w.asks >= keychainAsks {
+			w.asked = false
+			return false
+		}
+		w.asks++
+		return true
 	case asked:
 		return true
-	}
-	if locked, ok := keychainLocked(); ok {
-		return !locked
+	case ok:
+		return false
 	}
 	return now.Sub(last) >= keychainBlindRetry
 }
@@ -143,6 +165,9 @@ func (w *keychainWait) view(now time.Time) keychainView {
 	}
 	if w.err != nil {
 		v.Error = w.err.Error()
+	}
+	if w.asks >= keychainAsks {
+		v.Error = "Retry asked the keychain to unlock " + strconv.Itoa(keychainAsks) + " times; unlock it on this computer's desktop, and Studio starts by itself."
 	}
 	if left := keychainRetryGap - now.Sub(w.last); left > 0 {
 		v.RetryIn = int(left.Round(time.Second) / time.Second)

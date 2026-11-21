@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/zalando/go-keyring"
@@ -44,19 +45,42 @@ func (keychain) Name() string { return backendKeychain }
 // prompt, whose answer never comes when its daemon can't show one. A var so tests can shorten it.
 var keychainWait = time.Minute
 
+// keychainRead is a read of the keychain that may outlive the Get that started it: one that
+// didn't answer in time still waits on its prompt, or on macOS its security process.
+type keychainRead struct {
+	done chan struct{}
+	s    string
+	err  error
+}
+
+var (
+	readMu   sync.Mutex
+	inFlight = map[string]*keychainRead{} // by account
+)
+
 func (k keychain) Get() ([]byte, error) {
-	type got struct {
-		s   string
-		err error
+	// A read still waiting is waited on again rather than another started, so that a prompt
+	// nobody answers doesn't pile up more of them; but one that waited while the keychain
+	// was locked can't see it unlock, so a keychain known to be open is read afresh.
+	locked, ok := KeychainLocked()
+	readMu.Lock()
+	r := inFlight[k.account]
+	if r == nil || ok && !locked {
+		r = &keychainRead{done: make(chan struct{})}
+		inFlight[k.account] = r
+		go func() {
+			r.s, r.err = keyring.Get(keychainService, k.account)
+			readMu.Lock()
+			if inFlight[k.account] == r {
+				delete(inFlight, k.account)
+			}
+			readMu.Unlock()
+			close(r.done)
+		}()
 	}
-	done := make(chan got, 1)
-	go func() {
-		s, err := keyring.Get(keychainService, k.account)
-		done <- got{s, err}
-	}()
-	var r got
+	readMu.Unlock()
 	select {
-	case r = <-done:
+	case <-r.done:
 	case <-time.After(keychainWait):
 		return nil, fmt.Errorf("the keychain didn't answer within %s", keychainWait)
 	}

@@ -74,7 +74,7 @@ func startOpenVault(ctx context.Context, t *testing.T, addr string) <-chan vault
 	t.Helper()
 	done := make(chan vaultResult, 1)
 	go func() {
-		v, _, err := openVault(ctx, nil, t.TempDir(), addr, waitingAuth(t), false, slog.New(slog.DiscardHandler))
+		v, _, err := openVault(ctx, nil, t.TempDir(), addr, waitingAuth(t), false, nil, slog.New(slog.DiscardHandler))
 		done <- vaultResult{v, err}
 	}()
 	return done
@@ -153,6 +153,21 @@ func TestOpenVaultWaitsForALockedKeychainWithoutAskingItAgain(t *testing.T) {
 	}
 	eventually(t, "retry reads the key", func() bool { return k.reads.Load() == 2 })
 
+	// Each of those prompts while the keychain stays locked: past keychainAsks, Retry stops.
+	for i := 1; i < keychainAsks; i++ {
+		time.Sleep(keychainRetryGap)
+		request(t, http.MethodPost, base+"/api/keychain/retry", "")
+		eventually(t, "retry reads the key again", func() bool { return k.reads.Load() == int32(2+i) })
+	}
+	time.Sleep(keychainRetryGap)
+	if _, v := request(t, http.MethodPost, base+"/api/keychain/retry", ""); !strings.Contains(v.Error, "unlock it on this computer's desktop") {
+		t.Errorf("a spent retry says %+v", v)
+	}
+	time.Sleep(2 * keychainRetryGap)
+	if n := k.reads.Load(); n != int32(1+keychainAsks) {
+		t.Fatalf("the key was read %d times, want %d", n, 1+keychainAsks)
+	}
+
 	// Unlocked, Studio opens the vault by itself and stops serving the wait.
 	k.locked.Store(false)
 	select {
@@ -163,8 +178,8 @@ func TestOpenVaultWaitsForALockedKeychainWithoutAskingItAgain(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("openVault didn't return once the keychain unlocked")
 	}
-	if n := k.reads.Load(); n != 3 {
-		t.Fatalf("the key was read %d times, want 3", n)
+	if n := k.reads.Load(); n != int32(2+keychainAsks) {
+		t.Fatalf("the key was read %d times, want %d", n, 2+keychainAsks)
 	}
 	if resp, err := http.Get(base + "/api/auth/status"); err == nil {
 		resp.Body.Close()

@@ -340,7 +340,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		}
 	}()
 	served := make(chan struct{})
-	resume.Watchdog(served, log)
+	pauseWatchdog := resume.Watchdog(served, log)
 	// msb refuses a home that other accounts could tamper with. Stop before msb or its
 	// database changes, so that an update rolls back to the Studio that still works.
 	if err := prepareMSBHome(log); err != nil {
@@ -383,7 +383,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	refreshAutostart(addr, log)
 	// Studio must not run without its vault: without the key the stored secrets are lost.
 	// While the keychain holding the key is locked, Studio waits for it (keychain.go).
-	vault, opened, err := openVault(ctx, st, p.Data, addr, auth, open, log)
+	vault, opened, err := openVault(ctx, st, p.Data, addr, auth, open, pauseWatchdog, log)
 	if err != nil {
 		return err
 	}
