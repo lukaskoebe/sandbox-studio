@@ -210,19 +210,21 @@ on a push waiting for review (`opensEnlarged` in `git-review.tsx`) opens it with
 the diff has the width; Esc or the layout switch brings the conversation back.
 Double-click resets the split; the arrows move it, and past either end fold or expand.
 
-- Home: first the **Now** card (`<name> now`): its presence word and since when, or what waits
-  for you, with what keeps it from working (`hooks/use-teammate-presence.ts`);
-  then the waiting rows (Answer opens the card in place, Review opens a push on Changes), the
-  threads it is working in and its agents in terminals, each with Open, and what it browses.
-  With nothing alive it is one line, which names a harness or program in a terminal and links
-  to it. Below it the threads as cards, newest day first (title, a chip for another computer, the last
-  answer, the number of requests, its state, and New while it has changes this browser hasn't
-  seen: `lib/chat-seen.ts`, revs in localStorage), the small events between them (facts it
+- Home: its status goes into the top bar's status slot (`<name> now`): working on N chats, else
+  its presence word and since when, with what keeps it from working
+  (`hooks/use-teammate-presence.ts`); with nothing on the Now card it names a harness or
+  program in a terminal and links to it. Each thing shows once: the **Now** card is there only
+  while something waits for you (the waiting rows: Answer opens the card in place, Review opens
+  a push on Changes) or its agents work in terminals (each with Open) or it browses. Below it
+  the threads as cards, newest day first (title, a chip for another computer, the last answer,
+  and what waits in it in words, "Asks to run make test", else the number of requests and its
+  state; New while it has changes this browser hasn't seen: `lib/chat-seen.ts`, revs in
+  localStorage), the small events between them (facts it
   learned, with Forget; tasks; terminal work; check-ins). One composer starts a thread on the
   computer on the screen (or another it picks), adds a task, or teaches a fact. Beside the
-  threads on a wide page, above them on a narrow one, its computers as stacked cards: state, the
-  thread there (two lines at most), and Terminal, Browser and Files, each opening the desk on
-  that tab; then a dashed Give X another computer. A computer that is off says Off and has a
+  threads on a wide page, above them on a narrow one, its computers as stacked cards: state, a
+  fork's base, and Terminal, Browser and Files, each opening the desk on that tab; then a quiet
+  "+ Another computer". A computer that is off says Off and has a
   green Start (Resume when suspended), and its Terminal and Files start it as they open; its
   browser button waits until it runs. The composer's line says "off, it starts as you type".
   The folded screen's rail has the same start as a power button (`FoldedStart`). A narrow

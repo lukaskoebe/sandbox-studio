@@ -44,8 +44,10 @@ import {
   activityDetail,
   presenceLabels,
   useActivity,
+  type Presence,
 } from "@/hooks/use-teammate-presence"
-import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
+import { InTopBar } from "@/components/top-bar-slot"
+import { PresenceDot } from "@/components/teammate-avatar"
 import { Readiness } from "@/components/teammate-readiness"
 import { Button } from "@/components/ui/button"
 import {
@@ -257,8 +259,8 @@ function FullHome({
       key: `chat-${chat.id}`,
       node: (
         <ThreadCard
-          teammate={teammate}
           chat={chat}
+          asks={chatApprovals(chat, waiting, chats)}
           turns={turns.get(chat.id) ?? []}
           computer={
             computers.length > 1
@@ -311,7 +313,6 @@ function FullHome({
       env={env}
       teammate={teammate}
       computers={computers}
-      chats={chats}
       loaded={loaded}
       onOpen={onOpenComputer}
     />
@@ -321,17 +322,21 @@ function FullHome({
     <div className="@container flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 pt-4 pb-6">
-          <NowCard
+          <HomeStatus
             env={env}
             teammate={teammate}
             chats={chats}
+            quiet={inTerminals.length > 0 || !!browsing}
+          />
+          <NowCard
+            teammate={teammate}
+            env={env}
             computers={computers}
             waiting={shownWaiting}
             terminals={inTerminals}
             browsing={!!browsing}
             browserWaiting={browserWaiting}
             watching={watching}
-            onThread={onThread}
             onReview={onReview}
             onWatch={onWatch}
             onOpenComputer={onOpenComputer}
@@ -393,74 +398,33 @@ function FullHome({
 }
 
 /**
- * The top of the teammate's home: what it does now. What waits for you comes first, each with
- * the button that answers it, then what runs: its threads at work, its agents in terminals and
- * its browser. With nothing alive it is one line, its status.
+ * What the teammate does, in the top bar after its name: working on its chats, its agent at
+ * work in a terminal, idle since when, or offline, and what keeps it from working. What waits
+ * for you is the Now card's to say and the threads at work are the cards below; while the Now
+ * card lists its agents in terminals or its browser, the line leaves those to it.
  */
-function NowCard({
+function HomeStatus({
   env,
   teammate,
   chats,
-  computers,
-  waiting,
-  terminals,
-  browsing,
-  browserWaiting,
-  watching,
-  onThread,
-  onReview,
-  onWatch,
-  onOpenComputer,
+  quiet,
 }: {
   env: string
   teammate: Teammate
   chats: Chat[]
-  computers: Sandbox[]
-  waiting: Approval[]
-  terminals: AgentTerminal[]
-  browsing: boolean
-  browserWaiting: boolean
-  watching: boolean
-  onThread: (chat: Chat) => void
-  onReview: (a: Approval) => void
-  onWatch: () => void
-  onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
+  quiet: boolean
 }) {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
   const activity = useActivity(env)(teammate.id)
-  const running = chats.filter((c) => c.state === "running")
-  const where = (id?: string | null) =>
-    computers.length > 1 ? computers.find((c) => c.id === id)?.name : undefined
-  const rows = [
-    ...running.map((c) => (
-      <NowRow
-        key={c.id}
-        lead={<ThreadDot status="working" />}
-        title={chatTitle(c)}
-        meta={["working", where(c.sandboxId)].filter(Boolean).join(" on ")}
-        onOpen={() => onThread(c)}
-      />
-    )),
-    ...terminals.flatMap((t) => {
-      const c = computers.find((x) => x.id === t.sandboxId)
-      if (!c) return []
-      return [
-        <NowRow
-          key={`${t.sandboxId}-${t.name}`}
-          lead={<ThreadDot status="terminal" />}
-          title={t.title || `${teammate.name} in a terminal`}
-          meta={`${t.state === "working" ? "working" : "in the terminal"} on ${c.name}`}
-          onOpen={() => onOpenComputer(c, "terminal", t.name)}
-        />,
-      ]
-    }),
-  ]
-  const alive = rows.length > 0 || browsing
-  const presence = waiting.length > 0 ? "waiting" : activity.presence
-  // What it does is in the rows below while there are any; otherwise the status line says it.
-  const detail = alive ? undefined : activityDetail(activity)
+  const running = chats.filter((c) => c.state === "running").length
+  const presence: Presence =
+    running > 0
+      ? "working"
+      : activity.presence === "waiting"
+        ? "idle"
+        : activity.presence
   const last = chats.reduce<string | undefined>(
     (m, c) => (!m || c.updatedAt > m ? c.updatedAt : m),
     undefined
@@ -471,59 +435,118 @@ function NowCard({
     new Date(last).toDateString() === new Date().toDateString()
       ? ` since ${time(last)}`
       : ""
-  const terminal = activity.terminal
-  const status =
-    waiting.length > 0
-      ? `Waiting for you · ${waiting.length}`
-      : `${presenceLabels[presence]}${since}`
+  const terminal = running > 0 || quiet ? undefined : activity.terminal
+  const detail = terminal && activityDetail({ presence, terminal })
+  const label =
+    running > 0
+      ? `working on ${running} ${running === 1 ? "chat" : "chats"}`
+      : `${presenceLabels[presence].toLowerCase()}${since}`
   return (
-    <section
-      aria-label={`${teammate.name} now`}
-      className={cn(
-        "grid gap-2 rounded-xl border bg-card px-3.5 py-3 shadow-xs",
-        presence === "waiting"
-          ? "border-l-3 border-l-(--st-waiting)"
-          : alive && "border-l-3 border-l-(--st-running)"
-      )}
-    >
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+    <InTopBar slot="status">
+      <span
+        role="group"
+        aria-label={`${teammate.name} now`}
+        className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+      >
         <PresenceDot
           presence={presence}
           busy={activity.terminal?.state === "busy"}
         />
-        <h2 className="min-w-0 flex-1 text-sm font-medium break-words">
-          {status}
-          {waiting.length === 0 && detail && (
-            <span className="font-normal text-muted-foreground">
+        {/* A narrow window keeps the dot; the words are in its title. */}
+        <span className="min-w-0 truncate max-md:sr-only">
+          {label}
+          {terminal && detail && (
+            <>
               {" · "}
-              {terminal ? (
-                <Link
-                  to="/e/$env/teammates/$id"
-                  params={{ env, id: teammate.id }}
-                  search={(prev) => ({
-                    ...prev,
-                    tab: "terminal" as const,
-                    term: terminal.name,
-                    computer: terminal.sandboxId,
-                  })}
-                  className="text-foreground underline-offset-2 hover:underline"
-                >
-                  {detail}
-                </Link>
-              ) : (
-                detail
-              )}
-            </span>
+              <Link
+                to="/e/$env/teammates/$id"
+                params={{ env, id: teammate.id }}
+                search={(prev) => ({
+                  ...prev,
+                  tab: "terminal" as const,
+                  term: terminal.name,
+                  computer: terminal.sandboxId,
+                })}
+                className="text-foreground underline-offset-2 hover:underline"
+              >
+                {detail}
+              </Link>
+            </>
           )}
-        </h2>
+        </span>
         <Readiness
           teammate={teammate}
           provider={providers.data?.find((p) => p.id === teammate.providerId)}
           problemsOnly
         />
-      </div>
+      </span>
+    </InTopBar>
+  )
+}
+
+/**
+ * The top of the teammate's home, while something needs you or goes on outside its threads:
+ * what waits for you, each with the button that answers it, then its agents in terminals and
+ * its browser. Its threads at work are the cards below, and its status is in the top bar.
+ */
+function NowCard({
+  env,
+  teammate,
+  computers,
+  waiting,
+  terminals,
+  browsing,
+  browserWaiting,
+  watching,
+  onReview,
+  onWatch,
+  onOpenComputer,
+}: {
+  env: string
+  teammate: Teammate
+  computers: Sandbox[]
+  waiting: Approval[]
+  terminals: AgentTerminal[]
+  browsing: boolean
+  browserWaiting: boolean
+  watching: boolean
+  onReview: (a: Approval) => void
+  onWatch: () => void
+  onOpenComputer: (c: Sandbox, tab?: ScreenTab, term?: string) => void
+}) {
+  const rows = terminals.flatMap((t) => {
+    const c = computers.find((x) => x.id === t.sandboxId)
+    if (!c) return []
+    return [
+      <NowRow
+        key={`${t.sandboxId}-${t.name}`}
+        lead={<ThreadDot status="terminal" />}
+        title={t.title || `${teammate.name} in a terminal`}
+        meta={`${t.state === "working" ? "working" : "in the terminal"} on ${c.name}`}
+        onOpen={() => onOpenComputer(c, "terminal", t.name)}
+      />,
+    ]
+  })
+  const alive = rows.length > 0 || browsing
+  if (waiting.length === 0 && !alive) return null
+  return (
+    <section
+      aria-label="Now"
+      className={cn(
+        "grid gap-2 rounded-xl border border-l-3 bg-card px-3.5 py-3 shadow-xs",
+        waiting.length > 0
+          ? "border-l-(--st-waiting)"
+          : "border-l-(--st-running)"
+      )}
+    >
       {waiting.length > 0 && (
-        <Waiting env={env} approvals={waiting} onReview={onReview} inCard />
+        <>
+          <h2 className="flex items-center gap-2.5 text-sm font-medium">
+            <PresenceDot presence="waiting" />
+            Waiting for you · {waiting.length}
+          </h2>
+          <Waiting env={env} approvals={waiting} onReview={onReview} inCard />
+        </>
       )}
       {waiting.length > 0 && alive && <hr className="border-border" />}
       {rows}
@@ -617,20 +640,17 @@ function ComputerCards({
   env,
   teammate,
   computers,
-  chats,
   loaded,
   onOpen,
 }: {
   env: string
   teammate: Teammate
   computers: Sandbox[]
-  chats: Chat[]
   loaded: boolean
   onOpen: (c: Sandbox, tab?: ScreenTab) => void
 }) {
   const [giving, setGiving] = useState(false)
   const [all, setAll] = useState(false)
-  const pending = usePendingApprovals()
   const give = (
     <CreateSandboxDialog
       env={env}
@@ -659,20 +679,15 @@ function ComputerCards({
         {give}
       </section>
     )
-  const asks = (pending.data ?? []).filter((a) => a.environmentId === env)
   const byName = new Map(computers.map((c) => [c.id, c.name]))
   return (
     <div className="grid gap-2">
-      <span className="section-label text-muted-foreground">
-        {teammate.name}'s computers
-      </span>
+      <span className="section-label text-muted-foreground">Computers</span>
       {computers.map((c, i) => (
         <ComputerCard
           key={c.id}
           env={env}
           computer={c}
-          chats={chats}
-          asks={asks}
           forkOf={c.forkOf ? byName.get(c.forkOf) : undefined}
           className={cn(i >= foldedCards && !all && "hidden @4xl:grid")}
           onOpen={(tab) => onOpen(c, tab)}
@@ -690,11 +705,12 @@ function ComputerCards({
       )}
       <button
         type="button"
+        aria-label={`Give ${teammate.name} another computer`}
         onClick={() => setGiving(true)}
-        className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-xs text-muted-foreground outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="flex items-center gap-1.5 justify-self-start rounded-sm px-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         <PlusIcon className="size-3.5" />
-        Give {teammate.name} another computer
+        Another computer
       </button>
       {give}
     </div>
@@ -702,24 +718,20 @@ function ComputerCards({
 }
 
 /**
- * One of the teammate's computers: its state, what happens on it, and one click into its
- * terminal, browser or files. One that is off leads with Start (Resume when suspended), and its
+ * One of the teammate's computers: its state, and one click into its terminal, browser or
+ * files. What runs on it is its threads' to say, on their cards. One that is off leads with Start (Resume when suspended), and its
  * Terminal and Files start it too, then open on the glass while it boots. Browser steps aside
  * until it runs, to keep the card to three buttons; the screen's own tab still opens it.
  */
 function ComputerCard({
   env,
   computer: c,
-  chats,
-  asks,
   forkOf,
   className,
   onOpen,
 }: {
   env: string
   computer: Sandbox
-  chats: Chat[]
-  asks: Approval[]
   /** The name of the computer it is a fork of, when that one is the teammate's too. */
   forkOf?: string
   className?: string
@@ -732,15 +744,6 @@ function ComputerCard({
   const startable = !!action && !c.oldDiskLayout && c.status !== "absent"
   const mutation = action === "resume" ? resume : start
   const starting = p === "booting" || mutation.isPending
-  const here = chats
-    .filter((x) => x.sandboxId === c.id)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  const waitingChat = here.find((x) => chatApprovals(x, asks, chats).length > 0)
-  const shown =
-    here.find((x) => x.state === "running") ?? waitingChat ?? here.at(0)
-  const status = shown
-    ? chatStatus(shown, shown === waitingChat ? 1 : 0)
-    : undefined
   const wake = () => {
     if (startable && !mutation.isPending) mutation.mutate(path)
   }
@@ -777,31 +780,19 @@ function ComputerCard({
           {starting ? "Starting…" : phaseDot(p).label}
         </span>
       </span>
-      <span className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
-        {starting ? (
-          <span>Its terminals open once it is up</span>
-        ) : shown && status ? (
-          <>
-            <ThreadDot status={status} className="mt-1" />
-            <span className="line-clamp-2 break-words">
-              {chatTitle(shown)}
-              {status === "working"
-                ? " is running here"
-                : status === "waiting"
-                  ? " waits for you here"
-                  : `, ${statusLabels[status]}`}
-            </span>
-          </>
-        ) : forkOf ? (
-          <span className="truncate">
-            A fork of <span className="font-mono">{forkOf}</span>
-          </span>
-        ) : startable ? (
-          <span>Its workspace, home and Docker images are kept</span>
-        ) : (
-          <span>No thread here yet</span>
-        )}
-      </span>
+      {(starting || forkOf || startable) && (
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {starting ? (
+            "Its terminals open once it is up"
+          ) : forkOf ? (
+            <>
+              A fork of <span className="font-mono">{forkOf}</span>
+            </>
+          ) : (
+            "Its workspace, home and Docker images are kept"
+          )}
+        </span>
+      )}
       <span className="flex flex-wrap gap-1">
         {(startable || starting) && (
           <Button
@@ -1075,16 +1066,17 @@ function Preview({ text }: { text: string }) {
 
 /** One thread in brief: its title, where it runs, the last answer and how it stands. */
 function ThreadCard({
-  teammate,
   chat,
+  asks,
   turns,
   computer,
   live,
   news,
   onOpen,
 }: {
-  teammate: Teammate
   chat: Chat
+  /** What waits for you in it. */
+  asks: Approval[]
   /** Its requests in the last two weeks, oldest first. */
   turns: Turn[]
   /** The computer it runs on, named when the teammate has more than one. */
@@ -1095,7 +1087,6 @@ function ThreadCard({
   onOpen: () => void
 }) {
   const last = turns.at(-1)
-  const running = chat.state === "running"
   const tool = live
     ? [...live.items].reverse().find((i) => i.kind === "tool")?.tool?.title
     : undefined
@@ -1168,42 +1159,23 @@ function ThreadCard({
         </span>
       </span>
       {said && (
-        <span className="flex min-w-0 items-start gap-2">
-          <TeammateAvatar
-            name={teammate.name}
-            avatar={teammate.avatar}
-            className="mt-0.5 size-4 shrink-0 text-[0.5rem]"
-          />
-          <span className="line-clamp-2 text-xs/relaxed">
-            <Preview text={said} />
-          </span>
+        <span className="line-clamp-2 text-xs/relaxed">
+          <Preview text={said} />
         </span>
       )}
       <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
-        {turns.length > 0 && (
+        {asks.length > 0 ? (
           <>
-            <span className="shrink-0">
-              {turns.length} {turns.length === 1 ? "request" : "requests"}
-            </span>
-            <span aria-hidden>·</span>
-          </>
-        )}
-        {running ? (
-          <>
-            <span className="size-1.5 shrink-0 rounded-full bg-(--st-running)" />
-            <span className="min-w-0 shimmer truncate">
-              {tool ? `${tool}…` : "Working"}
+            <span className="size-1.5 shrink-0 rounded-full bg-(--st-waiting)" />
+            <span className="min-w-0 truncate font-medium text-(--st-waiting-fg)">
+              {askWords(asks[0])}
+              {asks.length > 1 && ` · ${asks.length - 1} more`}
             </span>
           </>
-        ) : marker ? (
-          <span className="text-destructive">{marker}</span>
-        ) : chat.state === "terminal" ? (
-          <span>In the terminal</span>
-        ) : chat.state === "orphaned" ? (
-          <span>Ended</span>
         ) : (
-          <span>Done</span>
+          <ThreadState chat={chat} turns={turns} tool={tool} marker={marker} />
         )}
+
         {/* A narrow card leaves the title line to the title. */}
         {computer && (
           <span className="hidden min-w-0 truncate @max-[26rem]/card:inline">
@@ -1212,6 +1184,73 @@ function ThreadCard({
         )}
       </span>
     </button>
+  )
+}
+
+const askVerbs: Record<string, string> = {
+  execute: "run",
+  edit: "edit",
+  delete: "delete",
+  move: "move",
+  fetch: "fetch",
+  read: "read",
+  search: "search",
+}
+
+/** What a thread waits for, in words: "Asks to run make test", or "Git push: fix → team/app". */
+export function askWords(a: Approval) {
+  const p = a.chatPermission
+  if (!p) {
+    const k = approvalKind(a)
+    return `${k.title}: ${k.summary(a)}`
+  }
+  const verb = askVerbs[p.toolKind ?? ""]
+  const t = p.title.trim()
+  if (verb && t.toLowerCase().startsWith(`${verb} `))
+    return `Asks to ${verb}${t.slice(verb.length)}`
+  return verb ? `Asks to ${verb} ${t}` : `Asks before going on: ${t}`
+}
+
+/** A thread card's foot while nothing waits: its requests, and whether it works or how it ended. */
+function ThreadState({
+  chat,
+  turns,
+  tool,
+  marker,
+}: {
+  chat: Chat
+  turns: Turn[]
+  tool?: string
+  marker?: string
+}) {
+  const running = chat.state === "running"
+  return (
+    <>
+      {turns.length > 0 && (
+        <>
+          <span className="shrink-0">
+            {turns.length} {turns.length === 1 ? "request" : "requests"}
+          </span>
+          <span aria-hidden>·</span>
+        </>
+      )}
+      {running ? (
+        <>
+          <span className="size-1.5 shrink-0 rounded-full bg-(--st-running)" />
+          <span className="min-w-0 shimmer truncate">
+            {tool ? `${tool}…` : "Working"}
+          </span>
+        </>
+      ) : marker ? (
+        <span className="text-destructive">{marker}</span>
+      ) : chat.state === "terminal" ? (
+        <span>In the terminal</span>
+      ) : chat.state === "orphaned" ? (
+        <span>Ended</span>
+      ) : (
+        <span>Done</span>
+      )}
+    </>
   )
 }
 

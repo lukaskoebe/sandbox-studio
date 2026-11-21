@@ -364,7 +364,9 @@ test("the home's rim drags the screen out of its rail, over the page and back to
   await api.guestReady(sb)
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(`/e/${env}/teammates/${id}`)
-  const now = page.getByRole("region", { name: `${name} now` })
+  const now = page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("group", { name: `${name} now` })
   await expect(now).toBeVisible()
   const edge = page.getByRole("separator", { name: "Resize the home" })
   const drag = async (dx: number) => {

@@ -11,6 +11,11 @@
   agent worked so far instead of "Waiting for you".
 - While a teammate works, the composer says "Steer Iris…", and its foot what the keys do: Enter
   steers this turn, Alt+Enter waits for the next.
+- A teammate's home says each thing once. What it does is in the top bar after its name
+  ("working on 1 chat", "idle since 10:42"). The box at the top shows only while something waits
+  for you or its agents work in terminals; a thread's card says what it waits for ("Asks to run
+  make test") and no longer repeats the avatar. A computer's card shows only the computer, under
+  "Computers", with a quiet "+ Another computer".
 - Teammates wear drawn pixel sprites: 30 of them, from a fox and an owl to a robot and eight
   people, on a light tile of the teammate's color. A teammate without a chosen avatar, new or
   old, wears the one its name picks, where it showed its initials before; the initials, shapes

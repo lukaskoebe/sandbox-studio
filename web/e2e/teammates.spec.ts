@@ -61,9 +61,11 @@ test("a teammate is copied to another environment from its settings, and opens t
 
   await page.getByRole("button", { name: "Open", exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${target!.id}/teammates/[^/]+$`))
-  await expect(page.getByRole("region", { name: `${name} now` })).toContainText(
-    "No provider"
-  )
+  await expect(
+    page
+      .getByRole("navigation", { name: "Where you are" })
+      .getByRole("group", { name: `${name} now` })
+  ).toContainText("No provider")
 })
 
 // Without a provider there is no model to choose, so adding a teammate says so and leads to the
@@ -142,7 +144,8 @@ test("an off computer starts from its card, its Terminal, or the folded screen",
   const status = async () =>
     (await api.json<{ status: string }>("GET", base))!.status
   const stop = async () => {
-    await api.json("POST", `${base}/stop`)
+    // The create holds the computer a moment after its guest connects: Stop then says busy.
+    await expect(() => api.json("POST", `${base}/stop`)).toPass()
     await expect.poll(status).toBe("stopped")
   }
   const started = () =>
@@ -221,12 +224,14 @@ test("a teammate's status counts what runs in its terminals", async ({
     foreground: ["node", "/usr/local/bin/opencode"],
   })
   await page.goto(`/e/${env}/teammates/${id}`)
-  const header = page.getByRole("region", { name: `${name} now` })
+  const header = page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("group", { name: `${name} now` })
   // The row's own link: its + is "New thread with" the teammate.
   const row = page
     .locator('[data-sidebar="sidebar"]')
     .getByRole("link", { name: new RegExp(`^${name}`) })
-  await expect(header).toContainText("Working · opencode in a terminal", {
+  await expect(header).toContainText("working · opencode in a terminal", {
     timeout: 15_000,
   })
   await expect(row).toContainText("working")
@@ -242,14 +247,14 @@ test("a teammate's status counts what runs in its terminals", async ({
   )
   await expect(sessions.getByLabel("working")).toBeVisible()
 
-  // A dev server that printed long ago isn't work; the home's Now card says so.
+  // A dev server that printed long ago isn't work; the top bar says so.
   await api.setTerminal(sb, "2", {
     command: "npm",
     foreground: ["npm run dev"],
     idle: 120,
   })
   await page.goto(`/e/${env}/teammates/${id}`)
-  await expect(header).toContainText("Idle · npm run dev running", {
+  await expect(header).toContainText("idle · npm run dev running", {
     timeout: 15_000,
   })
   await expect(row).toContainText("npm")

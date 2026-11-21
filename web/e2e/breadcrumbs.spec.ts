@@ -95,10 +95,11 @@ test("the breadcrumb row says where a page is, and its parts open their neighbou
     "Computers",
   ])
 
-  // The home names the teammate alone; its computers are on the page.
+  // The home names the teammate and what it does; its computers are on the page.
   await page.goto(`/e/${env}/teammates/${id}`)
   await expect(crumbs.getByRole("listitem")).toHaveText([
     new RegExp(`${name}$`),
+    /^idle since /,
   ])
 
   // A computer of the user's own: Computers › the computer, which switches to the others.
@@ -151,6 +152,7 @@ test("a teammate's crumb goes home, and its settings lead back", async ({
   await expect(page).not.toHaveURL(/[?&]thread=/)
   await expect(crumbs.getByRole("listitem")).toHaveText([
     new RegExp(`${name}$`),
+    /^idle since /,
   ])
 
   // Back, after moving between rows, leaves the settings for where they were opened.
@@ -244,9 +246,10 @@ for (const width of [390, 1280])
     const row = list.getByTestId("approval-card").filter({ hasText: host })
     await expect(row).toBeVisible()
     const bar = (await crumbs.boundingBox())!
-    expect((await row.boundingBox())!.y).toBeGreaterThanOrEqual(
-      bar.y + bar.height
-    )
+    // The list slides in from above: measure it where it settles.
+    await expect
+      .poll(async () => (await row.boundingBox())!.y)
+      .toBeGreaterThanOrEqual(bar.y + bar.height - 0.5)
     await expect(list).toContainText("Cards with the full detail are on Home.")
     // Escape closes it, as it does a menu.
     await page.keyboard.press("Escape")
