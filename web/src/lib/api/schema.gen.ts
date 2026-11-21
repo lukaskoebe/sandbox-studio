@@ -7984,7 +7984,7 @@ export interface components {
              * @enum {string}
              */
             approvalScope: "sandbox" | "teammate" | "environment";
-            /** @description One emoji, shape:<name> for a generated avatar, or empty to show the initials */
+            /** @description One emoji, sprite:<name> for a drawn sprite, shape:<name> for a generated shape, initials, or empty for a sprite picked from the name */
             avatar: string;
             /** @description After the user hands the browser back, agents hear which pages it was on while the user drove */
             browserSharePages: boolean;
@@ -8049,7 +8049,7 @@ export interface components {
              * @enum {string}
              */
             approvalScope: "sandbox" | "teammate" | "environment";
-            /** @description One emoji, or shape:<name> for a generated avatar; omitted shows the initials */
+            /** @description One emoji, sprite:<name> for a drawn sprite, shape:<name> for a generated shape, or initials; omitted shows a sprite picked from the name */
             avatar?: string;
             /** @description Defaults to <slug>@agents.invalid */
             gitEmail?: string;

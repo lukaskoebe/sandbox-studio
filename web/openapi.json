@@ -12208,7 +12208,7 @@
             "type": "string"
           },
           "avatar": {
-            "description": "One emoji, shape:\u003cname\u003e for a generated avatar, or empty to show the initials",
+            "description": "One emoji, sprite:\u003cname\u003e for a drawn sprite, shape:\u003cname\u003e for a generated shape, initials, or empty for a sprite picked from the name",
             "type": "string"
           },
           "browserSharePages": {
@@ -12410,7 +12410,7 @@
             "type": "string"
           },
           "avatar": {
-            "description": "One emoji, or shape:\u003cname\u003e for a generated avatar; omitted shows the initials",
+            "description": "One emoji, sprite:\u003cname\u003e for a drawn sprite, shape:\u003cname\u003e for a generated shape, or initials; omitted shows a sprite picked from the name",
             "maxLength": 64,
             "type": "string"
           },

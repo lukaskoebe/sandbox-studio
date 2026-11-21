@@ -34,6 +34,7 @@ import { ModelInput, knownModels } from "@/components/model-input"
 import { ModelsInput } from "@/components/models-input"
 import { ModelSuggestions } from "@/components/provider-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
+import { spriteFor, spriteLabel, spriteNames } from "@/lib/sprites"
 import {
   $api,
   errorMessage,
@@ -335,8 +336,9 @@ export function TeammateForm({
             <FieldLabel>Avatar</FieldLabel>
             <AvatarPicker name={name} value={avatar} onChange={setAvatar} />
             <FieldDescription>
-              An emoji or a generated shape. Without one, the teammate shows its
-              initials.
+              {avatar
+                ? "A drawn sprite, the initials, a shape or an emoji, on the teammate's color."
+                : "Until you pick one, the teammate wears the sprite its name picks."}
             </FieldDescription>
           </Field>
         </FormSection>
@@ -569,7 +571,29 @@ export function TeammateForm({
   )
 }
 
-/** The avatars to pick from: the initials, the generated shapes, then the emoji. */
+/** The avatar choices by group, with each one's name for people. */
+const avatarGroups: { label: string; choices: [string, string][] }[] = [
+  {
+    label: "Sprites",
+    choices: spriteNames.map((n) => [`sprite:${n}`, spriteLabel(n)]),
+  },
+  {
+    label: "Initials and shapes",
+    choices: [
+      ["initials", "Initials"],
+      ...shapeAvatars.map((shape): [string, string] => [
+        `shape:${shape}`,
+        shape[0].toUpperCase() + shape.slice(1),
+      ]),
+    ],
+  },
+  { label: "Emoji", choices: emojiAvatars.map((e) => [e, e]) },
+]
+
+/**
+ * The avatars to pick from: the sprites, the initials and shapes, then the emoji. Without a
+ * chosen avatar the sprite the name picks is marked; picking it keeps it when the name changes.
+ */
 function AvatarPicker({
   name,
   value,
@@ -579,32 +603,38 @@ function AvatarPicker({
   value: string
   onChange: (avatar: string) => void
 }) {
-  const choices = [
-    "",
-    ...shapeAvatars.map((shape) => `shape:${shape}`),
-    ...emojiAvatars,
-  ]
+  const own = name.trim() || "?"
+  const worn = value || `sprite:${spriteFor(own)}`
   return (
-    <div role="group" aria-label="Avatar" className="flex flex-wrap gap-1">
-      {choices.map((choice) => (
-        <button
-          key={choice || "initials"}
-          type="button"
-          aria-pressed={value === choice}
-          aria-label={choice || "Initials"}
-          title={choice || "Initials"}
-          onClick={() => onChange(choice)}
-          className={cn(
-            "rounded-full p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            value === choice && "ring-2 ring-primary"
-          )}
+    <div role="group" aria-label="Avatar" className="grid gap-2">
+      {avatarGroups.map((group) => (
+        <div
+          key={group.label}
+          role="group"
+          aria-label={group.label}
+          className="flex flex-wrap gap-1"
         >
-          <TeammateAvatar
-            name={name.trim() || "?"}
-            avatar={choice}
-            className="size-7 text-caption"
-          />
-        </button>
+          {group.choices.map(([choice, label]) => (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={worn === choice}
+              aria-label={label}
+              title={label}
+              onClick={() => onChange(choice)}
+              className={cn(
+                "rounded-full p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                worn === choice && "ring-2 ring-primary"
+              )}
+            >
+              <TeammateAvatar
+                name={own}
+                avatar={choice}
+                className="size-8 text-caption"
+              />
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   )

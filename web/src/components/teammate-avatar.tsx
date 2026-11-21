@@ -1,6 +1,12 @@
 import { presenceLabels, type Presence } from "@/hooks/use-teammate-presence"
 import { cn } from "@/lib/utils"
 import { $api } from "@/lib/api/client"
+import {
+  isSpriteName,
+  spriteFor,
+  spritePaths,
+  type SpriteName,
+} from "@/lib/sprites"
 
 /** Up to two initials: the first letters of the first and last words. */
 function initials(name: string) {
@@ -34,9 +40,39 @@ const shapePaths: Partial<Record<string, string[]>> = {
   cross: ["M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6Z"],
 }
 
+/** What an avatar value draws. Unknown values, such as a newer Studio's sprite, show initials. */
+function avatarKind(
+  name: string,
+  avatar: string | undefined
+):
+  | { kind: "sprite"; sprite: SpriteName }
+  | { kind: "shape"; paths: string[] }
+  | { kind: "emoji"; emoji: string }
+  | { kind: "initials" } {
+  if (!avatar) return { kind: "sprite", sprite: spriteFor(name) }
+  if (avatar === "initials") return { kind: "initials" }
+  const sprite = avatar.startsWith("sprite:")
+    ? avatar.slice("sprite:".length)
+    : undefined
+  if (sprite !== undefined)
+    return isSpriteName(sprite)
+      ? { kind: "sprite", sprite }
+      : { kind: "initials" }
+  const shape = avatar.startsWith("shape:")
+    ? avatar.slice("shape:".length)
+    : undefined
+  if (shape !== undefined) {
+    const paths = shapePaths[shape]
+    return paths ? { kind: "shape", paths } : { kind: "initials" }
+  }
+  return { kind: "emoji", emoji: avatar }
+}
+
 /**
- * A teammate's avatar: its emoji or generated shape when it has one, else its initials on a
- * color derived from its name, so the color stays the same everywhere.
+ * A teammate's avatar on a color derived from its name, so the color stays the same
+ * everywhere. Without a chosen avatar it wears a sprite picked from its name. A sprite sits on
+ * a lighter tile of that color, drawn at the largest whole multiple of 16 px that fits so its
+ * pixels stay sharp; shapes and initials are white on the full color; an emoji on muted.
  */
 export function TeammateAvatar({
   name,
@@ -44,33 +80,44 @@ export function TeammateAvatar({
   className,
 }: {
   name: string
-  /** One emoji, `shape:<name>` for a generated avatar, or empty for the initials. */
+  /** One emoji, `sprite:<name>`, `shape:<name>`, `initials`, or empty for a sprite from the name. */
   avatar?: string
   className?: string
 }) {
-  const shape = avatar?.startsWith("shape:")
-    ? avatar.slice("shape:".length)
-    : undefined
-  const emoji = avatar && !shape ? avatar : undefined
-  const paths = shape ? shapePaths[shape] : undefined
+  const look = avatarKind(name, avatar)
   return (
     <span
       aria-hidden
       data-slot="avatar"
       className={cn(
         "inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-meta font-semibold text-white select-none",
-        emoji && "bg-muted text-foreground",
+        look.kind === "emoji" && "bg-muted text-foreground",
         className
       )}
       style={
-        emoji ? undefined : { backgroundColor: `oklch(0.55 0.13 ${hue(name)})` }
+        look.kind === "emoji"
+          ? undefined
+          : look.kind === "sprite"
+            ? { backgroundColor: `oklch(var(--avatar-tile) 0.07 ${hue(name)})` }
+            : { backgroundColor: `oklch(0.55 0.13 ${hue(name)})` }
       }
     >
-      {emoji ? (
-        <span className="text-[1.5em] leading-none">{emoji}</span>
-      ) : paths ? (
+      {look.kind === "emoji" ? (
+        <span className="text-[1.5em] leading-none">{look.emoji}</span>
+      ) : look.kind === "sprite" ? (
+        <svg
+          viewBox="0 0 16 16"
+          data-sprite={look.sprite}
+          className="avatar-sprite"
+          shapeRendering="crispEdges"
+        >
+          {spritePaths(look.sprite).map((p) => (
+            <path key={p.fill} fill={p.fill} d={p.d} />
+          ))}
+        </svg>
+      ) : look.kind === "shape" ? (
         <svg viewBox="0 0 24 24" className="size-3/5" fill="currentColor">
-          {paths.map((d) => (
+          {look.paths.map((d) => (
             <path key={d} d={d} />
           ))}
         </svg>

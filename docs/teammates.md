@@ -126,9 +126,13 @@ computer, provider or harness, and only reads the environment's day.
 - Name (unique in the environment), role, avatar, approval scope, soul (markdown, at most
   16 KiB), harness, provider, default model, the models also offered in chats
   ([below](#models)), git name and email.
-- The avatar is one emoji or one of the generated avatars, stored as `shape:<name>` (`circle`,
-  `square`, `diamond`, `triangle`, `pentagon`, `hexagon`, `star`, `cross`), which the UI draws
-  in the teammate's color. Empty shows the initials. Nothing is uploaded.
+- The avatar is one of 30 drawn pixel sprites, stored as `sprite:<name>` (the list is
+  `teammates.AvatarSprites`; the web UI draws them from `web/src/lib/sprites.ts`), one of the
+  generated shapes, stored as `shape:<name>` (`circle`, `square`, `diamond`, `triangle`,
+  `pentagon`, `hexagon`, `star`, `cross`), `initials`, or one emoji. Empty wears the sprite the
+  name picks, so a new teammate has one until someone chooses. Sprites sit on a light tile of
+  the teammate's color and are drawn at the largest whole multiple of 16 px that fits, so their
+  pixels stay sharp. Nothing is uploaded.
 - The harness must be supported by the provider's kind. API-key providers need a model;
   `openai_compatible` defaults to the provider's model.
 - Git name defaults to the name, git email to `<slug>@agents.invalid`. Both are one line

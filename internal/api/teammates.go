@@ -80,7 +80,7 @@ type teammatePath struct {
 type TeammateInput struct {
 	Name          string   `json:"name" minLength:"1" maxLength:"64"`
 	Role          string   `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
-	Avatar        string   `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
+	Avatar        string   `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, sprite:<name> for a drawn sprite, shape:<name> for a generated shape, or initials; omitted shows a sprite picked from the name"`
 	ApprovalScope string   `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
 	Soul          string   `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
 	Harness       string   `json:"harness" enum:"opencode,claude,codex"`

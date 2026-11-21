@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Teammates wear drawn pixel sprites: 30 of them, from a fox and an owl to a robot and eight
+  people, on a light tile of the teammate's color. A teammate without a chosen avatar, new or
+  old, wears the one its name picks, where it showed its initials before; the initials, shapes
+  and emoji stay in its settings.
 - One layout switch at the right of the top bar sets a teammate's page: the home or chat alone,
   both side by side, or the computer alone. It replaces Enlarge and Fold on the computer's
   bezel, the desk home's Expand and Fold, Unfold on the folded screen and the strip that

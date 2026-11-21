@@ -296,11 +296,12 @@ func TestTeammateAvatar(t *testing.T) {
 	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Avatar != "shape:hexagon" {
 		t.Fatalf("generated avatar: %d %+v", rec.Code, got)
 	}
-	rec = do(h, "PUT", base+"/"+ada.ID, body(""))
-	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Avatar != "" {
-		t.Fatalf("back to initials: %d %+v", rec.Code, got)
+	for _, avatar := range []string{"sprite:owl", "initials", ""} {
+		if got := decode[store.Teammate](t, do(h, "PUT", base+"/"+ada.ID, body(avatar))); got.Avatar != avatar {
+			t.Fatalf("avatar %q: %+v", avatar, got)
+		}
 	}
-	for _, avatar := range []string{"shape:blob", "🦊🦊", "Ada", "<img src=x>", "data:image/png;base64,AAAA"} {
+	for _, avatar := range []string{"shape:blob", "sprite:dragon", "🦊🦊", "Ada", "<img src=x>", "data:image/png;base64,AAAA"} {
 		if rec := do(h, "PUT", base+"/"+ada.ID, body(avatar)); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("avatar %q: got %d (%s)", avatar, rec.Code, rec.Body)
 		}

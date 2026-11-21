@@ -140,6 +140,8 @@
 :root {
   /* Native controls, a date picker's or a select's popup and scrollbars, follow the theme. */
   color-scheme: light;
+  /* The lightness of a sprite avatar's tile, in the teammate's hue (teammate-avatar.tsx). */
+  --avatar-tile: 0.86;
   --background: #f8fafa;
   --foreground: #172024;
   --card: #ffffff;
@@ -251,6 +253,7 @@
 
 .dark {
   color-scheme: dark;
+  --avatar-tile: 0.42;
   --background: #0f1416;
   --foreground: #e1e7ea;
   --card: #151b1e;
@@ -461,6 +464,15 @@
   }
   .tok-function {
     color: var(--code-variable);
+  }
+  /* A sprite avatar is sharp only at whole multiples of 16 px: it takes the largest that fits
+     its tile, and the tile's color shows around it. */
+  .avatar-sprite {
+    flex: none;
+    width: 100%;
+    height: 100%;
+    width: round(down, 100%, 16px);
+    height: round(down, 100%, 16px);
   }
 }
 

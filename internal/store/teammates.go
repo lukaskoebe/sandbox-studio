@@ -294,7 +294,7 @@ type Teammate struct {
 	EnvironmentID string `json:"environmentId"`
 	Name          string `json:"name"`
 	Role          string `json:"role"`
-	Avatar        string `json:"avatar" doc:"One emoji, shape:<name> for a generated avatar, or empty to show the initials"`
+	Avatar        string `json:"avatar" doc:"One emoji, sprite:<name> for a drawn sprite, shape:<name> for a generated shape, initials, or empty for a sprite picked from the name"`
 	ApprovalScope string `json:"approvalScope" enum:"sandbox,teammate,environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
 	// ApprovalPattern is the host pattern level the teammate last chose, which its next card
 	// preselects. It is kept by the policy, not edited.

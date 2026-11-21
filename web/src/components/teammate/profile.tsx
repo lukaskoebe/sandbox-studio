@@ -92,7 +92,7 @@ export function ProfileSettingsPage({
               <TeammateAvatar
                 name={teammate.name}
                 avatar={teammate.avatar}
-                className="size-7 text-xs"
+                className="size-8 text-xs"
               />
               <span className="truncate">{meta.title(teammate.name)}</span>
             </h1>

@@ -220,20 +220,34 @@ func checkLine(what, s string) error {
 	return nil
 }
 
-// Avatars. A teammate's avatar is one emoji, one of the generated avatars, or empty to show
-// its initials. Generated avatars are fixed shapes the web UI draws in the teammate's color,
-// so nothing is uploaded.
-const avatarShapePrefix = "shape:"
+// Avatars. A teammate's avatar is one emoji, one of the drawn sprites or generated shapes,
+// "initials", or empty for the sprite the web UI picks from its name. Sprites and shapes are
+// fixed pictures the web UI draws on the teammate's color, so nothing is uploaded.
+const (
+	avatarShapePrefix  = "shape:"
+	avatarSpritePrefix = "sprite:"
+	// AvatarInitials shows the teammate's initials instead of a picture.
+	AvatarInitials = "initials"
+)
 
 // AvatarShapes are the generated avatars, stored as "shape:<name>".
 var AvatarShapes = []string{"circle", "square", "diamond", "triangle", "pentagon", "hexagon", "star", "cross"}
 
+// AvatarSprites are the drawn pixel sprites, stored as "sprite:<name>". The web UI holds their
+// pictures (lib/sprites.ts), in this order.
+var AvatarSprites = []string{
+	"cat", "fox", "owl", "frog", "rabbit", "bear", "panda", "penguin", "pig", "mouse",
+	"chick", "duck", "octopus", "ghost", "slime", "robot", "rocket", "tree", "flower", "cactus",
+	"mushroom", "mug", "dark-hair", "red-hair", "cap", "curls", "shades", "beard", "bun", "headphones",
+}
+
 // MaxAvatarRunes bounds an emoji sequence: the longest family emoji is 7 code points.
 const MaxAvatarRunes = 16
 
-// CheckAvatar validates a teammate's avatar: empty, a generated avatar or a single emoji.
+// CheckAvatar validates a teammate's avatar: empty, "initials", a sprite, a generated shape
+// or a single emoji.
 func CheckAvatar(avatar string) error {
-	if avatar == "" {
+	if avatar == "" || avatar == AvatarInitials {
 		return nil
 	}
 	if shape, ok := strings.CutPrefix(avatar, avatarShapePrefix); ok {
@@ -242,8 +256,14 @@ func CheckAvatar(avatar string) error {
 		}
 		return nil
 	}
+	if sprite, ok := strings.CutPrefix(avatar, avatarSpritePrefix); ok {
+		if !slices.Contains(AvatarSprites, sprite) {
+			return fmt.Errorf("%w: %q is not one of the sprites", ErrInvalid, avatar)
+		}
+		return nil
+	}
 	if !isEmoji(avatar) {
-		return fmt.Errorf("%w: the avatar must be one emoji or a generated avatar (shape:<name>)", ErrInvalid)
+		return fmt.Errorf("%w: the avatar must be one emoji, sprite:<name>, shape:<name> or initials", ErrInvalid)
 	}
 	return nil
 }

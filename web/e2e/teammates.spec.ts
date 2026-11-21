@@ -416,6 +416,43 @@ test("a teammate's settings save as you type, and closing them with a change tha
   expect((await teammate())?.name).toBe(name)
 })
 
+test("a teammate wears the sprite its name picks until another avatar is chosen", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("Sprite")
+  const id = await addTeammate(api, env, name)
+  const avatar = async () =>
+    (
+      await api.json<{ avatar?: string }>(
+        "GET",
+        `/api/environments/${env}/teammates/${id}`
+      )
+    )?.avatar ?? ""
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings&open=identity`)
+  const picker = page.getByRole("group", { name: "Avatar", exact: true })
+  const header = page.locator('h1 [data-slot="avatar"]')
+  // Without a chosen avatar, the sprite the name picks is marked and drawn in the header.
+  await expect(page.getByText("Until you pick one")).toBeVisible()
+  const marked = picker
+    .getByRole("group", { name: "Sprites" })
+    .getByRole("button", { pressed: true })
+  await expect(marked).toHaveCount(1)
+  await expect(header.locator("svg[data-sprite]")).toHaveCount(1)
+
+  // Picking one stores it; the initials and an emoji are choices too.
+  await picker.getByRole("button", { name: "Owl", exact: true }).click()
+  await expect.poll(avatar).toBe("sprite:owl")
+  await expect(header.locator('svg[data-sprite="owl"]')).toBeVisible()
+  await picker.getByRole("button", { name: "Initials", exact: true }).click()
+  await expect.poll(avatar).toBe("initials")
+  await expect(header.locator("svg")).toHaveCount(0)
+  await picker.getByRole("button", { name: "🦊", exact: true }).click()
+  await expect.poll(avatar).toBe("🦊")
+  await expect(header).toHaveText("🦊")
+})
+
 test("a teammate's security level is a card, or the environment's default", async ({
   page,
   api,

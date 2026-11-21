@@ -2,6 +2,10 @@ package teammates
 
 import (
 	"errors"
+	"os"
+	"regexp"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -83,17 +87,34 @@ func TestHarnessTable(t *testing.T) {
 }
 
 func TestCheckAvatar(t *testing.T) {
-	for _, ok := range []string{"", "shape:hexagon", "🦊", "❤️", "👍🏽", "🧑🏽‍💻", "👨‍👩‍👧", "🇩🇪", "1️⃣", "©"} {
+	for _, ok := range []string{"", "initials", "shape:hexagon", "sprite:fox", "sprite:dark-hair", "🦊", "❤️", "👍🏽", "🧑🏽‍💻", "👨‍👩‍👧", "🇩🇪", "1️⃣", "©"} {
 		if err := CheckAvatar(ok); err != nil {
 			t.Errorf("%q refused: %v", ok, err)
 		}
 	}
 	for _, bad := range []string{
-		"shape:blob", "shape:", "Ada", "1", "#", "🦊🦊", "🦊 ", " 🦊", "🦊\n", "<b>🦊</b>", "🇩", "🦊‍",
+		"shape:blob", "shape:", "sprite:", "sprite:dragon", "sprite:Fox", "Initials", "Ada", "1", "#", "🦊🦊", "🦊 ", " 🦊", "🦊\n", "<b>🦊</b>", "🇩", "🦊‍",
 		"👍🏽🏽", "🏽", "\x00", "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊", "\xff",
 	} {
 		if err := CheckAvatar(bad); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+// The web UI draws the sprites the server accepts, in the same order.
+func TestAvatarSpritesMatchTheWebUI(t *testing.T) {
+	src, err := os.ReadFile("../../web/src/lib/sprites.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, body, _ := strings.Cut(string(src), "\nconst sprites = {\n")
+	body, _, _ = strings.Cut(body, "\n} satisfies")
+	var names []string
+	for _, m := range regexp.MustCompile(`(?m)^  "?([a-z-]+)"?: \{$`).FindAllStringSubmatch(body, -1) {
+		names = append(names, m[1])
+	}
+	if !slices.Equal(names, AvatarSprites) {
+		t.Fatalf("web sprites %v\nserver sprites %v", names, AvatarSprites)
 	}
 }

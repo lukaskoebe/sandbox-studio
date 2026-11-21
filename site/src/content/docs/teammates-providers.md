@@ -3,7 +3,7 @@ title: Teammates and providers
 description: Configure an agent identity and connect it to an API key or a subscription.
 ---
 
-A teammate is an agent identity in one environment. It has a name, role, avatar (an emoji or a generated shape), optional Markdown instructions (“soul”), harness, provider, and a Git name and email, or **Use my git identity** to commit as you do on the Studio machine. Its **Default model** is the one its terminal sessions, check-ins and scheduled tasks use; **Also offered in chats** lists other models of its provider that a chat can pick instead. **New rules from approvals apply to** sets the scope its approval cards preselect: this sandbox, this teammate, or the environment.
+A teammate is an agent identity in one environment. It has a name, role, avatar (a drawn pixel sprite, which a new teammate gets from its name until you pick another, or the initials, a shape or an emoji), optional Markdown instructions (“soul”), harness, provider, and a Git name and email, or **Use my git identity** to commit as you do on the Studio machine. Its **Default model** is the one its terminal sessions, check-ins and scheduled tasks use; **Also offered in chats** lists other models of its provider that a chat can pick instead. **New rules from approvals apply to** sets the scope its approval cards preselect: this sandbox, this teammate, or the environment.
 
 One teammate can own several computers. A computer's teammate is picked when it is created or forked, and changes later in the computer's **Details** tab: choose **Change…** in its **Teammate** row while the computer is stopped. The new teammate's rules, secrets and harness settings apply from its next start, while its home, with the harness history and logins in it, stays as it is.
 
