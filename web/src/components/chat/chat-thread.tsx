@@ -67,7 +67,11 @@ import {
 } from "@/lib/chats"
 import { useChatStepsSetting } from "@/lib/chat-steps-setting"
 import { usePreviewSetting } from "@/lib/preview-setting"
-import { takeFirstMessage } from "@/lib/first-message"
+import {
+  firstMessageDone,
+  lostFirstMessage,
+  takeFirstMessage,
+} from "@/lib/first-message"
 import { cn } from "@/lib/utils"
 
 /**
@@ -630,14 +634,28 @@ function ChatComposer({
     return true
   }
   // A new thread's first message, written where the thread was started, goes from here. Should
-  // it fail, its words come back into the composer.
+  // it fail, its words come back into the composer: at once, or, when the thread was left
+  // meanwhile or the tab reloaded before it went, once the thread opens again.
   const firstSent = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   useEffect(() => {
     if (firstSent.current) return
     firstSent.current = true
     const first = takeFirstMessage(chat.id)
-    if (!first) return
+    if (!first) {
+      const lost = lostFirstMessage(chat.id)
+      if (lost) setInsert({ id: `first-${chat.id}`, text: lost })
+      return
+    }
     void send(first.prompt, { after: false, ready: first.ready }).then((ok) => {
+      if (!ok && !mounted.current) return
+      firstMessageDone(chat.id)
       if (!ok && first.prompt.text)
         setInsert({ id: `first-${chat.id}`, text: first.prompt.text })
     })
@@ -712,9 +730,7 @@ function ChatComposer({
                   context={context}
                   teammateName={teammateName}
                   running={chat.state === "running"}
-                  onCompact={() =>
-                    void send({ text: "/compact" }, { after: false })
-                  }
+                  onCompact={() => send({ text: "/compact" }, { after: false })}
                 />
               )}
               {/* While it works, the keys say what sending does. */}

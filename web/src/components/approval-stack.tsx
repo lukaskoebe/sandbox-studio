@@ -157,10 +157,12 @@ export function ApprovalsButton({ className }: { className?: string }) {
   const { permission, request } = useNotificationPermission()
   const cards = approvalCards(items, split)
   const settled = useSettled(approvalIds(cards))
-  // The list closes once nothing is left in it.
+  // The list closes once nothing is left in it, and with the button, so it doesn't open
+  // again by itself where the top bar mounts one anew.
   useEffect(() => {
     if (cards.length === 0 && listOpen) setListOpen(false)
   }, [cards.length])
+  useEffect(() => () => setListOpen(false), [])
   if (all.length === 0) return sheet
 
   const n = cards.length > 0 ? items.length : all.length

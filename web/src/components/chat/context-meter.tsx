@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { ArrowsInLineVerticalIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
@@ -49,8 +50,10 @@ export function ContextMeter({
   teammateName: string
   /** The agent works: compacting waits until it is done. */
   running: boolean
-  onCompact: () => void
+  /** Sends /compact; the button waits for it, so a double click sends one. */
+  onCompact: () => Promise<unknown>
 }) {
+  const [sending, setSending] = useState(false)
   const share = Math.min(1, context.used / context.size)
   const pct = Math.round(share * 100)
   const full = share >= nearlyFull
@@ -103,8 +106,11 @@ export function ContextMeter({
         <Button
           size="sm"
           variant="outline"
-          disabled={running}
-          onClick={onCompact}
+          disabled={running || sending}
+          onClick={() => {
+            setSending(true)
+            void onCompact().finally(() => setSending(false))
+          }}
         >
           <ArrowsInLineVerticalIcon />
           {running ? `Once ${teammateName} is done` : "Compact now"}

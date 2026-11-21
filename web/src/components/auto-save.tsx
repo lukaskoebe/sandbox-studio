@@ -83,6 +83,8 @@ export function AutoSave({
   const parts = useRef(new Map<string, Part>())
   // The signature each part last sent, so a failed save isn't sent again unchanged.
   const sent = useRef(new Map<string, string>())
+  // The signature of each part's save that failed: leaving with it asks first.
+  const failed = useRef(new Map<string, string>())
   const [saving, setSaving] = useState(0)
   const [saved, setSaved] = useState(false)
   const set = useRef((id: string, state: State | undefined) =>
@@ -99,6 +101,12 @@ export function AutoSave({
     ([id, s]) => s.dirty && s.valid && sent.current.get(id) !== s.signature
   )
   const incomplete = Object.values(states).some((s) => s.dirty && !s.valid)
+  const statesRef = useRef(states)
+  statesRef.current = states
+  const unsaved = () =>
+    Object.entries(statesRef.current).some(
+      ([id, s]) => s.dirty && failed.current.get(id) === s.signature
+    )
   const pendingRef = useRef(pending)
   pendingRef.current = pending
 
@@ -112,7 +120,11 @@ export function AutoSave({
         setSaved(false)
         try {
           await part.save()
+          failed.current.delete(id)
           setSaved(true)
+        } catch (e) {
+          failed.current.set(id, s.signature)
+          throw e
         } finally {
           setSaving((n) => n - 1)
         }
@@ -139,9 +151,10 @@ export function AutoSave({
         current.pathname !== next.pathname || !!leaves?.(next.search)
       if (!leaving) return false
       if (pendingRef.current.length > 0) await saveNow()
-      return incomplete
+      return incomplete || unsaved()
     },
-    enableBeforeUnload: () => incomplete || pending.length > 0 || saving > 0,
+    enableBeforeUnload: () =>
+      incomplete || unsaved() || pending.length > 0 || saving > 0,
     withResolver: true,
   })
 
@@ -177,8 +190,9 @@ export function AutoSave({
           <AlertDialogHeader>
             <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
             <AlertDialogDescription>
-              A change on this page isn't complete, so it can't be saved. It is
-              lost if you leave.
+              {incomplete
+                ? "A change on this page isn't complete, so it can't be saved. It is lost if you leave."
+                : "A change on this page didn't save. It is lost if you leave."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

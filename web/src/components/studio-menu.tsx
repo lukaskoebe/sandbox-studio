@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -40,23 +40,28 @@ function releaseNotes(version?: string) {
     : releases
 }
 
+/** When the Studio that answers started, or undefined while none does. */
+async function startedAt(): Promise<string | undefined> {
+  try {
+    const { data } = await fetchClient.GET("/api/health")
+    return data?.started
+  } catch {
+    return undefined
+  }
+}
+
 /**
- * Waits for Studio to go away and answer again after a restart, for at most a minute, and
- * reports whether it came back.
+ * Waits for another Studio process to answer after a restart, for at most a minute, and
+ * reports whether one did. One that came back between two looks counts too.
  */
-async function awaitRestart(): Promise<boolean> {
+async function awaitRestart(before: string | undefined): Promise<boolean> {
   let wentAway = false
   const until = Date.now() + 60_000
   while (Date.now() < until) {
     await new Promise((r) => setTimeout(r, 1000))
-    let up = false
-    try {
-      up = (await fetchClient.GET("/api/health")).response.ok
-    } catch {
-      up = false
-    }
-    if (!up) wentAway = true
-    else if (wentAway) return true
+    const now = await startedAt()
+    if (now === undefined) wentAway = true
+    else if (wentAway || (before !== undefined && now !== before)) return true
   }
   return false
 }
@@ -70,6 +75,14 @@ export function StudioMenu({ version }: { version?: string }) {
   const navigate = useNavigate()
   const { env } = useParams({ strict: false })
   const [asking, setAsking] = useState<"restart" | "quit" | null>(null)
+  // What the dialog asks, kept while it closes so its words don't flip as it fades.
+  const [kind, setKind] = useState<"restart" | "quit">("restart")
+  const ask = (k: "restart" | "quit") => {
+    setKind(k)
+    setAsking(k)
+  }
+  // The Studio that answered before the restart, to tell the new one by.
+  const before = useRef<string | undefined>(undefined)
   const [stopped, setStopped] = useState(false)
   const showUpdates = () =>
     void navigate({
@@ -102,7 +115,7 @@ export function StudioMenu({ version }: { version?: string }) {
     onSuccess: async () => {
       setAsking(null)
       const id = toast.loading("Restarting Studio…")
-      if (await awaitRestart()) {
+      if (await awaitRestart(before.current)) {
         toast.success("Studio restarted", { id })
         void queryClient.invalidateQueries()
       } else
@@ -184,13 +197,13 @@ export function StudioMenu({ version }: { version?: string }) {
               <SparkleIcon />
               What's new
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setAsking("restart")}>
+            <DropdownMenuItem onClick={() => ask("restart")}>
               <ArrowClockwiseIcon />
               Restart Studio…
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setAsking("quit")}>
+          <DropdownMenuItem onClick={() => ask("quit")}>
             <PowerIcon />
             Quit Studio…
           </DropdownMenuItem>
@@ -203,10 +216,10 @@ export function StudioMenu({ version }: { version?: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {asking === "restart" ? "Restart Studio?" : "Quit Studio?"}
+              {kind === "restart" ? "Restart Studio?" : "Quit Studio?"}
             </DialogTitle>
             <DialogDescription>
-              {asking === "restart" ? (
+              {kind === "restart" ? (
                 <>
                   Chats in the middle of a turn stop. The sandboxes keep
                   running, and this page reconnects once Studio is back.
@@ -225,11 +238,15 @@ export function StudioMenu({ version }: { version?: string }) {
             </Button>
             <Button
               disabled={pending}
-              onClick={() =>
-                asking === "restart" ? restart.mutate({}) : quit.mutate({})
-              }
+              onClick={() => {
+                if (kind === "quit") return quit.mutate({})
+                void startedAt().then((s) => {
+                  before.current = s
+                  restart.mutate({})
+                })
+              }}
             >
-              {asking === "restart" ? "Restart" : "Quit"}
+              {kind === "restart" ? "Restart" : "Quit"}
             </Button>
           </DialogFooter>
         </DialogContent>

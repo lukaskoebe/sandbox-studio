@@ -5455,6 +5455,11 @@ export interface components {
             value: string;
         };
         Health: {
+            /**
+             * Format: date-time
+             * @description When this Studio process started: a restart changes it
+             */
+            started: string;
             /** @enum {string} */
             status: "ok";
             version: string;
@@ -6628,6 +6633,11 @@ export interface components {
              */
             round?: number;
             sandboxId?: string;
+            /**
+             * Format: date-time
+             * @description When Lead began sending the message; its turn starts after
+             */
+            sending?: string;
             /** @enum {string} */
             state: "proposed" | "pending" | "running" | "done" | "failed" | "skipped";
             /** @description The teammate's name */

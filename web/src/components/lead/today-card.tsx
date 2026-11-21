@@ -102,13 +102,14 @@ export function LeadTodayCard({ env }: { env: string }) {
  * while Home is open, and opening Home records the look.
  */
 function useSinceYouLooked(env: string, v?: LeadView) {
-  const [snap, setSnap] = useState<LeadSince | null | undefined>(undefined)
-  if (v && snap === undefined) setSnap(v.today.since ?? null)
-  const took = snap !== undefined
+  // Kept per environment: switching to another takes its own look.
+  const [snap, setSnap] = useState<{ env: string; since: LeadSince | null }>()
+  if (v && snap?.env !== env) setSnap({ env, since: v.today.since ?? null })
+  const took = snap?.env === env
   useEffect(() => {
     if (took) void postLeadSeen(env)
   }, [env, took])
-  return snap
+  return took ? snap.since : undefined
 }
 
 function SinceLine({ s }: { s: LeadSince }) {

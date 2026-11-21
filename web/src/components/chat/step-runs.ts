@@ -117,10 +117,12 @@ export function foldSteps(
       after.push(e)
     }
     // A message steered into the turn can follow a call that still runs, such as a long
-    // sleep: the run goes on until the call ends.
+    // sleep: the run goes on until the call ends. Once the agent works on after it, in a run
+    // of its own, a call left running (as one whose ask was rejected) doesn't hold it open.
     if (
       r.turnId === openTurn &&
-      (after.every(pendingAsk) || r.items.some(toolRunning))
+      (after.every(pendingAsk) ||
+        (r.items.some(toolRunning) && !after.some((e) => e.kind === "run")))
     ) {
       r.live = true
       r.waiting = after.some(pendingAsk)

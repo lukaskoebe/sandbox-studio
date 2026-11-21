@@ -37,7 +37,7 @@ export function TeammateThread({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* The title shows in the top bar; the page keeps it as its heading for screen readers. */}
       {chat && <h1 className="sr-only">{chatTitle(chat)}</h1>}
-      {chat && (
+      {chat && !log.gone && (
         <ThreadOptions
           env={env}
           chat={chat}

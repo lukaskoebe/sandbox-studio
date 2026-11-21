@@ -16,6 +16,7 @@
   for you or its agents work in terminals; a thread's card says what it waits for ("Asks to run
   make test") and no longer repeats the avatar. A computer's card shows only the computer, under
   "Computers", with a quiet "+ Another computer".
+- A computer card's name on a teammate's home opens that computer's details.
 - Teammates wear drawn pixel sprites: 30 of them, from a fox and an owl to a robot and eight
   people, on a light tile of the teammate's color. A teammate without a chosen avatar, new or
   old, wears the one its name picks, where it showed its initials before; the initials, shapes
@@ -55,7 +56,8 @@
 - Lead follows up. When an answer leaves your request unfinished, its report can propose one
   more message in the thread, at most twice a plan, and it waits for your approval like the
   first. In Lead's settings you can let follow-ups go without asking, but only in threads the
-  plan itself started. Plans now know which teammates are busy and which open pull requests
+  plan itself started, and only when the plan spoke to one teammate, so no answer reaches
+  another teammate unasked. Plans now know which teammates are busy and which open pull requests
   have failing checks.
 - Lead makes plans. **New plan** under Lead, or **Make a plan** on one of a day's suggestions,
   takes what you want from the team. Lead asks back when something is unclear, or proposes
@@ -84,7 +86,7 @@
   typing, and when you close the settings. The **Unsaved changes** bar is gone.
 - A new thread from a teammate's home, or from **New chat**, opens at once. Your message shows
   there while the computer and the agent start, instead of the composer waiting for them. If
-  it can't go, the thread says why and keeps your words in its composer.
+  it can't go, the thread says why and keeps your words in its composer, also after a reload.
 - The step an agent is on now looks like the steps before it: a line with a spinner, instead
   of a card. Thoughts in a row of steps are lines too.
 - A chat's step row no longer says **Worked for** while a call in it still runs, as when you
@@ -95,7 +97,8 @@
   Studio used to exit at every start, and on Linux its login entry started it again every
   5 seconds, which could fill the keychain's open files and block logging in on the desktop.
   Studio now waits, and its page says **Unlock your keychain**; it starts once you log in on
-  the desktop, or on **Retry**. The Linux login entry stops after 10 failed starts in 5
+  the desktop, or on **Retry**, which asks the keychain at most five times. An update doesn't
+  roll back while Studio waits for the keychain. The Linux login entry stops after 10 failed starts in 5
   minutes, and Studio updates an entry an older version wrote.
 
 ## v0.27.0 — 2026-11-20

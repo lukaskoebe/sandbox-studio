@@ -175,9 +175,13 @@ func config() huma.Config {
 
 // Health is the server status.
 type Health struct {
-	Status  string `json:"status" enum:"ok"`
-	Version string `json:"version"`
+	Status  string    `json:"status" enum:"ok"`
+	Version string    `json:"version"`
+	Started time.Time `json:"started" doc:"When this Studio process started: a restart changes it"`
 }
+
+// started is when this process started.
+var started = time.Now().UTC()
 
 type envPath struct {
 	Env string `path:"env" doc:"Environment ID"`
@@ -187,7 +191,7 @@ func (s *Server) registerEnvironments(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "getHealth", Method: http.MethodGet, Path: "/api/health", Tags: []string{"system"},
 	}, func(ctx context.Context, _ *struct{}) (*struct{ Body Health }, error) {
-		return &struct{ Body Health }{Health{Status: "ok", Version: version.Version}}, nil
+		return &struct{ Body Health }{Health{Status: "ok", Version: version.Version, Started: started}}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -524,7 +528,8 @@ func apiError(err error) error {
 		errors.Is(err, sandboxes.ErrLifecycleState),
 		errors.Is(err, sandboxes.ErrWorkspaceTooLarge), errors.Is(err, sandboxes.ErrHomeTooLarge), errors.Is(err, sandboxes.ErrDockerTooLarge),
 		errors.Is(err, sandboxes.ErrTemplateWithoutHome), errors.Is(err, tasks.ErrCannotRun),
-		errors.Is(err, agentchan.ErrHomeFull):
+		errors.Is(err, agentchan.ErrHomeFull),
+		errors.Is(err, lead.ErrPlanChanged), errors.Is(err, lead.ErrPlanClosed), errors.Is(err, lead.ErrPlanBusy):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, sandboxes.ErrTransferUnsupported):
 		return huma.Error503ServiceUnavailable(err.Error())

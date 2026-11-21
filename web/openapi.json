@@ -4908,6 +4908,11 @@
       "Health": {
         "additionalProperties": false,
         "properties": {
+          "started": {
+            "description": "When this Studio process started: a restart changes it",
+            "format": "date-time",
+            "type": "string"
+          },
           "status": {
             "enum": [
               "ok"
@@ -4920,7 +4925,8 @@
         },
         "required": [
           "status",
-          "version"
+          "version",
+          "started"
         ],
         "type": "object"
       },
@@ -8454,6 +8460,11 @@
             "type": "integer"
           },
           "sandboxId": {
+            "type": "string"
+          },
+          "sending": {
+            "description": "When Lead began sending the message; its turn starts after",
+            "format": "date-time",
             "type": "string"
           },
           "state": {
