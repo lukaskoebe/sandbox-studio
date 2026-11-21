@@ -104,7 +104,7 @@ sideways. Its sections:
 | | Ports and LAN (`ports`) | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
 | | Updates (`updates`) | the update check (the whole installation) |
 
-Requests waiting for a decision are on Home and in the approval stack, not in Settings.
+Requests waiting for a decision are on Home and in the top bar's approvals list, not in Settings.
 
 `/e/$env/settings` opens General, and `/e/$env/settings/git` opens Git forges. An old
 `?settings=<section>` link on any page of an environment, from when Settings was a dialog,
@@ -172,8 +172,8 @@ and Rebase all appears while some run an older base image. A row opens a teammat
 its desk and the user's own on its page, which has its terminal sessions in a panel beside the
 screen, folded until opened.
 
-The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
-on every page.
+The approvals button ([approvals](approvals.md#realtime-and-ui)) sits in the top bar on every
+page; the root route mounts `ApprovalNotices` for the notifications and the page title.
 
 The root route also maps Alt+← and Alt+→, and ⌘[ and ⌘] on a Mac, to Back and Forward
 (`hooks/use-history-keys.ts`): the desktop app's webview has no such keys, and a browser that
@@ -333,17 +333,17 @@ way back; the conversation stays mounted behind it, so a draft and the scroll ar
 or the bezel's Shrink gives it back. Folding and enlarging undo each other. Below 1024px it
 is that strip, and opens over the conversation.
 
-Review on a git approval's card, in the stack or on Home, opens it on its computer's Changes
-tab (`useOpenGitReview` in `components/git-review.tsx`): beside the open thread when the computer
-is that teammate's, else through the computer's address, which leads a teammate's computer to
-its desk. The review's own page (`/e/$env/git/reviews/$id`) stays for decided pushes, the TUI
-and a computer that is gone. Sheets remain for detail opened from outside its context: a memory
-conflict (from the approval stack and the Conflicts tab of Settings → Shared memory) and a
-build's log (from Settings → Templates). Each of those sheets has "Open as page", which leads
-to the item's own page above; Home's activity, Settings → Activity, Settings → Templates and
-the memory conflicts tab link there too. A page for an item that doesn't exist
-says so, and one already decided shows the outcome without the buttons. The chat page of a chat
-the list doesn't know keeps a resizable side panel for its changes and files
+Review on a git approval's card or row, on Home or in the top bar's list, opens it on its
+computer's Changes tab (`useOpenGitReview` in `components/git-review.tsx`): beside the open
+thread when the computer is that teammate's, else through the computer's address, which leads a
+teammate's computer to its desk. The review's own page (`/e/$env/git/reviews/$id`) stays for
+decided pushes, the TUI and a computer that is gone. Sheets remain for detail opened from
+outside its context: a memory conflict (from the top bar's approvals list and the Conflicts tab
+of Settings → Shared memory) and a build's log (from Settings → Templates). Each of those sheets
+has "Open as page", which leads to the item's own page above; Home's activity, Settings →
+Activity, Settings → Templates and the memory conflicts tab link there too. A page for an item
+that doesn't exist says so, and one already decided shows the outcome without the buttons. The
+chat page of a chat the list doesn't know keeps a resizable side panel for its changes and files
 (`components/side-panel.tsx`), its width in local storage (`studio.panel.chat`).
 
 A chat's log folds each run of steps between the agent's messages (tool calls, thoughts, and

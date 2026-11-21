@@ -170,7 +170,7 @@ compiled truth as markdown, where `[[slug]]` opens the linked page and a wanted 
 N more", with chips by kind and one for the retracted or replaced; Linked from; the timeline
 with a field to add an entry; and the page's path in the sandboxes' folder. A fact's ⋯ menu
 edits, promotes a teammate fact to shared, retracts and deletes.
-`memory.conflict` approvals show in the approval stack with the same sheet.
+`memory.conflict` approvals show on Home and in the top bar's approvals list with the same sheet.
 
 ## Links
 

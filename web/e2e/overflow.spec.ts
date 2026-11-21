@@ -1,5 +1,12 @@
 import type { Locator } from "@playwright/test"
-import { addTeammate, approvals, expect, sandboxName, test } from "./fixtures"
+import {
+  addTeammate,
+  approvals,
+  expect,
+  openApprovals,
+  sandboxName,
+  test,
+} from "./fixtures"
 
 /** Descendants of el that stick out of it, and el itself if it scrolls sideways or leaves the viewport. */
 function overflowing(el: Locator) {
@@ -46,21 +53,18 @@ for (const [width, path] of [
     await api.connect(id, host)
 
     await page.goto(`/e/${env}${path}`)
-    // Below sm (640 px) the stack folds into a button in the crumb row, which opens the card.
-    if (path && width < 640)
-      await page
-        .getByRole("navigation", { name: "Where you are" })
-        .getByRole("button", { name: "1 approval", exact: true })
-        .click()
-    const card = approvals(page)
-      .getByTestId("approval-card")
-      .filter({ hasText: host })
+    // Off Home the approval is a row of the top bar's list, which its button opens.
+    const list = path ? await openApprovals(page) : approvals(page)
+    const card = list.getByTestId("approval-card").filter({ hasText: host })
     await expect(card).toBeVisible()
     expect(await overflowing(card)).toEqual([])
 
-    await card.getByRole("button", { name: "Options" }).click()
-    await expect(card.getByRole("group", { name: "Scope" })).toBeVisible()
-    expect(await overflowing(card)).toEqual([])
+    // Home's card has the other choices behind Options.
+    if (!path) {
+      await card.getByRole("button", { name: "Options" }).click()
+      await expect(card.getByRole("group", { name: "Scope" })).toBeVisible()
+      expect(await overflowing(card)).toEqual([])
+    }
 
     await api.dismissApprovals()
   })

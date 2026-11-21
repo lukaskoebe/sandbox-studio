@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Approvals moved from the stack floating in the corner to a "needs you" button at the right
+  of the top bar, on every page and at every width. It opens a compact list: one row per
+  request, with Allow and Deny for network requests and agents' permission asks, and Review or
+  Open for the rest. Home keeps the full cards, so up there the button is only a count. A new
+  request flashes the count, and its card slides into Home's list. Nothing covers a
+  composer's Send button or a terminal's last lines any more.
 - The version line at the foot of the sidebar opens a Studio menu: Check for updates, What's
   new, Restart Studio and Quit Studio. Restart had only the command line before; Quit moved
   here from Settings → General, which drops its Shut down row.

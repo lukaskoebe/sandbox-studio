@@ -299,22 +299,28 @@ export function sandboxName(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** The approvals: Home's section of them, or the stack on every other page. */
+/**
+ * The approvals: Home's section of them, or on other pages the top bar's list, which
+ * openApprovals opens.
+ */
 export function approvals(page: Page) {
   return page.getByRole("region", { name: "Approvals" })
 }
 
-/**
- * Hides the floating approval stack until the page navigates. The stack shows the pending
- * approvals of every environment, so a card from a test running beside this one can sit over
- * what this test clicks for as long as that test leaves it; a test that never looks at
- * approvals hides it.
- */
-export async function hideApprovalStack(page: Page) {
-  await page.addStyleTag({
-    content:
-      'section[aria-label="Approvals"].fixed { display: none !important }',
-  })
+/** The top bar's count of approvals, which opens their list. */
+export function approvalsButton(page: Page) {
+  return page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("button", { name: /needs? you/ })
+}
+
+/** Opens the top bar's list of approvals, unless it is open, and returns it. */
+export async function openApprovals(page: Page) {
+  const button = approvalsButton(page)
+  await expect(button).toBeVisible()
+  if ((await button.getAttribute("aria-expanded")) !== "true")
+    await button.click()
+  return approvals(page)
 }
 
 /**

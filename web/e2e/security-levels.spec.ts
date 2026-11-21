@@ -1,4 +1,4 @@
-import { approvals, expect, sandboxName, test } from "./fixtures"
+import { expect, openApprovals, sandboxName, test } from "./fixtures"
 
 test("the security level decides what no rule covers, and a curated entry can be switched off", async ({
   page,
@@ -11,8 +11,14 @@ test("the security level decides what no rule covers, and a curated entry can be
     page
       .getByRole("group", { name: "Security level" })
       .getByRole("radio", { name, exact: true })
-  const held = (host: string) =>
-    approvals(page).getByTestId("approval-card").filter({ hasText: host })
+  // Held requests wait in the top bar's list; this checks one is there and closes the list.
+  const held = async (host: string) => {
+    const list = await openApprovals(page)
+    await expect(
+      list.getByTestId("approval-card").filter({ hasText: host })
+    ).toBeVisible()
+    await page.keyboard.press("Escape")
+  }
 
   await page.goto(`/e/${env}/network`)
   await expect(
@@ -50,7 +56,7 @@ test("the security level decides what no rule covers, and a curated entry can be
   await level("Locked").click()
   await expect(level("Locked")).toBeChecked()
   await api.connect(id, "security.debian.org", 80)
-  await expect(held("security.debian.org")).toBeVisible()
+  await held("security.debian.org")
   await api.dismissApprovals()
 
   // Switching the entry off makes Guarded ask for its hosts too.
@@ -60,7 +66,7 @@ test("the security level decides what no rule covers, and a curated entry can be
   await debian.click()
   await expect(debian).not.toBeChecked()
   await api.connect(id, "deb.debian.org", 80)
-  await expect(held("deb.debian.org")).toBeVisible()
+  await held("deb.debian.org")
 
   // Back to the defaults for the tests after this one.
   await api.dismissApprovals()

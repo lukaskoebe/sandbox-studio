@@ -3,18 +3,23 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
+  type ComponentProps,
   type ReactNode,
 } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Link } from "@tanstack/react-router"
-import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react"
+import { Link, useParams } from "@tanstack/react-router"
+import { CaretDownIcon } from "@phosphor-icons/react"
 import {
   ApprovalDecision,
   decideEach,
   decisionBody,
+  initialDecision,
+  initialDecisionBody,
+  isBrowserRequest,
   refreshDecisions,
+  ruleSummary,
+  useDecideApproval,
 } from "@/components/approval-decision"
 import { NetworkGroupCard } from "@/components/approval-group"
 import {
@@ -52,6 +57,12 @@ import { KindChip } from "@/components/kind-chip"
 import { WaitingCount } from "@/components/waiting-count"
 import { approvalHost } from "@/components/waiting-requests"
 import { Button } from "@/components/ui/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Spinner } from "@/components/ui/spinner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Card,
@@ -80,37 +91,34 @@ import { LeadPlanSummary } from "@/components/lead/plan-approval"
 import {
   heldFor,
   isConnection,
+  useHoldClock,
   waitingConnections,
 } from "@/lib/connection-holds"
 import { appAllowAllEvent, appNotifies, notifyApp } from "@/lib/desktop"
-import { useComposerClearance } from "@/lib/composer-clearance"
+import {
+  useArrivals,
+  useJustArrived,
+  useRecordArrivals,
+} from "@/lib/approval-arrivals"
 
-/** Cards the open stack lists; the rest are one link away. */
-const maxCards = 3
+/** The top bar's list, which its button opens and names. */
+const listId = "approvals-list"
 
-/** The open stack's cards, which the pill and the crumb row's button name. */
-const panelId = "approval-stack-cards"
-
-// Whether the stack is open, and whether a crumb row holds its button, which on a phone takes
-// the pill's place: up there it covers no composer or terminal keys.
-let stackOpen = false
-let buttonHosts = 0
-const stackListeners = new Set<() => void>()
-const subscribeStack = (l: () => void) => {
-  stackListeners.add(l)
-  return () => void stackListeners.delete(l)
+// Whether the top bar's list is open: reviewing an approval from it closes it.
+let listOpen = false
+const listListeners = new Set<() => void>()
+const subscribeList = (l: () => void) => {
+  listListeners.add(l)
+  return () => void listListeners.delete(l)
 }
-const emitStack = () => stackListeners.forEach((l) => l())
-const setStackOpen = (open: boolean) => {
-  stackOpen = open
-  emitStack()
+const setListOpen = (open: boolean) => {
+  listOpen = open
+  listListeners.forEach((l) => l())
 }
-const useStackOpen = () => useSyncExternalStore(subscribeStack, () => stackOpen)
-const useButtonHosted = () =>
-  useSyncExternalStore(subscribeStack, () => buttonHosts > 0)
+const useListOpen = () => useSyncExternalStore(subscribeList, () => listOpen)
 
-/** The approvals the stack shows: those pending that the page doesn't show in place. */
-function useStackItems() {
+/** The approvals pending, and those of them the page doesn't show in place. */
+function usePendingItems() {
   const pending = usePendingApprovals()
   const claimed = useClaimedApprovals()
   const all = pending.data ?? []
@@ -118,131 +126,347 @@ function useStackItems() {
 }
 
 /**
- * The stack's button for the crumb row on a phone: the count of approvals, which opens their
- * cards below the row. It shows nothing while none wait.
+ * What approvals do on every page without showing: notify while the window is behind others,
+ * count in the tab's title, and note which arrive (lib/approval-arrivals.ts). The root mounts
+ * it once; the top bar's ApprovalsButton shows them.
+ */
+export function ApprovalNotices() {
+  const pending = usePendingApprovals()
+  useNotifications(pending.data)
+  useRecordArrivals(pending.data)
+  useTitleCount(pending.data?.length ?? 0)
+  return null
+}
+
+/**
+ * The top bar's count of pending approvals, which opens them as a compact list under the bar,
+ * as menus do, and closes again. Approvals the page shows in place are left out
+ * (lib/approval-claims.ts), so each shows once: where the page shows them all, as Home and a
+ * teammate's home do, it is only their count. A new one flashes the count once. Cards with
+ * every detail and choice are on Home (docs/design/ui-style.md).
  */
 export function ApprovalsButton({ className }: { className?: string }) {
-  const { items } = useStackItems()
-  const expanded = useStackOpen()
+  const { env } = useParams({ strict: false })
+  const { all, items } = usePendingItems()
+  const open = useListOpen()
+  const arrivals = useArrivals()
+  // Requests the user chose to see one by one, which then no longer group.
+  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
+  const { sheet, review } = useApprovalReview()
+  const envs = $api.useQuery("get", "/api/environments")
+  const { permission, request } = useNotificationPermission()
+  const cards = approvalCards(items, split)
+  const settled = useSettled(approvalIds(cards))
+  // The list closes once nothing is left in it.
   useEffect(() => {
-    buttonHosts++
-    emitStack()
-    return () => {
-      buttonHosts--
-      emitStack()
-    }
-  }, [])
-  if (items.length === 0) return null
+    if (cards.length === 0 && listOpen) setListOpen(false)
+  }, [cards.length])
+  if (all.length === 0) return sheet
+
+  const n = cards.length > 0 ? items.length : all.length
+  const count = (
+    <>
+      <WaitingCount
+        key={arrivals}
+        count={n}
+        className={cn(arrivals > 0 && "motion-safe:animate-count-arrival")}
+      />{" "}
+      {n === 1 ? "needs you" : "need you"}
+    </>
+  )
+  if (cards.length === 0)
+    return (
+      <>
+        <span
+          className={cn(
+            "inline-flex h-7 shrink-0 items-center gap-1.5 px-1.5 text-xs text-muted-foreground",
+            className
+          )}
+          title="Answer them on this page"
+        >
+          {count}
+        </span>
+        {sheet}
+      </>
+    )
+  const envName = (a: Approval) =>
+    envs.data?.find((e) => e.id === a.environmentId)?.name
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      aria-expanded={expanded}
-      aria-controls={panelId}
-      onClick={() => setStackOpen(!expanded)}
-      className={cn("h-7 shrink-0 gap-1.5 px-1.5 text-xs", className)}
-    >
-      <WaitingCount count={items.length} />
-      {items.length === 1 ? "approval" : "approvals"}
-      {expanded ? <CaretUpIcon aria-hidden /> : <CaretDownIcon aria-hidden />}
-    </Button>
+    <>
+      <Popover open={open} onOpenChange={setListOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              aria-controls={listId}
+              className={cn("h-7 shrink-0 gap-1.5 px-2 text-xs", className)}
+            />
+          }
+        >
+          {count}
+          <CaretDownIcon aria-hidden className="size-3 opacity-70" />
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="w-104 max-w-[calc(100vw-1rem)] p-0"
+          initialFocus={false}
+        >
+          <section id={listId} aria-label="Approvals" className="grid">
+            <ScrollArea viewportClassName="max-h-[min(60vh,32rem)]">
+              <ul className="grid divide-y">
+                {cards.map((card) => (
+                  <ApprovalRow
+                    key={cardApproval(card).id}
+                    card={card}
+                    envName={envName}
+                    onReview={review}
+                    onSplit={(ids) =>
+                      setSplit((prev) => new Set([...prev, ...ids]))
+                    }
+                    inert={!settled}
+                  />
+                ))}
+              </ul>
+            </ScrollArea>
+            <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-2 text-caption text-muted-foreground">
+              <span className="min-w-0 flex-1">
+                Cards with the full detail are on Home.
+              </span>
+              {permission === "default" && (
+                <Button variant="link" size="xs" onClick={request}>
+                  Enable notifications
+                </Button>
+              )}
+              {env && (
+                <Link
+                  to="/e/$env"
+                  params={{ env }}
+                  onClick={() => setListOpen(false)}
+                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  Open Home →
+                </Link>
+              )}
+            </footer>
+          </section>
+        </PopoverContent>
+      </Popover>
+      {sheet}
+    </>
   )
 }
 
 /**
- * Pending approvals, shown on every page: a held connection waits on the answer, a staged
- * git push waits for review. Approvals the page already shows in place are left out
- * (lib/approval-claims.ts), so each shows once.
- *
- * One approval shows its card at sm and wider. More than one, or a phone, folds the cards
- * into an "N approvals" pill that opens them on click, so the stack covers the page only when
- * someone asks for it (docs/design/ui-style.md).
+ * One approval of the top bar's list, or one sandbox's requests together: its kind, what it
+ * asks, and the answer that needs no more choices. Permissions and single network requests
+ * are allowed or denied here, as their cards start; a git ask opens for review, and the rest
+ * open where their card is.
  */
-export function ApprovalStack() {
-  const pending = usePendingApprovals()
-  const { all, items } = useStackItems()
-  const envs = $api.useQuery("get", "/api/environments")
-  const notifications = useNotifications(pending.data)
-  const expanded = useStackOpen()
-  const hosted = useButtonHosted()
-  // Requests the user chose to review one by one, which then no longer group.
-  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
-  useTitleCount(all.length)
-  // 1rem up from the corner, or above the composer it would rest on, clear of its Send button.
-  const [section, setSection] = useState<HTMLElement | null>(null)
-  const bottom = useComposerClearance(section, 16)
-
-  // What the page shows in place (a chat's permission cards, Home's and a teammate's cards,
-  // the browser's questions) stays out of the stack.
-  const { sheet, review } = useApprovalReview()
-  const cards = approvalCards(items, split)
-  if (cards.length === 0) return sheet
-  const envName = (a: Approval) =>
-    envs.data?.find((e) => e.id === a.environmentId)?.name
-
-  // One card needs no pill on a wide page, so it shows there; below sm the CSS hides it until the
-  // pill opens it. Several cards start folded. On a phone with a crumb row, its button stands in
-  // for the pill and the cards open below the row.
-  const single = cards.length === 1
-  return (
-    <section
-      ref={setSection}
-      aria-label="Approvals"
-      style={{ "--stack-bottom": `${bottom}px` } as CSSProperties}
-      className={cn(
-        "fixed right-4 bottom-(--stack-bottom) z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2",
-        hosted && "max-sm:top-12 max-sm:bottom-auto"
-      )}
-    >
-      <ScrollArea
-        id={panelId}
-        className={cn(
-          "w-80 max-w-full",
-          !expanded && (single ? "max-sm:hidden" : "hidden")
-        )}
-        // Lifted over a tall draft, the list keeps to the room left above it.
-        viewportClassName="flex max-h-[min(60vh,calc(100dvh_-_var(--stack-bottom)_-_6rem))] flex-col gap-2 *:shrink-0 *:data-[slot=card]:shadow-lg"
-      >
-        {notifications.canAsk && (
-          <Button
-            variant="link"
-            size="xs"
-            className="self-end"
-            onClick={notifications.request}
-          >
-            Enable notifications
-          </Button>
-        )}
-        <ApprovalCardList
-          cards={cards}
-          max={maxCards}
-          envName={envName}
-          onReview={review}
-          onSplit={(ids) => {
-            setSplit((prev) => new Set([...prev, ...ids]))
-            // The hosts become cards of their own, which would fold the stack away.
-            setStackOpen(true)
-          }}
-        />
-      </ScrollArea>
+function ApprovalRow({
+  card,
+  envName,
+  onReview,
+  onSplit,
+  inert,
+}: {
+  card: ApprovalCard
+  envName: (a: Approval) => string | undefined
+  onReview: (a: Approval) => void
+  onSplit: (ids: string[]) => void
+  inert: boolean
+}) {
+  const a = cardApproval(card)
+  const kind = approvalKind(a)
+  const group = card.kind === "single" ? undefined : card.approvals
+  const details = [approvalSource(a), envName(a), formatAge(a.createdAt)]
+    .filter(Boolean)
+    .join(" · ")
+  const summary = group
+    ? `${group.length} requests: ${group.map(approvalHost).join(", ")}`
+    : kind.summary(a)
+  // A connection the gateway holds says how long it waits; once it gave up, an answer is for
+  // the next attempt.
+  const connection = !group && (isConnection(a) || !!a.network?.write)
+  const now = useHoldClock(connection ? [a] : [])
+  const left = connection ? heldFor(a, now) : undefined
+  let actions: ReactNode
+  if (group)
+    actions = (
       <Button
-        variant="outline"
         size="sm"
-        aria-expanded={expanded}
-        aria-controls={panelId}
-        onClick={() => setStackOpen(!expanded)}
-        className={cn(
-          "rounded-full bg-card shadow-lg",
-          single && "sm:hidden",
-          hosted && "max-sm:hidden"
-        )}
+        variant="outline"
+        onClick={() => onSplit(group.map((g) => g.id))}
       >
-        <WaitingCount count={items.length} />
-        {items.length === 1 ? "approval" : "approvals"}
-        {expanded ? <CaretDownIcon aria-hidden /> : <CaretUpIcon aria-hidden />}
+        Show each
       </Button>
-      {sheet}
-    </section>
+    )
+  else if (a.kind === "chat.permission" && a.chatPermission)
+    actions = <PermissionRowActions approval={a} />
+  else if (isNetworkApproval(a))
+    actions = (
+      <NetworkRowActions
+        approval={a}
+        envName={envName(a)}
+        gaveUp={connection && left === undefined}
+      />
+    )
+  else if (isGitApproval(a) || a.kind === "memory.conflict")
+    actions = (
+      <Button size="sm" variant="outline" onClick={() => onReview(a)}>
+        {a.kind === "memory.conflict" ? "Resolve" : "Review"}
+      </Button>
+    )
+  else
+    actions = (
+      <Button
+        size="sm"
+        variant="outline"
+        render={<CardPageLink approval={a} />}
+      >
+        Open
+      </Button>
+    )
+  return (
+    <li
+      data-testid={group ? "approval-group" : "approval-card"}
+      inert={inert}
+      className="grid min-w-0 gap-1 px-3 py-2.5"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <KindChip area={kind.area} icon={kind.icon}>
+          {kind.title}
+        </KindChip>
+        <span className="min-w-0 truncate text-caption text-muted-foreground">
+          {details}
+        </span>
+        {connection && (
+          <span
+            data-testid="hold-status"
+            className="ml-auto shrink-0 text-caption text-muted-foreground tabular-nums"
+          >
+            {left === undefined ? "No longer held" : `Held, ${left} s left`}
+          </span>
+        )}
+      </div>
+      <div className="flex min-w-0 items-center gap-3">
+        <p className="line-clamp-2 min-w-0 flex-1 text-xs font-medium break-words">
+          {kind.mono && !group ? <Ident>{summary}</Ident> : summary}
+        </p>
+        <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
+      </div>
+    </li>
+  )
+}
+
+/** Denies or allows an agent's permission request once, as its card's buttons do untouched. */
+function PermissionRowActions({ approval }: { approval: Approval }) {
+  const decide = useDecideApproval()
+  const options = approval.chatPermission?.options ?? []
+  const has = (kind: string) => options.some((o) => o.kind === kind)
+  const busy = (action: string) =>
+    decide.isPending && decide.variables.body.action === action
+  const send = (action: "allow" | "deny") =>
+    decide.mutate({
+      params: { path: { env: approval.environmentId, id: approval.id } },
+      body: { action, scope: "environment", remember: false },
+    })
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={decide.isPending || !has("reject_once")}
+        onClick={() => send("deny")}
+      >
+        {busy("deny") && <Spinner />}
+        Deny
+      </Button>
+      <Button
+        size="sm"
+        disabled={decide.isPending || !has("allow_once")}
+        onClick={() => send("allow")}
+      >
+        {busy("allow") && <Spinner />}
+        Allow
+      </Button>
+    </>
+  )
+}
+
+/**
+ * Denies or allows a network request as its card starts (initialDecision): the button's
+ * tooltip says for whom and how long; the card on Home has the other choices.
+ */
+function NetworkRowActions({
+  approval,
+  envName,
+  gaveUp,
+}: {
+  approval: Approval
+  envName?: string
+  gaveUp: boolean
+}) {
+  const decide = useDecideApproval()
+  const d = initialDecision(approval)
+  const rule = ruleSummary({
+    lifetime: d.lifetime,
+    scope: d.scope,
+    reach: d.reach,
+    browser: isBrowserRequest(approval),
+    sandboxName: approval.network?.sandboxName,
+    owner: approval.teammate?.name,
+    envName,
+  })
+  const busy = (action: string) =>
+    decide.isPending && decide.variables.body.action === action
+  const send = (action: "allow" | "deny") =>
+    decide.mutate({
+      params: { path: { env: approval.environmentId, id: approval.id } },
+      body: initialDecisionBody(approval, action),
+    })
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        title={rule}
+        disabled={decide.isPending}
+        onClick={() => send("deny")}
+      >
+        {busy("deny") && <Spinner />}
+        Deny
+      </Button>
+      <Button
+        size="sm"
+        title={rule}
+        disabled={decide.isPending}
+        onClick={() => send("allow")}
+      >
+        {busy("allow") && <Spinner />}
+        {gaveUp ? "Allow next time" : "Allow"}
+      </Button>
+    </>
+  )
+}
+
+/** A link to the page that shows an approval's card: Home, or the teammate's browser. */
+function CardPageLink({
+  approval,
+  ...props
+}: { approval: Approval } & Omit<ComponentProps<"a">, "href">) {
+  const page = approvalKind(approval).page
+  return (
+    <Link
+      to={page}
+      params={{
+        env: approval.environmentId,
+        id: approvalTeammateId(approval) ?? "",
+      }}
+      search={page === "/e/$env/teammates/$id" ? { tab: "browser" } : {}}
+      onClick={() => setListOpen(false)}
+      {...props}
+    />
   )
 }
 
@@ -270,7 +494,7 @@ export function useApprovalReview(): {
     review: (a) => {
       if (a.kind === "memory.conflict") setConflict(a)
       else {
-        setStackOpen(false)
+        setListOpen(false)
         void openReview(a)
       }
     },
@@ -344,6 +568,9 @@ function StackCard({
   onSplit: (ids: string[]) => void
   inert: boolean
 }) {
+  // A card that just arrived slides in with a ring that fades (lib/approval-arrivals.ts).
+  const arriving = useJustArrived(cardApproval(card).id)
+  const className = cn(arriving && "motion-safe:animate-card-arrival")
   if (card.kind === "single") {
     return (
       <ApprovalCard
@@ -351,6 +578,7 @@ function StackCard({
         envName={envName(card.approval)}
         onReview={() => onReview(card.approval)}
         inert={inert}
+        className={className}
       />
     )
   }
@@ -360,6 +588,7 @@ function StackCard({
       envName={envName(card.approvals[0])}
       onReview={() => onSplit(card.approvals.map((a) => a.id))}
       inert={inert}
+      className={className}
     />
   )
 }
@@ -367,21 +596,12 @@ function StackCard({
 /** Links to the environment page that lists the next hidden approval's kind. */
 function MoreLink({ approval, count }: { approval: Approval; count: number }) {
   return (
-    <Link
-      to={approvalKind(approval).page}
-      params={{
-        env: approval.environmentId,
-        id: approvalTeammateId(approval) ?? "",
-      }}
-      search={
-        approvalKind(approval).page === "/e/$env/teammates/$id"
-          ? { tab: "browser" }
-          : {}
-      }
+    <CardPageLink
+      approval={approval}
       className="px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
     >
       +{count} more
-    </Link>
+    </CardPageLink>
   )
 }
 
@@ -390,11 +610,13 @@ function ApprovalCard({
   envName,
   onReview,
   inert,
+  className,
 }: {
   approval: Approval
   envName?: string
   onReview: () => void
   inert: boolean
+  className?: string
 }) {
   const kind = approvalKind(approval)
   const details = [
@@ -417,7 +639,7 @@ function ApprovalCard({
     <Card
       ref={card}
       size="sm"
-      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
+      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area), className)}
       data-testid="approval-card"
       inert={inert}
     >

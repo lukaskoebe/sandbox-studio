@@ -190,7 +190,7 @@ The conversation opens on the teammate's home (`components/teammate/home.tsx`), 
 The home groups them by day: each chat is a thread card (its title, a chip for a computer other
 than the one on the screen, the last answer, its requests and its state), and the rest are
 small events between them. Threads untouched for a while wait behind "Earlier threads". The
-pending approvals for the teammate close the home, a row each, and the floating approval stack
+pending approvals for the teammate close the home, a row each, and the top bar's approvals list
 leaves them out on this page. Opening a card opens the thread (`?thread=`), whose turn underway
 comes from the chat's own stream, so it updates live. The composer has three modes:
 **Thread** starts a chat on the computer the screen shows; **Task** adds a task (the first line

@@ -851,7 +851,7 @@ test("a paste into the live view types the clipboard, after a warning", async ({
   ).toEqual([])
 })
 
-// The teammate's question shows on the page, not also in the approval stack; once allowed, the
+// The teammate's question shows on the page, not also in the top bar's list; once allowed, the
 // click goes through and its step replays from the activity.
 test("an agent's question shows on the page, and its step replays from the activity", async ({
   page,

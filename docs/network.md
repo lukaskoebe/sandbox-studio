@@ -236,9 +236,9 @@ private hosts list and this computer's ports are edited under Settings → Ports
   ones: the ones you decided, and the ones a level, the curated list or the
   [AI reviewer](#ai-reviewer-assisted) allowed or denied. A reviewer's decision has a Revert.
 
-Pending network approvals (connections and browser requests) are on Home and in the approval
-stack. A sandbox's connections are also on top of its Connections list and behind a count on its
-screen, which then leaves them out of the stack. The old addresses `/e/$env/network` and `/network/rules` redirect to Settings → Network,
+Pending network approvals (connections and browser requests) are on Home and in the top bar's
+approvals list. A sandbox's connections are also on top of its Connections list and behind a count
+on its screen, which then leaves them out of the list. The old addresses `/e/$env/network` and `/network/rules` redirect to Settings → Network,
 `/network/requests` to Home and `/network/activity` to Settings → Activity.
 
 ## Hold and ask
@@ -269,8 +269,8 @@ pages offer "Allow next time" and Dismiss rather than Once. A retry holds it aga
 notice a client that disconnects early: the gateway waits on the answer, not on the client, so
 such a request shows as held until its time runs out.
 
-Connections from one sandbox that arrive within 3 seconds of each other show as one card on the
-approval stack, with Allow all, Review individually and Deny all (see
+Connections from one sandbox that arrive within 3 seconds of each other show as one card on
+Home (one row in the top bar's list), with Allow all, Review individually and Deny all (see
 [approvals](approvals.md#realtime-and-ui)). A browser's requests group by the page they belong
 to instead: one sandbox's pending requests to one top-level site are one card, titled with the
 site. A navigation keeps its own card, since it needs the site decision.

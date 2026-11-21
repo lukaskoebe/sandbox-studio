@@ -651,8 +651,8 @@ export function Breadcrumbs({ env }: { env: string }) {
           </li>
         )}
       </ol>
-      {/* On a phone the approvals wait up here, where they cover nothing. */}
-      <ApprovalsButton className="sm:hidden" />
+      {/* The approvals wait up here, where they cover nothing. */}
+      <ApprovalsButton />
       <Button
         variant="ghost"
         size="icon-sm"

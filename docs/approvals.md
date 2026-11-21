@@ -77,18 +77,20 @@ change it.
 - `internal/events` publishes change notices as SSE at `/api/events`, with topics such as
   `approvals`, `rules`, `secrets`, `builds`, `teammates`, `chats` and `tasks`. Events say what
   changed; clients refetch. Slow subscribers are disconnected.
-- The approval stack (`web/src/components/approval-stack.tsx`) shows on every page, for
-  every environment, with the environment's name on cards from other environments. Pages
-  that list a kind themselves (a chat's own permission requests, Home its environment's
-  approvals, which it shows as cards of its own) leave those out of the stack. Every place
-  that shows an approval card itself claims its ID while it is on screen (`useClaimApprovals`
-  in `web/src/lib/approval-claims.ts`): a teammate's conversation, a chat's permission card,
-  the browser window's questions on its page and Home. The stack leaves claimed IDs out, so a
-  card shows in one place even when several views are on the page. More than one card, or a narrow page, folds
-  the stack into an "N approvals" pill that opens the cards on click
-  ([UI style](design/ui-style.md)). On a phone the pill is a button in the breadcrumb row
-  (`ApprovalsButton`), whose cards open below the row, so nothing floats over a composer or
-  the terminal's keys. The pending count goes into the page title.
+- The top bar's approvals button (`ApprovalsButton` in
+  `web/src/components/approval-stack.tsx`) shows on every page and at every width, for every
+  environment, with the environment's name on rows from other environments. It opens a compact
+  list, one row per card: Allow and Deny for a network request (as its card decides
+  untouched, `initialDecisionBody`) and an agent's permission ask, Review for git and memory
+  kinds, and Open for the rest, which links to the card's page. Every place that shows an
+  approval card itself claims its ID while it is on screen (`useClaimApprovals` in
+  `web/src/lib/approval-claims.ts`): Home, a teammate's conversation, a chat's permission card
+  and the browser window's questions. The list leaves claimed IDs out, so a card shows in one
+  place; when every pending approval is claimed, the button is only a count. Nothing floats
+  over a composer or the terminal's keys ([UI style](design/ui-style.md)). `ApprovalNotices`,
+  mounted once by the root route, sends the notifications, puts the pending count into the
+  page title and records arrivals (`web/src/lib/approval-arrivals.ts`): one that comes after
+  the first load flashes the count, and its card slides into Home's list.
 - A network approval's Options have two rows: who the decision covers and for how long. For a
   browser request, Who is "<teammate>'s browser", "All browsers" or "Browsers and sandboxes"
   (only the last leaves out `browserOnly`), and For is "Always", "1 hour", "This session" or

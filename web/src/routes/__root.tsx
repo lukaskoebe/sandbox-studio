@@ -4,7 +4,7 @@ import {
   createRootRouteWithContext,
 } from "@tanstack/react-router"
 import type { QueryClient } from "@tanstack/react-query"
-import { ApprovalStack } from "@/components/approval-stack"
+import { ApprovalNotices } from "@/components/approval-stack"
 import { WindowBar, WindowEdges } from "@/components/window-bar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
@@ -42,7 +42,7 @@ function RootLayout() {
     <TooltipProvider>
       <Outlet />
       <WindowEdges />
-      <ApprovalStack />
+      <ApprovalNotices />
       <Toaster position="top-center" closeButton />
     </TooltipProvider>
   )

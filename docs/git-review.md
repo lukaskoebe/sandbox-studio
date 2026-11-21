@@ -576,7 +576,7 @@ review: `git_pull_request_comment(repository, number, body, forge?, idempotency_
   no table of its own. The agent gets "awaiting approval" with the approval's ID at once. A
   call with an `idempotency_key` this sandbox already asked with answers with that comment.
   Comments don't replace each other, unlike review drafts.
-- **The card** (`ForgeComment` in `web/src/components/forge-comment.tsx`, in the stack, on
+- **The card** (`ForgeComment` in `web/src/components/forge-comment.tsx`, on Home, on
   Changes and the review page) shows the comment's start; the review shows the pull request with
   its link, the comment in an editable box, the attribution checkbox ("Comment by Ada
   (agent)", remembered per teammate as for reviews) and "Posts as <account> on <host>",

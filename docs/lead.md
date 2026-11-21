@@ -222,7 +222,7 @@ it and on the approvals and chats topics.
   plan's conversation: the user's messages, Lead's replies with the answers to pick, the steps
   with Approve and send and their states once approved, notes, and the report with links to
   the threads, with a box for a change or another message at the bottom. The plan page claims
-  its approval, so the floating stack leaves it out there; elsewhere the stack and Home show
+  its approval, so the top bar's list leaves it out there; elsewhere the list and Home show
   its card (`plan-approval.tsx`) with the messages and Approve and send. Each round's steps
   show at the reply that proposed them, a follow-up's headed Follow-up 1 or 2, with who
   approved it when or that it went without asking. A plan drafted for a standing order says

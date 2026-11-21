@@ -1,10 +1,4 @@
-import {
-  addTeammate,
-  expect,
-  hideApprovalStack,
-  sandboxName,
-  test,
-} from "./fixtures"
+import { addTeammate, expect, sandboxName, test } from "./fixtures"
 
 type Pending = {
   kind: string
@@ -57,7 +51,6 @@ test("Lead's plan waits for approval, then sends its message in the teammate's t
 
   // New plan from under Lead in the sidebar.
   await page.goto(`/e/${env}/lead`)
-  await hideApprovalStack(page)
   const sidebar = page.locator("[data-sidebar=sidebar]")
   await sidebar.getByRole("link", { name: "New plan" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/plans/new$`))
@@ -161,7 +154,6 @@ test("Lead asks back with answers to pick, and a cancelled plan withdraws its ap
   await page.goto(
     `/e/${env}/lead/plans/new?text=${encodeURIComponent(`Have ${name} rebuild, but ask me which branch`)}`
   )
-  await hideApprovalStack(page)
   const ask = page.getByRole("textbox", { name: "Ask Lead for a plan" })
   await expect(ask).toHaveValue(`Have ${name} rebuild, but ask me which branch`)
   await ask.press("Enter")

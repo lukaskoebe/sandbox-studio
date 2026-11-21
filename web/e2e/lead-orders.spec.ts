@@ -1,10 +1,4 @@
-import {
-  addTeammate,
-  expect,
-  hideApprovalStack,
-  sandboxName,
-  test,
-} from "./fixtures"
+import { addTeammate, expect, sandboxName, test } from "./fixtures"
 
 type Api = Parameters<typeof addTeammate>[0]
 
@@ -90,7 +84,6 @@ test("a follow-up in a teammate's own thread waits for approval, then goes and i
   const { teammate, chat } = await teammateWithThread(api, env, name)
 
   await page.goto(`/e/${env}/lead/plans/new`)
-  await hideApprovalStack(page)
   const ask = page.getByRole("textbox", { name: "Ask Lead for a plan" })
   await ask.fill(`Ask ${name} whether the tests pass, and follow up`)
   await ask.press("Enter")
@@ -171,7 +164,6 @@ test("with follow-ups allowed, Lead follows up in a thread its plan started with
     ).toContainText("Follow-ups in its own threads")
 
     await page.goto(`/e/${env}/lead/plans/new`)
-    await hideApprovalStack(page)
     const ask = page.getByRole("textbox", { name: "Ask Lead for a plan" })
     await ask.fill(`Have ${name} check in a new thread, and follow up`)
     await ask.press("Enter")
@@ -229,7 +221,6 @@ test("a standing order drafts its plan on Run now, waits for approval, and can b
   const words = `Ask ${name} whether the ${tag} tests still pass`
 
   await page.goto(`/e/${env}/lead`)
-  await hideApprovalStack(page)
   const sidebar = page.locator("[data-sidebar=sidebar]")
   await sidebar.getByRole("link", { name: "Standing orders" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/orders$`))

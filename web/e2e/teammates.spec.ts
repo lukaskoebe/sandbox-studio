@@ -1,6 +1,6 @@
 import {
   addTeammate,
-  approvals,
+  openApprovals,
   expect,
   sandboxName,
   teammateMenu,
@@ -302,10 +302,10 @@ test("the screen enlarges to take the page, and the conversation comes back", as
 })
 
 // The conversation stays mounted while the screen takes the page or covers it on a phone, and
-// the home in it shows the teammate's requests. Out of sight it lets them float, so a request
-// from a computer off the screen isn't shown nowhere.
+// the home in it shows the teammate's requests. Out of sight it leaves them to the top bar's
+// list, so a request from a computer off the screen isn't shown nowhere.
 for (const phone of [false, true]) {
-  test(`a request floats while the screen hides the conversation${phone ? " on a phone" : ""}`, async ({
+  test(`a request is in the top bar's list while the screen hides the conversation${phone ? " on a phone" : ""}`, async ({
     page,
     api,
     env,
@@ -326,16 +326,11 @@ for (const phone of [false, true]) {
 
     const host = `hidden-${Math.random().toString(36).slice(2, 8)}.example.org`
     await api.connect(other, host)
-    const card = approvals(page)
+    const card = (await openApprovals(page))
       .getByTestId("approval-card")
       .filter({ hasText: host })
-    // A phone folds the stack behind the crumb row's count.
-    if (phone)
-      await page
-        .getByRole("navigation", { name: "Where you are" })
-        .getByRole("button", { name: "1 approval" })
-        .click()
     await expect(card).toBeVisible()
+    await page.keyboard.press("Escape")
 
     // With the conversation back, its home shows the request in place again.
     if (phone) await page.goto(`/e/${env}/teammates/${id}`)

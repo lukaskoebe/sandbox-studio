@@ -1,4 +1,12 @@
-import { addTeammate, approvals, expect, sandboxName, test } from "./fixtures"
+import {
+  addTeammate,
+  approvals,
+  approvalsButton,
+  expect,
+  openApprovals,
+  sandboxName,
+  test,
+} from "./fixtures"
 
 test("a held connection asks; Allow adds a rule and clears the card in every tab", async ({
   page,
@@ -10,16 +18,16 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
   const id = await api.createSandbox(sandboxName("net"))
   const host = `api-${Math.random().toString(36).slice(2, 8)}.example.org`
 
-  // Home lists approvals in place, so the stack shows them on other pages.
+  // Home lists approvals in place, so the top bar's list has them on other pages.
   await page.goto(`/e/${env}/secrets`)
   const other = await context.newPage()
   await other.goto(`/e/${env}/memory`)
   await api.connect(id, host)
 
-  const card = approvals(page)
+  const card = (await openApprovals(page))
     .getByTestId("approval-card")
     .filter({ hasText: host })
-  const otherCard = approvals(other)
+  const otherCard = (await openApprovals(other))
     .getByTestId("approval-card")
     .filter({ hasText: host })
   await expect(card).toBeVisible()
@@ -92,9 +100,12 @@ test("a page opened as a connection is held shows its approval at once", async (
   land()
 
   // Sooner than the approvals' own refresh every 15 seconds.
+  await expect(approvalsButton(page)).toBeVisible({ timeout: 5000 })
   await expect(
-    approvals(page).getByTestId("approval-card").filter({ hasText: host })
-  ).toBeVisible({ timeout: 5000 })
+    (await openApprovals(page))
+      .getByTestId("approval-card")
+      .filter({ hasText: host })
+  ).toBeVisible()
   await api.dismissApprovals()
 })
 
@@ -417,7 +428,7 @@ function freshLabel() {
   return Math.random().toString(36).slice(2, 8)
 }
 
-test("an approval shows once: in the teammate's conversation, not also in the stack", async ({
+test("an approval shows once: in the teammate's conversation, not also in the top bar's list", async ({
   page,
   api,
   env,
@@ -434,8 +445,11 @@ test("an approval shows once: in the teammate's conversation, not also in the st
     page.getByTestId("waiting-row").filter({ hasText: host })
   ).toHaveCount(1)
   await expect(cards).toHaveCount(0)
-  // Elsewhere the stack shows it.
+  // Up there it is only counted.
+  await expect(approvalsButton(page)).toHaveCount(0)
+  // Elsewhere the list has it.
   await page.goto(`/e/${env}/secrets`)
+  await openApprovals(page)
   await expect(cards).toHaveCount(1)
   await api.dismissApprovals()
 })
@@ -545,7 +559,8 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
       curated: true,
     })
 
-  await page.goto(`/e/${env}/memory`)
+  // Home's cards say why a write asks; the top bar's rows have only the request.
+  await page.goto(`/e/${env}`)
   await expect(request("GET", `/${owner}/a.git/info/refs`)).resolves.toEqual({
     outcome: "allowed",
   })
@@ -561,16 +576,9 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
   const otherCard = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: `/${owner}/other` })
-  await approvals(page)
-    .getByRole("button", { name: /\d+ approvals/ })
-    .click()
   await expect(otherCard).toBeVisible()
   await expect(otherCard).toContainText("The curated list allows only reads")
   await expect(card).not.toContainText(`/${owner}/other`)
-  // Several cards in the stack aren't squeezed: the stack scrolls, and a card keeps its buttons.
-  await expect
-    .poll(() => otherCard.evaluate((el) => el.scrollHeight <= el.clientHeight))
-    .toBe(true)
 
   await otherCard.getByRole("button", { name: "Deny", exact: true }).click()
   await expect(other).resolves.toEqual({ outcome: "denied" })

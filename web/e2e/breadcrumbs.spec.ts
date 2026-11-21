@@ -1,4 +1,11 @@
-import { addTeammate, approvals, expect, sandboxName, test } from "./fixtures"
+import {
+  addTeammate,
+  approvals,
+  approvalsButton,
+  expect,
+  sandboxName,
+  test,
+} from "./fixtures"
 
 test("the breadcrumb row says where a page is, and its parts open their neighbours", async ({
   page,
@@ -204,75 +211,80 @@ test("on a phone the breadcrumb row holds the sidebar's toggle and search", asyn
   ).toBeVisible()
 })
 
-// The approvals wait in the crumb row on a phone, so no floating pill covers a composer's send
-// button or the terminal's keys; their cards open below the row.
-test("on a phone the approvals are a button in the breadcrumb row", async ({
+// The approvals wait in the crumb row at every width, so nothing floats over a composer's Send
+// button, a terminal's last lines or a table; their list opens below the row, as a menu does.
+for (const width of [390, 1280])
+  test(`the approvals are a button in the breadcrumb row at ${width}px, with a compact list`, async ({
+    page,
+    api,
+    env,
+  }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await api.dismissApprovals()
+    await page.goto(`/e/${env}/secrets`)
+    const crumbs = page.getByRole("navigation", { name: "Where you are" })
+    const button = approvalsButton(page)
+    await expect(crumbs).toBeVisible()
+    await expect(button).toHaveCount(0)
+
+    // One that arrives while the page is open flashes the count.
+    const host = `crumb-${Math.random().toString(36).slice(2, 8)}.example.org`
+    const sb = await api.createSandbox(sandboxName("crumbask"))
+    await api.connect(sb, host)
+    await expect(button).toHaveText(/^1 needs you$/, { timeout: 20_000 })
+    await expect(button.locator("[data-status=waiting]")).toHaveClass(
+      /animate-count-arrival/
+    )
+
+    await button.click()
+    await expect(button).toHaveAttribute("aria-expanded", "true")
+    const list = approvals(page)
+    const row = list.getByTestId("approval-card").filter({ hasText: host })
+    await expect(row).toBeVisible()
+    const bar = (await crumbs.boundingBox())!
+    expect((await row.boundingBox())!.y).toBeGreaterThanOrEqual(
+      bar.y + bar.height
+    )
+    await expect(list).toContainText("Cards with the full detail are on Home.")
+    // Escape closes it, as it does a menu.
+    await page.keyboard.press("Escape")
+    await expect(row).toBeHidden()
+
+    // Allow in the row decides as the card would untouched.
+    await button.click()
+    await row.getByRole("button", { name: "Allow" }).click()
+    await expect(button).toHaveCount(0)
+    await expect
+      .poll(async () =>
+        (await api.guest(sb)).connections.find((c) => c.host === host)
+      )
+      .toMatchObject({ done: true, status: 200 })
+  })
+
+// Home lists the cards itself, so up there the button is only the count; a card that arrives
+// slides into the list.
+test("on Home the approvals' count opens nothing, and a new card slides in", async ({
   page,
   api,
   env,
 }) => {
-  await page.setViewportSize({ width: 390, height: 800 })
   await api.dismissApprovals()
-  const host = `crumb-${Math.random().toString(36).slice(2, 8)}.example.org`
-  await api.connect(await api.createSandbox(sandboxName("crumbask")), host)
-  await page.goto(`/e/${env}/secrets`)
-  const crumbs = page.getByRole("navigation", { name: "Where you are" })
-  const button = crumbs.getByRole("button", { name: /^\d+ approvals?$/ })
-  await expect(button).toBeVisible()
-  await expect(
-    approvals(page).getByRole("button", { name: /^\d+ approvals?$/ })
-  ).toBeHidden()
-
-  await button.click()
-  await expect(button).toHaveAttribute("aria-expanded", "true")
+  await page.goto(`/e/${env}`)
+  await expect(approvals(page)).toBeVisible()
+  const host = `home-${Math.random().toString(36).slice(2, 8)}.example.org`
+  await api.connect(await api.createSandbox(sandboxName("homeask")), host)
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: host })
+  await expect(card).toBeVisible({ timeout: 20_000 })
+  await expect(card).toHaveClass(/animate-card-arrival/)
+  const crumbs = page.getByRole("navigation", { name: "Where you are" })
+  await expect(crumbs.getByText(/^1 needs you$/)).toBeVisible()
+  await expect(approvalsButton(page)).toHaveCount(0)
+
+  // Cards already waiting when the page loads don't move.
+  await page.reload()
   await expect(card).toBeVisible()
-  const row = (await crumbs.boundingBox())!
-  expect((await card.boundingBox())!.y).toBeGreaterThanOrEqual(
-    row.y + row.height
-  )
-  await button.click()
-  await expect(card).toBeHidden()
+  await expect(card).not.toHaveClass(/animate-card-arrival/)
   await api.dismissApprovals()
-})
-
-// On a wide page the stack floats in the corner, and above the composer when there is one, so
-// its cards never cover the Send button.
-test("the approval stack sits above a composer, not over its Send button", async ({
-  page,
-  api,
-  env,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  const name = `Stack ${Math.random().toString(36).slice(2, 8)}`
-  const id = await addTeammate(api, env, name)
-  const host = `stack-${Math.random().toString(36).slice(2, 8)}.example.org`
-  await api.connect(await api.createSandbox(sandboxName("stackask")), host)
-
-  const stack = approvals(page)
-  await page.goto(`/e/${env}/secrets`)
-  await expect(stack).toBeVisible()
-  await expect
-    .poll(async () =>
-      Math.round(
-        800 -
-          (await stack.boundingBox())!.y -
-          (await stack.boundingBox())!.height
-      )
-    )
-    .toBe(16)
-
-  await page.goto(`/e/${env}/teammates/${id}`)
-  const send = page.getByRole("button", { name: "Send" })
-  await expect(send).toBeVisible()
-  await expect(stack).toBeVisible()
-  const top = (await send.boundingBox())!.y
-  await expect
-    .poll(async () => {
-      const box = (await stack.boundingBox())!
-      return box.y + box.height
-    })
-    .toBeLessThanOrEqual(top)
 })

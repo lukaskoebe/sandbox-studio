@@ -89,28 +89,22 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   `KindChip` with the kind's name, a details line (source, environment, age), a title sentence
   (hosts in `Ident`), and Deny / Allow. Grouped requests list their hosts and allow the
   whole site at once. Browser URLs are in mono.
-- **The approval stack.** It sits bottom right on every page but Home, which answers its own
-  environment's approvals in place (the stack still shows other environments' there), and does
-  not cover content unless
-  someone opens it. It leaves out the cards that a conversation, chat, browser window or review
-  page on screen already shows (`useClaimApprovals`). One approval shows its card at 640 px and wider; that card is the one
-  exception, since it has to be answered. More than one approval, or a narrower page, folds the
-  cards into an "N approvals" pill, a
-  small outline button with the count chip (`WaitingCount`) and a caret. The pill opens the
-  list above it on click, up to three cards and a "+N more" link, and closes on the next click.
-  Below 640 px, on a page with the breadcrumb row, the pill moves into that row beside Search
-  and the cards open below it: at the bottom it covered the composer's send button and the
-  terminal's keys. Pages without the row keep the floating pill.
-  Where a composer lies under its corner (a teammate's home, a wide conversation), the stack sits
-  8 px above the composer instead of 1rem from the foot, and moves up as a draft grows, so a card
-  never hides Send (2026-11-16: a waiting card covered it). A review's decision row counts as
-  one (`DecisionRow` in `review-feedback.tsx`), so a card that floats over an enlarged review
-  keeps clear of Approve and Add a note (2026-11-20). Each composer reports its box
-  (`useComposerSpot`, `lib/composer-clearance.ts`) and the stack measures where it would rest
-  (`useComposerClearance`); the open list keeps to the room left above it.
-  Click alone opens it: a hover would open it over content as the pointer passes. The pill is a
-  disclosure button (`aria-expanded`, `aria-controls`), so keyboard and screen-reader users get
-  the same states. Enable notifications sits at the top of the open list.
+- **Approvals in the top bar.** The breadcrumb row ends with "N need you", a small outline
+  button with the count chip (`WaitingCount`) and a caret, on every page and at every width
+  (`ApprovalsButton` in `approval-stack.tsx`; 2026-11-20 round, mock 6 A). It replaced a pill
+  that floated bottom right, which covered a terminal's last lines, table rows and a composer's
+  Send, and whose open cards covered half the page. Click opens a compact list under the bar,
+  as menus do, and a click outside or Escape closes it. Each row is a `KindChip`, a details
+  line, the title and the answer that needs no more choices: Deny / Allow for a permission and
+  a single network request (as its card starts, `initialDecision`; the button's tooltip says
+  for whom and how long), Review for a git ask, Resolve for a memory conflict, Show each for
+  grouped requests, and Open for the rest, which goes where its card is. The list's foot says
+  that Home has the cards with every choice, links there, and offers Enable notifications.
+  It leaves out what the page on screen already shows (`useClaimApprovals`); where the page
+  shows all of them, as Home and a teammate's home do, the button is only the count. A new
+  approval flashes the count once, and its card slides into Home's list with a ring in the
+  waiting colour that fades (`lib/approval-arrivals.ts`); those already waiting when the page
+  loads don't move. Both animations keep still under reduced motion.
 
 ## Direction A: the app theme
 

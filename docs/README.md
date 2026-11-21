@@ -14,7 +14,7 @@ data locations, repository layout, security model, testing and conventions.
 | [Sandboxes and runtime](sandboxes.md) | VM naming, mounts, boot, resources, checkpoints, suspend, restore gate, base image | `internal/runtime`, `internal/sandboxes` |
 | [Guest agent and channel](guest-agent.md) | vsock/yamux channel, stream kinds, subcommands, terminals, previews, CA trust in guests | `cmd/studio-agent`, `internal/guest`, `internal/agentchan` |
 | [Network, secrets and CA](network.md) | fence, DNS, gateway pipeline, rules, hold-and-ask, interception, Caddy rules, vault, CA, connection log | `internal/gateway`, `internal/policy`, `internal/secrets` |
-| [Approvals](approvals.md) | kinds, decisions, events, the approval stack | `internal/policy`, `internal/integrations`, `internal/events` |
+| [Approvals](approvals.md) | kinds, decisions, events, the top bar's approvals list | `internal/policy`, `internal/integrations`, `internal/events` |
 | [API, auth and storage](api.md) | huma/OpenAPI, streaming, login and preview auth, SQLite and migrations | `internal/api`, `internal/webauth`, `internal/store` |
 | [Frontend](frontend.md) | stack, routes, development | `web/` |
 | [Terminal UI](tui.md) | `studio tui`: screens, keys, sign-in, terminal attach | `internal/tui` |

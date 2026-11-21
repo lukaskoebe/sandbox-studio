@@ -2,6 +2,7 @@ import {
   addTeammate,
   approvals,
   expect,
+  openApprovals,
   sandboxName,
   terminal,
   test,
@@ -316,7 +317,7 @@ test("Review opens a waiting push enlarged over its teammate's thread", async ({
   expect(pushed.error, pushed.output).toBeUndefined()
 
   await page.goto(`/e/${env}/teammates/${teammate}?thread=${chat.id}`)
-  const card = approvals(page)
+  const card = (await openApprovals(page))
     .getByTestId("approval-card")
     .filter({ hasText: "team/app" })
   await card.getByRole("button", { name: "Review" }).click()

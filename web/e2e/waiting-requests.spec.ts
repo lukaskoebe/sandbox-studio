@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test"
-import { approvals, expect, sandboxName, test } from "./fixtures"
+import { approvals, expect, openApprovals, sandboxName, test } from "./fixtures"
 
 function freshHost(label: string) {
   return `${label}-${Math.random().toString(36).slice(2, 8)}.example.org`
@@ -108,7 +108,7 @@ test("the count's Allow all answers them, and the next request finds it closed",
   await api.dismissApprovals()
 })
 
-test("another page still floats a sandbox's request, with how long it is held", async ({
+test("another page lists a sandbox's request in the top bar, with how long it is held", async ({
   page,
   api,
   env,
@@ -119,11 +119,11 @@ test("another page still floats a sandbox's request, with how long it is held", 
   await page.goto(`/e/${env}/secrets`)
   await api.connect(id, host)
 
-  const card = approvals(page)
+  const card = (await openApprovals(page))
     .getByTestId("approval-card")
     .filter({ hasText: host })
   await expect(card.getByTestId("hold-status")).toContainText(
-    /Connection held, \d+ s left/
+    /Held, \d+ s left/
   )
   await card.getByRole("button", { name: "Allow" }).click()
   await expect(card).toBeHidden()
@@ -174,7 +174,7 @@ test("a connection that gave up is answered for the next attempt", async ({
   ).toBeVisible()
 })
 
-test("a floating card says when its connection gave up", async ({
+test("a row in the top bar's list says when its connection gave up", async ({
   page,
   api,
   env,
@@ -186,11 +186,10 @@ test("a floating card says when its connection gave up", async ({
   await api.connect(id, host)
   await page.goto(`/e/${env}/secrets`)
 
-  const card = approvals(page)
+  const card = (await openApprovals(page))
     .getByTestId("approval-card")
     .filter({ hasText: host })
   await expect(card.getByTestId("hold-status")).toContainText("No longer held")
-  await expect(card.getByRole("button", { name: "Dismiss" })).toBeVisible()
   await card.getByRole("button", { name: "Allow next time" }).click()
   await expect(card).toBeHidden()
 })
@@ -311,7 +310,9 @@ test("app: a notification's Allow all answers what it named, and nothing after",
 
   const after = freshHost("after")
   await api.connect(id, after)
-  await expect(approvals(page).getByText(`${after}:80`)).toBeAttached()
+  await expect(
+    (await openApprovals(page)).getByText(`${after}:80`)
+  ).toBeAttached()
 
   await page.evaluate(
     (detail) =>

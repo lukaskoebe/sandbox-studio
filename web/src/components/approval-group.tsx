@@ -49,12 +49,14 @@ export function NetworkGroupCard({
   envName,
   onReview,
   inert,
+  className,
 }: {
   approvals: Approval[]
   envName?: string
   onReview: () => void
   /** Ignores clicks, as for a moment after the list it's in changed. */
   inert?: boolean
+  className?: string
 }) {
   const queryClient = useQueryClient()
   const first = approvals[0]
@@ -106,7 +108,7 @@ export function NetworkGroupCard({
     <Card
       ref={card}
       size="sm"
-      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
+      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area), className)}
       data-testid="approval-group"
       inert={inert}
     >

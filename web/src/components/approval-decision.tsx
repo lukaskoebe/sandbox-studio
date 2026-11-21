@@ -524,6 +524,49 @@ export function LifetimeToggle({
 }
 
 /**
+ * What a network approval's decision starts as, which is what Allow and Deny decide when nothing
+ * is changed: the pattern at the level its owner picked last, writes like this one for a write,
+ * the owner's scope, and a lasting rule.
+ */
+export function initialDecision(approval: Approval) {
+  const net = approval.network
+  const owner = approval.teammate
+  // Without patterns from the server, the requested host itself is the one choice.
+  const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
+  return {
+    patterns,
+    pattern:
+      patterns.find((p) => patternLevel(p) === owner?.patternLevel) ??
+      patterns[0],
+    // A write starts as an allow of writes like it, not of every write to the host.
+    requestLevel: !!net?.write && !!net.pathPattern,
+    // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
+    scope: owner?.approvalScope ?? "environment",
+    reach: defaultReach(approval),
+    lifetime: "always" as Lifetime,
+  }
+}
+
+/** The body of deciding a network approval as it starts (initialDecision), untouched. */
+export function initialDecisionBody(
+  approval: Approval,
+  action: "allow" | "deny"
+) {
+  const d = initialDecision(approval)
+  const net = approval.network
+  return decisionBody(approval, action, {
+    lifetime: d.lifetime,
+    scope: d.scope,
+    reach: d.reach,
+    host: d.pattern,
+    note: "",
+    ...(d.requestLevel && net?.method && net.pathPattern
+      ? { method: net.method, pathPrefix: net.pathPattern }
+      : {}),
+  })
+}
+
+/**
  * Decides one network approval: the host pattern to allow or deny, who the rule covers and for
  * how long. A sandbox's request picks the scope and the ports; a browser's request picks the
  * browser, every browser, or the browsers and the sandboxes, and can be allowed for the browser
@@ -540,27 +583,20 @@ export function ApprovalDecision({
   const net = approval.network
   const owner = approval.teammate
   const browser = isBrowserRequest(approval)
-  // Without patterns from the server, the requested host itself is the one choice. The level
-  // the owner chose last is preselected.
-  const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
-  const preferred =
-    patterns.find((p) => patternLevel(p) === owner?.patternLevel) ?? patterns[0]
-  const [pattern, setPattern] = useState(preferred)
+  const initial = initialDecision(approval)
+  const patterns = initial.patterns
+  const [pattern, setPattern] = useState(initial.pattern)
   // A browser request can also be allowed by its method and path, such as GET /repos/*.
   const requestPattern =
     net?.method && net.pathPattern
       ? `${net.method} ${net.pathPattern}`
       : undefined
-  // A write starts as an allow of writes like it, not of every write to the host.
-  const [requestLevel, setRequestLevel] = useState(
-    !!net?.write && !!net.pathPattern
-  )
+  const [requestLevel, setRequestLevel] = useState(initial.requestLevel)
   const [anyPort, setAnyPort] = useState(false)
-  // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
-  const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
+  const defaultScope = initial.scope
   const [scope, setScope] = useState<DecisionScope>(defaultScope)
-  const [reach, setReach] = useState<BrowserReach>(defaultReach(approval))
-  const [picked, setLifetime] = useState<Lifetime>("always")
+  const [reach, setReach] = useState<BrowserReach>(initial.reach)
+  const [picked, setLifetime] = useState<Lifetime>(initial.lifetime)
   // A connection nothing holds open any more can only be answered for its next attempt.
   const connection = isConnection(approval) || !!net?.write
   const now = useHoldClock(connection ? [approval] : [])
