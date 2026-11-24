@@ -1,4 +1,5 @@
 import { createCn } from "cn/config"
+import { ago } from "@/lib/time"
 
 /**
  * Joins class names and drops the ones a later class overrides. It knows the type scale's own
@@ -27,16 +28,9 @@ export function hostPort(host: string, port: number): string {
   return host.includes(":") ? `[${host}]:${port}` : `${host}:${port}`
 }
 
-/** How long ago a timestamp was: "just now", "5m ago", "3h ago". */
+/** How long ago a timestamp was: "just now", "5 min ago", "3 h ago", then a clock time (lib/time.ts). */
 export function formatAge(iso: string, now = Date.now()): string {
-  const seconds = Math.floor((now - Date.parse(iso)) / 1000)
-  if (seconds < 5) return "just now"
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
+  return ago(iso, now)
 }
 
 /** How long a sandbox's VM has been up since it started: "Up 14 min", "Up 2 h", "Up 3 d". */

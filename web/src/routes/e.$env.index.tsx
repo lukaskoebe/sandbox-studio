@@ -34,6 +34,7 @@ import {
   approvalKind,
   approvalSource,
 } from "@/lib/approval-kinds"
+import { when } from "@/lib/time"
 
 export const Route = createFileRoute("/e/$env/")({ component: Home })
 
@@ -71,6 +72,7 @@ function Home() {
   return (
     <ColumnPage
       title="Home"
+      titleHidden
       intro={summary(waiting.length, running.length)}
       narrow
     >
@@ -321,20 +323,14 @@ function DiskNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
   )
 }
 
+/** Where things stand, in place of a "Home" heading the crumb already says: "2 need you · 3 working". */
 function summary(waiting: number, working: number) {
   const needs =
     waiting === 0
-      ? "Nothing needs you."
-      : waiting === 1
-        ? "1 thing needs you."
-        : `${waiting} things need you.`
-  const busy =
-    working === 0
-      ? "No one is working right now."
-      : working === 1
-        ? "1 chat is working."
-        : `${working} chats are working.`
-  return `${needs} ${busy}`
+      ? "Nothing needs you"
+      : `${waiting} ${waiting === 1 ? "needs" : "need"} you`
+  const busy = working === 0 ? "nobody working" : `${working} working`
+  return `${needs} · ${busy}`
 }
 
 /** A section's label for the page's three parts, in the style's label type. */
@@ -463,17 +459,6 @@ function ApprovalPageLink({
 }
 
 type Entry = { key: string; at: string; text: ReactNode; who?: string }
-
-/** The time of day for today, the day and time before. */
-function when(iso: string, now = new Date()) {
-  const d = new Date(iso)
-  const time = d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-  if (d.toDateString() === now.toDateString()) return time
-  return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${time}`
-}
 
 /**
  * What happened lately: decided approvals (allowed, denied, by whom or which rule) and chats

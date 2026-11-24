@@ -1,4 +1,5 @@
 import type { components } from "@/lib/api/schema.gen"
+import { clock as clockTime, lasted } from "@/lib/time"
 
 export type LeadView = components["schemas"]["LeadView"]
 export type LeadDay = components["schemas"]["LeadDayView"]
@@ -96,10 +97,7 @@ export function dayName(
 
 /** "14:05", local. */
 export function clock(at: string): string {
-  return new Date(at).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return clockTime(at)
 }
 
 /** USD × 10^6 as "$3.62"; a cost under a cent as "<$0.01". */
@@ -108,13 +106,9 @@ export function dollars(micros: number): string {
   return `$${(micros / 1e6).toFixed(2)}`
 }
 
-/** Seconds of turns as "2 h 50 m", "47 m" or "under a minute". */
+/** Seconds of turns as "2 h 50 min", "47 min" or "<1 min". */
 export function turnTime(sec: number): string {
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h} h ${m} m`
-  if (m > 0) return `${m} m`
-  return "under a minute"
+  return lasted(sec)
 }
 
 export function plural(n: number, one: string, many: string): string {

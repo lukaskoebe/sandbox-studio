@@ -65,7 +65,7 @@ export function ContinuePlaces({
     if (!loaded) return { rows: found, gone: lost }
     for (const visit of visits) {
       if (now - visit.at > placeAge) continue
-      const row = describe(visit, teammates, chats, sandboxes)
+      const row = describeVisit(visit, teammates, chats, sandboxes)
       if (row) found.push(row)
       else lost.push(visit.place)
     }
@@ -135,7 +135,7 @@ export function ContinuePlaces({
 }
 
 /** A visit's row, or none when what it showed is gone. */
-function describe(
+export function describeVisit(
   v: Visit,
   teammates: { id: string; name: string }[] = [],
   chats: Chat[] = [],

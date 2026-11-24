@@ -18,7 +18,6 @@ import { presenceLabels, usePresence } from "@/hooks/use-teammate-presence"
 import type { Teammate } from "@/lib/api/client"
 import type { ProfileView } from "@/lib/computer"
 import { harnessLabels } from "@/lib/teammates"
-import { cn } from "@/lib/utils"
 
 type Open = (view: ProfileView | undefined, section?: string) => void
 
@@ -141,10 +140,9 @@ export function ProfileSheet({
     <Sheet open={open} onOpenChange={(on) => !on && onOpen(undefined)}>
       <SheetContent
         side="right"
-        className={cn(
-          "gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl",
-          shown === "memory" && "data-[side=right]:sm:max-w-4xl"
-        )}
+        // Tasks and Memory take the same width, the one Memory's two columns need, so the
+        // sheet's edge stays put between them.
+        className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-4xl"
       >
         {meta && (
           <>

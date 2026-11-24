@@ -346,7 +346,7 @@ function WaitingNow({ env }: { env: string }) {
     <Section title="Needs you">
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-(--radius) border bg-card px-3 py-2.5 text-xs">
         <span className="min-w-0 flex-1">
-          {n === 1 ? "1 request needs you" : `${n} requests need you`}
+          {n} {n === 1 ? "needs" : "need"} you
         </span>
         <Link
           to="/e/$env"

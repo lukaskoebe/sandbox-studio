@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner"
 import type { Approval, Sandbox } from "@/lib/api/client"
 import { heldFor, useHoldClock } from "@/lib/connection-holds"
 import { hostPort } from "@/lib/utils"
+import { left as leftTime } from "@/lib/time"
 
 /** What an approval asks to reach. */
 export function approvalHost(a: Approval) {
@@ -225,7 +226,7 @@ export function WaitingRequests({
                 key={a.id}
                 approval={a}
                 status="waiting"
-                detail={`${heldFor(a, now)} s left`}
+                detail={leftTime(heldFor(a, now) ?? 0)}
               >
                 {button(
                   `deny-${a.id}`,

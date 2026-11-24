@@ -1,4 +1,11 @@
-import { useState, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useId,
+  useState,
+  type ReactNode,
+} from "react"
+import { createPortal } from "react-dom"
 import { Link } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -38,6 +45,12 @@ import {
 } from "@/lib/api/client"
 import { isSubscription, kindLabels, harnessLabels } from "@/lib/teammates"
 import type { SetupKey } from "@/lib/setup"
+
+/**
+ * Where a step puts its main button: the wizard's row of Back and Skip, so the main button
+ * is always last on the right. Without it, the button stays in the step's body.
+ */
+export const SetupActions = createContext<HTMLElement | null>(null)
 
 /** The body of one step of the guided setup. Each one uses the forms the settings pages use. */
 export function SetupStepBody({ step, env }: { step: SetupKey; env: string }) {
@@ -317,6 +330,8 @@ function SandboxStep({ env }: { env: string }) {
       }),
   })
   const invalid = name !== "" && !sandboxName.test(name)
+  const actions = useContext(SetupActions)
+  const formId = useId()
   const latest = [...(sandboxes.data ?? [])]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .at(0)
@@ -365,8 +380,20 @@ function SandboxStep({ env }: { env: string }) {
   }
 
   const owner = teammates.data?.[0]
+  const submit = (
+    <Button
+      size={actions ? "default" : "sm"}
+      type="submit"
+      form={formId}
+      disabled={!name || invalid || create.isPending}
+    >
+      {create.isPending && <Spinner />}
+      Create computer
+    </Button>
+  )
   return (
     <form
+      id={formId}
       className="grid gap-3"
       onSubmit={(e) => {
         e.preventDefault()
@@ -408,16 +435,7 @@ function SandboxStep({ env }: { env: string }) {
         onChange={setRepos}
         disabled={create.isPending}
       />
-      <div>
-        <Button
-          size="sm"
-          type="submit"
-          disabled={!name || invalid || create.isPending}
-        >
-          {create.isPending && <Spinner />}
-          Create computer
-        </Button>
-      </div>
+      {actions ? createPortal(submit, actions) : <div>{submit}</div>}
     </form>
   )
 }

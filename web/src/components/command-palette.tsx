@@ -38,7 +38,13 @@ import {
   settingsPaths,
 } from "@/components/settings/link"
 import { useMentionIndex } from "@/components/chat/mention-picker"
-import { approvalKind, approvalTeammateId } from "@/lib/approval-kinds"
+import {
+  approvalKind,
+  approvalSource,
+  approvalTeammateId,
+} from "@/lib/approval-kinds"
+import { loadVisits, type Visit } from "@/lib/places"
+import { describeVisit } from "@/components/continue-places"
 import {
   errorMessage,
   type Approval,
@@ -62,7 +68,7 @@ import { setStyleName, useStyleName } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
 type Group =
-  | "Recent"
+  | "Continue"
   | "Needs you"
   | "Teammates"
   | "Computers"
@@ -231,7 +237,8 @@ function Highlight({ text, hi }: { text: string; hi?: Set<number> }) {
  * The search palette (⌘K, Ctrl+K elsewhere): teammates with their browsers, tasks, memory and
  * settings rows, computers with their tabs, threads, Home and the environment's pages, settings
  * and actions, grouped by kind with where each lives on the right, so a search also teaches the
- * map. With nothing typed it lists what was opened last and what waits for you.
+ * map. With nothing typed it lists what was opened last, then the places last worked in, and
+ * what waits for you, each with whose it is.
  * `>` keeps a search to actions, `@` to teammates, and `/` searches the files of the computer in
  * view, opening the pick in its Files tab.
  */
@@ -260,6 +267,7 @@ export function CommandPalette({
   const [query, setQuery] = useState("")
   const [sel, setSel] = useState(0)
   const [recent, setRecent] = useState(loadRecent)
+  const [visits, setVisits] = useState<Visit[]>([])
   const listId = useId()
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -279,8 +287,9 @@ export function CommandPalette({
       setQuery("")
       setSel(0)
       setRecent(loadRecent())
+      setVisits(loadVisits(env))
     }
-  }, [open])
+  }, [open, env])
 
   const items = useMemo(() => {
     const out: Item[] = []
@@ -577,11 +586,18 @@ export function CommandPalette({
         const kind = approvalKind(a)
         const Icon = kind.icon
         const who = teammates.find((t) => t.id === approvalTeammateId(a))
+        // Whose it is and where it came from, so two alike are told apart.
+        const permission = a.chatPermission
+        const source = permission
+          ? permission.chatTitle || "New chat"
+          : approvalSource(a)
         return {
           id: `ap:${a.id}`,
           group: "Needs you",
           title: kind.summary(a),
-          place: [kind.title, who?.name].filter(Boolean).join(" · "),
+          place: [who?.name, source !== who?.name ? source : undefined]
+            .filter(Boolean)
+            .join(" · "),
           keys: "",
           mono: kind.mono,
           lead: <Icon />,
@@ -589,6 +605,28 @@ export function CommandPalette({
         }
       }),
     [pending, teammates, navigate, env]
+  )
+
+  // The places last worked in, as Home's Continue lists them.
+  const places = useMemo(
+    () =>
+      visits.flatMap((v): Item[] => {
+        const row = describeVisit(v, teammates, chats, sandboxes)
+        if (!row) return []
+        const Icon = row.icon
+        return [
+          {
+            id: `visit:${v.href}`,
+            group: "Continue",
+            title: row.title,
+            place: row.detail ?? "",
+            keys: "",
+            lead: <Icon />,
+            run: () => void navigate({ href: v.href }),
+          },
+        ]
+      }),
+    [visits, teammates, chats, sandboxes, navigate]
   )
 
   // The computer whose files / searches: the one the page shows.
@@ -659,13 +697,15 @@ export function CommandPalette({
     if (filesMode) return [["Files", fileItems]]
     if (!q && !scope) {
       const byId = new Map(items.map((i) => [i.id, i]))
-      const last = recent
+      const picked = recent
         .map((id) => byId.get(id))
         .filter((i): i is Item => !!i)
+      const titles = new Set(picked.map((i) => i.title))
+      const last = [...picked, ...places.filter((p) => !titles.has(p.title))]
         .slice(0, 5)
-        .map((i) => ({ ...i, group: "Recent" as const }))
+        .map((i) => ({ ...i, group: "Continue" as const }))
       return [
-        ["Recent", last],
+        ["Continue", last],
         ["Needs you", waiting],
       ]
     }
@@ -684,7 +724,7 @@ export function CommandPalette({
       if (g.length < (scope ? 12 : 5)) g.push({ ...h.i, hi: h.m.hi })
     }
     return [...by.entries()]
-  }, [items, waiting, recent, q, scope, filesMode, fileItems])
+  }, [items, waiting, recent, places, q, scope, filesMode, fileItems])
   const rows = groups.flatMap(([, g]) => g)
   const at = Math.min(sel, Math.max(0, rows.length - 1))
 
@@ -697,7 +737,7 @@ export function CommandPalette({
   const run = (it: Item | undefined) => {
     if (!it) return
     setPaletteOpen(false)
-    if (!/^(act|ap|file):/.test(it.id)) {
+    if (!/^(act|ap|file|visit):/.test(it.id)) {
       const next = [it.id, ...recent.filter((id) => id !== it.id)].slice(0, 6)
       setRecent(next)
       saveRecent(next)

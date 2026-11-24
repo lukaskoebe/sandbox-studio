@@ -19,12 +19,9 @@ test("the breadcrumb row says where a page is, and its parts open their neighbou
   await page.goto(`/e/${env}`)
   await expect(crumbs.getByRole("listitem")).toHaveText(["Home"])
 
-  // An environment page names its group, and switches to the others.
+  // An environment page is top-level, like Teammates, and switches to the others.
   await page.goto(`/e/${env}/network`)
-  await expect(crumbs.getByRole("listitem")).toHaveText([
-    "Environment",
-    "Network",
-  ])
+  await expect(crumbs.getByRole("listitem")).toHaveText(["Network"])
   await crumbs.getByRole("button", { name: "Switch page: Network" }).click()
   await page.getByRole("menuitem", { name: "Secrets" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/secrets$`))
@@ -90,10 +87,7 @@ test("the breadcrumb row says where a page is, and its parts open their neighbou
   ).toBeVisible()
   await page.getByRole("menuitem", { name: "All computers" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/computers$`))
-  await expect(crumbs.getByRole("listitem")).toHaveText([
-    "Environment",
-    "Computers",
-  ])
+  await expect(crumbs.getByRole("listitem")).toHaveText(["Computers"])
 
   // The home names the teammate and what it does; its computers are on the page.
   await page.goto(`/e/${env}/teammates/${id}`)

@@ -371,7 +371,7 @@ export function ChangesView({
             />
           ) : (
             <p className="text-muted-foreground">
-              Its requests haven't changed any files yet.
+              Its messages haven't changed any files yet.
             </p>
           )}
         </section>
@@ -507,7 +507,7 @@ export function ChangesView({
             {thread && (
               <RailSection
                 label="This thread"
-                count={`${changedTurns.length} ${changedTurns.length === 1 ? "request" : "requests"}`}
+                count={`${changedTurns.length} ${changedTurns.length === 1 ? "message" : "messages"}`}
                 {...fold("thread")}
               >
                 <RailRow
@@ -519,7 +519,7 @@ export function ChangesView({
                   <span className="min-w-0 flex-1 truncate">
                     {changedTurns.length === 0
                       ? "No files changed yet"
-                      : `${changedTurns.length} ${changedTurns.length === 1 ? "request" : "requests"} changed ${files} ${files === 1 ? "file" : "files"}`}
+                      : `${changedTurns.length} ${changedTurns.length === 1 ? "message" : "messages"} changed ${files} ${files === 1 ? "file" : "files"}`}
                   </span>
                   <CaretRightIcon className="size-3 shrink-0 text-muted-foreground" />
                 </RailRow>

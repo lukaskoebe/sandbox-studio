@@ -351,11 +351,6 @@ export function AppSidebar({
                   >
                     <DesktopTowerIcon />
                     <span className="min-w-0 flex-1 truncate">Computers</span>
-                    {all.length > 0 && (
-                      <span className="font-mono text-caption text-muted-foreground">
-                        {all.length}
-                      </span>
-                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {environmentPages.map((page) => {

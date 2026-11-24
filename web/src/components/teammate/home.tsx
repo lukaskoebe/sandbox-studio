@@ -78,6 +78,7 @@ import {
 } from "@/lib/threads"
 import { cn } from "@/lib/utils"
 import { useNewThreadFocus } from "@/lib/new-thread"
+import { clock } from "@/lib/time"
 
 type Event = components["schemas"]["TeammateEvent"]
 type Turn = components["schemas"]["TeammateTurn"]
@@ -89,13 +90,8 @@ const modes: Record<Mode, { label: string; icon: Icon }> = {
   teach: { label: "Teach", icon: BrainIcon },
 }
 
-const timeFormat = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-})
-
 export function time(iso: string) {
-  return timeFormat.format(new Date(iso))
+  return clock(iso)
 }
 
 function dayLabel(d: Date, now = new Date()) {
@@ -1141,7 +1137,7 @@ export function askWords(a: Approval) {
   return verb ? `Asks to ${verb} ${t}` : `Asks before going on: ${t}`
 }
 
-/** A thread card's foot while nothing waits: its requests, and whether it works or how it ended. */
+/** A thread card's foot while nothing waits: its messages, and whether it works or how it ended. */
 function ThreadState({
   chat,
   turns,
@@ -1159,7 +1155,7 @@ function ThreadState({
       {turns.length > 0 && (
         <>
           <span className="shrink-0">
-            {turns.length} {turns.length === 1 ? "request" : "requests"}
+            {turns.length} {turns.length === 1 ? "message" : "messages"}
           </span>
           <span aria-hidden>·</span>
         </>

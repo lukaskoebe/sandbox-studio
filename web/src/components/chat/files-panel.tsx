@@ -83,8 +83,8 @@ type FileContent = components["schemas"]["FileContent"]
 
 /**
  * A browser of the sandbox's /workspace, or of any folder of its computer, as mock K draws it: the tree beside the file
- * shown, the path above them, and Go to file. Below 640px the tree opens over the file
- * and closes once one is picked. Folders opened in the tree stay open while Files moves about.
+ * shown, the path above them, and Go to file. Below 36rem the tree opens over the file
+ * and closes once one is picked; with no file open it starts open, as nothing is under it. Folders opened in the tree stay open while Files moves about.
  * With no file open, the view beside the tree is empty and takes uploads into the folder
  * shown; files the selected request changed are marked.
  */
@@ -119,7 +119,13 @@ export function FilesPanel({
   )
   const railWidth = Math.min(Math.max(rail, railSplit.min), railMax)
   const [hidden, setHidden] = useState(treeHidden)
-  const [over, setOver] = useState(false)
+  const [over, setOver] = useState(!file)
+  // A file opened covers the tree that was over the empty view.
+  const [overFile, setOverFile] = useState(file)
+  if (overFile !== file) {
+    setOverFile(file)
+    if (file) setOver(false)
+  }
   const tree = narrow ? over : !hidden
   const place = file ?? dir
 
@@ -299,13 +305,13 @@ function treeHidden() {
   }
 }
 
-/** Whether the element is narrower than 640px, as the tree then opens over the file. */
+/** Whether the element is narrower than 36rem, as the tree then opens over the file. */
 function useNarrow(el: RefObject<HTMLElement | null>) {
   const [narrow, setNarrow] = useState(false)
   useLayoutEffect(() => {
     const node = el.current
     if (!node) return
-    const measure = () => setNarrow(node.clientWidth < 640)
+    const measure = () => setNarrow(node.clientWidth < 576)
     measure()
     const seen = new ResizeObserver(measure)
     seen.observe(node)

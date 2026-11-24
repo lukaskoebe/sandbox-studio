@@ -340,15 +340,19 @@ func refNames(f LeadFacts) map[string]string {
 	return out
 }
 
+// duration is how long turns lasted, as the web writes it (web/src/lib/time.ts): "<1 min",
+// "12 min" or "1 h 20 min".
 func duration(sec int64) string {
 	h, m := sec/3600, sec%3600/60
 	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%d h %d min", h, m)
 	case h > 0:
-		return fmt.Sprintf("%d h %d m", h, m)
+		return fmt.Sprintf("%d h", h)
 	case m > 0:
-		return fmt.Sprintf("%d m", m)
+		return fmt.Sprintf("%d min", m)
 	default:
-		return "under a minute"
+		return "<1 min"
 	}
 }
 

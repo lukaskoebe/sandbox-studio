@@ -119,8 +119,7 @@ function SinceLine({ s }: { s: LeadSince }) {
       `${names(who)} worked in ${plural(s.threads, "thread", "threads")}`,
     s.pushes > 0 &&
       `${plural(s.pushes, "push", "pushes")}${s.prs > 0 ? `, ${s.prs} with a PR` : ""}`,
-    s.waiting > 0 &&
-      `${plural(s.waiting, "request needs", "requests need")} you`,
+    s.waiting > 0 && `${s.waiting} ${s.waiting === 1 ? "needs" : "need"} you`,
     s.tasks > 0 && `${plural(s.tasks, "task ran", "tasks ran")}`,
   ].filter(Boolean)
   if (parts.length === 0) return null

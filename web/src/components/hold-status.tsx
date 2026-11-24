@@ -1,5 +1,6 @@
 import type { Approval } from "@/lib/api/client"
 import { heldFor, holdSeconds } from "@/lib/connection-holds"
+import { left as leftTime } from "@/lib/time"
 
 /**
  * Whether connections still wait on a card's answer: how long they are held, on a thin track that
@@ -24,7 +25,7 @@ export function HoldStatus({
   return (
     <div data-testid="hold-status" className="grid gap-1">
       <p className="text-xs text-muted-foreground tabular-nums">
-        Connection held, {left} s left
+        Connection held, {leftTime(left)}
       </p>
       <div aria-hidden className="h-0.5 bg-muted">
         <div

@@ -127,6 +127,7 @@ import {
 } from "@/lib/browser-sites"
 import { cn, formatAge } from "@/lib/utils"
 import { pasteBrowserFile } from "@/lib/workspace-upload"
+import { when } from "@/lib/time"
 
 type BrowserStatus = components["schemas"]["BrowserStatus"]
 type BrowserSession = components["schemas"]["BrowserSession"]
@@ -1762,11 +1763,8 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** When an action was: the time today, or the day and time before. */
-function clockTime(at: string, now = new Date()) {
-  const d = new Date(at)
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  if (d.toDateString() === now.toDateString()) return time
-  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`
+function clockTime(at: string) {
+  return when(at)
 }
 
 /** The pages the persistent browser last had open, newest first, each once. */

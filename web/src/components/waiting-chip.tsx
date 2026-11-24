@@ -24,6 +24,7 @@ import {
 } from "@/lib/connection-holds"
 import { useNotificationPermission } from "@/lib/notifications"
 import { useSettled } from "@/lib/settled"
+import { left as leftTime } from "@/lib/time"
 
 /**
  * How many of a sandbox's connections wait for an answer, on its screen. Nothing opens by itself:
@@ -109,7 +110,7 @@ export function WaitingChip({
                     />
                     <Ident className="min-w-0 flex-1">{approvalHost(a)}</Ident>
                     <span className="shrink-0 font-mono text-caption text-muted-foreground tabular-nums">
-                      {left === undefined ? "gave up" : `${left} s left`}
+                      {left === undefined ? "gave up" : leftTime(left)}
                     </span>
                   </li>
                 )

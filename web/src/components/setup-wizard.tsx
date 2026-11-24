@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { CheckIcon, MinusIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { SetupStepBody } from "@/components/setup-steps"
+import { SetupActions, SetupStepBody } from "@/components/setup-steps"
 import { errorMessage, type Setup } from "@/lib/api/client"
 import {
   doneSteps,
@@ -68,6 +68,8 @@ function Stepper({
   step?: SetupKey
 }) {
   const navigate = useNavigate()
+  // The open step's main button, such as Create computer, joins Back and Skip on the right.
+  const [actions, setActions] = useState<HTMLElement | null>(null)
   const [current, setCurrent] = useState(() => {
     const i = setupSteps.findIndex((s) => s.key === initial)
     return i >= 0 ? i : firstOpenStep(setup)
@@ -114,7 +116,9 @@ function Stepper({
               </button>
               {open && (
                 <div className="grid gap-4 border-t p-4">
-                  <SetupStepBody step={step.key} env={env} />
+                  <SetupActions.Provider value={actions}>
+                    <SetupStepBody step={step.key} env={env} />
+                  </SetupActions.Provider>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {i > 0 && (
                       <Button variant="ghost" onClick={() => setCurrent(i - 1)}>
@@ -130,6 +134,7 @@ function Stepper({
                         Skip
                       </Button>
                     )}
+                    <span ref={setActions} className="contents" />
                     {/* Network has no condition to check, so going through it is the step. */}
                     {(outcome !== undefined || step.key === "network") && (
                       <Button

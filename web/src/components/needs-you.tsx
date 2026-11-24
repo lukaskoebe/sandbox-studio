@@ -80,6 +80,7 @@ import {
 import { heldFor, isConnection, useHoldClock } from "@/lib/connection-holds"
 import { useSettled } from "@/lib/settled"
 import { cn, formatAge } from "@/lib/utils"
+import { left as leftTime } from "@/lib/time"
 
 // Whether the top bar's list is open: reviewing an approval from it closes it.
 let listOpen = false
@@ -199,7 +200,8 @@ export function NeedsYouList({
               inert={!settled}
               who={who}
               envName={envName}
-              showEnv={showEnv}
+              // The name tells environments apart, so one alone goes unnamed.
+              showEnv={showEnv && (envs.data?.length ?? 0) > 1}
               tips={tips}
             />
           )
@@ -316,7 +318,7 @@ function NeedsYouRow({
             data-testid="hold-status"
             className="ml-auto shrink-0 tabular-nums"
           >
-            {left === undefined ? "No longer held" : `Held, ${left} s left`}
+            {left === undefined ? "No longer held" : `Held, ${leftTime(left)}`}
           </span>
         )}
       </div>

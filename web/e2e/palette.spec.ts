@@ -52,7 +52,7 @@ test("Ctrl+K and the sidebar's Search open the palette, which finds and opens pl
 
   // With nothing typed, it lists what was opened last.
   await page.keyboard.press("Control+k")
-  const recent = palette.getByRole("group", { name: "Recent" })
+  const recent = palette.getByRole("group", { name: "Continue" })
   await expect(recent.getByRole("option")).toHaveCount(3)
   await expect(recent.getByRole("option").first()).toContainText("Network")
   await page.keyboard.press("Escape")

@@ -278,9 +278,9 @@ export function Breadcrumbs({ env }: { env: string }) {
   const crumbs: Crumb[] = (() => {
     if (routeId === "/e/$env/")
       return [{ key: "home", label: "Home", lead: <TrayIcon /> }]
+    // A top-level page has no parent: the environment switcher already names it.
     if (routeId === "/e/$env/computers")
       return [
-        { key: "env", label: "Environment" },
         {
           key: "page",
           switches: "Switch page",
@@ -294,7 +294,6 @@ export function Breadcrumbs({ env }: { env: string }) {
     )
     if (page || routeId === "/e/$env/memory/conflicts/$id")
       return [
-        { key: "env", label: "Environment" },
         {
           key: "page",
           switches: "Switch page",

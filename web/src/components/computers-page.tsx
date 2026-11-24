@@ -47,11 +47,15 @@ import { cn, formatAge } from "@/lib/utils"
 
 type Filter = "all" | "running" | "yours" | "bases"
 
-const filters: { id: Filter; label: string }[] = [
+const filters: { id: Filter; label: string; title?: string }[] = [
   { id: "all", label: "All" },
   { id: "running", label: "Running" },
   { id: "yours", label: "Yours" },
-  { id: "bases", label: "Bases" },
+  {
+    id: "bases",
+    label: "Bases",
+    title: "Computers new ones can start from, as forks",
+  },
 ]
 
 /**
@@ -147,24 +151,31 @@ export function ComputersPage({ env }: { env: string }) {
             aria-label="Show"
             className="flex flex-wrap items-center gap-1.5"
           >
-            {filters.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
-                className={cn(
-                  "inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-caption text-muted-foreground hover:text-foreground",
-                  filter === f.id &&
-                    "border-foreground/20 bg-muted font-medium text-foreground"
-                )}
-              >
-                {f.label}
-                <span className="font-mono text-meta">
-                  {all.filter(matches[f.id]).length}
-                </span>
-              </button>
-            ))}
+            {/* A filter with nothing in it hides, unless it is the one picked. */}
+            {filters
+              .filter(
+                (f) =>
+                  f.id === "all" || f.id === filter || all.some(matches[f.id])
+              )
+              .map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  title={f.title}
+                  aria-pressed={filter === f.id}
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    "inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-caption text-muted-foreground hover:text-foreground",
+                    filter === f.id &&
+                      "border-foreground/20 bg-muted font-medium text-foreground"
+                  )}
+                >
+                  {f.label}
+                  <span className="font-mono text-meta">
+                    {all.filter(matches[f.id]).length}
+                  </span>
+                </button>
+              ))}
           </div>
         )}
         <DisksNotice env={env} />
@@ -381,7 +392,9 @@ function ComputerRow({
             </span>
           </span>
         ) : (
-          <span className="text-muted-foreground">none</span>
+          <span className="text-muted-foreground" aria-label="No thread">
+            —
+          </span>
         )}
       </TableCell>
       <TableCell className="font-mono text-muted-foreground max-lg:hidden">
