@@ -154,7 +154,7 @@ export function describeVisit(
           visit: v,
           icon: ChatCircleIcon,
           title: teammate.name,
-          detail: join("Home", tab),
+          detail: join("Desk", tab),
         }
       const chat = chats.find((c) => c.id === place.thread)
       if (!chat) return undefined

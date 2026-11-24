@@ -332,7 +332,7 @@ test("the conversation and the screen split where they are dragged to, and past 
   await page.setViewportSize({ width: 1400, height: 900 })
   // The desk's home is a narrower panel of its own.
   await page.goto(`/e/${env}/teammates/${id}?tab=terminal`)
-  const home = page.getByRole("separator", { name: "Resize the home" })
+  const home = page.getByRole("separator", { name: "Resize the desk" })
   await expect(home).toBeVisible()
   const deskLeft = (await home.boundingBox())!.x
   await page.goto(`/e/${env}/teammates/${id}?thread=${chat.id}`)
@@ -379,7 +379,7 @@ test("the home's rim drags the screen out of its rail, over the page and back to
     .getByRole("navigation", { name: "Where you are" })
     .getByRole("group", { name: `${name} now` })
   await expect(now).toBeVisible()
-  const edge = page.getByRole("separator", { name: "Resize the home" })
+  const edge = page.getByRole("separator", { name: "Resize the desk" })
   const drag = async (dx: number) => {
     const box = (await edge.boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + 300)

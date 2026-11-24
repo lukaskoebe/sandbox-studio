@@ -209,7 +209,9 @@ rail (none on a phone); its desk, a computer open with the home narrowed to a pa
 thread); and a thread, the conversation on the left and the screen to the right. Everything it
 shows is in the URL's search, so Back, Forward and links work: `thread`, `computer`, `tab`,
 `term`, `review`, `fold`, `full`, `profile` (`settings`, or the `tasks` or `memory` sheet over
-them; the old `card` opens `settings`), `open` (the open settings card) and `from=setup`. Esc
+them; the old `card` opens `settings`), `open` (the open settings card) and `from=setup`. The
+UI calls the home the teammate's desk ("Desk only", "Ada · Desk" in Continue, "Resize the
+desk"), as Home is the environment's page; the code and these docs still say home. Esc
 closes a sheet, the settings or a menu first, then leaves the thread. The page has no header of
 its own, nor has a thread: the crumb row's teammate is its only name, and its menu switches
 teammate and opens the Threads and the Settings; the thread's title, state and options are the
@@ -281,7 +283,9 @@ and Changes, each with a dot while something on it waits for you; power (Stop, S
 and ⋯. On a teammate's page the layout switch at the right of the breadcrumb row
 (`components/teammate/layout-switch.tsx`, put there through `components/top-bar-slot.tsx`)
 gives the page to the home or the conversation, to both, or to the computer; a narrow window
-offers only the two alone. Under the bezel the display:
+offers only the two alone. The tabs sit at the left of the bezel, so switching never moves
+them; each is named, and a screen narrower than 40rem drops every name at once, its row
+scrolling when even the icons don't fit. Under the bezel the display:
 
 - Terminal: the computer's tmux sessions as a strip of tabs (`components/computer/terminals.tsx`),
   with + for a new shell and the Terminal tab counting them when there is more than one. A tab

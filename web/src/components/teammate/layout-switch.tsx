@@ -26,7 +26,7 @@ function Glyph({ layout }: { layout: PageLayout }) {
 /**
  * The one control for a teammate's page layout, at the right of the top bar: the conversation
  * alone, both side by side, or the computer alone. A narrow window has no room for both, so it
- * offers the other two. conversation names the left side: "Chat" in a thread, "Home" without.
+ * offers the other two. conversation names the left side: "Chat" in a thread, "Desk" without.
  */
 export function LayoutSwitch({
   value,

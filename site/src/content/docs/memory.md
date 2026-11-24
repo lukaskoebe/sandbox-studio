@@ -20,7 +20,7 @@ Open **Memory** under **Environment** in the sidebar for shared memory, which ev
 
 Type in the search box (or press `/`) to filter the index; press Enter to search memory the way an agent does, with the reason for each hit. **Dream now** consolidates the memory right away; the **⋯** menu next to it has Export, Import, **Dream history**, **Extraction cost** and **How memory works**.
 
-Under **Knowledge → Memory** in a teammate's settings, **Learn from its chats** turns extraction from its sessions on or off, and **Dream every night** tidies its memory after 3:00 and after 25 new facts. **Add a fact** and **Dream now** are there too, and **Teach** in the box on its home adds a fact without a thread.
+Under **Knowledge → Memory** in a teammate's settings, **Learn from its chats** turns extraction from its sessions on or off, and **Dream every night** tidies its memory after 3:00 and after 25 new facts. **Add a fact** and **Dream now** are there too, and **Teach** in the box on its desk adds a fact without a thread.
 
 - Teammate facts and pages are visible in that teammate's scope.
 - A teammate can propose a fact for shared memory. The proposal waits on Home under **Needs you**; it becomes shared only after you approve it.

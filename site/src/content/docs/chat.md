@@ -26,7 +26,7 @@ A Claude subscription runs chats too: Studio runs Claude Code itself for the tea
 
 ## Start a chat
 
-Open the teammate's page and write in the box at the bottom of its home: what you send starts a thread on the computer named under the box, and the thread opens. A chat is a thread on its teammate's page. The box can also pick another of the teammate's computers, and the thread's model when the teammate offers more than its default. **+** next to the teammate in the sidebar, and **New thread with Iris** in ⌘K, open the same box. **New chat** on the Chats page, and in ⌘K, asks who should do it and opens that teammate's box. The chat starts with that first message, so there are no empty chats.
+Open the teammate's page and write in the box at the bottom of its desk: what you send starts a thread on the computer named under the box, and the thread opens. A chat is a thread on its teammate's page. The box can also pick another of the teammate's computers, and the thread's model when the teammate offers more than its default. **+** next to the teammate in the sidebar, and **New thread with Iris** in ⌘K, open the same box. **New chat** on the Chats page, and in ⌘K, asks who should do it and opens that teammate's box. The chat starts with that first message, so there are no empty chats.
 
 - **Enter** sends; **Shift+Enter** starts a new line.
 - Use the paperclip to attach files, up to 10 MiB per message in total.
@@ -114,4 +114,4 @@ If the agent can't pick a conversation back up, for example because the computer
 
 ## Rename a thread
 
-A thread is named after its first message, and the agent may give it a better name as it works. To name it yourself, choose **Rename…** in the menu of its title in the top bar, or right-click it in the sidebar or on the teammate's home. A name you give stays: the agent no longer changes it. The right-click menu also copies the thread's link, continues it in the terminal, and deletes it.
+A thread is named after its first message, and the agent may give it a better name as it works. To name it yourself, choose **Rename…** in the menu of its title in the top bar, or right-click it in the sidebar or on the teammate's desk. A name you give stays: the agent no longer changes it. The right-click menu also copies the thread's link, continues it in the terminal, and deletes it.

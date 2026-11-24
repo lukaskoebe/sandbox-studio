@@ -823,7 +823,9 @@ function DeskHome({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1 pr-1.5 pl-3">
-        <h2 className="mr-1 font-heading text-sm font-semibold">Home</h2>
+        <h2 className="mr-1 font-heading text-sm font-semibold">
+          {teammate.name}'s desk
+        </h2>
       </header>
       <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-3 pb-3">
         {shownWaiting.length > 0 && (

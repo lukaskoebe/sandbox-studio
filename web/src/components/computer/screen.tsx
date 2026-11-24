@@ -214,7 +214,9 @@ export function ComputerScreen({
             <div
               role="tablist"
               aria-label={`${sb.name}'s screen`}
-              className="mx-auto flex items-center gap-0.5 rounded-xl bg-foreground/5 p-[3px]"
+              // Left-aligned, so switching tabs never moves them; a row too narrow for
+              // the icons scrolls.
+              className="mr-auto flex min-w-0 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto rounded-xl bg-foreground/5 p-[3px]"
             >
               {shown.map((t) => {
                 const M = tabMeta[t]
@@ -237,22 +239,14 @@ export function ComputerScreen({
                     onClick={() => onChange({ tab: t })}
                     title={M.label}
                     className={cn(
-                      "flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
+                      "flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground @max-[40rem]:px-2",
                       active &&
-                        "bg-background font-medium text-foreground shadow-[0_1px_2px_rgb(0_0_0/8%),0_0_0_1px_color-mix(in_oklab,var(--border)_70%,transparent)] dark:bg-accent",
-                      // A narrow screen names only the shown tab; a phone's names none,
-                      // to leave room for its buttons.
-                      active ? "@max-[26rem]:px-2" : "@max-[46rem]:px-2"
+                        "bg-background font-medium text-foreground shadow-[0_1px_2px_rgb(0_0_0/8%),0_0_0_1px_color-mix(in_oklab,var(--border)_70%,transparent)] dark:bg-accent"
                     )}
                   >
                     <M.icon className="size-3.5" />
-                    <span
-                      className={
-                        active ? "@max-[26rem]:hidden" : "@max-[46rem]:hidden"
-                      }
-                    >
-                      {M.label}
-                    </span>
+                    {/* A narrow screen drops every name at once, never one at a time. */}
+                    <span className="@max-[40rem]:hidden">{M.label}</span>
                     {counted && (
                       <span className="rounded-sm border px-1 font-mono text-meta leading-3.5 font-normal text-muted-foreground">
                         {count}
@@ -269,7 +263,7 @@ export function ComputerScreen({
               })}
             </div>
           ) : (
-            <span className="mx-auto" />
+            <span className="mr-auto" />
           )}
           {on && previews && (
             <PreviewTip

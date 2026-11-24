@@ -182,7 +182,7 @@ test("an off computer starts from its card, its Terminal, or the folded screen",
   await expect.poll(status).toBe("running")
 
   // Folded, the screen's Start starts it and it stays folded.
-  await layoutButton(page, "Home only").click()
+  await layoutButton(page, "Desk only").click()
   const folded = page.getByRole("region", { name: `${sandbox}, folded` })
   await expect(folded).toBeVisible()
   await expect(
@@ -300,11 +300,11 @@ test("the top bar's layout switch gives the page to the conversation, both or th
   await expect(composer).toHaveValue("a draft")
   await expect(page).not.toHaveURL(/full=/)
 
-  await layoutButton(page, "Home only").click()
+  await layoutButton(page, "Desk only").click()
   const folded = page.getByRole("region", { name: `${sandbox}, folded` })
   await expect(folded).toBeVisible()
   await expect(composer).toBeVisible()
-  await expect(layoutButton(page, "Home only")).toHaveAttribute(
+  await expect(layoutButton(page, "Desk only")).toHaveAttribute(
     "aria-pressed",
     "true"
   )
@@ -361,7 +361,7 @@ for (const phone of [false, true]) {
     await page.keyboard.press("Escape")
 
     // With the conversation back, its home shows the request in place again.
-    await layoutButton(page, "Home only").click()
+    await layoutButton(page, "Desk only").click()
     await expect(
       page.getByRole("region", { name: "Needs you" }).filter({ hasText: host })
     ).toBeVisible()

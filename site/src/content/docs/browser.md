@@ -33,7 +33,7 @@ Every port the computer listens on is available, and a server started later is t
 
 The browser is one window that looks like any browser: tabs, Back, Forward, Reload, an address bar and Downloads. It is on the teammate's page:
 
-- the **Browser** button of each computer on the teammate's home, which opens its screen on the browser, with **Activity** and **Sites** from the clock in its toolbar; the browser stays there while the computer is off;
+- the **Browser** button of each computer on the teammate's desk, which opens its screen on the browser, with **Activity** and **Sites** from the clock in its toolbar; the browser stays there while the computer is off;
 - **Watch** on the browsing card in **Now** while the teammate browses;
 - ⌘K, *Iris's browser*.
 

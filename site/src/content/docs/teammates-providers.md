@@ -13,7 +13,7 @@ One teammate can own several computers. A computer's teammate is picked when it 
 
 Each teammate is listed under **Teammates** in the sidebar, where a word says what it is doing or a number how much waits for you. Its threads are listed under its name; on hover, its row has a terminal button and **+** for a new thread. The **Teammates** heading opens the list of all of them, with **Add a teammate**.
 
-The teammate's page starts on its home. The bar at the top says what it does after its name, such as *working on 2 chats* or *idle since 10:42*, and what keeps it from working, such as **No provider**. Below:
+The teammate's page starts on its desk. The bar at the top says what it does after its name, such as *working on 2 chats* or *idle since 10:42*, and what keeps it from working, such as **No provider**. Below:
 
 - **Needs you**: what waits for you, as the same rows as on Home, each with its answer.
 - Its agents in terminals, and its browser while it browses, with **Watch**.
@@ -22,7 +22,7 @@ The teammate's page starts on its home. The bar at the top says what it does aft
 
 The box at the bottom sends a **Thread**, a message that starts a thread on the computer named under it; a **Task**, which goes on its task list and which it starts on right away; or **Teach**, a fact for its memory without a thread. The three sit side by side under the box, and the button says what happens: **Send**, **Add task** or **Remember**. After a Teach the box goes back to Thread. When the teammate offers more than one model, the box also picks the thread's model.
 
-Open one of its computers and it shows beside the home, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). The layout switch at the right of the top bar gives the page to the home (**Home only**), to both, or to the computer (**Computer only**). Open a thread to go on with it; the chat takes the home's place, and the teammate's name in the bar at the top, or Esc, returns to the home. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
+Open one of its computers and it shows beside the desk, with its terminal, its browser, a preview of what it serves, its files, its changes and its details (see [the computer's screen](../sandboxes/#the-computers-screen)). The layout switch at the right of the top bar gives the page to the desk (**Desk only**), to both, or to the computer (**Computer only**). Open a thread to go on with it; the chat takes the desk's place, and the teammate's name in the bar at the top, or Esc, returns to the desk. With the computer's screen folded to a strip, a computer that is off has a power button at the top of the strip that starts it without unfolding.
 
 ## A teammate's settings
 

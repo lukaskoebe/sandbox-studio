@@ -327,7 +327,7 @@ export function TeammatePage({
           <LayoutSwitch
             value={layout}
             onChange={setLayout}
-            conversation={search.thread ? "Chat" : "Home"}
+            conversation={search.thread ? "Chat" : "Desk"}
             narrow={!wide}
           />
         </InTopBar>
@@ -410,7 +410,7 @@ export function TeammatePage({
       </ClaimsHidden>
       {wide && computer && boxWidth > 0 && (
         <ResizeHandle
-          label={search.thread ? "the conversation" : "the home"}
+          label={search.thread ? "the conversation" : "the desk"}
           side="left"
           size={conversationWidth}
           min={sizes.min}
