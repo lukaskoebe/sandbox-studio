@@ -75,6 +75,7 @@ export function Composer({
   mentionsIn,
   draft,
   onInput,
+  sendLabel,
   className,
 }: {
   /**
@@ -106,6 +107,8 @@ export function Composer({
   draft?: string
   /** Called as the user types, such as to start the computer the message is for. */
   onInput?: () => void
+  /** What sending does, in words on the button, such as "Add task"; without, an arrow. */
+  sendLabel?: string
   className?: string
 }) {
   const [text, setText] = useState(() => loadDraft(draft).text)
@@ -450,18 +453,19 @@ export function Composer({
             </Button>
           )}
           <Button
-            size="icon-sm"
-            className={cn(!running && "ml-auto")}
-            aria-label={running ? "Send now" : "Send"}
+            size={sendLabel && !running ? "sm" : "icon-sm"}
+            className={cn("shrink-0", !running && "ml-auto")}
+            aria-label={running ? "Send now" : (sendLabel ?? "Send")}
             title={
               running
                 ? "Send now (Enter): it goes into this turn. With Alt, it waits for the turn to end"
-                : "Send (Enter)"
+                : `${sendLabel ?? "Send"} (Enter)`
             }
             disabled={sending || (!text.trim() && files.length === 0)}
             onClick={(e) => void send(e.altKey)}
           >
             {sending ? <Spinner /> : <ArrowUpIcon />}
+            {sendLabel && !running && sendLabel}
           </Button>
         </div>
       </div>

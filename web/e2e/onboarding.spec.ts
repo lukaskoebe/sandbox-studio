@@ -51,14 +51,14 @@ test("Home's Get to know Studio card starts a first task in a new chat", async (
       `/e/${env}/secrets`
     )
 
-  // The first starter is picked; Start opens a new chat with it to edit.
+  // The first starter is picked; Start opens the teammate's home with it in the composer.
   const tasks = card.getByRole("radiogroup", { name: "First task" })
   await expect(tasks.getByRole("radio").first()).toHaveAttribute(
     "aria-checked",
     "true"
   )
   await card.getByRole("button", { name: /^Start with / }).click()
-  await expect(page).toHaveURL(/\/chats\/new\?sandbox=/)
+  await expect(page).toHaveURL(/\/teammates\/[^/?]+\?computer=/)
   await expect(
     page.getByRole("main").getByRole("textbox", { name: "Message" })
   ).toContainText("health check endpoint")

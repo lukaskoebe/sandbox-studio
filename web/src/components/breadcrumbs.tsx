@@ -565,7 +565,6 @@ export function Breadcrumbs({ env }: { env: string }) {
     const named: Record<string, string> = {
       "/e/$env/teammates/": "Teammates",
       "/e/$env/chats/": "Chats",
-      "/e/$env/chats/new": "New chat",
       "/e/$env/chats/$chat": "Chat",
       "/e/$env/git/reviews/$id": "Git review",
       "/e/$env/merges/$merge": "Memory merge",

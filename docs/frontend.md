@@ -74,7 +74,7 @@ to an environment.
 | `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome, or at `?step=`; it works on the environment last opened, or the first. The teammate's Edit and the sandbox's Open computer add `?from=setup`, and those pages then link back to their step |
 | `/e/$env/sandboxes/$id` | a computer without a teammate: its screen at full width (below). `?tab=` (`terminal`, `preview`, `changes`), `?term=` and `?review=` pick what it shows. A teammate's computer redirects to the teammate's page with `?computer=` |
 | `/e/$env/sandboxes/$id/work` | the old workspace: redirects to the screen, on the tab its `?terminal=`, `?session=`, `?review=` or `?panel=` named |
-| `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)): all of them, linked from Home. A chat is a thread on its teammate's page, so `/chats/$chat` redirects there with `?thread=`, and is left only for a chat the list doesn't know, such as one just deleted. `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox, and opens the thread it creates |
+| `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)): all of them, linked from Home. A chat is a thread on its teammate's page, so `/chats/$chat` redirects there with `?thread=`, and is left only for a chat the list doesn't know, such as one just deleted. `/chats/new` is gone as a page: with `?teammate=`, or `?sandbox=` of a teammate's computer, it opens that teammate's home with the composer focused (and that computer on the screen); without, Chats with "Who should do it?" open, or the only teammate's home |
 | `/e/$env/settings/<section>` | Settings (below) |
 | `/e/$env/lead`, `/lead/$day`, `/lead/settings` | [Lead](lead.md): today (written or so far), a written day, its settings |
 | `/e/$env/teammates` | every teammate, Lead first: its agent (Claude Code, Codex, OpenCode, or Studio for Lead), provider, model, state (working, needs you, idle, or off while none of its computers runs, with what keeps its sessions from starting, such as a missing key) and the identity it commits as |
@@ -144,7 +144,9 @@ working in a terminal with no chat (marked `>_`), and the two latest others of t
 each with its state and, for a teammate with more than one computer, the computer; then "All N
 threads" to its home. On hover a teammate shows `>_`, a terminal on the computer last used for
 it, and +, a new thread: its home, with the composer focused (`lib/new-thread.ts`; ⌘K's
-"New thread with X" does the same). All teammates ends the group and opens their list; the
+"New thread with X" does the same). New chat, on Chats and in ⌘K, asks "Who should do it?",
+the teammate used last first, and then does the same; with one teammate it goes straight there
+(`components/new-chat-dialog.tsx`, `lib/new-chat.ts`). All teammates ends the group and opens their list; the
 group's label is plain text. Your computers lists the sandboxes without a teammate, each with its
 status dot; Environment has Computers (every computer), Network, Secrets, Memory and Activity;
 the footer has Settings, the version and the theme switch. A number beside an entry is always
@@ -401,8 +403,8 @@ Once the setup is over, Home shows **Get to know Studio** under the setup card
 approval, pushes and pull requests, the browser, previews and secrets), each ticked off once it
 happened or its tip was closed. A first task is one of two starters, or the user's own,
 for the first sandbox with a teammate (a running one first); **Start with** saves it as the
-draft of a new chat on that sandbox and opens `/chats/new?sandbox=`, where it can be edited
-before it is sent. The Secrets row links to Settings → Secrets. **Not now** puts the card away;
+draft of the teammate's composer and opens its home with that computer on the screen, where it
+can be edited before it is sent. The Secrets row links to the Secrets page. **Not now** puts the card away;
 once all five are done it stays for a day.
 
 Each feature explains itself the first time it happens with a tip beside its control

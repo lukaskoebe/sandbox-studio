@@ -26,7 +26,7 @@ A Claude subscription runs chats too: Studio runs Claude Code itself for the tea
 
 ## Start a chat
 
-Open the teammate's page and write in the box at the bottom of its home: what you send starts a thread on the computer named under the box, and the thread opens. A chat is a thread on its teammate's page. The box can also pick another of the teammate's computers, and the thread's model when the teammate offers more than its default. **+** next to the teammate in the sidebar, and **New thread with Iris** in ⌘K, open the same box. You can also open **All chats** from Home and choose **New chat**, then pick the computer at the top. The chat starts with that first message, so there are no empty chats.
+Open the teammate's page and write in the box at the bottom of its home: what you send starts a thread on the computer named under the box, and the thread opens. A chat is a thread on its teammate's page. The box can also pick another of the teammate's computers, and the thread's model when the teammate offers more than its default. **+** next to the teammate in the sidebar, and **New thread with Iris** in ⌘K, open the same box. **New chat** on the Chats page, and in ⌘K, asks who should do it and opens that teammate's box. The chat starts with that first message, so there are no empty chats.
 
 - **Enter** sends; **Shift+Enter** starts a new line.
 - Use the paperclip to attach files, up to 10 MiB per message in total.

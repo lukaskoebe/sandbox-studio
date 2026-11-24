@@ -62,6 +62,7 @@ import { hasModKey } from "@/lib/keys"
 import { rank } from "@/lib/mentions"
 import { setPaletteOpen, usePaletteOpen } from "@/lib/palette"
 import { newThreadWith } from "@/lib/new-thread"
+import { useStartNewChat } from "@/lib/new-chat"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { teammateSettings } from "@/lib/teammate-settings"
 import { setStyleName, useStyleName } from "@/lib/theme"
@@ -264,6 +265,7 @@ export function CommandPalette({
   const { toggleSidebar } = useSidebar()
   const style = useStyleName()
   const previews = usePreviewSetting().enabled
+  const startNewChat = useStartNewChat(env)
   const [query, setQuery] = useState("")
   const [sel, setSel] = useState(0)
   const [recent, setRecent] = useState(loadRecent)
@@ -519,6 +521,15 @@ export function CommandPalette({
       "add create agent",
       onNewTeammate
     )
+    if (teammates.length > 1)
+      act(
+        "new-chat",
+        "New chat…",
+        "Who should do it?",
+        "start thread ask task begin",
+        startNewChat,
+        <PlusIcon />
+      )
     for (const t of teammates)
       act(
         `new-thread:${t.id}`,
@@ -578,6 +589,7 @@ export function CommandPalette({
     style,
     toggleSidebar,
     previews,
+    startNewChat,
   ])
 
   const waiting = useMemo(

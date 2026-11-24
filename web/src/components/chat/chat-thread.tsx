@@ -66,6 +66,7 @@ import {
   type useChat,
 } from "@/lib/chats"
 import { useChatStepsSetting } from "@/lib/chat-steps-setting"
+import { newThreadWith } from "@/lib/new-thread"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import {
   firstMessageDone,
@@ -677,11 +678,11 @@ function ChatComposer({
         pick it up again.
         <Button
           size="sm"
+          onClick={() => newThreadWith(chat.teammateId)}
           render={
             <Link
-              to="/e/$env/chats/new"
-              params={{ env }}
-              search={{ sandbox: chat.sandboxId }}
+              to="/e/$env/teammates/$id"
+              params={{ env, id: chat.teammateId }}
             />
           }
         >

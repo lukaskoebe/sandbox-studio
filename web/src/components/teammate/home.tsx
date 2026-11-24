@@ -84,10 +84,28 @@ type Event = components["schemas"]["TeammateEvent"]
 type Turn = components["schemas"]["TeammateTurn"]
 type Mode = "message" | "task" | "teach"
 
-const modes: Record<Mode, { label: string; icon: Icon }> = {
-  message: { label: "Thread", icon: ChatCircleDotsIcon },
-  task: { label: "Task", icon: ListChecksIcon },
-  teach: { label: "Teach", icon: BrainIcon },
+const modes: Record<
+  Mode,
+  { label: string; icon: Icon; send: string; says: string }
+> = {
+  message: {
+    label: "Thread",
+    icon: ChatCircleDotsIcon,
+    send: "Send",
+    says: "A new thread with your message",
+  },
+  task: {
+    label: "Task",
+    icon: ListChecksIcon,
+    send: "Add task",
+    says: "Added to its tasks; it starts right away",
+  },
+  teach: {
+    label: "Teach",
+    icon: BrainIcon,
+    send: "Remember",
+    says: "A fact for its memory, no thread",
+  },
 }
 
 export function time(iso: string) {
@@ -1343,6 +1361,8 @@ function Waiting({
 /**
  * The home's composer: a message starts a new thread on the computer on the screen; a task is
  * added to the list and a thread starts on it; teaching writes a fact to memory, with no thread.
+ * The three show side by side, the send button names what happens, and after teaching the
+ * composer goes back to Thread, so the next message isn't a fact by mistake.
  */
 function NewThread({
   env,
@@ -1414,6 +1434,7 @@ function NewThread({
         if (error) throw error
         toast.success(`${teammate.name} will remember that`)
         refresh()
+        setMode("message")
         return true
       }
       if (mode === "task") {
@@ -1445,15 +1466,14 @@ function NewThread({
     }
   }
 
-  const M = modes[mode]
   const placeholder = {
     message: `Message ${teammate.name}…`,
     task: `Hand ${teammate.name} a task: the first line is its title`,
-    teach: `Tell ${teammate.name} something to remember for good…`,
+    teach: `A fact for ${teammate.name}'s memory, e.g. "the tests run with make test"`,
   }[mode]
   const where =
     mode === "teach"
-      ? `Saved to ${teammate.name}'s memory`
+      ? "No thread starts"
       : computer
         ? mode === "task"
           ? "Added to the tasks, then a new thread on"
@@ -1500,6 +1520,7 @@ function NewThread({
         error={problem}
         placeholder={placeholder}
         draft={`teammate:${teammate.id}`}
+        sendLabel={modes[mode].send}
         onInput={mode === "teach" ? undefined : wake.wake}
         attachments={mode === "message"}
         mentionsIn={
@@ -1514,38 +1535,35 @@ function NewThread({
         )}
         hint={
           <span className="flex min-w-0 items-center gap-1.5">
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger
-                aria-label={`Mode: ${M.label}`}
-                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-foreground hover:bg-muted data-popup-open:bg-muted"
-              >
-                <M.icon className="size-3.5" />
-                {M.label}
-                <CaretDownIcon className="size-2.5 text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" className="w-64">
-                {(Object.keys(modes) as Mode[]).map((m) => {
-                  const I = modes[m].icon
-                  return (
-                    <DropdownMenuItem key={m} onClick={() => setMode(m)}>
-                      <I />
-                      <span className="grid">
-                        {modes[m].label}
-                        <span className="text-caption text-muted-foreground">
-                          {
-                            {
-                              message: "A new thread with your message",
-                              task: "Added to its tasks; it starts right away",
-                              teach: "A fact for its memory, no thread",
-                            }[m]
-                          }
-                        </span>
-                      </span>
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <span
+              role="group"
+              aria-label="Mode"
+              className="inline-flex h-6 shrink-0 items-center rounded-md border p-px"
+            >
+              {(Object.keys(modes) as Mode[]).map((m) => {
+                const I = modes[m].icon
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={mode === m}
+                    aria-label={modes[m].label}
+                    title={modes[m].says}
+                    onClick={() => setMode(m)}
+                    className={cn(
+                      "inline-flex h-full items-center gap-1 rounded-[calc(var(--radius-md)-2px)] px-1.5 hover:text-foreground",
+                      mode === m && "bg-muted font-medium text-foreground",
+                      mode === m && m === "teach" && "text-(--acc-memory)"
+                    )}
+                  >
+                    <I className="size-3.5" />
+                    <span className="@max-[30rem]/composer:hidden">
+                      {modes[m].label}
+                    </span>
+                  </button>
+                )
+              })}
+            </span>
             {mode !== "teach" && (
               <ModelPicker
                 teammate={teammate}

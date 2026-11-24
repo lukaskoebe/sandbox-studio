@@ -19,6 +19,7 @@ import { useGitStatus } from "@/components/computer/git-changes"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { saveDraft } from "@/lib/drafts"
+import { newThreadWith } from "@/lib/new-thread"
 import {
   featureDone,
   onboardingFeatures,
@@ -156,7 +157,7 @@ function starters(repo?: string) {
   ]
 }
 
-/** A first task for a teammate in its sandbox, which opens a new chat with the task to edit. */
+/** A first task for a teammate in its sandbox: its home opens with the task in the composer. */
 function FirstTask({ env }: { env: string }) {
   const navigate = useNavigate()
   const sandboxes = $api.useQuery("get", "/api/environments/{env}/sandboxes", {
@@ -178,11 +179,13 @@ function FirstTask({ env }: { env: string }) {
   const tasks = starters(repoName(git.data?.repos?.at(0)?.path))
   const start = () => {
     const text = tasks[picked]?.text ?? ""
-    saveDraft(`new-chat:${sb.id}`, { text, files: [], mentions: [] })
+    if (!owner) return
+    saveDraft(`teammate:${owner.id}`, { text, files: [], mentions: [] })
+    newThreadWith(owner.id)
     void navigate({
-      to: "/e/$env/chats/new",
-      params: { env },
-      search: { sandbox: sb.id },
+      to: "/e/$env/teammates/$id",
+      params: { env, id: owner.id },
+      search: { computer: sb.id },
     })
   }
   return (

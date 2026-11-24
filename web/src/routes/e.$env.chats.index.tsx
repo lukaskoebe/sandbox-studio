@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { PlusIcon } from "@phosphor-icons/react"
 import { ChatTable } from "@/components/chat/chat-table"
 import { PageHeader } from "@/components/page-header"
@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
+import { useStartNewChat } from "@/lib/new-chat"
 
 export const Route = createFileRoute("/e/$env/chats/")({
   component: ChatsPage,
@@ -23,16 +24,13 @@ function ChatsPage() {
     params: { path: { env } },
   })
   const list = chats.data ?? []
+  const startNewChat = useStartNewChat(env)
 
   return (
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Chats</h1>
-        <Button
-          size="sm"
-          className="ml-auto"
-          render={<Link to="/e/$env/chats/new" params={{ env }} />}
-        >
+        <Button size="sm" className="ml-auto" onClick={startNewChat}>
           <PlusIcon />
           New chat
         </Button>
@@ -67,10 +65,7 @@ function ChatsPage() {
                 Start one to ask a teammate for something.
               </EmptyDescription>
             </EmptyHeader>
-            <Button
-              size="sm"
-              render={<Link to="/e/$env/chats/new" params={{ env }} />}
-            >
+            <Button size="sm" onClick={startNewChat}>
               <PlusIcon />
               New chat
             </Button>

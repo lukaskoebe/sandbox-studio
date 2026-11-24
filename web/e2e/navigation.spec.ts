@@ -189,12 +189,23 @@ test("teaching a teammate puts the fact on its home, where it can be forgotten",
   const id = await addTeammate(api, env, name)
   await page.goto(`/e/${env}/teammates/${id}`)
 
-  await page.getByRole("button", { name: "Mode: Thread" }).click()
-  await page.getByRole("menuitem", { name: /^Teach/ }).click()
-  await expect(page.getByText(`Saved to ${name}'s memory`)).toBeVisible()
+  // The three modes show side by side; the send button says what happens.
+  const mode = page.getByRole("group", { name: "Mode" })
+  await expect(mode.getByRole("button", { name: "Thread" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await mode.getByRole("button", { name: "Teach" }).click()
+  await expect(page.getByText("No thread starts")).toBeVisible()
   const fact = "The staging database needs the VPN"
   await page.getByRole("textbox", { name: "Message" }).fill(fact)
-  await page.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("button", { name: "Remember" }).click()
+  // Then it is back to Thread, so the next message isn't a fact by mistake.
+  await expect(mode.getByRole("button", { name: "Thread" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await expect(page.getByRole("button", { name: "Send" })).toBeVisible()
 
   const home = page.getByLabel(`Threads with ${name}`)
   const learned = home.getByText(
@@ -441,4 +452,31 @@ test("Home continues where you left off, on the tab it was left on, and leaves o
       `studio.places.${env}`
     )
   ).not.toContain(chat.id)
+})
+
+test("New chat asks who should do it, then opens that teammate's home ready to type", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Pick ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  await page.goto(`/e/${env}/chats`)
+  await page.getByRole("button", { name: "New chat" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Who should do it?" })
+  await expect(
+    dialog.getByRole("button", { name: "Add a teammate…" })
+  ).toBeVisible()
+  await dialog.getByRole("button", { name: new RegExp(`^${name}`) }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
+  await expect(
+    page.getByRole("main").getByRole("textbox", { name: "Message" })
+  ).toBeFocused()
+
+  // The old page's address leads to the same places.
+  await page.goto(`/e/${env}/chats/new?teammate=${id}`)
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
+  await page.goto(`/e/${env}/chats/new`)
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/chats$`))
+  await expect(dialog).toBeVisible()
 })

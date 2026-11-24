@@ -196,10 +196,11 @@ than the one on the screen, the last answer, its requests and its state), and th
 small events between them. Threads untouched for a while wait behind "Earlier threads". The
 pending approvals for the teammate close the home, a row each, and the top bar's approvals list
 leaves them out on this page. Opening a card opens the thread (`?thread=`), whose turn underway
-comes from the chat's own stream, so it updates live. The composer has three modes:
-**Thread** starts a chat on the computer the screen shows; **Task** adds a task (the first line
-is the title) and starts a chat that asks the teammate to work on it; **Teach** writes a fact to
-its memory as the user, without a chat. The name at the top opens its profile: its open tasks,
+comes from the chat's own stream, so it updates live. The composer has three modes, side by
+side in its foot: **Thread** starts a chat on the computer the screen shows; **Task** adds a
+task (the first line is the title) and starts a chat that asks the teammate to work on it;
+**Teach** writes a fact to its memory as the user, without a chat. The send button names what
+happens (Send, Add task, Remember), and after Teach the mode goes back to Thread. The name at the top opens its profile: its open tasks,
 what it knows, its computers and its settings, each also a sheet (`?profile=`).
 
 ## Tasks

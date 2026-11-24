@@ -78,6 +78,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { LeadSidebarRow } from "@/components/lead/sidebar-row"
+import { NewChatDialog } from "@/components/new-chat-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { teammateApprovals } from "@/components/teammate/home"
@@ -458,6 +459,7 @@ export function AppSidebar({
         open={addingTeammate}
         onOpenChange={setAddingTeammate}
       />
+      <NewChatDialog env={env} onNewTeammate={openTeammateDialog} />
       <CommandPalette
         env={env}
         teammates={teammates.data ?? []}

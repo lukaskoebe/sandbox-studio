@@ -31,7 +31,7 @@ test("the breadcrumb row says where a page is, and its parts open their neighbou
   await crumbs
     .getByRole("button", { name: "Switch section: Git forges" })
     .click()
-  await expect(page.getByRole("group", { name: "Accounts" })).toBeVisible()
+  await expect(page.getByRole("group", { name: "Environment" })).toBeVisible()
   await page.getByRole("menuitem", { name: "Runtime" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/runtime$`))
 
