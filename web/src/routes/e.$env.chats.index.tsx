@@ -1,14 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { PlusIcon } from "@phosphor-icons/react"
+import { ChatCircleIcon, PlusIcon } from "@phosphor-icons/react"
 import { ChatTable } from "@/components/chat/chat-table"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { EmptyState } from "@/components/empty-state"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
@@ -30,10 +25,13 @@ function ChatsPage() {
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Chats</h1>
-        <Button size="sm" className="ml-auto" onClick={startNewChat}>
-          <PlusIcon />
-          New chat
-        </Button>
+        {/* While there are none, the empty list has the one button. */}
+        {list.length > 0 && (
+          <Button size="sm" className="ml-auto" onClick={startNewChat}>
+            <PlusIcon />
+            New chat
+          </Button>
+        )}
       </PageHeader>
       <ScrollArea
         className="min-h-0 flex-1"
@@ -58,18 +56,18 @@ function ChatsPage() {
             {errorMessage(chats.error)}
           </p>
         ) : list.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No chats yet</EmptyTitle>
-              <EmptyDescription>
-                Start one to ask a teammate for something.
-              </EmptyDescription>
-            </EmptyHeader>
-            <Button size="sm" onClick={startNewChat}>
-              <PlusIcon />
-              New chat
-            </Button>
-          </Empty>
+          <EmptyState
+            icon={ChatCircleIcon}
+            title="No chats yet"
+            action={
+              <Button size="sm" onClick={startNewChat}>
+                <PlusIcon />
+                New chat
+              </Button>
+            }
+          >
+            A chat is a thread with a teammate, on one of its computers.
+          </EmptyState>
         ) : (
           <ChatTable env={env} chats={list} />
         )}

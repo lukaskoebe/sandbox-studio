@@ -5,7 +5,7 @@ test("the spec editor inserts the Studio dev example", async ({
   env,
 }) => {
   await page.goto(`/e/${env}/settings/templates`)
-  await page.getByRole("button", { name: "New build" }).first().click()
+  await page.getByRole("button", { name: "Build a template" }).first().click()
   const editor = page.locator(".cm-content")
   // New builds start from the Web app example.
   await expect(editor).toContainText("postgresql-client")

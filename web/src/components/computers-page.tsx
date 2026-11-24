@@ -1,6 +1,11 @@
 import { useState } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { DownloadSimpleIcon, PlusIcon, StackIcon } from "@phosphor-icons/react"
+import {
+  DesktopTowerIcon,
+  DownloadSimpleIcon,
+  PlusIcon,
+  StackIcon,
+} from "@phosphor-icons/react"
 import { BaseMark } from "@/components/base-dialog"
 import { ComputerMenu } from "@/components/computer/computer-menu"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
@@ -15,13 +20,7 @@ import { StatusDot } from "@/components/status-dot"
 import { ThreadDot } from "@/components/thread-status"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { EmptyState } from "@/components/empty-state"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -107,6 +106,7 @@ export function ComputersPage({ env }: { env: string }) {
   }
   const shown = forkTree(all).filter(({ sandbox }) => matches[filter](sandbox))
   const outdated = all.filter((sb) => sb.baseOutdated)
+  const empty = !sandboxes.isPending && all.length === 0
   const open = (sb: Sandbox) => {
     const owner = ownerOf(sb)
     if (owner)
@@ -126,7 +126,8 @@ export function ComputersPage({ env }: { env: string }) {
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Computers</h1>
-        <div className="ml-auto flex gap-2">
+        {/* While there are none, the empty list has the one button. */}
+        <div className={cn("ml-auto flex gap-2", empty && "hidden")}>
           <Button
             size="sm"
             variant="outline"
@@ -203,21 +204,31 @@ export function ComputersPage({ env }: { env: string }) {
         {sandboxes.isPending ? (
           <Spinner className="mx-auto block" />
         ) : all.length === 0 ? (
-          <Empty className="border">
-            <EmptyHeader>
-              <EmptyTitle>No computers yet</EmptyTitle>
-              <EmptyDescription>
-                A computer is a small VM where you or a teammate work, with its
-                own terminal, browser and files.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
+          <EmptyState
+            icon={DesktopTowerIcon}
+            title="No computers yet"
+            action={
               <Button size="sm" onClick={() => setCreating(true)}>
                 <PlusIcon />
                 New computer
               </Button>
-            </EmptyContent>
-          </Empty>
+            }
+            more={
+              <>
+                or{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-4 hover:text-foreground"
+                  onClick={() => setImporting(true)}
+                >
+                  import one
+                </button>
+              </>
+            }
+          >
+            A computer is a small VM where you or a teammate work, with its own
+            terminal, browser and files.
+          </EmptyState>
         ) : (
           <div className="rounded-lg ring-1 ring-foreground/10">
             <Table>

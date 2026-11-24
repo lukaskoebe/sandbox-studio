@@ -56,6 +56,7 @@ import {
   type Scanned,
 } from "@/components/forge-dialog"
 import { SettingsPage } from "@/components/settings/page"
+import { EmptyState } from "@/components/empty-state"
 import { SectionHeader } from "@/components/section-header"
 import {
   $api,
@@ -103,10 +104,13 @@ export function GitSettings({
       <SettingsPage
         title="Git forges"
         actions={
-          <Button size="sm" onClick={() => setAdding(true)}>
-            <PlusIcon />
-            Add forge
-          </Button>
+          // While there are none, the empty list has the one button.
+          list.length > 0 && (
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <PlusIcon />
+              Add forge
+            </Button>
+          )
         }
         intro={
           <>
@@ -158,21 +162,19 @@ export function GitSettings({
               </Table>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-3 rounded-(--radius) border border-dashed px-3 py-2.5 text-xs">
-              <p className="min-w-0 flex-1 text-muted-foreground">
-                No forges yet. Add GitHub, a Forgejo instance such as Codeberg,
-                or any git host over HTTPS or SSH; computers then use it through
-                Studio.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setAdding(true)}
-              >
-                <PlusIcon />
-                Add forge
-              </Button>
-            </div>
+            <EmptyState
+              icon={CloudIcon}
+              title="No forges yet"
+              action={
+                <Button size="sm" onClick={() => setAdding(true)}>
+                  <PlusIcon />
+                  Add forge
+                </Button>
+              }
+            >
+              GitHub, a Forgejo instance such as Codeberg, or any git host over
+              HTTPS or SSH.
+            </EmptyState>
           )}
         </section>
 

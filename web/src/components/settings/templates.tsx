@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { EmptyState } from "@/components/empty-state"
 import { $api, errorMessage } from "@/lib/api/client"
 import { templateStack } from "@/lib/lineage"
 import { exampleTemplateSource } from "@/lib/template-spec-example"
@@ -103,13 +104,16 @@ function BuildsWorkspace({ env }: { env: string }) {
       <SettingsPage
         title="Templates"
         actions={
-          <Button
-            size="sm"
-            onClick={() => openSubmission(exampleTemplateSource)}
-          >
-            <PlusIcon />
-            New build
-          </Button>
+          // While there are no builds, the empty list has the one button.
+          builds.data?.length || templates.data?.length ? (
+            <Button
+              size="sm"
+              onClick={() => openSubmission(exampleTemplateSource)}
+            >
+              <PlusIcon />
+              Build a template
+            </Button>
+          ) : undefined
         }
         intro={
           <>
@@ -258,21 +262,21 @@ function BuildsWorkspace({ env }: { env: string }) {
                 </div>
               </div>
             ) : (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>No template builds yet</EmptyTitle>
-                  <EmptyDescription>
-                    Submit a YAML spec to build a reusable template. You can
-                    review its output and source here.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent>
-                  <Button onClick={() => openSubmission(exampleTemplateSource)}>
-                    <HammerIcon />
+              <EmptyState
+                icon={HammerIcon}
+                title="No templates yet"
+                action={
+                  <Button
+                    size="sm"
+                    onClick={() => openSubmission(exampleTemplateSource)}
+                  >
+                    <PlusIcon />
                     Build a template
                   </Button>
-                </EmptyContent>
-              </Empty>
+                }
+              >
+                A template is a ready computer built from a YAML spec.
+              </EmptyState>
             )}
           </>
         )}

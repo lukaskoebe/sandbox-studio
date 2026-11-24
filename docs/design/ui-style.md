@@ -232,9 +232,13 @@ primitives above and keeps the e2e selectors it had.
 - **Done: settings.** General, providers, git, network, templates and runtime; the build log
   and template spec sheets; template resources. Each section is a `SettingsPage` in the same
   56 rem column, and the nav's title row is as tall as the section's. Toggles and one-off actions are `SettingRow`s
-  (icon tile, title, description, control on the right) in a `SettingsGroup` card; General
-  groups them as Studio and This environment. Empty lists are one dashed row with their
-  action, not a centred empty state.
+  (icon tile, title, description, control on the right) in a `SettingsGroup` card; the nav
+  groups the sections as Studio, Environment and This browser.
+- **Done: empty pages.** A page whose list is empty (Computers, Teammates, Secrets, Chats,
+  Activity, Templates, Git forges, AI providers) shows `EmptyState`
+  (`components/empty-state.tsx`): a dashed box with an icon tile, a title, one sentence and
+  one button, and the header leaves its own button out until the first item. Small lists
+  inside a page (Home's Earlier, Lead's day) keep one line of muted text.
 
 ## Open points
 

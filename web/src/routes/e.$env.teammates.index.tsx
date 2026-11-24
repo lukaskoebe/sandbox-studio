@@ -1,16 +1,9 @@
 import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { SettingsLink } from "@/components/settings/link"
-import { PlusIcon } from "@phosphor-icons/react"
+import { PlusIcon, UsersThreeIcon } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { EmptyState } from "@/components/empty-state"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -107,7 +100,8 @@ function TeammatesPage() {
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Teammates</h1>
-        <div className="ml-auto">{addButton}</div>
+        {/* While there are none, the empty list has the one button. */}
+        {list.length > 0 && <div className="ml-auto">{addButton}</div>}
       </PageHeader>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
@@ -237,25 +231,15 @@ function TeammatesPage() {
             </Table>
           </div>
         ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No teammates yet</EmptyTitle>
-              <EmptyDescription>
-                {canAdd ? (
-                  explanation
-                ) : (
-                  <>
-                    A teammate needs a provider for its model.{" "}
-                    <SettingsLink section="providers">
-                      Add a provider
-                    </SettingsLink>{" "}
-                    first.
-                  </>
-                )}
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>{addButton}</EmptyContent>
-          </Empty>
+          <EmptyState
+            icon={UsersThreeIcon}
+            title="No teammates yet"
+            action={addButton}
+          >
+            {canAdd
+              ? "Add one to hand it work; it runs on its own computers."
+              : "A teammate needs a provider for its model, which adding one sets up first."}
+          </EmptyState>
         )}
       </ScrollArea>
       <TeammateDialog

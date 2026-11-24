@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { ListBulletsIcon } from "@phosphor-icons/react"
 import { ForgeReviewOutcome } from "@/components/forge-review"
 import { ForgeCommentOutcome } from "@/components/forge-comment"
 import { ForgeResolveOutcome } from "@/components/forge-resolve"
@@ -8,6 +9,7 @@ import { GitOutcome } from "@/components/git-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
 import { ColumnPage } from "@/components/column-page"
+import { EmptyState } from "@/components/empty-state"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -122,9 +124,13 @@ function ActivitySettings() {
       {approvals.isPending ? (
         <Spinner className="mx-auto block" />
       ) : decided.length === 0 ? (
-        <p className="rounded-(--radius) border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-          No decisions yet.
-        </p>
+        <EmptyState
+          icon={ListBulletsIcon}
+          title={kind ? "None of this kind yet" : "No decisions yet"}
+        >
+          What you, the security level or the reviewer decide lands here, newest
+          first.
+        </EmptyState>
       ) : (
         <div className="rounded-lg ring-1 ring-foreground/10">
           <Table>

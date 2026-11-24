@@ -5,6 +5,7 @@ import {
   PencilSimpleIcon,
   PlusIcon,
   SignInIcon,
+  SparkleIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
 import {
@@ -20,13 +21,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { EmptyState } from "@/components/empty-state"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -64,10 +59,13 @@ export function ProvidersSettings({ env }: { env: string }) {
       <SettingsPage
         title="AI providers"
         actions={
-          <Button size="sm" onClick={() => setDialog({})}>
-            <PlusIcon />
-            Add provider
-          </Button>
+          // While there are none, the empty list has the one button.
+          list.length > 0 && (
+            <Button size="sm" onClick={() => setDialog({})}>
+              <PlusIcon />
+              Add provider
+            </Button>
+          )
         }
         intro={explanation}
       >
@@ -182,18 +180,19 @@ export function ProvidersSettings({ env }: { env: string }) {
             </Table>
           </div>
         ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No providers yet</EmptyTitle>
-              <EmptyDescription>{explanation}</EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button onClick={() => setDialog({})}>
+          <EmptyState
+            icon={SparkleIcon}
+            title="No providers yet"
+            action={
+              <Button size="sm" onClick={() => setDialog({})}>
                 <PlusIcon />
                 Add provider
               </Button>
-            </EmptyContent>
-          </Empty>
+            }
+          >
+            A provider is the account a teammate's model runs on: Anthropic,
+            OpenAI, or a model server of your own.
+          </EmptyState>
         )}
       </SettingsPage>
       <ProviderDialog

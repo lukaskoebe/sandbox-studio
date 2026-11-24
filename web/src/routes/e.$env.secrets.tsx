@@ -10,13 +10,7 @@ import {
   UserIcon,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
+import { EmptyState } from "@/components/empty-state"
 import { Spinner } from "@/components/ui/spinner"
 import {
   stickyEnd,
@@ -91,6 +85,7 @@ function SecretsPage() {
     (sandboxes.data ?? []).map((sb) => [sb.id, sb.name])
   )
   const groups = groupByScope(secrets.data ?? [], teammateNames, sandboxNames)
+  const empty = !secrets.isPending && groups.length === 0
   const managed = useManagedSecrets(env)
 
   return (
@@ -99,10 +94,12 @@ function SecretsPage() {
         title="Secrets"
         actions={
           <>
-            <Button ref={add} size="sm" onClick={() => setDialog({})}>
-              <PlusIcon />
-              Add secret
-            </Button>
+            {!empty && (
+              <Button ref={add} size="sm" onClick={() => setDialog({})}>
+                <PlusIcon />
+                Add secret
+              </Button>
+            )}
             <FeatureTip
               env={env}
               feature="secret"
@@ -147,21 +144,19 @@ function SecretsPage() {
             />
           ))
         ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No secrets yet</EmptyTitle>
-              <EmptyDescription>
-                Add one to let a computer use a credential without ever seeing
-                its value.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button onClick={() => setDialog({})}>
+          <EmptyState
+            icon={KeyIcon}
+            title="No secrets yet"
+            action={
+              <Button ref={add} size="sm" onClick={() => setDialog({})}>
                 <PlusIcon />
                 Add secret
               </Button>
-            </EmptyContent>
-          </Empty>
+            }
+          >
+            A computer sees a placeholder; Studio puts the real value in only on
+            the way to its hosts.
+          </EmptyState>
         )}
       </ColumnPage>
       <SecretDialog
