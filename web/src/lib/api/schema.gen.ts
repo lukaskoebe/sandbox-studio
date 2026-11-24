@@ -2671,6 +2671,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds the default teammate, Iris, as the guided setup offers it. Adding a provider creates no teammate. */
+        post: operations["createDefaultTeammate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{id}": {
         parameters: {
             query?: never;
@@ -4574,6 +4591,17 @@ export interface components {
             scope: "sandbox" | "teammate" | "environment";
             /** @description For git.push approved with allow, when the review says checkedOut: update the working copy's files along with the branch, as git's receive.denyCurrentBranch=updateInstead does. Omitted, it does; false pushes as git would, which refuses */
             updateCheckedOut?: boolean;
+        };
+        DefaultTeammateInput: {
+            /**
+             * @description Defaults to the provider kind's usual harness
+             * @enum {string}
+             */
+            harness?: "opencode" | "claude" | "codex";
+            /** @description Defaults to the usual model of the provider kind and harness */
+            model?: string;
+            /** @description Defaults to the environment's first provider */
+            providerId?: string;
         };
         DiffSummary: {
             /** Format: int64 */
@@ -15273,6 +15301,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TeammateInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createDefaultTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultTeammateInput"];
             };
         };
         responses: {

@@ -160,7 +160,7 @@ browser, and the rows of its settings (but Delete) by what they hold; computers 
 (Terminal and Details, and while one runs Preview, Files and Changes); threads; Home and the
 Environment's pages; Settings' sections; and actions. A teammate's settings row or a computer's
 tab is a part: the name of its teammate or computer only narrows it, so "ada" lists Ada and its
-places, "ada soul" Ada's Soul row and "docs changes" the docs computer's Changes tab. A word
+places, "ada soul" Ada's Instructions row and "docs changes" the docs computer's Changes tab. A word
 matches a title as a run of letters, else as its letters in order close together ("actvty"),
 else, from six letters on, one typo away at a word's start ("netwrok"); the keys and the place
 only by a word's start, since what they matched isn't shown.

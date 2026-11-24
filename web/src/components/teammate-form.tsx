@@ -106,7 +106,6 @@ export function TeammateForm({
   env,
   teammate,
   providers,
-  prefill,
   onSaved,
   sections,
 }: {
@@ -114,8 +113,6 @@ export function TeammateForm({
   /** The teammate to edit; absent for a new one. */
   teammate?: Teammate
   providers: Provider[]
-  /** What a new teammate starts with, such as the default one's name. */
-  prefill?: { name?: string; role?: string }
   onSaved: () => void
   /**
    * Shows each section as a row that opens to its fields, with the open one named here. In an
@@ -125,8 +122,8 @@ export function TeammateForm({
   sections?: { open?: string; onOpen: (id: string | undefined) => void }
 }) {
   const queryClient = useQueryClient()
-  const [name, setName] = useState(teammate?.name ?? prefill?.name ?? "")
-  const [role, setRole] = useState(teammate?.role ?? prefill?.role ?? "")
+  const [name, setName] = useState(teammate?.name ?? "")
+  const [role, setRole] = useState(teammate?.role ?? "")
   const [providerId, setProviderId] = useState(
     teammate?.providerId ?? providers.at(0)?.id ?? ""
   )
@@ -263,9 +260,9 @@ export function TeammateForm({
   const summaries = {
     identity: [name.trim(), role.trim()].filter(Boolean).join(" · "),
     agent: [
+      model.trim() || undefined,
       harness && harnessLabels[harness],
       provider?.name,
-      model.trim() || undefined,
       models.length > 0 ? `+${models.length} in chats` : undefined,
     ]
       .filter(Boolean)
@@ -345,7 +342,7 @@ export function TeammateForm({
         <FormSection
           id="agent"
           summary={summaries.agent}
-          title="Agent"
+          title="Model"
           icon={RobotIcon}
           area="chat"
         >
@@ -386,9 +383,9 @@ export function TeammateForm({
             </Select>
           </Field>
           <Field>
-            <FieldLabel>Harness</FieldLabel>
+            <FieldLabel>Agent</FieldLabel>
             <ToggleGroup
-              aria-label="Harness"
+              aria-label="Agent"
               variant="outline"
               value={harness ? [harness] : []}
               onValueChange={(v) => {
@@ -403,9 +400,7 @@ export function TeammateForm({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <FieldDescription>
-              The harnesses this provider supports.
-            </FieldDescription>
+            <FieldDescription>The agents this provider runs.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="teammate-model">Default model</FieldLabel>
@@ -446,7 +441,7 @@ export function TeammateForm({
         <FormSection
           id="git"
           summary={summaries.git}
-          title="Git identity"
+          title="Commits as"
           icon={GitBranchIcon}
           area="git"
         >
@@ -535,14 +530,14 @@ export function TeammateForm({
         <FormSection
           id="soul"
           summary={summaries.soul}
-          title="Soul"
+          title="Instructions"
           icon={SparkleIcon}
           area="chat"
         >
           <Field data-invalid={soulBytes > maxSoulBytes || undefined}>
             {/* The section's title is the visible label; the textarea keeps its name. */}
             <FieldLabel htmlFor="teammate-soul" className="sr-only">
-              Soul
+              Instructions
             </FieldLabel>
             <textarea
               id="teammate-soul"
@@ -557,10 +552,10 @@ export function TeammateForm({
               onChange={(e) => setSoul(e.target.value)}
             />
             {soulBytes > maxSoulBytes ? (
-              <FieldError>The soul is limited to 16 KiB.</FieldError>
+              <FieldError>The instructions are limited to 16 KiB.</FieldError>
             ) : (
               <FieldDescription>
-                Personality and working rules, in markdown.
+                How it works and what it should know, in markdown.
               </FieldDescription>
             )}
           </Field>

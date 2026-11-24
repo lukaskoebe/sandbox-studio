@@ -30,7 +30,12 @@ import { SandboxProgress } from "@/components/sandbox-progress"
 import { HostLoginOffers, type HostOffer } from "@/components/host-logins"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { StatusBadge } from "@/components/status-badge"
-import { TeammateForm } from "@/components/teammate-form"
+import {
+  ModelChoice,
+  firstModel,
+  type ModelPick,
+} from "@/components/model-choice"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Ident } from "@/components/ident"
 import {
   CloneRepositories,
@@ -184,11 +189,7 @@ function ProviderStep({ env }: { env: string }) {
   )
 }
 
-/** The default teammate's name and role, which a new teammate starts with. */
-const defaultTeammate = { name: "Iris", role: "Generalist engineer" }
-
 function TeammateStep({ env }: { env: string }) {
-  const queryClient = useQueryClient()
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
@@ -199,22 +200,94 @@ function TeammateStep({ env }: { env: string }) {
   if (first) return <TeammateRow env={env} teammate={first} />
   if (!providers.data?.length)
     return (
-      <Hint>Add a provider first; Studio then creates a teammate with it.</Hint>
+      <Hint>Add a provider first; Studio then suggests a teammate for it.</Hint>
     )
+  return <IrisOffer env={env} providers={providers.data} />
+}
+
+/**
+ * The default teammate, Iris, as Studio would add it: on the first provider's usual model,
+ * which Change picks another of. Nothing is added until Add Iris.
+ */
+function IrisOffer({ env, providers }: { env: string; providers: Provider[] }) {
+  const queryClient = useQueryClient()
+  const actions = useContext(SetupActions)
+  const [picked, setPicked] = useState<ModelPick>()
+  const [changing, setChanging] = useState(false)
+  const pick = picked ?? firstModel(providers)
+  const add = $api.useMutation(
+    "post",
+    "/api/environments/{env}/teammates/default",
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: ["get", "/api/environments/{env}/teammates"],
+        })
+        queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
+      },
+      onError: (err) =>
+        toast.error("Could not add Iris", { description: errorMessage(err) }),
+    }
+  )
+  const button = (
+    <Button
+      size={actions ? "default" : "sm"}
+      disabled={add.isPending}
+      onClick={() =>
+        add.mutate({
+          params: { path: { env } },
+          body: pick
+            ? {
+                providerId: pick.providerId,
+                harness: pick.harness,
+                model: pick.model || undefined,
+              }
+            : {},
+        })
+      }
+    >
+      {add.isPending && <Spinner />}
+      Add Iris
+    </Button>
+  )
   return (
     <Column>
+      <div className="flex items-center gap-3 rounded-md p-2.5 text-xs ring-1 ring-foreground/10">
+        <TeammateAvatar name="Iris" className="size-7 shrink-0 text-caption" />
+        <div className="grid min-w-0">
+          <span className="font-medium">Iris</span>
+          <span className="truncate text-muted-foreground">
+            Generalist engineer
+            {pick && <> · {harnessLabels[pick.harness]}</>}
+            {pick?.model && <> · {pick.model}</>}
+          </span>
+        </div>
+        <Button
+          size="xs"
+          variant="ghost"
+          className="ml-auto"
+          aria-expanded={changing}
+          onClick={() => setChanging(!changing)}
+        >
+          Change
+        </Button>
+      </div>
+      {changing && (
+        <Field>
+          <FieldLabel htmlFor="setup-teammate-model">Model</FieldLabel>
+          <ModelChoice
+            id="setup-teammate-model"
+            providers={providers}
+            value={pick}
+            onChange={setPicked}
+          />
+        </Field>
+      )}
       <Hint>
-        A teammate is an agent identity: the harness it runs in, its model and
-        the name it commits under. Studio suggests one, which you can change.
+        Studio adds Iris now. Rename it or pick another face later, in its
+        settings.
       </Hint>
-      <TeammateForm
-        env={env}
-        providers={providers.data}
-        prefill={defaultTeammate}
-        onSaved={() =>
-          queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
-        }
-      />
+      {actions ? createPortal(button, actions) : button}
     </Column>
   )
 }
@@ -223,8 +296,8 @@ function TeammateRow({ env, teammate }: { env: string; teammate: Teammate }) {
   return (
     <Column>
       <Hint>
-        Studio created {teammate.name} with your first provider. Accept it, or
-        change its harness, model or instructions.
+        {teammate.name} is this environment&apos;s first teammate. Change its
+        model or instructions in its settings.
       </Hint>
       <div className="flex items-center gap-3 rounded-md p-2.5 text-xs ring-1 ring-foreground/10">
         <span className="font-medium">{teammate.name}</span>

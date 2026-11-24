@@ -313,6 +313,26 @@ func (s *Server) registerTeammates(api huma.API) {
 		return &struct{ Body store.Teammate }{p}, nil
 	})
 
+	type createDefaultTeammateIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body DefaultTeammateInput
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "createDefaultTeammate", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/default", Tags: []string{"teammates"},
+		DefaultStatus: http.StatusCreated,
+		Description:   "Adds the default teammate, Iris, as the guided setup offers it. Adding a provider creates no teammate.",
+	}, func(ctx context.Context, in *createDefaultTeammateIn) (*struct{ Body store.Teammate }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		t, err := s.createDefaultTeammate(ctx, in.Env, in.Body)
+		if err != nil {
+			return nil, err
+		}
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{t}, nil
+	})
+
 	type updateTeammateIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Teammate ID"`
@@ -534,25 +554,54 @@ func offeredModels(def string, in []string) ([]string, error) {
 	return out, nil
 }
 
-// createDefaultTeammate creates the default teammate on a provider that was just added, if
-// the environment has no teammates yet. Its fields go through the same checks as any
-// teammate's. A failure leaves the provider in place; the teammate can be added by hand.
-func (s *Server) createDefaultTeammate(ctx context.Context, envID string, p store.Provider) error {
-	existing, err := s.Store.Teammates(ctx, envID)
-	if err != nil || len(existing) > 0 {
-		return err
+// DefaultTeammateInput is what the default teammate runs on. Each field left out follows the
+// provider: the environment's first, its kind's usual harness and that harness's model.
+type DefaultTeammateInput struct {
+	ProviderID string `json:"providerId,omitempty" doc:"Defaults to the environment's first provider"`
+	Harness    string `json:"harness,omitempty" enum:"opencode,claude,codex" doc:"Defaults to the provider kind's usual harness"`
+	Model      string `json:"model,omitempty" maxLength:"128" doc:"Defaults to the usual model of the provider kind and harness"`
+}
+
+// createDefaultTeammate creates the default teammate (docs/teammates.md#default-teammate), which
+// the guided setup offers. Its fields go through the same checks as any teammate's.
+func (s *Server) createDefaultTeammate(ctx context.Context, envID string, in DefaultTeammateInput) (store.Teammate, error) {
+	var p store.Provider
+	if in.ProviderID != "" {
+		found, err := s.Store.Provider(ctx, envID, in.ProviderID)
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Teammate{}, huma.Error422UnprocessableEntity(fmt.Sprintf("provider %s is not in this environment", in.ProviderID))
+		}
+		if err != nil {
+			return store.Teammate{}, apiError(err)
+		}
+		p = found
+	} else {
+		list, err := s.Store.Providers(ctx, envID)
+		if err != nil {
+			return store.Teammate{}, apiError(err)
+		}
+		if len(list) == 0 {
+			return store.Teammate{}, huma.Error422UnprocessableEntity("add a provider first: the default teammate runs on one")
+		}
+		p = list[0]
 	}
 	harness, model := teammates.DefaultTeammateHarness(p.Kind)
+	if in.Harness != "" && in.Harness != harness {
+		harness, model = in.Harness, ""
+	}
+	if in.Model != "" {
+		model = in.Model
+	}
 	t, err := s.teammateFrom(ctx, envID, store.NewID(), TeammateInput{
 		Name: teammates.DefaultTeammateName, Role: teammates.DefaultTeammateRole, Soul: teammates.DefaultTeammateSoul,
 		Harness: harness, ProviderID: p.ID, Model: model,
 		GitName: teammates.DefaultTeammateGitName, GitEmail: teammates.DefaultTeammateGitEmail,
 	})
 	if err != nil {
-		return err
+		return store.Teammate{}, err
 	}
-	_, err = s.Store.CreateTeammate(ctx, t)
-	return err
+	t, err = s.Store.CreateTeammate(ctx, t)
+	return t, apiError(err)
 }
 
 // checkTeammate answers 422 unless teammateID is empty or a teammate of the environment.
@@ -642,9 +691,6 @@ func (s *Server) addProvider(ctx context.Context, env string, b newProvider) (Pr
 	if sec != nil {
 		s.Vault.Changed(env)
 		s.publishSecrets(env)
-	}
-	if err := s.createDefaultTeammate(ctx, env, created); err != nil {
-		s.Log.Warn("default teammate", "environment", env, "err", err)
 	}
 	s.publishTeammates(env)
 	return s.providerViewOf(ctx, created), nil

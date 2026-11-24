@@ -1,8 +1,7 @@
 package teammates
 
-// The default teammate. Studio creates the default teammate on a provider added to an
-// environment that has no teammates (docs/teammates.md#default-teammate). Afterwards the
-// default is an ordinary teammate.
+// The default teammate, which the guided setup offers to add once the environment has a
+// provider (docs/teammates.md#default-teammate). Afterwards it is an ordinary teammate.
 const (
 	DefaultTeammateName     = "Iris"
 	DefaultTeammateRole     = "Generalist engineer"

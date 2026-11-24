@@ -35,10 +35,14 @@ func TestSetupConditions(t *testing.T) {
 	}
 	setDoctor(doctor.OK)
 
-	// A provider brings the default teammate with it.
+	// A provider comes alone; the teammate step holds once the setup adds Iris.
 	createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
-	if got := steps(env.ID); got != (SetupSteps{Doctor: setupDone, Provider: setupDone, Teammate: setupDone}) {
+	if got := steps(env.ID); got != (SetupSteps{Doctor: setupDone, Provider: setupDone}) {
 		t.Fatalf("after a provider: %+v", got)
+	}
+	addDefaultTeammate(t, h, env.ID, `{}`)
+	if got := steps(env.ID); got != (SetupSteps{Doctor: setupDone, Provider: setupDone, Teammate: setupDone}) {
+		t.Fatalf("after the default teammate: %+v", got)
 	}
 
 	if _, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: env.ID, Name: "cb", Kind: "forgejo", BaseURL: "https://codeberg.org"},
@@ -122,6 +126,7 @@ func TestSetupCompletesWhenEveryStepHolds(t *testing.T) {
 	const path = testOrigin + "/api/setup?env="
 
 	createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	addDefaultTeammate(t, h, env.ID, `{}`)
 	if _, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: env.ID, Name: "cb", Kind: "forgejo", BaseURL: "https://codeberg.org"},
 		store.Secret{ID: store.NewID(), Name: "FORGE_CB_TOKEN", Sealed: []byte("x"), Hosts: []string{"codeberg.org"}}); err != nil {
 		t.Fatal(err)

@@ -70,7 +70,7 @@ To start Studio when you log in, turn on **Start at login** under **Settings →
 
 Studio checks GitHub for a newer release once a day. **Settings → Updates** shows it, and **Settings** in the sidebar says **Update available**. **Check for updates** looks right away, and **Update now** installs the release. Set **Updates** to **Off** to stop the check, or to **Install automatically** to have Studio install releases itself: it downloads the release, verifies it against `checksums.txt` and its GitHub build attestation, and restarts into it once no chat, template build or sign-in is running. If the new version doesn't start, the old one and its database come back. Studio can install itself only where it may write to the folder its binary is in, as with `install.sh`.
 
-On a first start, Studio opens a guided setup at `/setup`. It checks the host, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first computer. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there. After it, Home shows **Get to know Studio**: a first task to give a teammate, and five features that tick off as you use them. The first time each one happens, a tip beside it explains it; **Stop tips** closes them all, and **Settings → General → Tips** shows them again.
+On a first start, Studio opens a guided setup at `/setup`. It checks the host, adds an AI provider, adds a first teammate named Iris, connects a git forge if you have one, picks a network security level, and creates a first computer. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there. After it, Home shows **Get to know Studio**: a first task to give a teammate, and five features that tick off as you use them. The first time each one happens, a tip beside it explains it; **Stop tips** closes them all, and **Settings → General → Tips** shows them again.
 
 ![The guided setup with the host check done](../../assets/screenshots/setup.jpg)
 
@@ -107,10 +107,10 @@ The bar at the top names where you are; each part of it opens a menu that switch
 
 ## Prepare your first agent
 
-The guided setup adds the provider, creates a default teammate named Iris for it, and gives Iris the first computer. To do the same by hand:
+The guided setup adds the provider, adds a teammate named Iris on it, and gives Iris the first computer. To do the same by hand:
 
 1. In **Settings → AI providers**, sign in with a Claude Pro/Max or ChatGPT subscription, or add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
-2. Choose **+** next to **Teammates** in the sidebar. Give the teammate a name and role, and pick its provider, harness and default model. Its optional working instructions (“soul”) can come later.
+2. Choose **+** next to **Teammates** in the sidebar. Give the teammate a name, optionally what it does, and pick its model. Its instructions and who it commits as can come later, in its settings. Without a provider, the same dialog adds one first.
 3. Open the teammate and choose **Give Iris a computer**, or pick the teammate in **New computer**. You can change a computer's teammate later, while it is stopped, on its **Details** tab.
 4. Write to the teammate in the box on its home. Each message starts a thread, which runs the agent on the computer named under the box. To work beside it, open a **New shell** (**+** in the terminal's tabs) and start the agent there yourself, or press `T` in the [terminal UI](../tui/).
 

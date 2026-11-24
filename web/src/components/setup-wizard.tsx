@@ -94,12 +94,7 @@ function Stepper({
         {setupSteps.map((step, i) => {
           const outcome = setup.steps[step.key]
           const open = i === current
-          const label =
-            i === last
-              ? "Finish"
-              : step.key === "teammate" && outcome === "done"
-                ? "Accept"
-                : "Next"
+          const label = i === last ? "Finish" : "Next"
           return (
             <li key={step.key} className="rounded-lg ring-1 ring-foreground/10">
               <button

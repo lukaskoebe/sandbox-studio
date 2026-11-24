@@ -30,7 +30,7 @@ export const Route = createFileRoute("/e/$env/teammates/")({
 })
 
 const explanation =
-  "Teammates are the agents of an environment: a name, a role and a soul, the agent they run, the provider and model they use, and the identity they commit under. Computers can belong to a teammate, and network rules can be scoped to one."
+  "Teammates are the agents of an environment: a name, a role and instructions, the agent they run, the provider and model they use, and who they commit as. Computers can belong to a teammate, and network rules can be scoped to one."
 
 /**
  * A teammate's state in the words threads use; off while none of its computers runs, and, as
@@ -238,7 +238,7 @@ function TeammatesPage() {
           >
             {canAdd
               ? "Add one to hand it work; it runs on its own computers."
-              : "A teammate needs a provider for its model, which adding one sets up first."}
+              : "Adding one starts with the AI it runs on, then its name and model."}
           </EmptyState>
         )}
       </ScrollArea>

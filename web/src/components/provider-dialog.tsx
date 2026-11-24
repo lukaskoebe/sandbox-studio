@@ -31,6 +31,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { HostCodexAccount, type HostOffer } from "@/components/host-logins"
 import { ProviderLogin } from "@/components/provider-login"
+import { StepCount } from "@/components/step-count"
 import {
   errorMessage,
   fetchClient,
@@ -43,6 +44,7 @@ import {
   type EndpointPlace,
 } from "@/lib/provider-models"
 import { isSubscription, kindLabels, providerKinds } from "@/lib/teammates"
+import { cn } from "@/lib/utils"
 
 // What each kind asks for, so an API key and a subscription sign-in don't look alike.
 const kindHints: Record<ProviderKind, string> = {
@@ -57,6 +59,35 @@ const kindHints: Record<ProviderKind, string> = {
   chatgpt_subscription:
     "Use your ChatGPT Plus or Pro plan. You sign in with your ChatGPT account in the browser; there is no key to paste.",
 }
+
+// A teammate's first step offers the kinds as cards, subscriptions first, each in a line.
+const stepKinds: { kind: ProviderKind; name: string; hint: string }[] = [
+  {
+    kind: "claude_subscription",
+    name: "Claude",
+    hint: "Sign in with your Claude account. No key needed.",
+  },
+  {
+    kind: "anthropic_api",
+    name: "Anthropic",
+    hint: "Pay per use, with a key from console.anthropic.com.",
+  },
+  {
+    kind: "chatgpt_subscription",
+    name: "ChatGPT",
+    hint: "Sign in with your ChatGPT account. No key needed.",
+  },
+  {
+    kind: "openai_api",
+    name: "OpenAI",
+    hint: "Pay per use, with a key from platform.openai.com.",
+  },
+  {
+    kind: "openai_compatible",
+    name: "Local model",
+    hint: "Any server that speaks the OpenAI API, here or hosted.",
+  },
+]
 
 // The base URL's hint, by where its server is.
 const endpointHints: Record<EndpointPlace | "unknown", string> = {
@@ -100,22 +131,38 @@ export function ProviderDialog({
   )
 }
 
-function ProviderForm({
+/**
+ * Adds or edits a provider. As `step`, it is the first step of adding a teammate to an
+ * environment without one: the kinds as cards, the name taken from the kind, and Next where
+ * Add provider would be.
+ */
+export function ProviderForm({
   env,
   provider,
   offer,
+  step,
   onDone,
 }: {
   env: string
   provider?: Provider
   offer?: HostOffer
+  step?: {
+    count: string
+    onAdded: (provider: Provider) => void
+    onCancel: () => void
+  }
   onDone: () => void
 }) {
   const queryClient = useQueryClient()
-  const [name, setName] = useState(provider?.name ?? offer?.name ?? "")
+  const [typedName, setName] = useState(provider?.name ?? offer?.name ?? "")
   const [kind, setKind] = useState<ProviderKind>(
-    provider?.kind ?? offer?.kind ?? "anthropic_api"
+    provider?.kind ??
+      offer?.kind ??
+      (step ? "claude_subscription" : "anthropic_api")
   )
+  const name = step
+    ? (stepKinds.find((k) => k.kind === kind)?.name ?? kindLabels[kind])
+    : typedName
   const [apiKey, setApiKey] = useState("")
   const [removeKey, setRemoveKey] = useState(false)
   const [showKey, setShowKey] = useState(false)
@@ -186,17 +233,14 @@ function ProviderForm({
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/secrets"],
         })
-        // The first provider brings the default teammate, and both are steps of the setup.
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/teammates"],
-        })
         queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
         if (!provider && subscription) {
           // A subscription has no key to type: its sign-in is the next step.
           setAdded(result.data)
           return
         }
-        onDone()
+        if (step && !provider) step.onAdded(result.data)
+        else onDone()
         return
       }
       if (result.response.status === 409 || result.response.status === 422) {
@@ -223,20 +267,65 @@ function ProviderForm({
         save()
       }}
     >
-      <DialogHeader>
-        <DialogTitle>
-          {provider && subscription
-            ? `Sign in to ${provider.name}`
-            : provider
-              ? "Edit provider"
-              : "Add provider"}
-        </DialogTitle>
-        <DialogDescription>
-          How teammates reach a model. API keys and subscription logins are
-          stored as secrets, so computers only ever see a placeholder.
-        </DialogDescription>
-      </DialogHeader>
-      <div className="grid items-start gap-4 sm:grid-cols-2">
+      {step ? (
+        <DialogHeader>
+          <DialogTitle>
+            Add a teammate
+            <StepCount>{step.count}</StepCount>
+          </DialogTitle>
+          <DialogDescription>
+            First, which AI runs it? Studio keeps the key or sign-in for every
+            teammate in this environment.
+          </DialogDescription>
+        </DialogHeader>
+      ) : (
+        <DialogHeader>
+          <DialogTitle>
+            {provider && subscription
+              ? `Sign in to ${provider.name}`
+              : provider
+                ? "Edit provider"
+                : "Add provider"}
+          </DialogTitle>
+          <DialogDescription>
+            How teammates reach a model. API keys and subscription logins are
+            stored as secrets, so computers only ever see a placeholder.
+          </DialogDescription>
+        </DialogHeader>
+      )}
+      {step && !current && (
+        <div
+          role="radiogroup"
+          aria-label="Which AI runs it"
+          className="grid gap-1.5"
+        >
+          {stepKinds.map((k) => (
+            <label
+              key={k.kind}
+              className="grid cursor-pointer gap-0.5 rounded-(--radius) border px-3 py-2 text-xs has-checked:border-primary has-checked:bg-primary/5 has-focus-visible:ring-2 has-focus-visible:ring-ring/30"
+            >
+              <input
+                type="radio"
+                name="provider-kind"
+                className="sr-only"
+                checked={kind === k.kind}
+                onChange={() => {
+                  setKind(k.kind)
+                  setServerError(undefined)
+                }}
+              />
+              <span className="font-medium">{kindLabels[k.kind]}</span>
+              <span className="text-muted-foreground">{k.hint}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      <div
+        className={cn(
+          "grid items-start gap-4 sm:grid-cols-2",
+          step && "hidden"
+        )}
+      >
         <Field>
           <FieldLabel htmlFor="provider-name">Name</FieldLabel>
           <Input
@@ -412,14 +501,22 @@ function ProviderForm({
       )}
       {serverError && <FieldError>{serverError}</FieldError>}
       <DialogFooter>
+        {step && (
+          <Button type="button" variant="outline" onClick={step.onCancel}>
+            Cancel
+          </Button>
+        )}
         {subscription && current ? (
-          <Button type="button" onClick={onDone}>
-            Done
+          <Button
+            type="button"
+            onClick={() => (step ? step.onAdded(current) : onDone())}
+          >
+            {step ? "Next" : "Done"}
           </Button>
         ) : (
           <Button type="submit" disabled={!canSave || saving}>
             {saving && <Spinner />}
-            {provider ? "Save" : "Add provider"}
+            {step ? "Next" : provider ? "Save" : "Add provider"}
           </Button>
         )}
       </DialogFooter>

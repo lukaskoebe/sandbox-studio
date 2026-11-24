@@ -314,8 +314,10 @@ Sandboxes, chats, memory, secrets, provider keys, the remembered pattern level, 
 
 ## Default teammate
 
-Adding a provider to an environment that has no teammates creates the default teammate on
-that provider (`teammates.DefaultTeammate*`, created by the API's `createProvider`):
+Adding a provider creates no teammate. The guided setup's teammate step offers the default
+teammate and adds it on **Add Iris**, through `POST /api/environments/{env}/teammates/default`
+(`teammates.DefaultTeammate*`). Its body may name the provider, harness and model, which the
+step's **Change** picks; each one left out follows the environment's first provider:
 
 - name `Iris`, role `Generalist engineer`, and the soul "Curious, careful and direct. Says what
   it knows and what it doesn't, explains decisions briefly and prefers small verified steps.
@@ -330,10 +332,14 @@ that provider (`teammates.DefaultTeammate*`, created by the API's `createProvide
   default);
 - git identity `Iris (agent) <iris@agents.invalid>`.
 
-Afterwards the default is an ordinary teammate that the user can edit or delete. A provider
-added while the environment has a teammate creates nothing, and one added after the last
-teammate was deleted creates Iris again. If the default can't be created, the provider is kept, the
-failure is logged, and the teammate can be added by hand.
+A harness other than the kind's usual one starts without a model unless the body names one.
+Without a provider the call answers 422, and a second Iris clashes by name (409) as any
+teammate would. Afterwards the default is an ordinary teammate that the user can edit or delete.
+
+Outside the setup, **Add a teammate** asks only for a name, what it does (the role) and one menu
+of models grouped by provider and harness; the soul, git identity and approval scope keep their
+defaults until the teammate's settings change them. In an environment without a provider the
+dialog adds one first, as step 1 of 2, with the provider named after its kind.
 
 ## Ownership and rules
 

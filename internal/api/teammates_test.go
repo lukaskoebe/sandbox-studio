@@ -103,6 +103,7 @@ func TestProvidersCRUD(t *testing.T) {
 	}
 
 	// The default teammate runs on this provider, so the provider stays until the teammate is gone.
+	addDefaultTeammate(t, h, env.ID, `{"providerId":"`+p.ID+`"}`)
 	if rec := do(h, "DELETE", base+"/"+p.ID, ""); rec.Code != http.StatusConflict {
 		t.Fatalf("delete with a teammate on it: %d %s", rec.Code, rec.Body)
 	}
@@ -225,12 +226,12 @@ func TestTeammatesCRUD(t *testing.T) {
 	if rec := do(h, "PUT", testOrigin+"/api/environments/"+other.ID+"/teammates/"+ada.ID, `{"name":"Ada","harness":"claude","providerId":"`+foreign.ID+`","model":"m"}`); rec.Code != http.StatusNotFound {
 		t.Fatalf("cross-environment update: %d %s", rec.Code, rec.Body)
 	}
-	// Iris, the default teammate on the first provider, is listed with Ada and Bob.
-	if got := decode[[]store.Teammate](t, do(h, "GET", base, "")); len(got) != 3 {
+	// Ada and Bob are listed; no provider added a teammate of its own.
+	if got := decode[[]store.Teammate](t, do(h, "GET", base, "")); len(got) != 2 {
 		t.Fatalf("list: %+v", got)
 	}
-	// The other environment has only its own default teammate, on its own provider.
-	if got := decode[[]store.Teammate](t, do(h, "GET", testOrigin+"/api/environments/"+other.ID+"/teammates", "")); len(got) != 1 || got[0].ProviderID != foreign.ID {
+	// The other environment lists none of them.
+	if got := decode[[]store.Teammate](t, do(h, "GET", testOrigin+"/api/environments/"+other.ID+"/teammates", "")); len(got) != 0 {
 		t.Fatalf("teammates leak across environments: %+v", got)
 	}
 

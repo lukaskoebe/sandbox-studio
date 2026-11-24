@@ -496,9 +496,9 @@ export function CopyTeammate({
   return (
     <>
       <p className="text-xs text-muted-foreground">
-        The copy keeps its name, role, avatar, soul, agent, model, git identity
-        and approval setting. Its computers, chats, memory, secrets and keys
-        stay here.
+        The copy keeps its name, role, avatar, instructions, agent, model, who
+        it commits as and its approval setting. Its computers, chats, memory,
+        secrets and keys stay here.
       </p>
       <div>
         <Button size="sm" variant="outline" onClick={() => setOpen(true)}>

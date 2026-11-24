@@ -65,8 +65,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 	if file.Format != environmentFormat || file.Version != environmentVersion || file.Name != "work" {
 		t.Fatalf("file header: %+v", file)
 	}
-	// The first provider also creates the default teammate, Iris.
-	if len(file.Providers) != 2 || len(file.Teammates) != 3 || len(file.Rules) != 3 || len(file.Secrets) != 2 || len(file.Templates) != 1 {
+	if len(file.Providers) != 2 || len(file.Teammates) != 2 || len(file.Rules) != 3 || len(file.Secrets) != 2 || len(file.Templates) != 1 {
 		t.Fatalf("file content: %d providers, %d teammates, %d rules, %d secrets, %d templates",
 			len(file.Providers), len(file.Teammates), len(file.Rules), len(file.Secrets), len(file.Templates))
 	}
@@ -113,7 +112,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 		t.Fatalf("compatible provider: %+v", local2)
 	}
 	teammates := decode[[]store.Teammate](t, do(h, "GET", base+"/teammates", ""))
-	if len(teammates) != 3 {
+	if len(teammates) != 2 {
 		t.Fatalf("imported teammates: %+v", teammates)
 	}
 	var newAda store.Teammate
@@ -181,7 +180,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 	}
 
 	// The original is untouched.
-	if list := decode[[]store.Teammate](t, do(h, "GET", teammateURL, "")); len(list) != 3 {
+	if list := decode[[]store.Teammate](t, do(h, "GET", teammateURL, "")); len(list) != 2 {
 		t.Fatalf("the source environment changed: %+v", list)
 	}
 }

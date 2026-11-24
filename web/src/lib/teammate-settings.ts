@@ -17,13 +17,13 @@ export const teammateSettings: {
       },
       {
         id: "agent",
-        label: "Agent",
-        keywords: "harness model provider claude codex",
+        label: "Model",
+        keywords: "agent harness provider claude codex",
       },
       {
         id: "git",
-        label: "Git identity",
-        keywords: "author email commits signing",
+        label: "Commits as",
+        keywords: "git identity author email signing",
       },
       {
         id: "approvals",
@@ -32,8 +32,8 @@ export const teammateSettings: {
       },
       {
         id: "soul",
-        label: "Soul",
-        keywords: "instructions prompt personality",
+        label: "Instructions",
+        keywords: "soul prompt personality",
       },
     ],
   },

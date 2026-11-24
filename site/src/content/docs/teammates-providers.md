@@ -3,7 +3,7 @@ title: Teammates and providers
 description: Configure an agent identity and connect it to an API key or a subscription.
 ---
 
-A teammate is an agent identity in one environment. It has a name, role, avatar (a drawn pixel sprite, which a new teammate gets from its name until you pick another, or the initials, a shape or an emoji), optional Markdown instructions (“soul”), harness, provider, and a Git name and email, or **Use my git identity** to commit as you do on the Studio machine. Its **Default model** is the one its terminal sessions, check-ins and scheduled tasks use; **Also offered in chats** lists other models of its provider that a chat can pick instead. **New rules from approvals apply to** sets the scope its approval cards preselect: this computer, this teammate, or the environment.
+A teammate is an agent identity in one environment. It has a name, role, avatar (a drawn pixel sprite, which a new teammate gets from its name until you pick another, or the initials, a shape or an emoji), optional Markdown **Instructions**, the agent it runs (Claude Code, Codex or OpenCode), provider, and a Git name and email under **Commits as**, or **Use my git identity** to commit as you do on the Studio machine. Its **Default model** is the one its terminal sessions, check-ins and scheduled tasks use; **Also offered in chats** lists other models of its provider that a chat can pick instead. **New rules from approvals apply to** sets the scope its approval cards preselect: this computer, this teammate, or the environment.
 
 One teammate can own several computers. A computer's teammate is picked when it is created or forked, and changes later in the computer's **Details** tab: choose **Change…** in its **Teammate** row while the computer is stopped. The new teammate's rules, secrets and harness settings apply from its next start, while its home, with the harness history and logins in it, stays as it is.
 
@@ -28,7 +28,7 @@ Open one of its computers and it shows beside the desk, with its terminal, its b
 
 Choose the caret beside the teammate's name in the bar at the top, then **Settings**, or search for *Iris's settings* with ⌘K. The settings are a list of rows, each saying what it is set to and opening to edit it:
 
-- **Profile**: Identity, Agent (harness, provider and models), Git identity, Approvals and Soul.
+- **Profile**: Identity, Model (the provider, agent and models), Commits as, Approvals and Instructions.
 - **Knowledge**: [Memory](../memory/), with **Learn from its chats** and **Dream every night**, and Tasks.
 - **Routine and access**: Check-ins, New hosts (its [network level](../network/#security-levels)), Network rules, [Browser](../browser/), Secrets, and Copy to another environment.
 
@@ -76,12 +76,12 @@ Add or rotate provider keys under **Settings → AI providers**. The key remains
 
 ## Default teammate
 
-If an environment has no teammates when you add a provider, Studio adds a teammate named Iris on that provider. Iris is a generalist engineer that uses Claude Code with an Anthropic key or a Claude subscription, Codex with an OpenAI key or a ChatGPT subscription, or OpenCode with a custom endpoint. The Git identity is `Iris (agent) <iris@agents.invalid>`. Iris is an ordinary teammate: you can edit or delete Iris. Studio adds Iris again only when the environment has no teammates and you add another provider.
+Adding a provider adds no teammate. The guided setup's **Teammate** step offers one named Iris, a generalist engineer, and adds it when you choose **Add Iris**. Iris runs on your first provider: Claude Code with an Anthropic key or a Claude subscription, Codex with an OpenAI key or a ChatGPT subscription, or OpenCode with a custom endpoint. **Change** picks another provider or model first. Iris commits as `Iris (agent) <iris@agents.invalid>`, and is an ordinary teammate: you can rename, edit or delete it.
 
 ## Start a teammate session
 
 1. Add a provider and enter its API key, or sign in with a subscription.
-2. Choose **+** next to **Teammates** and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, the dialog says *Add a provider first* and **Add a provider** opens **Settings → AI providers**.
+2. Choose **+** next to **Teammates**, give the teammate a name, optionally what it does, and pick its model: the menu lists each provider's models by agent. Its instructions, who it commits as and its approvals keep their defaults until you change them in its settings. In an environment without a provider, the dialog first asks which AI runs it and adds that provider, as step 1 of 2.
 3. Choose **Give Iris a computer** on its page, or create a computer and pick that teammate.
 4. Write to the teammate on its page: that starts a thread, a chat. See [Chat](../chat/).
 5. To use the harness's own interface instead, choose **Continue in the terminal** in the menu of the thread's title in the top bar. Studio opens the harness in a new terminal session on the computer's **Terminal** tab.

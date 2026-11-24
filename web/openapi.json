@@ -2451,6 +2451,30 @@
         ],
         "type": "object"
       },
+      "DefaultTeammateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "harness": {
+            "description": "Defaults to the provider kind's usual harness",
+            "enum": [
+              "opencode",
+              "claude",
+              "codex"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "Defaults to the usual model of the provider kind and harness",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "providerId": {
+            "description": "Defaults to the environment's first provider",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "DiffSummary": {
         "additionalProperties": false,
         "properties": {
@@ -24535,6 +24559,59 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TeammateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/default": {
+      "post": {
+        "description": "Adds the default teammate, Iris, as the guided setup offers it. Adding a provider creates no teammate.",
+        "operationId": "createDefaultTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefaultTeammateInput"
               }
             }
           },

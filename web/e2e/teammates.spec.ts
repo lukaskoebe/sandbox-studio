@@ -70,7 +70,7 @@ test("a teammate is copied to another environment from its settings, and opens t
 
 // Without a provider there is no model to choose, so adding a teammate says so and leads to the
 // providers, from the sidebar and from the teammates page alike.
-test("adding a teammate without a provider explains why and leads to the providers", async ({
+test("adding a teammate without a provider adds one first, then asks three things", async ({
   page,
   api,
 }) => {
@@ -79,17 +79,44 @@ test("adding a teammate without a provider explains why and leads to the provide
   })
   await page.goto(`/e/${fresh!.id}/teammates`)
   await page.getByTitle("New teammate").click()
-  const dialog = page.getByRole("dialog", { name: "Add a provider first" })
-  await expect(dialog.getByText(/this environment has none yet/)).toBeVisible()
+  const dialog = page.getByRole("dialog", { name: "Add a teammate" })
+  await expect(dialog).toContainText("1 of 2")
+  await expect(dialog.getByText("First, which AI runs it?")).toBeVisible()
   await dialog.getByRole("button", { name: "Cancel" }).click()
   await expect(dialog).toBeHidden()
 
+  // Step 1 adds the provider in place; no teammate comes with it.
   await page.getByRole("button", { name: "Add a teammate" }).first().click()
-  await dialog.getByRole("link", { name: "Add a provider" }).click()
-  await expect(page).toHaveURL(
-    new RegExp(`/e/${fresh!.id}/settings/providers$`)
+  await dialog.getByText("Anthropic API key", { exact: true }).click()
+  await expect(
+    dialog.getByRole("radio", { name: /^Anthropic API key/ })
+  ).toBeChecked()
+  await dialog.getByLabel("API key", { exact: true }).fill("sk-ant-e2e-fake")
+  await dialog.getByRole("button", { name: "Next" }).click()
+
+  // Step 2 asks only for the name, what it does and the model, and says why Add waits.
+  await expect(dialog).toContainText("2 of 2")
+  await expect(dialog.getByLabel("Name")).toHaveAttribute(
+    "placeholder",
+    "e.g. Ada"
   )
+  await expect(dialog.getByLabel("Model")).toContainText(
+    "claude-sonnet-5-5 · Claude Code · Anthropic"
+  )
+  await expect(dialog.getByText("Give it a name to add it.")).toBeVisible()
+  await expect(
+    dialog.getByRole("button", { name: "Add teammate" })
+  ).toBeDisabled()
+  await dialog.getByLabel("Name").fill("Ada")
+  await dialog.getByRole("button", { name: "Add teammate" }).click()
   await expect(dialog).toBeHidden()
+  const teammates = await api.json<{ name: string; model: string }[]>(
+    "GET",
+    `/api/environments/${fresh!.id}/teammates`
+  )
+  expect(teammates).toEqual([
+    expect.objectContaining({ name: "Ada", model: "claude-sonnet-5-5" }),
+  ])
 })
 
 test("a teammate without a computer is offered one, the screen's menu forks it and the crumb adds another", async ({
@@ -390,7 +417,7 @@ test("a teammate's settings save as you type, and closing them with a change tha
   await page.getByLabel("Role").fill("Reviewer")
   await expect(status).toContainText("Saved")
   await expect.poll(async () => (await teammate())?.role).toBe("Reviewer")
-  await page.getByRole("button", { name: /^Git identity/ }).click()
+  await page.getByRole("button", { name: /^Commits as/ }).click()
   await page.getByLabel("Git name").fill("Saver Bot")
   await expect.poll(async () => (await teammate())?.gitName).toBe("Saver Bot")
 

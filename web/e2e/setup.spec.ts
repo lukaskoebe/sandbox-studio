@@ -41,16 +41,23 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(page.getByText("Anthropic", { exact: true })).toBeVisible()
     await next().click()
 
-    // Teammate: the first provider brought Iris along. Her settings lead back to this step;
-    // accept her as she is.
+    // Teammate: the provider brought no one. The step offers Iris on its usual model, and
+    // Change picks another; Iris's settings then lead back to this step.
     await open("Teammate")
     await expect(page.getByText("Iris", { exact: true })).toBeVisible()
+    await expect(
+      page.getByText("Generalist engineer · Claude Code · claude-sonnet-5-5")
+    ).toBeVisible()
+    await page.getByRole("button", { name: "Change", exact: true }).click()
+    await page.getByLabel("Model").click()
+    await page.getByRole("option", { name: "claude-opus-5-5" }).first().click()
+    await page.getByRole("button", { name: "Add Iris", exact: true }).click()
     await page.getByRole("link", { name: "Edit", exact: true }).click()
     await expect(page).toHaveURL(/\/teammates\/[^/?]+\?.*profile=settings/)
     await expect(page).toHaveURL(/[?&]from=setup/)
     await page.getByRole("link", { name: "Back to setup" }).click()
     await open("Teammate")
-    await page.getByRole("button", { name: "Accept", exact: true }).click()
+    await next().click()
 
     // Git: no forge yet, so leave it. Going Home in the middle shows where the setup stands,
     // and Continue opens it again on this step.

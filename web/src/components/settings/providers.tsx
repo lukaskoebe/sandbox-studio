@@ -89,7 +89,7 @@ export function ProvidersSettings({ env }: { env: string }) {
                   <TableHead>Name</TableHead>
                   <TableHead>Kind</TableHead>
                   <TableHead>Key</TableHead>
-                  <TableHead>Harnesses</TableHead>
+                  <TableHead>Agents</TableHead>
                   <TableHead>Updated</TableHead>
                   <TableHead>
                     <span className="sr-only">Actions</span>
