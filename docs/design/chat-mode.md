@@ -72,6 +72,13 @@ on 2026-10-11:
 - claude-agent-acp: 0.88.0 (2026-10-08) and 0.89.x (2026-10-09 and 10).
 - codex-acp: 2.2.x (2026-10-10).
 
+On 2026-11-25 Claude Code moved to 2.1.325 (the stable tag; the API refuses Fable 5.2 to
+anything older than 2.1.290) and claude-agent-acp to 0.107.3, whose Agent SDK 0.3.325 is built
+for it, installed with `--before=2026-11-17`. That version serves ACP v2 to clients that ask
+for it and v1 to the others, Studio among them; steering, `-32002` and `/compact` are as below.
+Its idle compaction (54 minutes after a turn) never fires here: Studio stops an idle agent
+after 30.
+
 **Claude Code:**
 
 - **The package was renamed twice.**

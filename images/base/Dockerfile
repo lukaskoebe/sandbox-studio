@@ -53,7 +53,7 @@ ARG NODE_VERSION=24.21.0
 ARG NODE_SHA256_AMD64=fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6
 ARG NODE_SHA256_ARM64=6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2
 ARG OPENCODE_VERSION=1.18.35
-ARG CLAUDE_CODE_VERSION=2.1.287
+ARG CLAUDE_CODE_VERSION=2.1.325
 ARG CODEX_VERSION=0.162.1
 RUN set -eu; \
     case "$(dpkg --print-architecture)" in \
@@ -77,12 +77,15 @@ RUN set -eu; \
 # The ACP adapters chats run (docs/design/chat-mode.md). --omit=optional skips their own
 # copies of the Claude Code and Codex binaries: CLAUDE_CODE_EXECUTABLE and CODEX_PATH point
 # them at the pinned ones above. --before makes their caret-range dependencies resolve
-# the same way on every build.
-ARG CLAUDE_AGENT_ACP_VERSION=0.87.0
+# the same way on every build. Claude's adapter is the one whose Agent SDK matches the
+# Claude Code version above (SDK 0.3.325 for 2.1.325).
+ARG CLAUDE_AGENT_ACP_VERSION=0.107.3
 ARG CODEX_ACP_VERSION=2.1.1
 RUN npm install -g --no-fund --no-audit --no-update-notifier --omit=optional \
-        --before=2026-10-08T00:00:00Z \
+        --before=2026-11-17T00:00:00Z \
         "@agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION}" \
+    && npm install -g --no-fund --no-audit --no-update-notifier --omit=optional \
+        --before=2026-10-08T00:00:00Z \
         "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" \
     && npm cache clean --force && rm -rf /root/.npm
 

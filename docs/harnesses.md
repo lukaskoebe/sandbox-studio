@@ -163,9 +163,9 @@ The base image (`images/base/Dockerfile`) installs these versions.
 |---|---|---|
 | Node.js | 24.21.0 LTS | official tarball, checked against its sha256 |
 | `opencode-ai` | 1.18.35 | npm, exact version |
-| `@anthropic-ai/claude-code` | 2.1.287 (stable tag) | npm, exact version |
+| `@anthropic-ai/claude-code` | 2.1.325 (stable tag; 2.1.290 or newer runs Fable 5.2) | npm, exact version |
 | `@openai/codex` | 0.162.1 | npm, exact version |
-| `@agentclientprotocol/claude-agent-acp` | 0.87.0 | npm, exact version, `--omit=optional --before=2026-10-08` |
+| `@agentclientprotocol/claude-agent-acp` | 0.107.3, whose Agent SDK (0.3.325) matches Claude Code | npm, exact version, `--omit=optional --before=2026-11-17`; it serves ACP v1 to Studio, which asks for v1 |
 | `@agentclientprotocol/codex-acp` | 2.1.1 | npm, exact version, `--omit=optional --before=2026-10-08` |
 
 ## Chats (ACP)
@@ -221,7 +221,7 @@ one process may write a session.
 Each adapter reports how full its context is with `usage_update` `used` and `size`, which
 Studio keeps with the turn (`chat_turns.usage`); the composer shows the latest as a meter
 (`components/chat/context-meter.tsx`). Its **Compact now** sends `/compact` as a message, a
-command every adapter takes (sources checked 2026-11-20): `claude-agent-acp` 0.87.0 passes it
+command every adapter takes (sources checked 2026-11-20, Claude's again 2026-11-25): `claude-agent-acp` 0.107.3 passes it
 to Claude Code, `codex-acp` 2.1.1 runs `thread/compact/start`, OpenCode 1.18.35 runs
 `session.summarize`, and the subscription shim passes it to `claude -p`. Each reports the
 smaller context after it.
@@ -235,7 +235,7 @@ harness; the agent's session goes on with its history.
 
 | Harness | Value | What it takes (adapter sources checked 2026-11-12) |
 |---|---|---|
-| Claude (`claude-agent-acp` 0.87.0) | the model id; `default` for Claude Code's own default | aliases and full ids |
+| Claude (`claude-agent-acp` 0.107.3) | the model id; `default` for Claude Code's own default | aliases and full ids |
 | Claude subscription (`studio-agent claude-acp`) | the same | restarts `claude -p` with `--model` once the process is idle, resuming the session |
 | Codex (`codex-acp` 2.1.1) | the model id | only models in Codex's own model list; with an OpenAI-compatible provider it may refuse every other model |
 | OpenCode | `<provider>/<model>`: `anthropic`, `openai`, or `studio` for a compatible provider | for a compatible provider, only models in `opencode.json`'s provider models, which Studio fills with the default and the offered ones |
