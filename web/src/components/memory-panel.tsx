@@ -79,6 +79,7 @@ import {
 import { ConflictSheet, DreamPanel } from "@/components/memory-conflict"
 import { MemorySessionsTab, MemoryUsage } from "@/components/memory-sessions"
 import { useMemoryFile } from "@/components/memory-file"
+import { EmptyState } from "@/components/empty-state"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { cn, formatAge } from "@/lib/utils"
@@ -165,12 +166,15 @@ export function MemoryPanel({
   scope,
   open,
   onOpen,
+  summary,
 }: {
   env: string
   scope: string
   /** The open view, as the URL holds it. */
   open?: string
   onOpen: (open: string | undefined) => void
+  /** More lines under the scope's size, such as the environment's quality numbers. */
+  summary?: ReactNode
 }) {
   const [pageDialog, setPageDialog] = useState<{
     page?: MemoryPage
@@ -218,30 +222,58 @@ export function MemoryPanel({
   }
   // Something is open: on a narrow screen the reader takes the place of the index.
   const reading = searching || view !== undefined
+  // Nothing remembered and nothing to review: no index, no numbers, one way to start.
+  const mem = useScopeMemory(env, scope)
+  const needs = useNeedsYou(env, scope)
+  const empty =
+    !mem.pending &&
+    mem.facts.length === 0 &&
+    mem.pages.length === 0 &&
+    needs.conflicts.length === 0 &&
+    needs.suggestions.length === 0
+  const who = teammate ? names.get(teammate) : undefined
 
   return (
     <div className="@container min-w-0 space-y-4">
-      <PanelHeader ctx={ctx} />
-      <div className="@2xl:grid @2xl:grid-cols-[15rem_minmax(0,1fr)] @2xl:items-start @2xl:gap-6">
-        <Index
-          ctx={ctx}
-          draft={draft}
-          setDraft={setDraft}
-          onSearch={() => setQuery(draft.trim())}
-          onClear={() => {
-            setDraft("")
-            setQuery("")
-          }}
-          className={cn(reading && "hidden @2xl:grid")}
-        />
-        <div className={cn("min-w-0", !reading && "hidden @2xl:block")}>
-          {searching ? (
-            <SearchResults ctx={ctx} query={query} />
-          ) : (
-            <Reader ctx={ctx} />
-          )}
+      <PanelHeader ctx={ctx} empty={empty} />
+      {!empty && summary}
+      {empty ? (
+        <EmptyState
+          icon={BrainIcon}
+          title="Nothing remembered yet"
+          action={
+            <Button size="sm" onClick={ctx.newFact}>
+              <PlusIcon />
+              Teach a fact
+            </Button>
+          }
+        >
+          {who
+            ? `${who} notes facts as it works: what you prefer, what was decided, how things run. Teach one now, or let it.`
+            : "Teammates note facts as they work: what you prefer, what was decided, how things run. Teach one now, or let them."}
+        </EmptyState>
+      ) : (
+        <div className="@2xl:grid @2xl:grid-cols-[15rem_minmax(0,1fr)] @2xl:items-start @2xl:gap-6">
+          <Index
+            ctx={ctx}
+            draft={draft}
+            setDraft={setDraft}
+            onSearch={() => setQuery(draft.trim())}
+            onClear={() => {
+              setDraft("")
+              setQuery("")
+            }}
+            className={cn(reading && "hidden @2xl:grid")}
+          />
+          <div className={cn("min-w-0", !reading && "hidden @2xl:block")}>
+            {searching ? (
+              <SearchResults ctx={ctx} query={query} />
+            ) : (
+              <Reader ctx={ctx} />
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <PageDialog
         env={env}
         scope={scope}
@@ -892,8 +924,8 @@ function LooseFacts({ ctx, group }: { ctx: PanelContext; group: FactGroup }) {
   )
 }
 
-/** The scope's size, Dream now, and the rest in one menu. */
-function PanelHeader({ ctx }: { ctx: PanelContext }) {
+/** The scope's size, Tidy now, and the rest in one menu. While it's empty, only the menu. */
+function PanelHeader({ ctx, empty }: { ctx: PanelContext; empty: boolean }) {
   const { env, scope } = ctx
   const queryClient = useQueryClient()
   const [dialog, setDialog] = useState<"dreams" | "usage" | null>(null)
@@ -917,7 +949,7 @@ function PanelHeader({ ctx }: { ctx: PanelContext }) {
     {
       onSettled: () => invalidateMemory(queryClient),
       onError: (err) =>
-        toast.error("Could not start consolidation", {
+        toast.error("Could not tidy memory", {
           description: errorMessage(err),
         }),
     }
@@ -927,30 +959,42 @@ function PanelHeader({ ctx }: { ctx: PanelContext }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <p className="font-mono text-caption text-muted-foreground">
-        {current ? (
+      <p className="text-caption text-muted-foreground">
+        {current && !empty ? (
           <>
-            {current.facts} facts · {current.pages} pages · core{" "}
-            {current.coreChars.toLocaleString()} /{" "}
-            {current.coreBudget.toLocaleString()}
+            {[
+              plural(current.facts, "fact"),
+              current.pages > 0 && plural(current.pages, "page"),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            {current.coreChars > 0 && (
+              <span title="Pages marked always in prompts go into every session, up to this many characters.">
+                {" "}
+                · always in prompts {current.coreChars.toLocaleString()} of{" "}
+                {current.coreBudget.toLocaleString()} characters
+              </span>
+            )}
           </>
         ) : (
           " "
         )}
       </p>
       <div className="ml-auto flex items-center gap-1">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={dreaming}
-          title="Merge duplicates, retire outdated facts, find contradictions and compile pages. Runs nightly and after 25 new facts too."
-          onClick={() =>
-            dream.mutate({ params: { path: { env } }, body: { scope } })
-          }
-        >
-          {dreaming ? <Spinner /> : <MoonStarsIcon />}
-          {dreaming ? "Dreaming…" : "Dream now"}
-        </Button>
+        {!empty && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={dreaming}
+            title="Merges duplicates, retires outdated facts, finds contradictions and compiles pages. It also runs nightly and after 25 new facts."
+            onClick={() =>
+              dream.mutate({ params: { path: { env } }, body: { scope } })
+            }
+          >
+            {dreaming ? <Spinner /> : <MoonStarsIcon />}
+            {dreaming ? "Tidying…" : "Tidy now"}
+          </Button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -979,7 +1023,7 @@ function PanelHeader({ ctx }: { ctx: PanelContext }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setDialog("dreams")}>
               <ClockCounterClockwiseIcon />
-              Dream history
+              Tidy history
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDialog("usage")}>
               <CoinsIcon />
@@ -1004,12 +1048,12 @@ function PanelHeader({ ctx }: { ctx: PanelContext }) {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {dialog === "usage" ? "Extraction cost" : "Dream history"}
+              {dialog === "usage" ? "Extraction cost" : "Tidy history"}
             </DialogTitle>
             <DialogDescription>
               {dialog === "usage"
                 ? "What learning from sessions cost today, and which models do it."
-                : "Dreams merge duplicates, retire outdated facts, find contradictions and compile pages, nightly and after 25 new facts."}
+                : "Tidying merges duplicates, retires outdated facts, finds contradictions and compiles pages, nightly and after 25 new facts."}
             </DialogDescription>
           </DialogHeader>
           {dialog === "usage" ? (
@@ -1666,7 +1710,7 @@ function PageView({ ctx, id }: { ctx: PanelContext; id: string }) {
             chips={
               <>
                 <Tag>{p.kind}</Tag>
-                {p.alwaysLoad && <Tag>core</Tag>}
+                {p.alwaysLoad && <Tag>always in prompts</Tag>}
               </>
             }
             actions={

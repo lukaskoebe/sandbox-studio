@@ -16,7 +16,7 @@ Opened, **Always allow** and **Always deny** add a lasting rule; the buttons fol
 - **Who**: the whole **Environment**, the teammate's computers, or only this computer. The teammate's **New rules from approvals apply to** setting picks the default. **Any port** makes the rule cover every port instead of the request's default ports.
 - **For**: **Always**, **1 hour**, or **Once**, which answers this request, and other GET requests to the host that wait with it, and adds no rule; any other request asks again. **Once** is offered only while the connection is still held.
 
-**Why? (saved on the rule)** keeps a note with the rule. **Ignore** refuses the request this time without a rule. Which scope the request preselects is set per teammate, under **Approvals** in its settings.
+**Why? (saved on the rule)** keeps a note with the rule. **Ignore** refuses the request this time without a rule. Its **Options** list the scopes narrowest first: only the computer that asked, the teammate's computers, or every computer in the environment. Which one a request starts with is set per teammate, under **Network → New rules cover** in its settings.
 
 Studio holds the original connection for up to 60 seconds, and the row counts down, such as **Held, 42 s left**. If you allow it before the hold expires and the client is still waiting, Studio releases that same connection and the original operation continues. If the client gives up or the hold expires first, the connection closes, and the row says **No longer held**: **Allow** makes the rule, so the client's next try goes through, and **Ignore** in the opened row drops the request.
 
@@ -80,7 +80,7 @@ A **Proxy** rule's **Advanced** options set the upstream, the Host header, the S
 
 Check **Only in the browser** to limit a rule to the pages Studio's browser loads: the computers' own connections to the host still ask, or follow their other rules. The rules list marks such rules **browser only**.
 
-The rules list shows each rule's scope, its note (**Add note** adds one), and where it came from: added by you, approved on a card, curated, or by the reviewer, with a countdown for a rule that expires. Filter it by scope, action and origin; **Unused** shows the rules that are 30 days old with no connection in 30 days, and **Delete unused** removes them. A teammate's settings list its own rules and the environment's under **Network rules**.
+The rules list shows each rule's scope, its note (**Add note** adds one), and where it came from: added by you, approved on a card, curated, or by the reviewer, with a countdown for a rule that expires. Filter it by scope, action and origin; **Unused** shows the rules that are 30 days old with no connection in 30 days, and **Delete unused** removes them. A teammate's settings list its own rules and the environment's under **Network → Rules**.
 
 An environment-wide deny always wins. Otherwise a computer's rules come first, then the teammate's, then the environment's. Within each, the most specific host wins, then a rule with ports, then a rule for a method and path, and a deny beats an allow.
 

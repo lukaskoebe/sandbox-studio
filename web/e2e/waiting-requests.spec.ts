@@ -61,12 +61,12 @@ test("a sandbox's held connections show as a count, answered there and in Connec
 
   // Options apply to what's answered next: the rule then covers this sandbox only.
   await held
-    .getByRole("button", { name: /^Options: this environment, always/ })
+    .getByRole("button", { name: /^Options: every computer, always/ })
     .click()
   await held
     .getByRole("group", { name: "Scope" })
     .locator("button")
-    .last()
+    .first()
     .click()
   await held.getByRole("button", { name: "Allow all" }).click()
   await expect(held).toBeHidden()
@@ -248,7 +248,7 @@ test("Settings turns off the notification about held connections", async ({
   await api.dismissApprovals()
   const id = await api.createSandbox(sandboxName("quiet"))
   await inTheBackground(page)
-  await page.goto(`/e/${env}/settings`)
+  await page.goto(`/e/${env}/settings/notifications`)
   await page
     .getByRole("switch", { name: /Tell me when a connection is held/ })
     .click()

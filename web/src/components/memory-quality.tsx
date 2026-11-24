@@ -1,11 +1,10 @@
-import { ChartBarIcon } from "@phosphor-icons/react"
-import { SectionHeader } from "@/components/section-header"
 import { $api } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
 /**
- * The memory's quality numbers, compact: what the facts are, how the judge has decided, what
- * the last consolidation did, and what the sessions got in the last week.
+ * The memory's numbers in one quiet line: what the week's sessions got, what a second model
+ * checked, what disagrees, and when it was last tidied. A number that would be zero stays
+ * out, and nothing shows before the first fact.
  */
 export function MemoryQuality({ env }: { env: string }) {
   const quality = $api.useQuery(
@@ -25,71 +24,73 @@ export function MemoryQuality({ env }: { env: string }) {
     Object.entries(m)
       .map(([k, n]) => `${n} ${k.replaceAll("_", " ")}`)
       .join(" · ")
+  if (count(q.facts) === 0) return null
+  const retired = at(q.facts, "superseded") + at(q.facts, "retracted")
+  const stats: { label: string; value: number; note: string }[] = [
+    {
+      label: "Used in prompts this week",
+      value: q.injected,
+      note: `${q.injected} items put into ${q.sessions} sessions; ${q.writes} facts written from them`,
+    },
+    {
+      label: "Checked by a second model",
+      value: count(q.verdicts),
+      note: byWord(q.verdicts),
+    },
+    {
+      label: "Disagree with each other",
+      value: at(q.conflicts, "open"),
+      note: `${at(q.conflicts, "resolved")} settled before`,
+    },
+    {
+      label: "Suggested changes",
+      value: count(q.suggestions),
+      note: byWord(q.suggestions),
+    },
+    {
+      label: "Only where named",
+      value: q.contextual,
+      note: "Facts that hold in one context, and surface only where it's named",
+    },
+    {
+      label: "Replaced or taken back",
+      value: retired,
+      note: `${at(q.facts, "superseded")} replaced · ${at(q.facts, "retracted")} retracted`,
+    },
+  ].filter((s) => s.value > 0)
   const last = q.lastRun
+  const tidied =
+    last &&
+    (last.status === "running"
+      ? "tidying now"
+      : last.status === "failed"
+        ? `tidying failed ${formatAge(last.startedAt)}`
+        : `tidied ${formatAge(last.startedAt)}`)
+  if (stats.length === 0 && !tidied) return null
   return (
-    <div className="space-y-2">
-      <SectionHeader title="Quality" icon={ChartBarIcon} area="memory" />
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg p-3 text-xs ring-1 ring-foreground/10 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat
-          label="Active facts"
-          value={at(q.facts, "active")}
-          note={`${at(q.facts, "disputed")} disputed · ${at(q.facts, "superseded")} superseded · ${at(q.facts, "retracted")} retracted`}
-        />
-        <Stat
-          label="In a context"
-          value={q.contextual}
-          note="surface only where named"
-        />
-        <Stat
-          label="Judge verdicts"
-          value={count(q.verdicts)}
-          note={byWord(q.verdicts) || "none cached yet"}
-        />
-        <Stat
-          label="Conflicts"
-          value={at(q.conflicts, "open")}
-          note={`open · ${at(q.conflicts, "resolved")} resolved`}
-        />
-        <Stat
-          label="Suggestions"
-          value={count(q.suggestions)}
-          note={byWord(q.suggestions) || "open"}
-        />
-        <Stat
-          label="Last consolidation"
-          value={last ? last.status : "none"}
-          note={
-            last
-              ? `${last.scope === "shared" ? "shared" : "a teammate"} · ${last.trigger} · ${formatAge(last.startedAt)}`
-              : "runs after new facts or on Dream now"
-          }
-        />
-        <Stat
-          label="Sessions, 7 days"
-          value={q.sessions}
-          note={`${q.injected} items injected · ${q.writes} facts written`}
-        />
-      </dl>
-    </div>
-  )
-}
-
-function Stat({
-  label,
-  value,
-  note,
-}: {
-  label: string
-  value: string | number
-  note: string
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">{value}</dd>
-      <dd className="truncate text-meta text-muted-foreground" title={note}>
-        {note}
-      </dd>
-    </div>
+    <dl
+      aria-label="Memory numbers"
+      className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-xs"
+    >
+      {stats.map((s) => (
+        <div
+          key={s.label}
+          className="flex items-baseline gap-1.5"
+          title={s.note}
+        >
+          <dt className="text-muted-foreground">{s.label}</dt>
+          <dd className="font-medium tabular-nums">{s.value}</dd>
+        </div>
+      ))}
+      {tidied && (
+        <div
+          className="flex items-baseline gap-1.5"
+          title={`${last.scope === "shared" ? "Shared memory" : "A teammate's memory"}, ${last.trigger === "manual" ? "on Tidy now" : last.trigger === "nightly" ? "nightly" : "after new facts"}`}
+        >
+          <dt className="sr-only">Last tidied</dt>
+          <dd className="text-muted-foreground">{tidied}</dd>
+        </div>
+      )}
+    </dl>
   )
 }

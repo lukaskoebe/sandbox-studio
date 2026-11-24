@@ -146,7 +146,9 @@ computer, provider or harness, and only reads the environment's day.
   network rules scoped to it.
 - The approval scope is `sandbox`, `teammate` or `environment` (the default, and what rules
   from approvals did before). It is the scope the approval cards for this teammate's
-  sandboxes preselect for a new rule; the card still lets the user pick another. See
+  sandboxes preselect for a new rule; the card still lets the user pick another. Settings
+  call it **New rules cover**, under Network, worded as the cards word their scopes (narrowest
+  first: "Only the computer that asked", "<name>'s computers", "Every computer in <env>"). See
   [approvals](approvals.md#network-approval-cards).
 
 ### Models

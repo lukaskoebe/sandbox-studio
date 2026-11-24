@@ -259,12 +259,13 @@ Double-click resets the split; the arrows move it, and past either end fold or e
   identity line and New task was already here or on the home, so those two moved here and the
   card went. The page uses rows, an icon, the label, what it is
   set to and a caret, each opening to its fields underneath, under the card's section labels:
-  Profile (identity, agent, git identity, approvals, soul), Knowledge (memory: its pages,
-  facts, facts this week and last dream, Open its memory, Add a fact, Dream now, and the
-  switches for learning from chats and dreaming every night; tasks: open and scheduled, the
-  first four, Open its tasks; `components/teammate/knowledge.tsx`), Routine and access
-  (check-ins, new hosts, network rules: its own and its computers', the environment's folded,
-  each linking to Settings → Network, browser, secrets: its own, its sandboxes' and the
+  Profile (identity, Model, Commits as, Instructions), Knowledge (memory: its pages,
+  facts, facts this week and last dream, Open its memory, Add a fact, Tidy now, and the
+  switches for learning from chats and tidying every night; tasks: open and scheduled, the
+  first four, Open its tasks; `components/teammate/knowledge.tsx`), Network (new hosts, New
+  rules cover — the form's approvals row, portalled there through `approvalsIn` — and rules:
+  its own and its computers', the environment's folded, each linking to Settings → Network),
+  Routine and access (check-ins, browser, secrets: its own, its sandboxes' and the
   environment's it inherits, with which replaces which; Add secret preselects the teammate's
   scope; copy to another environment), then delete. Memory or tasks opened from a row show a
   back arrow to that row. A setting has
@@ -296,7 +297,7 @@ scrolling when even the icons don't fit. Under the bezel the display:
   the one in view (`term`). The teammate's harness opens in one from a thread's Continue in
   the terminal.
 - Browser: the teammate's browser window (tabs, toolbar, live view; [browser](browser.md))
-  with its Activity and Sites beside it, or over it on a narrow screen, from the toolbar's
+  with its Steps and Sites beside it, or over it on a narrow screen, from the toolbar's
   clock or the site info's All sites. Its ⋯ menu opens Chrome's DevTools on the live page.
   They dock under the view behind a rim that drags up and down (`ResizeHandle` with
   `side="bottom"`; `top` and `bottom` drag rows as `left` and `right` drag columns), or

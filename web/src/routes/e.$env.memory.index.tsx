@@ -36,10 +36,10 @@ function MemoryPage() {
         </>
       }
     >
-      <MemoryQuality env={env} />
       <MemoryPanel
         env={env}
         scope={sharedScope}
+        summary={<MemoryQuality env={env} />}
         open={open}
         onOpen={(o) => void navigate({ search: o ? { open: o } : {} })}
       />

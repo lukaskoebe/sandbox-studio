@@ -139,7 +139,7 @@ scope in its Memory sheet. The panel is an index and a reader, like the Files ta
 on the left stays a few dozen rows however many facts there are, and the reader on the right
 shows the one picked. Its rows all look alike: an icon, the text, a meta line and actions.
 
-- The header has the scope's counts and core usage, **Dream now**, and a menu with Export and
+- The header has the scope's counts and core usage ("always in prompts"), **Tidy now**, and a menu with Export and
   Import ([Export and import](#export-and-import)), the dream history, the extraction cost and
   a link to these docs.
 - The index's filter (`/` focuses it) narrows the pages and the facts on no page as you type;
@@ -238,7 +238,7 @@ decided one is never made again.
   suggestion stays open and the response says why. Counts come from the session log, so
   they are what sessions actually received.
 
-Dreams open suggestions: after new facts, nightly, or on "Dream now". Each run also notes
+Dreams open suggestions: after new facts, nightly, or on "Tidy now" (the UI calls a dream tidying). Each run also notes
 how many it opened (`suggested`).
 
 ## Export and import
@@ -294,7 +294,10 @@ in as a plain page, and the result says so.
 facts that hold in a context, the cached judge verdicts per verdict, conflicts per status,
 open suggestions per kind, the latest consolidation run of any scope, and for the last seven
 days the agent sessions, the items put into them (context packs and recalls) and the facts
-they wrote. The memory page shows them as a compact section. The retrieval eval is a test, so
+they wrote. The memory page shows them as one line under its header, in plain words ("Used
+in prompts this week", "Checked by a second model", "Disagree with each other", "tidied 2 h
+ago"), leaving out the zeros; a scope with nothing in it shows only "Nothing remembered yet"
+and Teach a fact. The retrieval eval is a test, so
 its score is not in the numbers; run it with `go test ./internal/memory -run TestRetrievalEval`.
 
 ## In agent sessions
@@ -438,10 +441,10 @@ Code: `internal/agentmem/dream.go` (the job) and `internal/memory/consolidate.go
 
 **Triggers.** A scheduler checks every minute: a scope with 25 new facts since its last
 finished run, a scope with new facts after 03:00 local time that has not run since, and
-any interrupted run. Automatic runs of one scope are at least an hour apart. "Dream now"
+any interrupted run. Automatic runs of one scope are at least an hour apart. "Tidy now"
 (`POST dream`) starts one at once. One dream per scope runs at a time (an in-process lock
-plus a unique index on running rows). A teammate whose *Dream every night* switch is off
-gets no automatic runs, on either trigger; one already running finishes, and Dream now still
+plus a unique index on running rows). A teammate whose *Tidy every night* switch is off
+gets no automatic runs, on either trigger; one already running finishes, and Tidy now still
 works.
 
 **A run** covers the facts created between the end of the last finished run and now (both

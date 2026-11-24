@@ -330,6 +330,19 @@ export function ruleWho({
       : (sandboxName ?? "this computer")
 }
 
+/**
+ * A scope as a choice, worded as ruleWho words it: "Only shop-v7u7lp", "Ada's computers",
+ * "Every computer in Default". Every list of them goes narrowest first.
+ */
+export function scopeChoice(
+  scope: DecisionScope,
+  names: { sandboxName?: string; owner?: string; envName?: string }
+) {
+  const who = ruleWho({ scope, reach: "browser", browser: false, ...names })
+  const label = scope === "sandbox" ? `Only ${who}` : who
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
 /** The label of the allow or deny button for a lifetime, such as "Allow for 1 hour". */
 export function decisionLabel(
   action: "allow" | "deny",
@@ -348,22 +361,24 @@ export function decisionLabel(
   return `Always ${verb.toLowerCase()}`
 }
 
-/** The scope choice of a network decision, as two toggles. */
+/** The scope choice of a network decision: this computer, its teammate's, or every one. */
 export function ScopeToggle({
   value,
   onChange,
   sandboxName,
   owner,
+  envName,
 }: {
   value: DecisionScope
   onChange: (scope: DecisionScope) => void
   sandboxName?: string
   /** The teammate that owns the sandbox, which adds its sandboxes as a scope. */
   owner?: string
+  envName?: string
 }) {
   const scopes: DecisionScope[] = owner
-    ? ["environment", "teammate", "sandbox"]
-    : ["environment", "sandbox"]
+    ? ["sandbox", "teammate", "environment"]
+    : ["sandbox", "environment"]
   return (
     <ToggleGroup
       aria-label="Scope"
@@ -375,31 +390,20 @@ export function ScopeToggle({
       }}
       className="w-full"
     >
-      <ToggleGroupItem
-        value="environment"
-        size="sm"
-        className="min-w-0 flex-1 shrink"
-      >
-        Environment
-      </ToggleGroupItem>
-      {owner && (
-        <ToggleGroupItem
-          value="teammate"
-          size="sm"
-          title={`${owner}'s computers`}
-          className="min-w-0 flex-1 shrink"
-        >
-          <span className="truncate">{owner}&apos;s computers</span>
-        </ToggleGroupItem>
-      )}
-      <ToggleGroupItem
-        value="sandbox"
-        size="sm"
-        title={`Only ${sandboxName ?? "this computer"}`}
-        className="min-w-0 flex-1 shrink"
-      >
-        <span className="truncate">Only {sandboxName ?? "this computer"}</span>
-      </ToggleGroupItem>
+      {scopes.map((s) => {
+        const label = scopeChoice(s, { sandboxName, owner, envName })
+        return (
+          <ToggleGroupItem
+            key={s}
+            value={s}
+            size="sm"
+            title={label}
+            className="min-w-0 flex-1 shrink"
+          >
+            <span className="truncate">{label}</span>
+          </ToggleGroupItem>
+        )
+      })}
     </ToggleGroup>
   )
 }
@@ -765,6 +769,10 @@ export function ApprovalDecision({
                   onChange={setScope}
                   sandboxName={net?.sandboxName}
                   owner={owner?.name}
+                  envName={
+                    envs.data?.find((e) => e.id === approval.environmentId)
+                      ?.name
+                  }
                 />
               </OptionRow>
             </>

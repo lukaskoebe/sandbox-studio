@@ -253,7 +253,7 @@ export function TeammateTasks({
 
       <section className="space-y-3">
         <SectionHeader
-          title="Activity"
+          title="Check-ins and runs"
           icon={HeartbeatIcon}
           area="chat"
           count={beats.data || runs.data ? activity.length : undefined}
@@ -261,8 +261,8 @@ export function TeammateTasks({
         <p className="text-xs text-muted-foreground">
           {teammate?.heartbeat ? (
             <>
-              Check-ins: {heartbeatSentence(teammate.heartbeat)}, when it has
-              open tasks.
+              It checks in {heartbeatSentence(teammate.heartbeat).toLowerCase()}
+              , when it has open tasks.
             </>
           ) : (
             <>

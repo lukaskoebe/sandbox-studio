@@ -199,7 +199,7 @@ export function TeammateKnowledge({
           }
         >
           {dreaming ? <Spinner /> : <MoonStarsIcon />}
-          {dreaming ? "Dreaming…" : "Dream now"}
+          {dreaming ? "Tidying…" : "Tidy now"}
         </Button>
       </div>
       {adding && (
@@ -260,9 +260,9 @@ export function TeammateKnowledge({
             }
           />
           <span>
-            Dream every night
+            Tidy every night
             <span className="block text-caption text-muted-foreground">
-              Tidies its memory after 3:00, and after 25 new facts. Dream now
+              Tidies its memory after 3:00, and after 25 new facts. Tidy now
               works either way.
             </span>
           </span>
@@ -431,7 +431,7 @@ function RuleLine({ env, rule }: { env: string; rule: Rule }) {
   )
 }
 
-/** The Network rules row: the rules scoped to the teammate, and the environment's in a fold. */
+/** The Rules row under Network: the rules scoped to the teammate, and the environment's in a fold. */
 export function TeammateRules({ env, id }: { env: string; id: string }) {
   const r = useTeammateRules(env, id)
   return (

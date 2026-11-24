@@ -354,7 +354,7 @@ switch and delete) and under the teammate's **browser logins** in Settings → S
 The browser is one window, on the **Browser** tab of the teammate's computer screen, beside
 its conversation ([design](design/teammate-computer.md)); **Watch** on the browsing card of the
 teammate's home opens that tab. The tab stays while the computer is off, since the browser has
-a VM of its own. The toolbar's clock shows **Activity** and **Sites** beside the window, or over
+a VM of its own. The toolbar's clock shows **Steps** and **Sites** beside the window, or over
 it while the screen is narrower than 46rem; picking a step to replay there closes them, so the
 replay shows. Switching to another tab hides the viewer without stopping the browser or handing
 control back.
@@ -781,7 +781,7 @@ on the frame:
   `<data>/browser/`.
 - **Bounds.** The log keeps 500 actions per teammate and 200 MiB of screenshots overall,
   dropping the oldest first.
-- **Replay.** The Browser tab's **Activity** groups the log by session (one session per VM
+- **Replay.** The Browser tab's **Steps** groups the log by session (one session per VM
   start, and one per throwaway session), newest first, with a picture of each step that
   changed the page. Clicking a step shows the page as it was after it, in the window, with
   previous and next steps and **Back to live**. The home's browsing card shows the latest

@@ -23,18 +23,12 @@ export const harnessLabels: Record<Harness, string> = {
   codex: "Codex",
 }
 
-/** The scopes a teammate's approval cards can start with, in the order the form offers them. */
+/** The scopes a teammate's approval cards can start with, narrowest first as the cards list them. */
 export const approvalScopes: Teammate["approvalScope"][] = [
   "sandbox",
   "teammate",
   "environment",
 ]
-
-export const approvalScopeLabels: Record<Teammate["approvalScope"], string> = {
-  sandbox: "This computer",
-  teammate: "This teammate",
-  environment: "The environment",
-}
 
 /** Whether a kind is a subscription login rather than an API key. */
 export function isSubscription(kind: ProviderKind) {

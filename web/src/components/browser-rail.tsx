@@ -124,12 +124,12 @@ export function BrowserRail({
     >
       <div
         role="tablist"
-        aria-label="Browser activity and sites"
+        aria-label="Browser steps and sites"
         className="flex shrink-0 items-center gap-4 border-b pr-1 pl-4 text-xs"
       >
         {(
           [
-            ["activity", "Activity"],
+            ["activity", "Steps"],
             ["sites", "Sites"],
           ] as const
         ).map(([id, label]) => (

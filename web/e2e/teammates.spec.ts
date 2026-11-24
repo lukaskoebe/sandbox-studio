@@ -586,9 +586,9 @@ test("a teammate's settings show what it knows and works on, its own rules, and 
   await expect(page.getByRole("button", { name: /^Tasks/ })).toContainText(
     "1 open"
   )
-  await expect(
-    page.getByRole("button", { name: /^Network rules/ })
-  ).toContainText(/1 its own · \d+ from the environment/)
+  await expect(page.getByRole("button", { name: /^Rules/ })).toContainText(
+    /1 its own · \d+ from the environment/
+  )
 
   await memoryRow.click()
   const memory = page.locator("#teammate-memory-panel")
@@ -602,7 +602,7 @@ test("a teammate's settings show what it knows and works on, its own rules, and 
 
   await memory.getByRole("checkbox", { name: /Learn from its chats/ }).click()
   await expect.poll(async () => (await teammate())!.memoryLearn).toBe(false)
-  await memory.getByRole("checkbox", { name: /Dream every night/ }).click()
+  await memory.getByRole("checkbox", { name: /Tidy every night/ }).click()
   await expect.poll(async () => (await teammate())!.memoryDream).toBe(false)
   await expect(
     memory.getByRole("checkbox", { name: /Learn from its chats/ })
@@ -616,7 +616,7 @@ test("a teammate's settings show what it knows and works on, its own rules, and 
   await expect(page).toHaveURL(/open=memory/)
   await expect(page.locator("#teammate-memory-panel")).toBeVisible()
 
-  await page.getByRole("button", { name: /^Network rules/ }).click()
+  await page.getByRole("button", { name: /^Rules/ }).click()
   const rules = page.locator("#teammate-rules-panel")
   await rules.getByRole("link", { name: new RegExp(host) }).click()
   // The rule opens on the Network page, which then drops ?rule= from the URL.

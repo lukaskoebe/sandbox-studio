@@ -33,7 +33,7 @@ Every port the computer listens on is available, and a server started later is t
 
 The browser is one window that looks like any browser: tabs, Back, Forward, Reload, an address bar and Downloads. It is on the teammate's page:
 
-- the **Browser** button of each computer on the teammate's desk, which opens its screen on the browser, with **Activity** and **Sites** from the clock in its toolbar; the browser stays there while the computer is off;
+- the **Browser** button of each computer on the teammate's desk, which opens its screen on the browser, with **Steps** and **Sites** from the clock in its toolbar; the browser stays there while the computer is off;
 - **Watch** on the browsing card in **Now** while the teammate browses;
 - ⌘K, *Iris's browser*.
 
@@ -47,7 +47,7 @@ To point the teammate at something on the page, right-click it to pin a note the
 
 When the teammate has something to show you, such as the login page it just built, it opens the page and you get a card on Home and over the other pages with the page's full address and what to look at. **Watch** opens the browser, **Take the wheel** opens it with you driving, and **Ignore** clears the card. The page opens like any other the teammate opens, through the browser's network rules, so a host no rule or level allows still asks you first.
 
-The shield in the address bar shows what the teammate may do on the site: **Ask first**, **Allowed** or **Blocked** for clicks and typing, and which fields are hidden from it. **Sites** lists every site with a rule or a visit, and **Add a rule or hide a field** covers single actions and fields. **Activity** lists every step by session; click one to see the page as it was after it.
+The shield in the address bar shows what the teammate may do on the site: **Ask first**, **Allowed** or **Blocked** for clicks and typing, and which fields are hidden from it. **Sites** lists every site with a rule or a visit, and **Add a rule or hide a field** covers single actions and fields. **Steps** lists every step by session; click one to see the page as it was after it.
 
 The page size button beside the address bar shows the page as a phone, tablet, laptop or desktop would, or fits it to the browser window so it shows at full size:
 

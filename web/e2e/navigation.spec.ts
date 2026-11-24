@@ -57,9 +57,16 @@ test("the sidebar opens a teammate, whose settings open its tasks and memory", a
   await settings.getByRole("button", { name: `Open ${name}'s memory` }).click()
   await expect(page).toHaveURL(/[?&]profile=memory/)
   const memory = page.getByRole("dialog", { name: `What ${name} remembers` })
+  // Nothing remembered yet: one way to start, and no index or numbers.
+  await expect(
+    memory.getByRole("region", { name: "Nothing remembered yet" })
+  ).toContainText(`${name} notes facts as it works`)
+  await expect(
+    memory.getByRole("button", { name: "Teach a fact" })
+  ).toBeVisible()
   await expect(
     memory.getByRole("navigation", { name: "Memory index" })
-  ).toBeVisible()
+  ).toHaveCount(0)
   await memory
     .getByRole("button", { name: `Back to ${name}'s settings` })
     .click()

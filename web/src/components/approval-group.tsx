@@ -123,6 +123,7 @@ export function NetworkGroupBody({
               onChange={setScope}
               sandboxName={approvalSource(first)}
               owner={owner?.name}
+              envName={envName}
             />
           )}
           <LifetimeToggle

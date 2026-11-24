@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -9,6 +10,7 @@ import {
   SparkleIcon,
   type Icon,
 } from "@phosphor-icons/react"
+import { scopeChoice } from "@/components/approval-decision"
 import { DisclosureRow } from "@/components/disclosure-row"
 import { useSavePart } from "@/components/auto-save"
 import { SectionHeader } from "@/components/section-header"
@@ -46,7 +48,6 @@ import {
 import type { Area } from "@/lib/accents"
 import { useProviderModels } from "@/lib/provider-models"
 import {
-  approvalScopeLabels,
   approvalScopes,
   harnessLabels,
   isSubscription,
@@ -108,6 +109,7 @@ export function TeammateForm({
   providers,
   onSaved,
   sections,
+  approvalsIn,
 }: {
   env: string
   /** The teammate to edit; absent for a new one. */
@@ -120,6 +122,11 @@ export function TeammateForm({
    * the sections follow each other with one Save.
    */
   sections?: { open?: string; onOpen: (id: string | undefined) => void }
+  /**
+   * Where the approvals row goes instead of after Commits as, such as the settings' Network
+   * group; null until that place is in the page.
+   */
+  approvalsIn?: HTMLElement | null
 }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(teammate?.name ?? "")
@@ -159,6 +166,16 @@ export function TeammateForm({
     teammate?.approvalScope ?? "environment"
   )
   const [formError, setFormError] = useState<string>()
+  const envName = $api
+    .useQuery("get", "/api/environments")
+    .data?.find((e) => e.id === env)?.name
+  // The scopes as a request's Options word them, for any computer of this teammate.
+  const covers = (s: Teammate["approvalScope"]) =>
+    scopeChoice(s, {
+      sandboxName: "the computer that asked",
+      owner: name.trim() || "the teammate",
+      envName,
+    })
 
   const soulBytes = new TextEncoder().encode(soul).length
   const needsModel =
@@ -271,7 +288,7 @@ export function TeammateForm({
       useHostGit && hostGitSet
         ? `${hostGit.name} <${hostGit.email}>, yours`
         : `${gitName.trim() || name.trim()} <${gitEmail.trim() || `${slug(name) || "name"}@agents.invalid`}>`,
-    approvals: `New rules apply to ${approvalScopeLabels[approvalScope].toLowerCase()}`,
+    approvals: covers(approvalScope),
     soul: soulLine ?? "None",
   }
   const saveRow = inBar ? (
@@ -286,6 +303,42 @@ export function TeammateForm({
         </Button>
       </div>
     </>
+  )
+
+  const approvals = (
+    <FormSection
+      id="approvals"
+      summary={summaries.approvals}
+      title="New rules cover"
+      icon={ShieldCheckIcon}
+      area="network"
+    >
+      <div
+        role="radiogroup"
+        aria-label="New rules cover"
+        className="grid gap-1.5"
+      >
+        {approvalScopes.map((s) => (
+          <label
+            key={s}
+            className="flex cursor-pointer items-center gap-2 rounded-(--radius) border px-3 py-2 text-xs has-checked:border-primary has-checked:bg-primary/5 has-focus-visible:ring-2 has-focus-visible:ring-ring/30"
+          >
+            <input
+              type="radio"
+              name="teammate-approval-scope"
+              className="sr-only"
+              checked={approvalScope === s}
+              onChange={() => setApprovalScope(s)}
+            />
+            {covers(s)}
+          </label>
+        ))}
+      </div>
+      <FieldDescription>
+        When one of its computers asks to reach a host, the request starts with
+        this choice for the rule it makes, and you can pick another on it.
+      </FieldDescription>
+    </FormSection>
   )
 
   return (
@@ -496,37 +549,9 @@ export function TeammateForm({
             </Field>
           </div>
         </FormSection>
-        <FormSection
-          id="approvals"
-          summary={summaries.approvals}
-          title="Approvals"
-          icon={ShieldCheckIcon}
-          area="network"
-        >
-          <Field>
-            <FieldLabel>New rules from approvals apply to</FieldLabel>
-            <ToggleGroup
-              aria-label="New rules from approvals apply to"
-              variant="outline"
-              value={[approvalScope]}
-              onValueChange={(v) => {
-                const next = approvalScopes.find((s) => s === v[0])
-                if (next) setApprovalScope(next)
-              }}
-              className="w-full"
-            >
-              {approvalScopes.map((s) => (
-                <ToggleGroupItem key={s} value={s} className="flex-1">
-                  {approvalScopeLabels[s]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            <FieldDescription>
-              Preselected on the approval cards for this teammate's computers.
-              The card still lets you pick another scope.
-            </FieldDescription>
-          </Field>
-        </FormSection>
+        {approvalsIn === undefined
+          ? approvals
+          : approvalsIn && createPortal(approvals, approvalsIn)}
         <FormSection
           id="soul"
           summary={summaries.soul}

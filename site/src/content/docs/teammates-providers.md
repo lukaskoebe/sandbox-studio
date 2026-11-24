@@ -28,9 +28,10 @@ Open one of its computers and it shows beside the desk, with its terminal, its b
 
 Choose the caret beside the teammate's name in the bar at the top, then **Settings**, or search for *Iris's settings* with ⌘K. The settings are a list of rows, each saying what it is set to and opening to edit it:
 
-- **Profile**: Identity, Model (the provider, agent and models), Commits as, Approvals and Instructions.
-- **Knowledge**: [Memory](../memory/), with **Learn from its chats** and **Dream every night**, and Tasks.
-- **Routine and access**: Check-ins, New hosts (its [network level](../network/#security-levels)), Network rules, [Browser](../browser/), Secrets, and Copy to another environment.
+- **Profile**: Identity, Model (the provider, agent and models), Commits as, and Instructions.
+- **Knowledge**: [Memory](../memory/), with **Learn from its chats** and **Tidy every night**, and Tasks.
+- **Network**: New hosts (its [network level](../network/#security-levels)), **New rules cover** (whether a rule made on one of its requests starts with only the computer that asked, all its computers, or every computer in the environment), and Rules.
+- **Routine and access**: Check-ins, [Browser](../browser/), Secrets, and Copy to another environment.
 
 Changes save as you make them: a field saves once you pause typing, and when you close the settings. A change that can't be saved yet, such as an empty name, says so, and closing asks first. **Delete Iris** is at the bottom. **← Iris** above the title, Esc, or the browser's back button returns to where you opened the settings from, such as a thread. ⌘K also finds each row by what it holds, such as *stealth*, *soul* or *check-ins*.
 
@@ -96,9 +97,9 @@ The teammate's tasks, under **Tasks** in its settings (or ⌘K, *Iris's tasks*),
 
 Check-ins are off until you turn them on in the teammate's settings. With check-ins on, Studio gives the teammate a chat turn every few hours, during the hours you pick, whenever it has open tasks. The turn runs on the teammate's most recent computer, and its thread is marked **Check-in**. If that computer is stopped, Studio starts it for the check-in, and it keeps running afterwards.
 
-A check-in that can't run is listed under **Activity** in the teammate's tasks with the reason: the teammate has no computer, its provider has no key, approvals are waiting on its computer, or its computer isn't ready.
+A check-in that can't run is listed under **Check-ins and runs** in the teammate's tasks with the reason: the teammate has no computer, its provider has no key, approvals are waiting on its computer, or its computer isn't ready.
 
-A task can also get a schedule of its own in its dialog: once at a day and time, on some weekdays at a time, or every few hours inside a window. At each time Studio starts a new chat for that task on the teammate's latest computer, or the one you pick, and the chat list marks it as scheduled. If the teammate is busy then, the run waits up to 30 minutes. Each run starts with a clean chat, so the teammate keeps what the next run should know in the task's notes. Check-ins leave scheduled tasks to their own runs. The task list shows each schedule and its next run, and **Run now** starts a run at once. Runs, including the skipped and missed ones, are listed under **Activity**. Only you set schedules; the teammate can't.
+A task can also get a schedule of its own in its dialog: once at a day and time, on some weekdays at a time, or every few hours inside a window. At each time Studio starts a new chat for that task on the teammate's latest computer, or the one you pick, and the chat list marks it as scheduled. If the teammate is busy then, the run waits up to 30 minutes. Each run starts with a clean chat, so the teammate keeps what the next run should know in the task's notes. Check-ins leave scheduled tasks to their own runs. The task list shows each schedule and its next run, and **Run now** starts a run at once. Runs, including the skipped and missed ones, are listed under **Check-ins and runs**. Only you set schedules; the teammate can't.
 
 ## Ownership and deletion
 

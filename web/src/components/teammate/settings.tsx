@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -94,6 +94,9 @@ export function TeammateSettings({
     onOpenChange: (on: boolean) => setOpen(on ? section : undefined),
   })
 
+  // The Network group's place for the form's approvals row, which the form's state keeps.
+  const [approvalsIn, setApprovalsIn] = useState<HTMLElement | null>(null)
+
   const teammate = teammates.data?.find((p) => p.id === id)
   if (!teammate || !providers.data) return null
 
@@ -111,6 +114,7 @@ export function TeammateSettings({
             // The settings say Saved themselves.
             onSaved={() => undefined}
             sections={{ open, onOpen: setOpen }}
+            approvalsIn={approvalsIn}
           />
         </DisclosureGroup>
         <DisclosureGroup title="Knowledge">
@@ -143,17 +147,7 @@ export function TeammateSettings({
             />
           </DisclosureRow>
         </DisclosureGroup>
-        <DisclosureGroup title="Routine and access">
-          <DisclosureRow
-            {...row(
-              "checkins",
-              ClockIcon,
-              "Check-ins",
-              teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
-            )}
-          >
-            <TeammateHeartbeat env={env} teammate={teammate} />
-          </DisclosureRow>
+        <DisclosureGroup title="Network">
           <DisclosureRow
             {...row(
               "network",
@@ -168,15 +162,28 @@ export function TeammateSettings({
             </p>
             <TeammateLevelPicker env={env} teammate={teammate} />
           </DisclosureRow>
+          <div ref={setApprovalsIn} className="contents" />
           <DisclosureRow
             {...row(
               "rules",
               ListChecksIcon,
-              "Network rules",
+              "Rules",
               <RulesSummary env={env} id={id} />
             )}
           >
             <TeammateRules env={env} id={id} />
+          </DisclosureRow>
+        </DisclosureGroup>
+        <DisclosureGroup title="Routine and access">
+          <DisclosureRow
+            {...row(
+              "checkins",
+              ClockIcon,
+              "Check-ins",
+              teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
+            )}
+          >
+            <TeammateHeartbeat env={env} teammate={teammate} />
           </DisclosureRow>
           <DisclosureRow
             {...row(

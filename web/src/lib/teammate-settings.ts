@@ -26,11 +26,6 @@ export const teammateSettings: {
         keywords: "git identity author email signing",
       },
       {
-        id: "approvals",
-        label: "Approvals",
-        keywords: "ask permissions tools",
-      },
-      {
         id: "soul",
         label: "Instructions",
         keywords: "soul prompt personality",
@@ -45,6 +40,18 @@ export const teammateSettings: {
     ],
   },
   {
+    title: "Network",
+    rows: [
+      { id: "network", label: "New hosts", keywords: "network level security" },
+      {
+        id: "approvals",
+        label: "New rules cover",
+        keywords: "approvals scope ask permissions",
+      },
+      { id: "rules", label: "Rules", keywords: "network allow deny hosts" },
+    ],
+  },
+  {
     title: "Routine and access",
     rows: [
       {
@@ -52,8 +59,6 @@ export const teammateSettings: {
         label: "Check-ins",
         keywords: "heartbeat schedule routine",
       },
-      { id: "network", label: "New hosts", keywords: "network level security" },
-      { id: "rules", label: "Network rules", keywords: "allow deny hosts" },
       { id: "browser", label: "Browser", keywords: "stealth" },
       { id: "secrets", label: "Secrets", keywords: "keys tokens credentials" },
       {

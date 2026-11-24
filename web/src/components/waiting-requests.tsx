@@ -15,7 +15,7 @@ import { Ident } from "@/components/ident"
 import { StatusDot } from "@/components/status-dot"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import type { Approval, Sandbox } from "@/lib/api/client"
+import { $api, type Approval, type Sandbox } from "@/lib/api/client"
 import { heldFor, useHoldClock } from "@/lib/connection-holds"
 import { hostPort } from "@/lib/utils"
 import { left as leftTime } from "@/lib/time"
@@ -103,10 +103,10 @@ function optionsSummary(
 ) {
   const who =
     scope === "environment"
-      ? "this environment"
+      ? "every computer"
       : scope === "teammate"
         ? `${owner ?? "the teammate"}'s computers`
-        : "this computer"
+        : "only this computer"
   const how =
     lifetime === "hour" ? "1 hour" : lifetime === "once" ? "once" : "always"
   return `Options: ${who}, ${how}`
@@ -131,6 +131,9 @@ export function WaitingRequests({
   const [optionsOpen, setOptionsOpen] = useState(false)
   const { working, answer } = useAnswerConnections()
   const now = useHoldClock(approvals)
+  const envName = $api
+    .useQuery("get", "/api/environments")
+    .data?.find((e) => e.id === sandbox.environmentId)?.name
   if (approvals.length === 0) return null
 
   const held = approvals.filter((a) => heldFor(a, now) !== undefined)
@@ -178,6 +181,7 @@ export function WaitingRequests({
             onChange={setScope}
             sandboxName={sandbox.name}
             owner={owner?.name}
+            envName={envName}
           />
           <LifetimeToggle
             value={held.length > 0 ? lifetime : later}

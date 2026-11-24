@@ -560,7 +560,7 @@ export function DreamPanel({ env, scope }: { env: string; scope: string }) {
           }
         >
           {start.isPending || running ? <Spinner /> : <MoonStarsIcon />}
-          Dream now
+          Tidy now
         </Button>
         <span className="text-muted-foreground">
           Merges duplicates, retires outdated facts and finds contradictions.

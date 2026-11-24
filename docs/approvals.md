@@ -61,6 +61,9 @@ and the scope of the rule. Without an owner the scopes are the environment and t
 sandbox. For a sandbox a teammate owns, the card also offers the teammate's sandboxes, and
 starts with the scope the teammate sets (`approvalScope`, [teammates](teammates.md)). The
 response's `teammate` field carries the owner and that scope; the user can still pick another.
+The scopes are listed narrowest first and worded as rules word who they cover ("Only
+shop-v7u7lp", "Ada's computers", "Every computer in Default"; `scopeChoice` in
+`components/approval-decision.tsx`).
 
 A card for port 22 of a forge's host (`github.com`, `gitlab.com`, `codeberg.org`,
 `bitbucket.org`, or the host of a forge in Studio) is git over SSH. It says so and points to

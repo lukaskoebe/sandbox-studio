@@ -7,7 +7,7 @@ Memory is scoped to an environment. Each teammate has its own memory, and teamma
 
 Studio can recall relevant notes when a supported agent session starts or when you send a prompt. After a session, Studio extracts lasting facts from the conversation and keeps a short summary of it, so the teammate's next session knows what it did last and on which computer. Chats are read a few minutes after their last turn; terminal sessions send their conversation through harness hooks. Memory capture is best-effort; it does not block the agent session.
 
-![The Memory page: Quality numbers above the index of pages and facts, beside an open project page](../../assets/screenshots/memory.jpg)
+![The Memory page: its numbers above the index of pages and facts, beside an open project page](../../assets/screenshots/memory.jpg)
 
 ## Review memory in Studio
 
@@ -16,18 +16,18 @@ Open **Memory** under **Environment** in the sidebar for shared memory, which ev
 - **To review**: conflicts to resolve, suggestions to accept or dismiss, and loose ends: pages that are linked but don't exist yet, pages nothing links to, and topics with several facts but no page. **Create page** starts the missing page.
 - **This week**: pages updated and facts learned.
 - **Sessions**: what memory gave each agent session and what it learned.
-- **Pages**, by kind, and **Facts on no page**, by kind. A pin marks a core page, which loads into every session. Click a page to open it; the **⋯** on a row edits, promotes, retracts or deletes, and a page's **⋯** makes it a core page or stops loading it everywhere.
+- **Pages**, by kind, and **Facts on no page**, by kind. A pin and **always in prompts** mark a core page, which loads into every session. Click a page to open it; the **⋯** on a row edits, promotes, retracts or deletes, and a page's **⋯** makes it a core page or stops loading it everywhere.
 
-Type in the search box (or press `/`) to filter the index; press Enter to search memory the way an agent does, with the reason for each hit. **Dream now** consolidates the memory right away; the **⋯** menu next to it has Export, Import, **Dream history**, **Extraction cost** and **How memory works**.
+Type in the search box (or press `/`) to filter the index; press Enter to search memory the way an agent does, with the reason for each hit. **Tidy now** consolidates the memory right away; the **⋯** menu next to it has Export, Import, **Tidy history**, **Extraction cost** and **How memory works**. While nothing is remembered yet, the page has only **Teach a fact**.
 
-Under **Knowledge → Memory** in a teammate's settings, **Learn from its chats** turns extraction from its sessions on or off, and **Dream every night** tidies its memory after 3:00 and after 25 new facts. **Add a fact** and **Dream now** are there too, and **Teach** in the box on its desk adds a fact without a thread.
+Under **Knowledge → Memory** in a teammate's settings, **Learn from its chats** turns extraction from its sessions on or off, and **Tidy every night** tidies its memory after 3:00 and after 25 new facts. **Add a fact** and **Tidy now** are there too, and **Teach** in the box on its desk adds a fact without a thread.
 
 - Teammate facts and pages are visible in that teammate's scope.
 - A teammate can propose a fact for shared memory. The proposal waits on Home under **Needs you**; it becomes shared only after you approve it.
 - If facts disagree, Studio records a conflict for you to resolve, on Home and with **Resolve…** under **To review**. Ignoring its card does not resolve the conflict.
 - A fact can hold only in a **Context**, such as one project. Search then finds it only for questions that name that context.
 - **Suggestions** list what Studio's consolidation proposes but never applies on its own: **Promote** proposes a teammate fact that keeps coming back for shared memory, and **Make core** makes a page that sessions often need a core page. **Dismiss** drops a suggestion for good.
-- The **Memory** page shows **Quality** numbers: facts by status, conflicts, open suggestions, the last consolidation, and what the last week's sessions recalled and wrote.
+- Under its header, the **Memory** page shows its numbers in one line, leaving out those that are zero: what was used in prompts this week, how many facts a second model checked, which disagree with each other, open suggestions, and when it was last tidied.
 - A page can link another with `[[slug]]`, such as `[[project/webshop]]` or `[[topic/deploys|the deploy steps]]`. An open page shows its links, the pages and facts that link to it (**Linked from**), and its timeline. A link to a page that doesn't exist yet reads "(no page yet)"; click it to create the page.
 - **Export** downloads a scope's pages and facts as one Markdown file, and **Import** reads such a file back into the same scope. Pages and facts the scope already has are skipped.
 
