@@ -12,6 +12,7 @@ export function ColumnPage({
   intro,
   narrow,
   titleHidden,
+  back,
   children,
 }: {
   title: string
@@ -25,12 +26,15 @@ export function ColumnPage({
   intro?: ReactNode
   /** A column for reading rather than for tables. */
   narrow?: boolean
+  /** A way back above the title, such as "← Lead". */
+  back?: ReactNode
   children: ReactNode
 }) {
   const column = cn("mx-auto w-full", narrow ? "max-w-3xl" : "max-w-4xl")
   return (
     <>
       <header data-slot="page-header" className="shrink-0 px-4 md:px-6">
+        {back && <div className={cn(column, "pt-4")}>{back}</div>}
         <div className={cn(column, "flex h-14 items-center gap-2")}>
           <h1 className={titleHidden ? "sr-only" : "text-sm"}>{title}</h1>
           {titleHidden && intro && (

@@ -2,7 +2,6 @@ import { useState } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { CaretLeftIcon } from "@phosphor-icons/react"
 import { ColumnPage } from "@/components/column-page"
 import { SettingsGroup } from "@/components/setting-row"
 import {
@@ -30,6 +29,7 @@ import {
   type OrderInput,
 } from "@/lib/lead"
 import { DaysPicker, TimeInput, zoneName } from "./settings-page"
+import { LeadBack } from "./back"
 
 const maxOrders = 20
 
@@ -60,16 +60,7 @@ export function LeadOrdersPage({ env, text }: { env: string; text?: string }) {
     <ColumnPage
       title="Standing orders"
       narrow
-      actions={
-        <Button
-          size="sm"
-          variant="ghost"
-          render={<Link to="/e/$env/lead" params={{ env }} />}
-        >
-          <CaretLeftIcon />
-          Back to the day
-        </Button>
-      }
+      back={<LeadBack env={env} />}
       intro={
         <p>
           What {name} should do at a set time, such as each morning. When an

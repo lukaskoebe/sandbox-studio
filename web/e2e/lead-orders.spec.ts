@@ -221,10 +221,10 @@ test("a standing order drafts its plan on Run now, waits for approval, and can b
   const words = `Ask ${name} whether the ${tag} tests still pass`
 
   await page.goto(`/e/${env}/lead`)
-  const sidebar = page.locator("[data-sidebar=sidebar]")
-  await sidebar.getByRole("link", { name: "Standing orders" }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/orders$`))
   const crumbs = page.getByRole("navigation", { name: "Where you are" })
+  await crumbs.getByRole("button", { name: "Lead's pages: Lead" }).click()
+  await page.getByRole("menuitem", { name: "Standing orders" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/orders$`))
   await expect(crumbs.getByRole("listitem")).toHaveText([
     "Lead",
     "Standing orders",

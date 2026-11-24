@@ -7,7 +7,7 @@ import {
   CaretLeftIcon,
   CaretRightIcon,
   CopyIcon,
-  GearIcon,
+  MoonIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
 import { TeammateAvatar } from "@/components/teammate-avatar"
@@ -53,11 +53,12 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
   const name = lead.data?.settings.name ?? "Lead"
   const isToday = !!lead.data && day === leadToday(lead.data)
   useLeadSeen(env, isToday)
+  const quiet = !!v && quietDay(v)
 
   return (
     <>
       <header data-slot="page-header" className="shrink-0 px-4 md:px-6">
-        <div className="mx-auto flex min-h-14 w-full max-w-5xl flex-wrap items-center gap-x-2 gap-y-1 py-2">
+        <div className="mx-auto flex min-h-14 w-full max-w-3xl flex-wrap items-center gap-x-2 gap-y-1 py-2">
           <LeadGlyph className="size-5" />
           <h1 className="min-w-0 flex-1 basis-40 text-sm font-medium text-balance">
             {dayName(day)}
@@ -70,17 +71,11 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
           </h1>
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <DayArrows env={env} prev={v?.prev} next={v?.next} />
-            {v && <CopyButton markdown={v.markdown} />}
-            <SummarizeButton env={env} writing={!!lead.data?.writing} />
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`${name}'s settings`}
-              title={`${name}'s settings`}
-              render={<Link to="/e/$env/lead/settings" params={{ env }} />}
-            >
-              <GearIcon />
-            </Button>
+            {/* Nothing to copy or summarize until someone had a turn. */}
+            {v && !quiet && <CopyButton markdown={v.markdown} />}
+            {v && !quiet && (
+              <SummarizeButton env={env} writing={!!lead.data?.writing} />
+            )}
           </div>
         </div>
       </header>
@@ -88,7 +83,7 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
         className="min-h-0 flex-1"
         viewportClassName="px-4 pb-12 md:px-6"
       >
-        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 content-start gap-5">
+        <div className="mx-auto grid w-full max-w-3xl grid-cols-1 content-start gap-5">
           {page.isPending ? (
             <p className="flex items-center gap-2 text-muted-foreground">
               <Spinner /> Reading the day…
@@ -107,6 +102,7 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
                 lead={name}
                 today={leadToday(lead.data)}
                 showCosts={lead.data?.settings.showCosts ?? true}
+                schedule={lead.data?.settings}
               />
             )
           )}
@@ -125,12 +121,49 @@ export function LeadDayPage({ env, day }: { env: string; day: string }) {
   )
 }
 
+/** A day nobody had a turn on, with nothing pushed and nothing in the way. */
+function quietDay(v: LeadDay) {
+  const f = v.facts
+  return (
+    (f.teammates?.length ?? 0) === 0 &&
+    (f.pushes?.length ?? 0) === 0 &&
+    (f.blockers?.length ?? 0) === 0 &&
+    !v.prose
+  )
+}
+
+const weekdays = [
+  "Mondays",
+  "Tuesdays",
+  "Wednesdays",
+  "Thursdays",
+  "Fridays",
+  "Saturdays",
+  "Sundays",
+]
+
+/** When Lead writes a day like this one, as the quiet day says it. */
+function writesWhen(
+  day: string,
+  lead: string,
+  schedule?: { days: number; writeAt: number }
+) {
+  if (!schedule) return ""
+  // The settings count Monday as bit 0.
+  const i = (new Date(`${day}T12:00:00`).getDay() + 6) % 7
+  if (!(schedule.days & (1 << i)))
+    return `${lead} doesn't write the day on ${weekdays[i]}. `
+  const at = `${String(Math.floor(schedule.writeAt / 60)).padStart(2, "0")}:${String(schedule.writeAt % 60).padStart(2, "0")}`
+  return `${lead} writes it at ${at}. `
+}
+
 function Day({
   env,
   v,
   lead,
   today,
   showCosts,
+  schedule,
 }: {
   env: string
   v: LeadDay
@@ -138,6 +171,7 @@ function Day({
   /** Studio's today. */
   today: string
   showCosts: boolean
+  schedule?: { days: number; writeAt: number }
 }) {
   const f = v.facts
   const refs = refTargets(f)
@@ -157,6 +191,21 @@ function Day({
   const merged = pushes.filter((p) => p.prUrl).length
   // What the agents reported, and what Lead's own calls cost; settings can hide both.
   const costs = f.costed || v.leadCost > 0
+  // A quiet day says so once: no zero tiles, no empty lists.
+  if (quietDay(v) && waiting === 0)
+    return (
+      <div className="grid justify-items-start gap-1.5 rounded-(--radius) border border-dashed px-4 py-5">
+        <p className="flex items-center gap-2 text-sm font-medium">
+          <MoonIcon className="size-4 text-muted-foreground" />
+          {isToday ? "Quiet so far" : "A quiet day"}
+        </p>
+        <p className="text-xs/relaxed text-muted-foreground">
+          {isToday
+            ? `${writesWhen(v.day, lead, schedule)}Summarize now works once someone has had a turn.`
+            : "Nobody had a turn on this day."}
+        </p>
+      </div>
+    )
   return (
     <>
       <p className="text-caption text-muted-foreground">
@@ -217,7 +266,7 @@ function Day({
           }
         />
       </dl>
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-1 items-start gap-5">
         <div className="grid min-w-0 gap-5">
           {isToday ? (
             <WaitingNow env={env} />

@@ -1,11 +1,9 @@
 import { useState } from "react"
-import { Link } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   BellIcon,
   CalendarIcon,
-  CaretLeftIcon,
   ClockIcon,
   CurrencyDollarIcon,
   ChatTextIcon,
@@ -39,6 +37,7 @@ import {
   type LeadSettings,
   type LeadView,
 } from "@/lib/lead"
+import { LeadBack } from "./back"
 
 const notifyChoices: Record<LeadSettings["notify"], string> = {
   waiting: "Only if something needs you",
@@ -66,16 +65,7 @@ export function LeadSettingsPage({ env }: { env: string }) {
     <ColumnPage
       title={v ? `${v.settings.name}'s settings` : "Lead's settings"}
       narrow
-      actions={
-        <Button
-          size="sm"
-          variant="ghost"
-          render={<Link to="/e/$env/lead" params={{ env }} />}
-        >
-          <CaretLeftIcon />
-          Back to the day
-        </Button>
-      }
+      back={<LeadBack env={env} />}
     >
       {lead.isPending ? (
         <p className="flex items-center gap-2 text-muted-foreground">

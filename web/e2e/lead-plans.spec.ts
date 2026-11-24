@@ -49,13 +49,15 @@ test("Lead's plan waits for approval, then sends its message in the teammate's t
   // The fake agent asks a permission before its turn ends; answering it ends the turn.
   await turnEnded(api, env, chat.id)
 
-  // New plan from under Lead in the sidebar.
+  // A plan starts from the day's box, in its Plan mode.
   await page.goto(`/e/${env}/lead`)
   const sidebar = page.locator("[data-sidebar=sidebar]")
-  await sidebar.getByRole("link", { name: "New plan" }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/plans/new$`))
   const crumbs = page.getByRole("navigation", { name: "Where you are" })
-  await expect(crumbs.getByRole("listitem")).toHaveText(["Lead", "New plan"])
+  await page
+    .getByRole("form", { name: "Ask Lead" })
+    .getByRole("group", { name: "Mode" })
+    .getByRole("button", { name: "Plan" })
+    .click()
   const ask = page.getByRole("textbox", { name: "Ask Lead for a plan" })
   const words = `Ask ${name} whether the coupon tests pass`
   await ask.fill(words)

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { Link } from "@tanstack/react-router"
+import { useNavigate } from "@tanstack/react-router"
+import { ChatCircleIcon, ListChecksIcon } from "@phosphor-icons/react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -7,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { clock, dollars, refTargets, type LeadAsk } from "@/lib/lead"
+import { cn } from "@/lib/utils"
 import { LeadGlyph } from "./glyph"
 import { Prose } from "./prose"
 
@@ -90,9 +92,17 @@ function Ask({ env, a, name }: { env: string; a: LeadAsk; name: string }) {
   )
 }
 
+/** What the one box under a day does: ask about it, or ask for a plan to send messages. */
+type ComposerMode = "ask" | "plan"
+
+const composerModes = {
+  ask: { label: "Ask", icon: ChatCircleIcon },
+  plan: { label: "Plan", icon: ListChecksIcon },
+} as const
+
 /**
- * The box under a day to ask Lead about it. One question at a time: it waits while Lead
- * answers.
+ * The box under a day. Ask answers from the day's records, one question at a time; Plan asks
+ * Lead to draft messages to teammates, which wait for the user's approval on the plan's page.
  */
 export function AskComposer({
   env,
@@ -107,7 +117,9 @@ export function AskComposer({
   about: string
 }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [text, setText] = useState("")
+  const [mode, setMode] = useState<ComposerMode>("ask")
   const asks = useAsks(env, day)
   const answering = (asks.data ?? []).some((a) => a.state === "answering")
   const ask = $api.useMutation(
@@ -126,11 +138,30 @@ export function AskComposer({
         }),
     }
   )
-  const busy = ask.isPending || answering
+  const plan = $api.useMutation("post", "/api/environments/{env}/lead/plans", {
+    onSuccess: (p) => {
+      setText("")
+      void queryClient.invalidateQueries({
+        queryKey: ["get", "/api/environments/{env}/lead/plans"],
+      })
+      void navigate({
+        to: "/e/$env/lead/plans/$plan",
+        params: { env, plan: p.id },
+      })
+    },
+    onError: (err) =>
+      toast.error(`Could not ask ${name} for a plan`, {
+        description: errorMessage(err),
+      }),
+  })
+  const busy = mode === "plan" ? plan.isPending : ask.isPending || answering
   const send = () => {
-    const question = text.trim()
-    if (!question || busy) return
-    ask.mutate({ params: { path: { env, day } }, body: { question } })
+    const words = text.trim()
+    if (!words || busy) return
+    if (mode === "plan")
+      plan.mutate({ params: { path: { env } }, body: { text: words } })
+    else
+      ask.mutate({ params: { path: { env, day } }, body: { question: words } })
   }
   return (
     <form
@@ -141,11 +172,19 @@ export function AskComposer({
         send()
       }}
     >
-      <div className="mx-auto grid w-full max-w-5xl gap-1.5">
+      <div className="mx-auto grid w-full max-w-3xl gap-1.5">
         <div className="flex items-end gap-2">
           <Textarea
-            aria-label={`Your question for ${name}`}
-            placeholder={`Ask ${name} about ${about}…`}
+            aria-label={
+              mode === "plan"
+                ? `Ask ${name} for a plan`
+                : `Your question for ${name}`
+            }
+            placeholder={
+              mode === "plan"
+                ? "For example: have Ada rerun the coupon tests on main and tell me how they do"
+                : `Ask ${name} about ${about}…`
+            }
             rows={1}
             maxLength={2000}
             value={text}
@@ -164,20 +203,39 @@ export function AskComposer({
           />
           <Button type="submit" size="sm" disabled={!text.trim() || busy}>
             {busy && <Spinner />}
-            Ask
+            {mode === "plan" ? "Make a plan" : "Ask"}
           </Button>
         </div>
-        <p className="text-caption text-muted-foreground">
-          {name} answers from Studio's records of the day and sends nothing. To
-          have it message teammates,{" "}
-          <Link
-            to="/e/$env/lead/plans/new"
-            params={{ env }}
-            className="text-foreground underline underline-offset-2"
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">
+          <span
+            role="group"
+            aria-label="Mode"
+            className="inline-flex h-6 shrink-0 items-center rounded-md border p-px"
           >
-            make a plan
-          </Link>
-          .
+            {(Object.keys(composerModes) as ComposerMode[]).map((m) => {
+              const I = composerModes[m].icon
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  onClick={() => setMode(m)}
+                  className={cn(
+                    "inline-flex h-full items-center gap-1 rounded-[calc(var(--radius-md)-2px)] px-1.5 hover:text-foreground",
+                    mode === m && "bg-muted font-medium text-foreground"
+                  )}
+                >
+                  <I className="size-3.5" />
+                  {composerModes[m].label}
+                </button>
+              )
+            })}
+          </span>
+          <span className="min-w-0">
+            {mode === "plan"
+              ? `${name} drafts messages to teammates; nothing is sent until you approve the plan.`
+              : `${name} answers from Studio's records of the day and sends nothing.`}
+          </span>
         </p>
       </div>
     </form>

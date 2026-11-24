@@ -101,8 +101,8 @@ model or over the limit the question is saved failed, with a note saying why.
 
 ## Plans
 
-The user asks Lead for something that takes teammates (`NewPlan`, from New plan under Lead
-or Make a plan on a day's suggestion). Lead drafts a plan in the background within 2 minutes,
+The user asks Lead for something that takes teammates (`NewPlan`, from the day's box in its Plan
+mode, or Make a plan on a day's suggestion, which opens `/lead/plans/new` with the words). Lead drafts a plan in the background within 2 minutes,
 from a roster of the environment's teammates (not the user's own computers) and whether one
 has a turn running, their computers, their 30 latest threads (title, whether a turn runs, the
 last prompt), their open pull requests from the last 7 days with the state of their checks
@@ -210,17 +210,23 @@ it and on the approvals and chats topics.
 ## Web
 
 - The sidebar has Lead at the top of Teammates, with "writing" or when today was written, and
-  its open plans under it with their state; on Lead's pages New plan, Standing orders and the
-  last days it wrote are listed under it.
+  its open plans under it with their state; on Lead's pages the last days it wrote are listed
+  under it. Lead's crumb has a menu like a teammate's: Today, Standing orders and Settings;
+  those two pages have "← Lead" above their title, and Esc goes back too (`lead/back.tsx`).
+  Every Lead page is one centred column, as wide as the plan page's.
 - `/e/$env/lead` is today, by Studio's date (`today.day`), not the browser's; `/lead/$day` a
   written day, `/lead/settings` its settings, saved one after another. A day:
   the caption (written when, on request or not, the model, the cost), the summary, four
   numbers (today's waiting count is the live one), what waits for you (today: the live count
   and a link to Home's Needs you, which answers them; a past day's snapshot), each
-  teammate's lines with links to its threads, and beside them what shipped, blockers, costs
-  and suggestions for tomorrow. **Copy as Markdown** copies the day.
-- Under the day, the questions asked about it with Lead's answers (`ask.tsx`), and a box to
-  ask another (Enter sends; one at a time). Opening and leaving today records the look.
+  teammate's lines with links to its threads, and under them what shipped (only pushes that
+  went out), blockers, costs and suggestions for tomorrow. **Copy as Markdown** copies the day.
+  A day with no turns, pushes, blockers or prose, and nothing waiting, is one note instead:
+  "Quiet so far" with when Lead writes it (or that it doesn't on that weekday), or "A quiet
+  day" for a past one; Copy and Summarize now hide on it.
+- Under the day, the questions asked about it with Lead's answers (`ask.tsx`), and one box
+  with two modes: Ask asks another (Enter sends; one at a time), Plan starts a plan and opens
+  it. Opening and leaving today records the look.
 - Home's **Today so far** card shows the notes or, once written, the summary, with Summarize
   now and Open the day, and "Since you looked at …" when something happened since. It keeps
   what it showed while Home is open, and records the look.

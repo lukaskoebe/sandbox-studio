@@ -79,8 +79,10 @@ test("Lead writes today's day from Home, the day page links its work, and the se
   // A thread another test left, such as "Lead's errand", isn't Lead's row.
   await expect(sidebar.getByRole("link", { name: /^Lead(?!'s)/ })).toBeVisible()
 
-  // The settings: a heading turned off leaves the date alone; a new name reaches the sidebar.
-  await page.getByRole("link", { name: "Lead's settings" }).click()
+  // The settings, from Lead's menu in the crumbs as a teammate's are: a heading turned off
+  // leaves the date alone; a new name reaches the sidebar.
+  await crumbs.getByRole("button", { name: "Lead's pages: Lead" }).click()
+  await page.getByRole("menuitem", { name: "Settings" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/settings$`))
   await expect(crumbs.getByRole("listitem")).toHaveText(["Lead", "Settings"])
   await expect(
@@ -93,7 +95,7 @@ test("Lead writes today's day from Home, the day page links its work, and the se
   await rename.getByLabel("Lead's name").fill("Guide")
   await rename.getByRole("button", { name: "Rename" }).click()
   await expect(sidebar.getByRole("link", { name: /^Guide/ })).toBeVisible()
-  await page.getByRole("link", { name: "Back to the day" }).click()
+  await page.getByRole("link", { name: "Back to Guide" }).click()
   await expect(page.getByRole("heading", { level: 1 })).not.toContainText(
     "a steady day"
   )

@@ -7,6 +7,7 @@ import {
 } from "react"
 import { useMatches, useNavigate } from "@tanstack/react-router"
 import {
+  CalendarBlankIcon,
   CaretDownIcon,
   CheckIcon,
   DesktopTowerIcon,
@@ -219,6 +220,44 @@ export function Breadcrumbs({ env }: { env: string }) {
         lead: <GearIcon />,
         current: search.profile === "settings",
         run: () => goTeammate(t.id, { profile: "settings" }),
+      },
+    ],
+  })
+
+  // Lead's crumb opens its pages, as a teammate's opens its settings.
+  const leadName = lead.data?.settings.name ?? "Lead"
+  const leadCrumb = (
+    current: "today" | "orders" | "settings" | "other"
+  ): Crumb => ({
+    key: "lead",
+    switches: `${leadName}'s pages`,
+    label: leadName,
+    lead: <LeadGlyph className="size-4" />,
+    run:
+      current === "today"
+        ? undefined
+        : () => void navigate({ to: "/e/$env/lead", params: { env } }),
+    menu: [
+      { heading: leadName },
+      {
+        label: "Today",
+        lead: <CalendarBlankIcon />,
+        current: current === "today",
+        run: () => void navigate({ to: "/e/$env/lead", params: { env } }),
+      },
+      {
+        label: "Standing orders",
+        lead: <RepeatIcon />,
+        current: current === "orders",
+        run: () =>
+          void navigate({ to: "/e/$env/lead/orders", params: { env } }),
+      },
+      {
+        label: "Settings",
+        lead: <GearIcon />,
+        current: current === "settings",
+        run: () =>
+          void navigate({ to: "/e/$env/lead/settings", params: { env } }),
       },
     ],
   })
@@ -493,26 +532,14 @@ export function Breadcrumbs({ env }: { env: string }) {
       ]
     }
     if (routeId === "/e/$env/lead/orders") {
-      const name = lead.data?.settings.name ?? "Lead"
       return [
-        {
-          key: "lead",
-          label: name,
-          lead: <LeadGlyph className="size-4" />,
-          run: () => void navigate({ to: "/e/$env/lead", params: { env } }),
-        },
+        leadCrumb("orders"),
         { key: "orders", label: "Standing orders", lead: <RepeatIcon /> },
       ]
     }
     if (routeId.startsWith("/e/$env/lead/plans/")) {
-      const name = lead.data?.settings.name ?? "Lead"
       return [
-        {
-          key: "lead",
-          label: name,
-          lead: <LeadGlyph className="size-4" />,
-          run: () => void navigate({ to: "/e/$env/lead", params: { env } }),
-        },
+        leadCrumb("other"),
         {
           key: "plan",
           label: onPlan ? plan.data?.title || "Plan" : "New plan",
@@ -521,7 +548,6 @@ export function Breadcrumbs({ env }: { env: string }) {
       ]
     }
     if (routeId.startsWith("/e/$env/lead")) {
-      const name = lead.data?.settings.name ?? "Lead"
       const t = leadToday(lead.data)
       const day =
         routeId === "/e/$env/lead/$day"
@@ -538,12 +564,7 @@ export function Breadcrumbs({ env }: { env: string }) {
           ? void navigate({ to: "/e/$env/lead", params: { env } })
           : void navigate({ to: "/e/$env/lead/$day", params: { env, day: d } })
       return [
-        {
-          key: "lead",
-          label: name,
-          lead: <LeadGlyph className="size-4" />,
-          run: day === t ? undefined : () => goDay(t),
-        },
+        leadCrumb(day === t ? "today" : day ? "other" : "settings"),
         day
           ? {
               key: "day",

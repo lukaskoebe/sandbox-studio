@@ -1,5 +1,4 @@
 import { Link, useMatchRoute } from "@tanstack/react-router"
-import { PlusIcon, RepeatIcon } from "@phosphor-icons/react"
 import {
   SidebarMenuButton,
   SidebarMenuItem,
@@ -13,8 +12,8 @@ import { LeadGlyph } from "./glyph"
 
 /**
  * Lead at the top of Teammates (docs/lead.md): its name, and while it writes, that it does.
- * Its open plans are listed under it, and on its pages New plan, Standing orders and the last
- * days it wrote.
+ * Its open plans are listed under it, and on its pages the last days it wrote. A plan starts
+ * from the day's box, and Standing orders and Settings are in its name's menu in the crumbs.
  */
 export function LeadSidebarRow({ env }: { env: string }) {
   const matchRoute = useMatchRoute()
@@ -109,32 +108,12 @@ export function LeadSidebarRow({ env }: { env: string }) {
           </SidebarMenuSub>
         </li>
       )}
-      {onPage && (
+      {onPage && days.length > 0 && (
         <li className="list-none">
           <SidebarMenuSub
             aria-label={`Days ${name} wrote`}
             className="mr-0 gap-px pr-0"
           >
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton
-                size="sm"
-                isActive={onNew}
-                render={<Link to="/e/$env/lead/plans/new" params={{ env }} />}
-              >
-                <PlusIcon className="size-3.5" />
-                <span className="truncate">New plan</span>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-            <SidebarMenuSubItem>
-              <SidebarMenuSubButton
-                size="sm"
-                isActive={onOrders}
-                render={<Link to="/e/$env/lead/orders" params={{ env }} />}
-              >
-                <RepeatIcon className="size-3.5" />
-                <span className="truncate">Standing orders</span>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
             {days.map((d) => (
               <SidebarMenuSubItem key={d.day}>
                 <SidebarMenuSubButton

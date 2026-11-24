@@ -9,15 +9,15 @@ Lead never sends anything you haven't approved, except follow-ups in threads its
 
 ## Read the day
 
-Lead is at the top of **Teammates** in the sidebar. It opens on today:
+Lead is at the top of **Teammates** in the sidebar. It opens on today, in one column like a teammate's settings. The caret beside **Lead** in the bar at the top opens its pages: **Today**, **Standing orders** and **Settings**.
 
 - The caption says when the day was written, whether you asked for it, the model and what it cost.
 - A short summary, then four numbers: what waits for you, pushes, turn time and cost.
 - **Needs you** says how many requests wait now, with a link to Home, where you answer them; the top bar lists them too. A past day shows what waited then.
 - Each teammate's lines say what it finished, has open or is blocked on, each linking to the thread.
-- Beside them: **Shipped** (what was pushed, and pull requests), **Blockers** (a failed or declined push, denied requests, a command that keeps failing, a nearly full disk, a scheduled run that was missed), **Costs** and **Tomorrow**, a few suggestions. Lead never acts on them.
+- Under them: **Shipped** (what was pushed, and pull requests), **Blockers** (a failed or declined push, denied requests, a command that keeps failing, a nearly full disk, a scheduled run that was missed), **Costs** and **Tomorrow**, a few suggestions. Lead never acts on them.
 
-The arrows next to the date go to the days before and after. **Copy as Markdown** copies the day, to paste into a note or a chat.
+The arrows next to the date go to the days before and after. **Copy as Markdown** copies the day, to paste into a note or a chat. A day nobody has had a turn on yet says **Quiet so far**, and when Lead writes it, and shows neither numbers nor Copy and Summarize.
 
 Before the day is written, the page shows today's facts so far. **Summarize now** writes the day right away; at the set time Lead writes it again with the rest of the day. If Studio wasn't running then, it writes the day when it starts, up to the day before.
 
@@ -27,11 +27,11 @@ Home shows **Today so far** under what needs you once a teammate has worked: eac
 
 The box under a day asks Lead about it, such as "What did Ada get done?" or "Why is the checkout fix stuck?". Lead answers in a few sentences from that day's facts and notes, what it wrote about the day, the days before and your questions so far, linking the threads, pushes and requests it speaks of. It answers one question at a time, and the questions and answers stay with the day.
 
-Asking only reads: Lead doesn't pass your question on to a teammate. To have it ask them, make a plan. Questions count against the daily limit, and leave part of it for writing the day.
+Asking only reads: Lead doesn't pass your question on to a teammate. To have it ask them, switch the box from **Ask** to **Plan**. Questions count against the daily limit, and leave part of it for writing the day.
 
 ## Plans
 
-A plan is something you want from your teammates, which Lead turns into messages for you to approve. Start one with **New plan** under Lead in the sidebar, or **Make a plan** next to one of a day's suggestions for tomorrow, and say what you want, such as "Ask Ada whether the coupon tests pass".
+A plan is something you want from your teammates, which Lead turns into messages for you to approve. Start one from the box under the day in its **Plan** mode, or with **Make a plan** next to one of a day's suggestions for tomorrow, and say what you want, such as "Ask Ada whether the coupon tests pass".
 
 Lead answers in the plan's conversation:
 
@@ -52,7 +52,7 @@ In Lead's settings, **Message teammates** can let follow-ups go without asking, 
 
 ## Standing orders
 
-A standing order is something you'd ask Lead for again and again, such as "Each morning, hand failing checks on open pull requests to whoever is idle". **Standing orders** under Lead in the sidebar lists them: add one with your words, a time and the days. When it comes due, Lead drafts the plan from your words, and it waits for your approval like any other plan; the plan says it came from your order. When there's nothing to do, the plan just says so.
+A standing order is something you'd ask Lead for again and again, such as "Each morning, hand failing checks on open pull requests to whoever is idle". **Standing orders**, in the menu of Lead's name in the bar at the top, lists them: add one with your words, a time and the days. When it comes due, Lead drafts the plan from your words, and it waits for your approval like any other plan; the plan says it came from your order. When there's nothing to do, the plan just says so.
 
 - **Run now** drafts the plan right away, even when the order is off.
 - An order skips a day while its plan from last time is still open, and says so.
@@ -63,7 +63,7 @@ An environment has up to 20 standing orders.
 
 ## Settings
 
-The gear next to **Summarize now** opens Lead's settings:
+**Settings**, in the same menu, opens Lead's settings; **← Lead** above them, or Esc, goes back to the day:
 
 - **Name**: what the sidebar and the day call it.
 - **Write the day at** and **On**: 18:00 on weekdays to start with, in Studio's time zone.
