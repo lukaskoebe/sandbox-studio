@@ -142,7 +142,9 @@ function Day({
   const f = v.facts
   const refs = refTargets(f)
   const teammates = f.teammates ?? []
-  const pushes = f.pushes ?? []
+  // Only what was pushed shipped: a push that waits is in Needs you's count, and a failed
+  // or declined one is under Blockers.
+  const pushes = (f.pushes ?? []).filter((p) => p.state === "pushed")
   const blockers = f.blockers ?? []
   const lines = new Map((v.prose?.teammates ?? []).map((t) => [t.ref, t.lines]))
   const isToday = v.day === today
@@ -466,14 +468,7 @@ function TeammateBlock({
   )
 }
 
-const pushStates: Record<LeadPush["state"], string> = {
-  pending: "waits for review",
-  pushed: "pushed",
-  failed: "failed",
-  rejected: "rejected",
-  superseded: "superseded",
-}
-
+/** A push on the day's Shipped, which lists only those that went out. */
 function PushRow({ p }: { p: LeadPush }) {
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-2 px-3 py-2 text-xs">
@@ -493,17 +488,8 @@ function PushRow({ p }: { p: LeadPush }) {
         <span className="font-mono">{p.branch}</span>
         <span className="text-muted-foreground"> to {p.repo}</span>
       </span>
-      <span
-        className={cn(
-          "font-mono text-meta",
-          p.state === "failed" || p.state === "rejected"
-            ? "text-(--st-failed)"
-            : p.state === "pending"
-              ? "text-(--st-waiting-fg)"
-              : "text-muted-foreground"
-        )}
-      >
-        {pushStates[p.state]}
+      <span className="font-mono text-meta text-muted-foreground">
+        pushed {clock(p.at)}
       </span>
     </li>
   )

@@ -15,7 +15,7 @@ Lead is at the top of **Teammates** in the sidebar. It opens on today:
 - A short summary, then four numbers: what waits for you, pushes, turn time and cost.
 - **Needs you** says how many requests wait now, with a link to Home, where you answer them; the top bar lists them too. A past day shows what waited then.
 - Each teammate's lines say what it finished, has open or is blocked on, each linking to the thread.
-- Beside them: **Shipped** (pushes and pull requests), **Blockers** (a failed push, denied requests, a command that keeps failing, a nearly full disk, a scheduled run that was missed), **Costs** and **Tomorrow**, a few suggestions. Lead never acts on them.
+- Beside them: **Shipped** (what was pushed, and pull requests), **Blockers** (a failed or declined push, denied requests, a command that keeps failing, a nearly full disk, a scheduled run that was missed), **Costs** and **Tomorrow**, a few suggestions. Lead never acts on them.
 
 The arrows next to the date go to the days before and after. **Copy as Markdown** copies the day, to paste into a note or a chat.
 

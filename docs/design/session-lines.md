@@ -1,6 +1,11 @@
 # Session lines on Home
 
-Home draws each sandbox as a line over the last 30 minutes, hour, 2, 8 or 24 hours (the pick is
+Home starts folded: one line per computer, saying what it does now ("Ada's chat · working
+12 min", "needs you", "2 open: a chat, a terminal", "idle") and since when, each linking to
+the computer. **Show the lines** opens the chart below and is kept per browser; the chart's
+key is behind the ? beside its heading.
+
+With the lines shown, Home draws each sandbox as a line over the last 30 minutes, hour, 2, 8 or 24 hours (the pick is
 kept per browser). Every session the sandbox had in that window branches off its line when it
 opens and rejoins it when it closes:
 
@@ -56,9 +61,7 @@ Words drawn across a line keep a margin of the card around their letters, so the
 short of them:
 
 - **✗ failed**: a command a chat ran (`execute` tool call) failed, on the chat's branch;
-- **⏸ asked you**: an approval of the sandbox, on its chat's branch when it is a chat's
-  permission request and on the line otherwise, with its wait dashed until it was answered and
-  the answer ("yes, 4m later"). Network requests count only while they wait;
+- What asked the user (`asked` flags) isn't drawn: Needs you says that above the lines;
 - **⚠ blocked**: a network request was denied, with how often it was tried. Trackers and
   Chromium's own requests are left out;
 - **▲ push**: a push went out (`git_pushes` pushed, failed or rejected), on the line, red when

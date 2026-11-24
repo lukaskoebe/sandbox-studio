@@ -33,6 +33,16 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   })
 
   const lines = page.getByRole("region", { name: "Computers" })
+  // Folded, each computer is one line: what it does and since when.
+  const folded = lines
+    .getByRole("list", { name: "Computers, one line each" })
+    .getByRole("listitem")
+    .filter({ hasText: sandbox })
+  await expect(folded).toContainText(
+    new RegExp(`${name}'s chat · working \\d+ min|needs you`)
+  )
+  await expect(folded).toContainText(/since \d\d:\d\d/)
+  await lines.getByRole("button", { name: "Show the lines" }).click()
   // Other tests' sandboxes have a main terminal and a preview on :3000 too.
   const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(
@@ -64,8 +74,8 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   ).toBeVisible()
   await expect(lines.getByText("3 open · 1 closed")).toBeVisible()
 
-  // The last half hour: the terminals' output was counted, and the chat's question to the user
-  // is flagged as waiting.
+  // The last half hour: the terminals' output was counted. The chat's question to the user
+  // is Needs you's, not a note on the lines.
   const half = lines.getByRole("button", { name: "30m" })
   await half.click()
   await expect(half).toHaveAttribute("aria-pressed", "true")
@@ -82,8 +92,8 @@ test("home draws each sandbox's sessions as branches off its line", async ({
     )
     .toBe(true)
   await expect(
-    lines.locator("title").filter({ hasText: /asked you: .+ → waiting/ })
-  ).not.toHaveCount(0)
+    lines.locator("title").filter({ hasText: /asked you/ })
+  ).toHaveCount(0)
   await lines.getByRole("button", { name: "2h", exact: true }).click()
 
   // A sandbox folds into one line, and unfolds again.
@@ -217,6 +227,7 @@ test("a terminal stored under keys a second apart is one branch on home", async 
   )
   await page.goto(`/e/${env}`)
   const lines = page.getByRole("region", { name: "Computers" })
+  await lines.getByRole("button", { name: "Show the lines" }).click()
   await lines.getByRole("button", { name: "2h", exact: true }).click()
   const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })
   await expect(

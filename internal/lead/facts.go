@@ -273,9 +273,14 @@ func (s *Service) gather(ctx context.Context, env string, day time.Time, set sto
 		push := LeadPush{ID: p.ID, SandboxID: p.SandboxID, TeammateID: tm, Forge: p.ForgeName, Repo: p.Owner + "/" + p.Repo,
 			Branch: strings.TrimPrefix(p.Ref, "refs/heads/"), State: p.State, PRURL: p.PRURL, PRNumber: prNumber(p.PRURL), At: p.CreatedAt}
 		f.Pushes = append(f.Pushes, push)
-		if p.State == store.PushFailed {
+		// The day's Shipped lists only what was pushed; what failed or was turned down is in the way.
+		switch p.State {
+		case store.PushFailed:
 			f.Blockers = append(f.Blockers, LeadBlocker{Kind: "push", TeammateID: tm,
 				Text: fmt.Sprintf("The push of %s to %s failed.", push.Branch, push.Repo)})
+		case store.PushRejected:
+			f.Blockers = append(f.Blockers, LeadBlocker{Kind: "push", TeammateID: tm,
+				Text: fmt.Sprintf("The push of %s to %s was declined.", push.Branch, push.Repo)})
 		}
 	}
 

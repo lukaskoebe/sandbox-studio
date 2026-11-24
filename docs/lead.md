@@ -71,7 +71,7 @@ request that asked for it is gone.
 2. **Facts.** `gather` reads the day from Studio's records: each teammate's threads with turns
    that day (turn count and time, state, cost by the agent's reported session cost), pushes and
    pull requests, scheduled task runs, blockers (a thread that stopped early, a task run that
-   was missed or skipped, a failed push, denied requests, commands that failed again and
+   was missed or skipped, a failed or declined push, denied requests, commands that failed again and
    again, a nearly full disk) and what waits for the user now. Each item gets a ref,
    such as `push:2`, in the order the page shows them.
 3. **Sentences.** One call to the utility model with the facts and the notes, as JSON between

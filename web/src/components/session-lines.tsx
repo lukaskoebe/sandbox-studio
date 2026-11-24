@@ -1,6 +1,7 @@
 import {
   createContext,
   memo,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -8,7 +9,17 @@ import {
   useState,
 } from "react"
 import { Link } from "@tanstack/react-router"
-import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react"
+import {
+  CaretDownIcon,
+  CaretRightIcon,
+  QuestionIcon,
+} from "@phosphor-icons/react"
+import { Button } from "@/components/ui/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { $api, type Sandbox } from "@/lib/api/client"
 import type { Chat } from "@/lib/chats"
 import {
@@ -33,6 +44,7 @@ import { cn } from "@/lib/utils"
 const windows = [0.5, 1, 2, 8, 24] as const
 type Hours = (typeof windows)[number]
 const windowKey = "studio.lines-window"
+const shownKey = "studio.lines-shown"
 const windowLabel = (h: Hours) => (h < 1 ? `${h * 60}m` : `${h}h`)
 const windowWords = (h: Hours) =>
   h < 1 ? `${h * 60} minutes` : h === 1 ? "hour" : `${h} hours`
@@ -147,6 +159,34 @@ function useWindow() {
   return [hours, pick] as const
 }
 
+/** Whether Home shows the lines or one line per computer, kept in this browser. */
+function useShown() {
+  const [shown, setShown] = useState(() => {
+    try {
+      return localStorage.getItem(shownKey) === "on"
+    } catch {
+      return false
+    }
+  })
+  const pick = (on: boolean) => {
+    setShown(on)
+    try {
+      localStorage.setItem(shownKey, on ? "on" : "off")
+    } catch {
+      // Home just starts folded again.
+    }
+  }
+  return [shown, pick] as const
+}
+
+/** A duration as the folded lines say it: "12 min", "2 h 5 min". */
+function took(ms: number) {
+  const m = Math.max(1, Math.round(ms / 60_000))
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`
+}
+
 /** The time, a little behind: the lines move on twice a minute. */
 function useNow() {
   const [now, setNow] = useState(() => Date.now())
@@ -158,17 +198,19 @@ function useNow() {
 }
 
 /** The width of an element, as it changes. */
+/** The axis's width, measured from when it mounts: the chart may open after the page did. */
 function useWidth() {
-  const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
-  useEffect(() => {
-    const el = ref.current
+  const observer = useRef<ResizeObserver>(null)
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect()
+    observer.current = null
     if (!el) return
     const ro = new ResizeObserver(([e]) =>
       setWidth(Math.floor(e.contentRect.width))
     )
     ro.observe(el)
-    return () => ro.disconnect()
+    observer.current = ro
   }, [])
   return [ref, width] as const
 }
@@ -225,6 +267,7 @@ export function SessionLines({
   waiting: ReadonlySet<string | undefined>
 }) {
   const [hours, setHours] = useWindow()
+  const [shownLines, showLines] = useShown()
   const now = useNow()
   const [axisRef, width] = useWidth()
   const lines = $api.useQuery(
@@ -263,7 +306,10 @@ export function SessionLines({
           waiting: waits,
         })
       : new Map<string, Branch[]>()
-    const flags = buildFlags(lines.data?.flags ?? [])
+    // What waited on the user is Needs you's; the lines leave it out.
+    const flags = buildFlags(
+      (lines.data?.flags ?? []).filter((f) => f.kind !== "asked")
+    )
     const { marks, born } = buildMarks(
       lines.data?.events ?? [],
       new Map(sandboxes.map((s) => [s.id, s.forkOf])),
@@ -361,13 +407,23 @@ export function SessionLines({
           >
             Computers
           </h2>
-          <span className="text-caption text-muted-foreground">
-            sessions branch off as they open and rejoin as they close
-          </span>
+          {shownLines && <LinesKey />}
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground"
+            aria-pressed={shownLines}
+            onClick={() => showLines(!shownLines)}
+          >
+            {shownLines ? "Fold the lines" : "Show the lines"}
+          </Button>
           <div
             role="group"
             aria-label="How far back"
-            className="ml-auto flex gap-0.5 font-control text-caption"
+            className={cn(
+              "ml-auto flex gap-0.5 font-control text-caption",
+              !shownLines && "hidden"
+            )}
           >
             {windows.map((h) => (
               <button
@@ -385,62 +441,120 @@ export function SessionLines({
             ))}
           </div>
         </div>
-        <div className="min-w-0 overflow-hidden rounded-(--radius) border bg-card">
-          <div className="grid border-b sm:grid-cols-[11rem_minmax(0,1fr)]">
-            <div className="hidden px-3 py-1 sm:block" />
-            <div
-              ref={axisRef}
-              aria-hidden
-              className="relative h-6 lines-font text-meta text-muted-foreground sm:border-l"
-            >
-              {width > 0 &&
-                ticks(since, until).map((t) => (
-                  <span
-                    key={t}
-                    className="absolute top-1 -translate-x-1/2"
-                    style={{ left: x(t) }}
-                  >
-                    {clock(t)}
-                  </span>
-                ))}
-              {width > 0 && (
-                <span
-                  className="absolute top-1 -translate-x-full text-(--line-you)"
-                  style={{ left: right + RIGHT - 2 }}
+        {!shownLines ? (
+          <FoldedList
+            env={env}
+            rows={rows.rows}
+            quiet={rows.quiet}
+            pending={lines.isPending}
+            hours={hours}
+            now={now}
+            waiting={waiting}
+            working={working}
+          />
+        ) : (
+          <>
+            <div className="min-w-0 overflow-hidden rounded-(--radius) border bg-card">
+              <div className="grid border-b sm:grid-cols-[11rem_minmax(0,1fr)]">
+                <div className="hidden px-3 py-1 sm:block" />
+                <div
+                  ref={axisRef}
+                  aria-hidden
+                  className="relative h-6 lines-font text-meta text-muted-foreground sm:border-l"
                 >
-                  now
-                </span>
+                  {width > 0 &&
+                    ticks(since, until).map((t) => (
+                      <span
+                        key={t}
+                        className="absolute top-1 -translate-x-1/2"
+                        style={{ left: x(t) }}
+                      >
+                        {clock(t)}
+                      </span>
+                    ))}
+                  {width > 0 && (
+                    <span
+                      className="absolute top-1 -translate-x-full text-(--line-you)"
+                      style={{ left: right + RIGHT - 2 }}
+                    >
+                      now
+                    </span>
+                  )}
+                </div>
+              </div>
+              {rows.rows.length === 0 ? (
+                <p className="px-3 py-3 text-xs text-muted-foreground">
+                  {lines.isPending
+                    ? "Loading…"
+                    : `No computer ran in the last ${windowWords(hours)}.`}
+                </p>
+              ) : (
+                rows.rows.map((r) => (
+                  <SandboxRow
+                    key={r.sandbox.id}
+                    env={env}
+                    row={r}
+                    width={width}
+                    x={x}
+                    right={right}
+                    since={since}
+                    now={now}
+                    folded={!(unfolded[r.sandbox.id] ?? r.open > 0)}
+                    onFold={(fold) =>
+                      setUnfolded((u) => ({ ...u, [r.sandbox.id]: !fold }))
+                    }
+                    waiting={waiting.has(r.sandbox.id)}
+                    working={working.get(r.sandbox.id)}
+                  />
+                ))
               )}
             </div>
-          </div>
-          {rows.rows.length === 0 ? (
-            <p className="px-3 py-3 text-xs text-muted-foreground">
-              {lines.isPending
-                ? "Loading…"
-                : `No computer ran in the last ${windowWords(hours)}.`}
-            </p>
-          ) : (
-            rows.rows.map((r) => (
-              <SandboxRow
-                key={r.sandbox.id}
-                env={env}
-                row={r}
-                width={width}
-                x={x}
-                right={right}
-                since={since}
-                now={now}
-                folded={!(unfolded[r.sandbox.id] ?? r.open > 0)}
-                onFold={(fold) =>
-                  setUnfolded((u) => ({ ...u, [r.sandbox.id]: !fold }))
-                }
-                waiting={waiting.has(r.sandbox.id)}
-                working={working.get(r.sandbox.id)}
-              />
-            ))
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 lines-font text-meta text-muted-foreground">
+            {rows.quiet > 0 && (
+              <p className="justify-self-end lines-font text-meta text-muted-foreground">
+                {quietWords(rows.quiet)}
+              </p>
+            )}
+          </>
+        )}
+      </section>
+    </LookContext.Provider>
+  )
+}
+
+function quietWords(n: number) {
+  return n === 1
+    ? "1 more computer had nothing open"
+    : `${n} more computers had nothing open`
+}
+
+/** What the lines' colours and glyphs mean, behind a ? beside the heading. */
+function LinesKey() {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="What the lines show"
+            title="What the lines show"
+            className="text-muted-foreground"
+          />
+        }
+      >
+        <QuestionIcon />
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="grid w-72 gap-2 text-xs"
+        aria-label="What the lines show"
+      >
+        <p className="text-muted-foreground">
+          Sessions branch off a computer's line as they open and rejoin it as
+          they close. A branch widens with its tool calls, output, actions or
+          requests.
+        </p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 lines-font text-meta text-muted-foreground">
           <Legend color={stroke.chat}>chat</Legend>
           <Legend color={stroke.terminal}>an agent's terminal</Legend>
           <Legend color="var(--line-you)">yours</Legend>
@@ -448,24 +562,135 @@ export function SessionLines({
           <Legend color={stroke.preview} dotted>
             preview
           </Legend>
-          <span title="A branch widens with its tool calls, output, actions or requests">
-            wider: busier
-          </span>
           <span className="text-(--st-failed)">✗ failed</span>
-          <span className="text-(--st-waiting-fg)">⏸ asked you</span>
           <span className="text-(--acc-git)">▲ push</span>
           <span className="text-(--line-blocked)">⚠ blocked</span>
-          {rows.quiet > 0 && (
-            <span className="ml-auto">
-              {rows.quiet === 1
-                ? "1 more computer had nothing open"
-                : `${rows.quiet} more computers had nothing open`}
-            </span>
-          )}
         </div>
-      </section>
-    </LookContext.Provider>
+      </PopoverContent>
+    </Popover>
   )
+}
+
+/**
+ * Home's computers folded to one line each: what each one does now, and since when. The
+ * lines themselves are a click away.
+ */
+function FoldedList({
+  env,
+  rows,
+  quiet,
+  pending,
+  hours,
+  now,
+  waiting,
+  working,
+}: {
+  env: string
+  rows: Row[]
+  quiet: number
+  pending: boolean
+  hours: Hours
+  now: number
+  waiting: ReadonlySet<string | undefined>
+  working: Map<string, string>
+}) {
+  if (rows.length === 0)
+    return (
+      <p className="rounded-(--radius) border bg-card px-3 py-3 text-xs text-muted-foreground">
+        {pending
+          ? "Loading…"
+          : `No computer ran in the last ${windowWords(hours)}.`}
+      </p>
+    )
+  return (
+    <div className="grid gap-1.5">
+      <ul
+        aria-label="Computers, one line each"
+        className="divide-y rounded-(--radius) border bg-card"
+      >
+        {rows.map((r) => {
+          const s = r.sandbox
+          const open = r.branches
+            .flatMap(sessionsOf)
+            .filter((b) => b.end === undefined)
+          const chat = open.find(
+            (b) =>
+              b.kind === "chat" && b.blocks.some((k) => k.end === undefined)
+          )
+          const live = chat?.blocks.find((k) => k.end === undefined)
+          const who = working.get(s.id) ?? chat?.who
+          const kinds = [
+            ...new Set(
+              open.filter((b) => b !== chat).map((b) => kindWords[b.kind])
+            ),
+          ]
+          let what: string
+          let since: number | undefined
+          if (waiting.has(s.id)) {
+            what = "needs you"
+            since = live?.start
+          } else if (live) {
+            what = `${who ? `${who}'s chat` : "A chat"} · working ${took(now - live.start)}`
+            since = live.start
+          } else if (open.length > 0) {
+            what = `${open.length} open: ${[chat && "a chat", ...kinds].filter(Boolean).join(", ")}`
+            since = Math.min(...open.map((b) => b.start))
+          } else if (s.status === "running") {
+            what = "idle"
+            since = r.last
+          } else {
+            what = s.status
+            since = r.last
+          }
+          return (
+            <li
+              key={s.id}
+              className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2 text-xs"
+            >
+              <Link
+                to="/e/$env/sandboxes/$id"
+                params={{ env, id: s.id }}
+                className={cn(
+                  "min-w-0 truncate font-heading font-semibold hover:underline",
+                  r.depth > 0 && "text-(--acc-git)"
+                )}
+                style={{ paddingLeft: Math.min(r.depth, 3) * 8 }}
+              >
+                {r.depth > 0 && "↳ "}
+                {s.name}
+              </Link>
+              <span
+                className={cn(
+                  "min-w-0 truncate text-muted-foreground",
+                  waiting.has(s.id) && "text-(--st-waiting-fg)",
+                  live && !waiting.has(s.id) && "text-foreground"
+                )}
+              >
+                {what}
+              </span>
+              {since !== undefined && (
+                <span className="ml-auto lines-font text-meta text-muted-foreground">
+                  since {clock(since)}
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {quiet > 0 && (
+        <p className="justify-self-end lines-font text-meta text-muted-foreground">
+          {quietWords(quiet)}
+        </p>
+      )}
+    </div>
+  )
+}
+
+const kindWords: Record<BranchKind, string> = {
+  chat: "a chat",
+  terminal: "a terminal",
+  browser: "the browser",
+  preview: "a preview",
 }
 
 function Legend({
