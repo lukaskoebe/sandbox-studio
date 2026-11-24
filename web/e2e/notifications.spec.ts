@@ -31,7 +31,7 @@ test("notifications: Home asks once, and Settings → General has the button", a
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible()
   await expect(banner).toBeHidden()
 
-  await page.goto(`/e/${env}/settings/general`)
+  await page.goto(`/e/${env}/settings/notifications`)
   const row = page.getByRole("group", { name: "Notifications" })
   await expect(
     row.getByRole("button", { name: "Enable notifications" })

@@ -85,24 +85,30 @@ to an environment.
 | `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create computer" once it is done |
 
 Settings is one page (`routes/e.$env.settings.tsx`, the sections in `components/settings/`):
-a nav on the left with the sections grouped by what they belong to, and the section in view at
-`/e/$env/settings/<section>`. A search above the nav filters the sections by name and keywords
-(`components/settings/link.tsx`). On phones the nav is a row above the section that scrolls
-sideways. Its sections:
+a nav on the left with the sections grouped by what they apply to, and the section in view at
+`/e/$env/settings/<section>` (`components/settings/link.tsx`). Only the Environment group names
+the environment, with a chip beside its label. On phones the nav is a row above the section
+that scrolls sideways, with a rule between the groups. Its sections:
 
 | Group | Section | Shows |
 |---|---|---|
-| This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, "Show tips again" ([onboarding](#onboarding)), the environment's name, the environment file (export and import), and deleting the environment after its name is typed |
-| | Network (`network`) | an intro, the security level, the network rules (filters in the URL: `q`, `scope`, `action`, `origin`, `unused`; sorted by registrable domain, with a heading for a domain with several rules), the curated list and the tracker list ([network](network.md)) |
-| | Secrets (`secrets`) | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
-| | Shared memory (`memory`) | shared memory: pages, facts, conflicts, search, sessions |
-| | Activity (`activity`) | every decided approval of the environment (network requests, git pushes and pull requests, chat tool permissions, browser actions, memory), newest first, with chips for All, Network, Git, Chats, Browser and Memory kept in `?kind=`. Its columns: Decided, What (the kind and the host or a summary; a push links to its review page), From, Decision (with Revert for a reviewer's network decision) and Details (the reason, or a push's outcome) |
-| Accounts | AI providers (`providers`) | AI providers of the environment |
-| | Git forges (`forges`) | the git forges of the environment |
-| This machine | Templates (`templates`) | template builds and templates of the environment |
-| | Runtime (`runtime`) | host checks (doctor) |
-| | Ports and LAN (`ports`) | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
+| Studio | General (`general`) | start at login, SSH access, previews, the terminal shell, every step in chats, "Open setup" (`/setup`) once Home's setup card is gone, "Show tips again" ([onboarding](#onboarding)) |
 | | Updates (`updates`) | the update check (the whole installation) |
+| | Templates (`templates`) | template builds and templates of the environment |
+| | Runtime (`runtime`) | host checks (doctor) |
+| | Ports and LAN (`ports`) | this machine's ports open to computers (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
+| Environment | Name and file (`environment`) | the environment's name, the environment file (export and import), and deleting the environment after its name is typed |
+| | AI providers (`providers`) | AI providers of the environment |
+| | Git forges (`forges`) | the git forges of the environment |
+| This browser | Appearance (`appearance`) | the style (Pixel or Quiet), the text size, and light or dark, which the sidebar's foot also sets |
+| | Notifications (`notifications`) | the browser's permission to notify, and the notice about held connections |
+
+A page with one group of rows leaves out the group's label, as its title says it. On phones a
+row's switch shares its title's row, and a description longer than a sentence keeps the first
+one, with the rest behind More.
+
+The environment's own pages (Network, Secrets, Memory, Activity) are in the sidebar's
+Environment group, not in Settings.
 
 Requests waiting for a decision are on Home and in the top bar's approvals list, not in Settings.
 
@@ -139,12 +145,12 @@ each with its state and, for a teammate with more than one computer, the compute
 threads" to its home. On hover a teammate shows `>_`, a terminal on the computer last used for
 it, and +, a new thread: its home, with the composer focused (`lib/new-thread.ts`; ⌘K's
 "New thread with X" does the same). Your computers lists the sandboxes without a teammate, each with its
-status dot; Environment has Computers (every computer, with their count), Network, Secrets,
-Memory and Activity; the footer has Settings, the version and the theme switch. Teammates' +
+status dot; Environment has Computers (every computer), Network, Secrets, Memory and Activity;
+the footer has Settings, the version and the theme switch. A number beside an entry is always
+what needs you there. Teammates' +
 adds a teammate; Your computers' + makes a computer without one or imports one. A teammate is
 waiting on you while one of its approvals is pending (a browser action or credential, a memory
-share, or a tool permission in one of its chats), and working while one of its chats runs. The
-Settings page names the environment in its header.
+share, or a tool permission in one of its chats), and working while one of its chats runs.
 
 The palette finds teammates, each with its settings, tasks, memory and (with a computer) its
 browser, and the rows of its settings (but Delete) by what they hold; computers with their tabs
@@ -157,7 +163,8 @@ else, from six letters on, one typo away at a word's start ("netwrok"); the keys
 only by a word's start, since what they matched isn't shown.
 
 Above every page a row of breadcrumbs (`components/breadcrumbs.tsx`) says where it is: Home,
-Environment › a page, Settings › a section, Computers › a computer of the user's own, or a
+an environment page (Computers, Network …, which has no parent, as the environment switcher
+names the environment), Settings › a section, Computers › a computer of the user's own, or a
 teammate › the open thread followed, in a thread, by its state (`lib/threads.ts`'s, with "needs
 you" while it waits), what the page puts in the row's status slot (`components/top-bar-slot.tsx`),
 and on its desk and in a thread a chip for the computer it shows ("on ● docs-site"). The thread's
@@ -187,7 +194,9 @@ shell) and the live view of a browser you drive (the remote page). Back stops at
 page; there the key is the browser's again.
 
 Home and every Settings section are a `ColumnPage` (`components/column-page.tsx`): the title
-row and the page in one centred column, without a rule under the header.
+row and the page in one centred column, without a rule under the header. Home's title is for
+screen readers only, as the crumb says Home; its row shows where things stand ("2 need you ·
+3 working").
 
 ### A teammate and its computer
 

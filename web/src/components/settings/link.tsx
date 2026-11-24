@@ -31,39 +31,21 @@ export const environmentPages = [
 ] as const
 
 /**
- * The Settings page's sections, in the order its nav lists them: what belongs to this
- * environment, the accounts Studio uses, and this computer. The keywords are what the nav's
- * search finds a section by besides its name.
+ * The Settings page's sections, grouped by what they apply to: all of Studio on this machine,
+ * the environment on show, and this browser. The keywords are what the palette finds a section
+ * by besides its name.
  */
 export const settingsGroups = [
   {
-    title: "This environment",
+    title: "Studio",
+    scope: "studio",
     sections: [
       {
         id: "general",
         label: "General",
-        keywords: "start at login setup environment file export import",
+        keywords: "start at login ssh previews terminal shell steps setup tips",
       },
-    ],
-  },
-  {
-    title: "Accounts",
-    sections: [
-      {
-        id: "providers",
-        label: "AI providers",
-        keywords: "anthropic openai api key models",
-      },
-      {
-        id: "forges",
-        label: "Git forges",
-        keywords: "github gitlab forgejo codeberg ssh token folder",
-      },
-    ],
-  },
-  {
-    title: "This machine",
-    sections: [
+      { id: "updates", label: "Updates", keywords: "version release" },
       {
         id: "templates",
         label: "Templates",
@@ -79,7 +61,43 @@ export const settingsGroups = [
         label: "Ports and LAN",
         keywords: "host ports local network vpn private addresses",
       },
-      { id: "updates", label: "Updates", keywords: "version release" },
+    ],
+  },
+  {
+    title: "Environment",
+    scope: "environment",
+    sections: [
+      {
+        id: "environment",
+        label: "Name and file",
+        keywords: "environment rename export import file delete",
+      },
+      {
+        id: "providers",
+        label: "AI providers",
+        keywords: "anthropic openai api key models",
+      },
+      {
+        id: "forges",
+        label: "Git forges",
+        keywords: "github gitlab forgejo codeberg ssh token folder",
+      },
+    ],
+  },
+  {
+    title: "This browser",
+    scope: "browser",
+    sections: [
+      {
+        id: "appearance",
+        label: "Appearance",
+        keywords: "style pixel quiet text size light dark theme",
+      },
+      {
+        id: "notifications",
+        label: "Notifications",
+        keywords: "notify alerts held connections",
+      },
     ],
   },
 ] as const
@@ -92,6 +110,9 @@ export type SettingsSection =
 /** Each section's and environment page's address. */
 export const settingsPaths = {
   general: "/e/$env/settings/general",
+  environment: "/e/$env/settings/environment",
+  appearance: "/e/$env/settings/appearance",
+  notifications: "/e/$env/settings/notifications",
   network: "/e/$env/network",
   secrets: "/e/$env/secrets",
   memory: "/e/$env/memory",

@@ -15,6 +15,7 @@ import {
   PencilSimpleIcon,
   PowerIcon,
   SparkleIcon,
+  SunIcon,
   TerminalIcon,
   TerminalWindowIcon,
   TrashIcon,
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/dialog"
 import { SettingsLink } from "@/components/settings/link"
 import { SettingsPage } from "@/components/settings/page"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
 import { inApp } from "@/lib/desktop"
@@ -74,28 +76,61 @@ import {
 } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
-// Most settings apply to the whole installation; the environment file is this environment's.
+/** Switches for the whole of Studio on this machine, in every environment and browser. */
 export function GeneralSettings({ env }: { env: string }) {
   return (
     <SettingsPage title="General">
-      <SettingsGroup label="Studio">
+      <SettingsGroup>
         <AutostartSection />
         <SSHSection />
-        <NotificationsSection />
         <PreviewsSection />
         <TerminalShellSection />
         <ChatStepsSection />
         <SetupSection env={env} />
         <TipsSection env={env} />
       </SettingsGroup>
-      <SettingsGroup label="This environment">
+    </SettingsPage>
+  )
+}
+
+/** The environment on show: its name, its file, and deleting it. */
+export function EnvironmentSettings({ env }: { env: string }) {
+  return (
+    <SettingsPage title="Name and file">
+      <SettingsGroup>
         <EnvironmentNameSection key={env} env={env} />
         <EnvironmentFilesSection env={env} />
         <EnvironmentDeleteSection key={`delete-${env}`} env={env} />
       </SettingsGroup>
-      <SettingsGroup label="This browser">
+    </SettingsPage>
+  )
+}
+
+/** How Studio looks, which each browser keeps for itself. */
+export function AppearanceSettings() {
+  return (
+    <SettingsPage
+      title="Appearance"
+      intro="Kept by this browser. Other browsers keep their own."
+    >
+      <SettingsGroup>
         <StyleSection />
         <TextSizeSection />
+        <ThemeSection />
+      </SettingsGroup>
+    </SettingsPage>
+  )
+}
+
+/** The notifications this browser shows while Studio isn't in front. */
+export function NotificationsSettings() {
+  return (
+    <SettingsPage
+      title="Notifications"
+      intro="Kept by this browser, for this address."
+    >
+      <SettingsGroup>
+        <NotificationsSection />
       </SettingsGroup>
     </SettingsPage>
   )
@@ -105,7 +140,7 @@ export function GeneralSettings({ env }: { env: string }) {
 export function UpdatesSettings() {
   return (
     <SettingsPage title="Updates">
-      <SettingsGroup label="Studio">
+      <SettingsGroup>
         <UpdatesSection />
       </SettingsGroup>
     </SettingsPage>
@@ -468,7 +503,7 @@ function NotificationsSection() {
     <SettingRow
       icon={BellIcon}
       title="Notifications"
-      description="Tells you when an approval waits while Studio's window is not in front. This browser keeps the choice for this address."
+      description="Tells you when an approval waits while Studio's window is not in front."
       control={
         permission === "default" ? (
           <Button size="sm" variant="outline" onClick={request}>
@@ -525,7 +560,7 @@ function StyleSection() {
     <SettingRow
       icon={PaletteIcon}
       title="Style"
-      description="Pixel is square, with hard edges and titles and labels in mono. Quiet is soft and rounded, in sans. Light and dark are at the bottom of the sidebar."
+      description="Pixel is square, with hard edges and titles and labels in mono. Quiet is soft and rounded, in sans."
       control={
         <ToggleGroup
           aria-label="Style"
@@ -578,6 +613,18 @@ function TextSizeSection() {
           ))}
         </ToggleGroup>
       }
+    />
+  )
+}
+
+/** Light or dark, or as the system is; the buttons in the sidebar's foot set the same. */
+function ThemeSection() {
+  return (
+    <SettingRow
+      icon={SunIcon}
+      title="Light or dark"
+      description="The buttons at the bottom of the sidebar set the same."
+      control={<ThemeToggle labelled />}
     />
   )
 }
@@ -801,6 +848,7 @@ function UpdatesSection() {
     <SettingRow
       icon={ArrowCircleUpIcon}
       title="Updates"
+      titleHidden
       description={
         st?.mode === "install"
           ? "Checks GitHub for a newer release once a day. Studio downloads it, verifies its build attestation, and restarts into it once no chat, template build or sign-in is running. If the new version doesn't start, the old one and its database come back."

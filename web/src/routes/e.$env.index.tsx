@@ -112,7 +112,7 @@ const bannerKey = "studio.notifications-banner"
 
 /**
  * Asks once whether Studio may notify. It goes away when the browser has the answer, or for
- * good when it is dismissed; Settings → General still has the button.
+ * good when it is dismissed; Settings → Notifications still has the button.
  */
 function NotificationsBanner() {
   const { permission, request } = useNotificationPermission()

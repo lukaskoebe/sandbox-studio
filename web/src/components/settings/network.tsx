@@ -175,7 +175,7 @@ function LocalNetworkSection({ env }: { env: string }) {
             <Input
               id="private-host"
               autoComplete="off"
-              placeholder="192.168.178.20, 192.168.178.0/24 or git.company.local"
+              placeholder="e.g. 192.168.178.20, 192.168.178.0/24 or git.company.local"
               value={host}
               onChange={(e) => {
                 setHost(e.target.value)
@@ -196,7 +196,7 @@ function LocalNetworkSection({ env }: { env: string }) {
             <Input
               id="private-host-ports"
               autoComplete="off"
-              placeholder="80, 443"
+              placeholder="e.g. 80, 443"
               value={ports}
               aria-invalid={portList === null}
               onChange={(e) => {
@@ -384,7 +384,7 @@ function HostPortsSection({ env }: { env: string }) {
               id="host-port"
               autoComplete="off"
               inputMode="numeric"
-              placeholder="22"
+              placeholder="e.g. 22"
               value={port}
               aria-invalid={parsed === null}
               onChange={(e) => setPort(e.target.value)}

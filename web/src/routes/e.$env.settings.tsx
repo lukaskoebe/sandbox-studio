@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import {
   Link,
   Outlet,
@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-router"
 import { EnvironmentLabel } from "@/components/page-header"
 import { settingsGroups, settingsPaths } from "@/components/settings/link"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings")({
@@ -16,14 +15,13 @@ export const Route = createFileRoute("/e/$env/settings")({
 })
 
 /**
- * Settings as one page: a nav of sections grouped by what they belong to (this environment,
- * the accounts Studio uses, this computer) with a search over them, and the section in view.
- * On phones the nav is a row above the section that scrolls sideways.
+ * Settings as one page: a nav of sections grouped by what they apply to (all of Studio, the
+ * environment on show, this browser), and the section in view. Only the Environment group
+ * names the environment. On phones the nav is a row above the section that scrolls sideways.
  */
 function SettingsLayout() {
   const { env } = Route.useParams()
   const matchRoute = useMatchRoute()
-  const [query, setQuery] = useState("")
   const nav = useRef<HTMLElement>(null)
   const pathname = useLocation({ select: (l) => l.pathname })
   // On phones the nav scrolls sideways; keep the open section in view.
@@ -38,13 +36,6 @@ function SettingsLayout() {
     )
       el.scrollLeft = left - 8
   }, [pathname])
-  const q = query.trim().toLowerCase()
-  const groups = settingsGroups.map((g) => ({
-    ...g,
-    sections: g.sections.filter(
-      (s) => !q || `${s.label} ${s.keywords}`.toLowerCase().includes(q)
-    ),
-  }))
 
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -54,29 +45,27 @@ function SettingsLayout() {
           className="flex h-14 shrink-0 items-center gap-2 px-3 md:px-4"
         >
           <h1 className="text-sm">Settings</h1>
-          <EnvironmentLabel env={env} />
         </header>
-        <div className="p-2 pb-0 max-md:hidden">
-          <Input
-            type="search"
-            aria-label="Search settings"
-            placeholder="Search settings"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="h-8"
-          />
-        </div>
         <nav
           ref={nav}
           aria-label="Settings"
           className="flex gap-1 overflow-x-auto p-2 md:min-h-0 md:flex-1 md:flex-col md:overflow-y-auto"
         >
-          {groups.map(
-            (g) =>
+          {settingsGroups.map(
+            (g, i) =>
               g.sections.length > 0 && (
                 <div key={g.title} className="contents md:block md:pb-3">
-                  <p className="px-2 pt-1 pb-1.5 section-label text-muted-foreground max-md:hidden">
+                  {i > 0 && (
+                    <span
+                      aria-hidden
+                      className="my-1.5 w-px shrink-0 bg-border md:hidden"
+                    />
+                  )}
+                  <p className="flex items-center gap-2 px-2 pt-1 pb-1.5 section-label text-muted-foreground max-md:hidden">
                     {g.title}
+                    {g.scope === "environment" && (
+                      <EnvironmentLabel env={env} />
+                    )}
                   </p>
                   {g.sections.map((s) => {
                     const active = !!matchRoute({
@@ -100,11 +89,6 @@ function SettingsLayout() {
                   })}
                 </div>
               )
-          )}
-          {groups.every((g) => g.sections.length === 0) && (
-            <p className="px-2 text-xs text-muted-foreground">
-              No setting matches.
-            </p>
           )}
         </nav>
       </div>

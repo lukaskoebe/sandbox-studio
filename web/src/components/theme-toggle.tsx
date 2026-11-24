@@ -15,9 +15,16 @@ const modes: { value: ThemeMode; label: string; icon: Icon }[] = [
 
 /**
  * Picks system, light or dark for this browser; lib/theme.ts stores the choice. It sits in the
- * sidebar's footer (docs/design/ui-style.md).
+ * sidebar's footer (docs/design/ui-style.md) and in Settings › Appearance.
  */
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({
+  className,
+  labelled,
+}: {
+  className?: string
+  /** The words beside the icons, as Settings › Appearance shows them. */
+  labelled?: boolean
+}) {
   const mode = useThemeMode()
   return (
     <ToggleGroup
@@ -36,9 +43,10 @@ export function ThemeToggle({ className }: { className?: string }) {
           key={m.value}
           value={m.value}
           aria-label={m.label}
-          title={m.label}
+          title={labelled ? undefined : m.label}
         >
           <m.icon />
+          {labelled && m.label}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

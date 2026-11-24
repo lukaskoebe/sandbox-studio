@@ -46,7 +46,7 @@ test("app: in the Studio app's webview, new windows go to the app and the page k
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible()
 
   // The system shows notifications, so Settings doesn't ask for the browser's.
-  await page.goto(`/e/${env}/settings/general`)
+  await page.goto(`/e/${env}/settings/notifications`)
   const row = page.getByRole("group", { name: "Notifications" })
   await expect(row).toContainText("On")
   await expect(row.getByRole("button")).toHaveCount(0)

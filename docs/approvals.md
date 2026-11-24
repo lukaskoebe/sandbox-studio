@@ -125,7 +125,7 @@ change it.
   approximate.
 - New approvals raise a browser notification (Notification API) once the user allows it,
   whenever Studio's window is not in front, even while its tab is in view behind another app.
-  Home asks once (dismissable), and Settings → General has the button for later. The pending
+  Home asks once (dismissable), and Settings → Notifications has the button for later. The pending
   approvals keep polling in a background tab, and the change stream reopens by itself after
   Studio restarts. A chat's stream closes while its tab is hidden and resumes from its last
   rev: over HTTP/1.1 the browser has six connections to Studio for all its tabs.

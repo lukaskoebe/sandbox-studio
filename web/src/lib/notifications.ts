@@ -36,7 +36,7 @@ function subscribe(listener: () => void) {
 }
 
 /**
- * The notification permission, shared by the approval stack, Settings → General and Home's
+ * The notification permission, shared by the approval stack, Settings → Notifications and Home's
  * banner, so asking in one place updates the others.
  */
 export function useNotificationPermission() {

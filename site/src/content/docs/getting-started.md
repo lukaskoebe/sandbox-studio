@@ -62,7 +62,7 @@ This is the sign-in for your local Studio app. It does not sign an agent into an
 
 Studio listens on loopback, so other machines on your network cannot open its UI. The UI and the computers' services stay on the machine running Studio.
 
-Studio is square by default, with titles, buttons and labels in mono. For a soft, rounded look in sans, set **Style** to **Quiet** under **Settings → General**. Each browser keeps its own style, as it does light or dark, which you pick at the bottom of the sidebar.
+Studio is square by default, with titles, buttons and labels in mono. For a soft, rounded look in sans, set **Style** to **Quiet** under **Settings → Appearance**. Each browser keeps its own style, text size and light or dark; the buttons at the bottom of the sidebar also pick light or dark.
 
 To stop Studio, run `studio quit` or pick **Quit Studio…** in the Studio menu, which the version line at the foot of the sidebar opens; computers keep running. `studio restart`, or **Restart Studio…** in the same menu, stops Studio and starts it again. Installing a new version restarts a running Studio by itself. To remove Studio and everything it created, run `studio uninstall`, which lists what goes and asks you to confirm.
 

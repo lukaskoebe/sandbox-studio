@@ -21,7 +21,7 @@ test("an environment exports to a file without its keys, and the file imports as
     action: "allow",
   })
 
-  await page.goto(`/e/${id}/settings/general`)
+  await page.goto(`/e/${id}/settings/environment`)
   const downloaded = page.waitForEvent("download")
   await page.getByRole("link", { name: "Export environment" }).click()
   const file = await downloaded

@@ -52,7 +52,7 @@ Non-goals:
   providers, secrets, rules, teammates, sandboxes, memory, approvals and forges. Nothing is
   shared between environments, and each has its own TLS CA. The UI shows one environment at
   a time (`/e/$env/...`), with a switcher in the sidebar. A fresh install gets one
-  environment called "Default". Settings → General renames one (`PATCH /api/environments/{env}`)
+  environment called "Default". Settings → Name and file renames one (`PATCH /api/environments/{env}`)
   and deletes one after its name is typed (`DELETE /api/environments/{env}`): Studio takes the
   lock of each of its sandboxes, of every kind, refuses with 409 while one is busy, an import
   runs or a template builds, then removes their VMs, checkpoints, terminals and egress,

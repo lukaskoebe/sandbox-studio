@@ -318,7 +318,7 @@
 }
 
 /*
- * The quiet style, picked in Settings → General: soft and rounded. Titles, controls and labels
+ * The quiet style, picked in Settings → Appearance: soft and rounded. Titles, controls and labels
  * in sans, round pills, lighter borders and Tailwind's soft shadows. `.dark[data-style="quiet"]`
  * outranks `.dark`, so its borders win in dark mode.
  */

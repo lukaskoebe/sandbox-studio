@@ -84,6 +84,7 @@ test("every page's text is on the type scale, in both styles", async ({
       "/chats",
       "/memory",
       "/settings/general",
+      "/settings/appearance",
       "/network",
       "/settings/git",
     ]) {

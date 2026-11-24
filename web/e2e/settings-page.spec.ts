@@ -27,7 +27,7 @@ async function seedRules(api: Api, env: string, sandboxId: string) {
   return rules
 }
 
-test("the settings nav opens sections by URL, by click and by search", async ({
+test("the settings nav opens sections by URL and by click, grouped by what they apply to", async ({
   page,
   env,
 }) => {
@@ -58,12 +58,28 @@ test("the settings nav opens sections by URL, by click and by search", async ({
     page.getByRole("link", { name: "Git", exact: true })
   ).toHaveAttribute("aria-pressed", "true")
 
-  // The search finds a section by what it holds, not only by its name.
+  // Studio, the environment on show, and this browser; only the environment's group names it.
   await page.goto(`/e/${env}/settings`)
-  await page.getByRole("searchbox", { name: "Search settings" }).fill("gitlab")
-  await expect(nav.getByRole("link")).toHaveText(["Git forges"])
-  await page.getByRole("searchbox", { name: "Search settings" }).fill("zzz")
-  await expect(nav.getByText("No setting matches.")).toBeVisible()
+  await expect(nav.getByRole("link")).toHaveText([
+    "General",
+    "Updates",
+    "Templates",
+    "Runtime",
+    "Ports and LAN",
+    "Name and file",
+    "AI providers",
+    "Git forges",
+    "Appearance",
+    "Notifications",
+  ])
+  await expect(page.getByRole("searchbox")).toHaveCount(0)
+  await nav.getByRole("link", { name: "Appearance" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/appearance$`))
+  await expect(
+    page.getByRole("group", { name: "Light or dark" }).getByRole("button", {
+      name: "Dark",
+    })
+  ).toBeVisible()
 })
 
 test("the old network and settings addresses lead to the new pages", async ({
@@ -234,7 +250,7 @@ test("Studio is Pixel unless this browser picks Quiet", async ({
         getComputedStyle(document.documentElement).getPropertyValue("--radius")
       )
     )
-  await page.goto(`/e/${env}/settings/general`)
+  await page.goto(`/e/${env}/settings/appearance`)
   const style = page.getByRole("group", { name: "Style" })
   await expect(html).toHaveAttribute("data-style", "pixel")
   await expect(style.getByRole("button", { name: "Pixel" })).toHaveAttribute(
@@ -265,7 +281,7 @@ test("this browser's text size scales the whole page", async ({
     page.evaluate(() =>
       parseFloat(getComputedStyle(document.documentElement).fontSize)
     )
-  await page.goto(`/e/${env}/settings/general`)
+  await page.goto(`/e/${env}/settings/appearance`)
   const size = page.getByRole("group", { name: "Text size" })
   await expect(size.getByRole("button", { name: "100%" })).toHaveAttribute(
     "aria-pressed",

@@ -546,7 +546,7 @@ export function CommandPalette({
       style === "quiet"
         ? "Switch to the Pixel style"
         : "Switch to the Quiet style",
-      "Settings › General",
+      "Settings › Appearance",
       "style look theme pixel quiet",
       () => setStyleName(style === "quiet" ? "pixel" : "quiet")
     )

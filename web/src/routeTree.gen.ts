@@ -38,11 +38,14 @@ import { Route as EEnvNetworkRulesRouteImport } from './routes/e.$env.network.ru
 import { Route as EEnvSandboxesIdRouteImport } from './routes/e.$env.sandboxes.$id'
 import { Route as EEnvSettingsIndexRouteImport } from './routes/e.$env.settings.index'
 import { Route as EEnvSettingsActivityRouteImport } from './routes/e.$env.settings.activity'
+import { Route as EEnvSettingsAppearanceRouteImport } from './routes/e.$env.settings.appearance'
+import { Route as EEnvSettingsEnvironmentRouteImport } from './routes/e.$env.settings.environment'
 import { Route as EEnvSettingsForgesRouteImport } from './routes/e.$env.settings.forges'
 import { Route as EEnvSettingsGeneralRouteImport } from './routes/e.$env.settings.general'
 import { Route as EEnvSettingsGitRouteImport } from './routes/e.$env.settings.git'
 import { Route as EEnvSettingsMemoryRouteImport } from './routes/e.$env.settings.memory'
 import { Route as EEnvSettingsNetworkRouteImport } from './routes/e.$env.settings.network'
+import { Route as EEnvSettingsNotificationsRouteImport } from './routes/e.$env.settings.notifications'
 import { Route as EEnvSettingsPortsRouteImport } from './routes/e.$env.settings.ports'
 import { Route as EEnvSettingsProvidersRouteImport } from './routes/e.$env.settings.providers'
 import { Route as EEnvSettingsRuntimeRouteImport } from './routes/e.$env.settings.runtime'
@@ -203,6 +206,16 @@ const EEnvSettingsActivityRoute = EEnvSettingsActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => EEnvSettingsRoute,
 } as any)
+const EEnvSettingsAppearanceRoute = EEnvSettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => EEnvSettingsRoute,
+} as any)
+const EEnvSettingsEnvironmentRoute = EEnvSettingsEnvironmentRouteImport.update({
+  id: '/environment',
+  path: '/environment',
+  getParentRoute: () => EEnvSettingsRoute,
+} as any)
 const EEnvSettingsForgesRoute = EEnvSettingsForgesRouteImport.update({
   id: '/forges',
   path: '/forges',
@@ -228,6 +241,12 @@ const EEnvSettingsNetworkRoute = EEnvSettingsNetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => EEnvSettingsRoute,
 } as any)
+const EEnvSettingsNotificationsRoute =
+  EEnvSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => EEnvSettingsRoute,
+  } as any)
 const EEnvSettingsPortsRoute = EEnvSettingsPortsRouteImport.update({
   id: '/ports',
   path: '/ports',
@@ -322,11 +341,14 @@ export interface FileRoutesByFullPath {
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/activity': typeof EEnvSettingsActivityRoute
+  '/e/$env/settings/appearance': typeof EEnvSettingsAppearanceRoute
+  '/e/$env/settings/environment': typeof EEnvSettingsEnvironmentRoute
   '/e/$env/settings/forges': typeof EEnvSettingsForgesRoute
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
   '/e/$env/settings/memory': typeof EEnvSettingsMemoryRoute
   '/e/$env/settings/network': typeof EEnvSettingsNetworkRoute
+  '/e/$env/settings/notifications': typeof EEnvSettingsNotificationsRoute
   '/e/$env/settings/ports': typeof EEnvSettingsPortsRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
@@ -370,11 +392,14 @@ export interface FileRoutesByTo {
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/activity': typeof EEnvSettingsActivityRoute
+  '/e/$env/settings/appearance': typeof EEnvSettingsAppearanceRoute
+  '/e/$env/settings/environment': typeof EEnvSettingsEnvironmentRoute
   '/e/$env/settings/forges': typeof EEnvSettingsForgesRoute
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
   '/e/$env/settings/memory': typeof EEnvSettingsMemoryRoute
   '/e/$env/settings/network': typeof EEnvSettingsNetworkRoute
+  '/e/$env/settings/notifications': typeof EEnvSettingsNotificationsRoute
   '/e/$env/settings/ports': typeof EEnvSettingsPortsRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
@@ -421,11 +446,14 @@ export interface FileRoutesById {
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/activity': typeof EEnvSettingsActivityRoute
+  '/e/$env/settings/appearance': typeof EEnvSettingsAppearanceRoute
+  '/e/$env/settings/environment': typeof EEnvSettingsEnvironmentRoute
   '/e/$env/settings/forges': typeof EEnvSettingsForgesRoute
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
   '/e/$env/settings/memory': typeof EEnvSettingsMemoryRoute
   '/e/$env/settings/network': typeof EEnvSettingsNetworkRoute
+  '/e/$env/settings/notifications': typeof EEnvSettingsNotificationsRoute
   '/e/$env/settings/ports': typeof EEnvSettingsPortsRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
@@ -473,11 +501,14 @@ export interface FileRouteTypes {
     | '/e/$env/network/rules'
     | '/e/$env/sandboxes/$id'
     | '/e/$env/settings/activity'
+    | '/e/$env/settings/appearance'
+    | '/e/$env/settings/environment'
     | '/e/$env/settings/forges'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
     | '/e/$env/settings/memory'
     | '/e/$env/settings/network'
+    | '/e/$env/settings/notifications'
     | '/e/$env/settings/ports'
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
@@ -521,11 +552,14 @@ export interface FileRouteTypes {
     | '/e/$env/network/rules'
     | '/e/$env/sandboxes/$id'
     | '/e/$env/settings/activity'
+    | '/e/$env/settings/appearance'
+    | '/e/$env/settings/environment'
     | '/e/$env/settings/forges'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
     | '/e/$env/settings/memory'
     | '/e/$env/settings/network'
+    | '/e/$env/settings/notifications'
     | '/e/$env/settings/ports'
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
@@ -571,11 +605,14 @@ export interface FileRouteTypes {
     | '/e/$env/network/rules'
     | '/e/$env/sandboxes/$id'
     | '/e/$env/settings/activity'
+    | '/e/$env/settings/appearance'
+    | '/e/$env/settings/environment'
     | '/e/$env/settings/forges'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
     | '/e/$env/settings/memory'
     | '/e/$env/settings/network'
+    | '/e/$env/settings/notifications'
     | '/e/$env/settings/ports'
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
@@ -810,6 +847,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvSettingsActivityRouteImport
       parentRoute: typeof EEnvSettingsRoute
     }
+    '/e/$env/settings/appearance': {
+      id: '/e/$env/settings/appearance'
+      path: '/appearance'
+      fullPath: '/e/$env/settings/appearance'
+      preLoaderRoute: typeof EEnvSettingsAppearanceRouteImport
+      parentRoute: typeof EEnvSettingsRoute
+    }
+    '/e/$env/settings/environment': {
+      id: '/e/$env/settings/environment'
+      path: '/environment'
+      fullPath: '/e/$env/settings/environment'
+      preLoaderRoute: typeof EEnvSettingsEnvironmentRouteImport
+      parentRoute: typeof EEnvSettingsRoute
+    }
     '/e/$env/settings/forges': {
       id: '/e/$env/settings/forges'
       path: '/forges'
@@ -843,6 +894,13 @@ declare module '@tanstack/react-router' {
       path: '/network'
       fullPath: '/e/$env/settings/network'
       preLoaderRoute: typeof EEnvSettingsNetworkRouteImport
+      parentRoute: typeof EEnvSettingsRoute
+    }
+    '/e/$env/settings/notifications': {
+      id: '/e/$env/settings/notifications'
+      path: '/notifications'
+      fullPath: '/e/$env/settings/notifications'
+      preLoaderRoute: typeof EEnvSettingsNotificationsRouteImport
       parentRoute: typeof EEnvSettingsRoute
     }
     '/e/$env/settings/ports': {
@@ -948,11 +1006,14 @@ declare module '@tanstack/react-router' {
 
 interface EEnvSettingsRouteChildren {
   EEnvSettingsActivityRoute: typeof EEnvSettingsActivityRoute
+  EEnvSettingsAppearanceRoute: typeof EEnvSettingsAppearanceRoute
+  EEnvSettingsEnvironmentRoute: typeof EEnvSettingsEnvironmentRoute
   EEnvSettingsForgesRoute: typeof EEnvSettingsForgesRoute
   EEnvSettingsGeneralRoute: typeof EEnvSettingsGeneralRoute
   EEnvSettingsGitRoute: typeof EEnvSettingsGitRoute
   EEnvSettingsMemoryRoute: typeof EEnvSettingsMemoryRoute
   EEnvSettingsNetworkRoute: typeof EEnvSettingsNetworkRoute
+  EEnvSettingsNotificationsRoute: typeof EEnvSettingsNotificationsRoute
   EEnvSettingsPortsRoute: typeof EEnvSettingsPortsRoute
   EEnvSettingsProvidersRoute: typeof EEnvSettingsProvidersRoute
   EEnvSettingsRuntimeRoute: typeof EEnvSettingsRuntimeRoute
@@ -964,11 +1025,14 @@ interface EEnvSettingsRouteChildren {
 
 const EEnvSettingsRouteChildren: EEnvSettingsRouteChildren = {
   EEnvSettingsActivityRoute: EEnvSettingsActivityRoute,
+  EEnvSettingsAppearanceRoute: EEnvSettingsAppearanceRoute,
+  EEnvSettingsEnvironmentRoute: EEnvSettingsEnvironmentRoute,
   EEnvSettingsForgesRoute: EEnvSettingsForgesRoute,
   EEnvSettingsGeneralRoute: EEnvSettingsGeneralRoute,
   EEnvSettingsGitRoute: EEnvSettingsGitRoute,
   EEnvSettingsMemoryRoute: EEnvSettingsMemoryRoute,
   EEnvSettingsNetworkRoute: EEnvSettingsNetworkRoute,
+  EEnvSettingsNotificationsRoute: EEnvSettingsNotificationsRoute,
   EEnvSettingsPortsRoute: EEnvSettingsPortsRoute,
   EEnvSettingsProvidersRoute: EEnvSettingsProvidersRoute,
   EEnvSettingsRuntimeRoute: EEnvSettingsRuntimeRoute,

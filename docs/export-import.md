@@ -95,7 +95,7 @@ sandbox.
 ## Environments
 
 An environment's configuration is exported as a `.studio-environment` file, a JSON document,
-and imported as a new environment. Settings → General has both buttons.
+and imported as a new environment. Settings → Name and file has both buttons.
 
 - `GET /api/environments/{env}/export` downloads the file.
 - `POST /api/environment-imports` with the file as an `application/json` body creates the

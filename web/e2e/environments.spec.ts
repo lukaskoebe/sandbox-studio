@@ -19,13 +19,13 @@ test("a new environment opens at once, and it can be renamed in Settings", async
   await expect(sidebar).toContainText(`Client ${suffix}`)
 
   const id = new URL(page.url()).pathname.split("/")[2]
-  await page.goto(`/e/${id}/settings/general`)
+  await page.goto(`/e/${id}/settings/environment`)
   const field = page.getByRole("textbox", { name: "Environment name" })
   await expect(field).toHaveValue(`Client ${suffix}`)
   await field.fill(`Renamed ${suffix}`)
   await page.getByRole("button", { name: "Rename", exact: true }).click()
   await expect(sidebar).toContainText(`Renamed ${suffix}`)
-  await expect(page).toHaveURL(new RegExp(`/e/${id}/settings/general`))
+  await expect(page).toHaveURL(new RegExp(`/e/${id}/settings/environment`))
 })
 
 test("an environment is deleted with its computers after its name is typed", async ({
@@ -42,7 +42,7 @@ test("an environment is deleted with its computers after its name is typed", asy
     `doomed-${suffix}`
   )
 
-  await page.goto(`/e/${id}/settings/general`)
+  await page.goto(`/e/${id}/settings/environment`)
   await page.getByRole("button", { name: "Delete…" }).click()
   const dialog = page.getByRole("dialog", { name: `Delete Gone ${suffix}?` })
   const confirm = dialog.getByRole("button", { name: "Delete environment" })

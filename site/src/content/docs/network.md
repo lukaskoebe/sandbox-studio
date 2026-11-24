@@ -22,7 +22,7 @@ Studio holds the original connection for up to 60 seconds, and the row counts do
 
 Requests one computer makes together share a row, such as **Network access · 3** with the hosts: **Allow all** gives each host the rule its own row's **Allow** would, the arrow beside it allows them for an hour or denies them all, and **Each** splits them into a row per host. A browser page's requests share a row the same way. On the computer's screen, the count opens them too: **Always allow all** and **Always deny all** make lasting rules for that computer, and **Review individually** opens them one by one. In the computer's **Connections**, requests that gave up are kept under **Gave up waiting**, with **Ignore all** and **Always allow all**.
 
-To hear of a held connection while Studio isn't in front, choose **Enable notifications** under **Settings → General → Notifications**. You can also answer in the [terminal UI](../tui/) or with `studio approve` and `studio deny` (see [CLI](../cli/)).
+To hear of a held connection while Studio isn't in front, choose **Enable notifications** under **Settings → Notifications**. You can also answer in the [terminal UI](../tui/) or with `studio approve` and `studio deny` (see [CLI](../cli/)).
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
