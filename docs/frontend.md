@@ -77,7 +77,7 @@ to an environment.
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)): all of them, linked from Home. A chat is a thread on its teammate's page, so `/chats/$chat` redirects there with `?thread=`, and is left only for a chat the list doesn't know, such as one just deleted. `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox, and opens the thread it creates |
 | `/e/$env/settings/<section>` | Settings (below) |
 | `/e/$env/lead`, `/lead/$day`, `/lead/settings` | [Lead](lead.md): today (written or so far), a written day, its settings |
-| `/e/$env/teammates` | teammates |
+| `/e/$env/teammates` | every teammate, Lead first: its agent (Claude Code, Codex, OpenCode, or Studio for Lead), provider, model, state (working, needs you, idle, or off while none of its computers runs, with what keeps its sessions from starting, such as a missing key) and the identity it commits as |
 | `/e/$env/teammates/$id` | the teammate and its computer side by side ([design](design/teammate-computer.md)), below |
 | `/e/$env/teammates/$id/$view` | the old tabs: `chats` opens the teammate's home, `settings` (with its `?open=`) the settings page, `tasks` and `memory` their sheets, `browser` the screen's Browser tab |
 | `/e/$env/git/reviews/$id` | one git push review: the diff, commits and comments in tabs, decided there while it waits, its outcome after |
@@ -144,7 +144,8 @@ working in a terminal with no chat (marked `>_`), and the two latest others of t
 each with its state and, for a teammate with more than one computer, the computer; then "All N
 threads" to its home. On hover a teammate shows `>_`, a terminal on the computer last used for
 it, and +, a new thread: its home, with the composer focused (`lib/new-thread.ts`; ⌘K's
-"New thread with X" does the same). Your computers lists the sandboxes without a teammate, each with its
+"New thread with X" does the same). All teammates ends the group and opens their list; the
+group's label is plain text. Your computers lists the sandboxes without a teammate, each with its
 status dot; Environment has Computers (every computer), Network, Secrets, Memory and Activity;
 the footer has Settings, the version and the theme switch. A number beside an entry is always
 what needs you there. Teammates' +

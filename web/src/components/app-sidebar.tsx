@@ -17,6 +17,7 @@ import {
   PlusIcon,
   TerminalIcon,
   TrayIcon,
+  UsersThreeIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
 import { ChatContextMenu } from "@/components/chat/chat-actions"
@@ -224,10 +225,7 @@ export function AppSidebar({
             </SidebarMenu>
           </SidebarGroup>
           <SidebarGroup className="py-1">
-            <SidebarGroupLabel
-              className={groupLabel}
-              render={<Link to="/e/$env/teammates" params={{ env }} />}
-            >
+            <SidebarGroupLabel className={groupLabel}>
               Teammates
             </SidebarGroupLabel>
             <SidebarGroupAction
@@ -289,6 +287,30 @@ export function AppSidebar({
                     />
                   )
                 })}
+                {/* The group ends with the list of them all, the way "Another computer" ends
+                    a teammate's computers. */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    size="sm"
+                    tooltip="All teammates"
+                    className="text-muted-foreground"
+                    isActive={
+                      !!matchRoute({ to: "/e/$env/teammates", params: { env } })
+                    }
+                    render={
+                      <Link
+                        to="/e/$env/teammates"
+                        params={{ env }}
+                        activeOptions={{ exact: true }}
+                      />
+                    }
+                  >
+                    <UsersThreeIcon />
+                    <span className="min-w-0 flex-1 truncate">
+                      All teammates
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

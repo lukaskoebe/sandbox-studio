@@ -651,3 +651,31 @@ test("the sidebar's + and ⌘K start a new thread with a teammate in its home co
   await expect(page).toHaveURL(new RegExp(`/teammates/${id}$`))
   await expect(composer).toBeFocused()
 })
+
+test("All teammates ends the sidebar's group and lists Lead first, with each one's state", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}`)
+  const sidebar = page.locator('[data-sidebar="sidebar"]')
+  await sidebar.getByRole("link", { name: "All teammates" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates$`))
+  await expect(
+    sidebar.getByRole("link", { name: "All teammates" })
+  ).toHaveAttribute("data-active", "")
+
+  const table = page.getByRole("table")
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Name",
+    "Agent",
+    "Provider",
+    "Model",
+    "State",
+    "Commits as",
+  ])
+  const lead = table.getByRole("row").nth(1)
+  await expect(lead).toContainText("Writes the day")
+  await expect(lead).toContainText("Studio")
+  await lead.getByRole("link", { name: "Lead" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/lead$`))
+})
