@@ -465,15 +465,17 @@
   .tok-function {
     color: var(--code-variable);
   }
-  /* A sprite avatar is sharp only at whole multiples of 16 px: it takes the largest that fits
-     its tile, and the tile's color shows around it. */
-  .avatar-sprite {
-    flex: none;
-    width: 100%;
-    height: 100%;
-    width: round(down, 100%, 16px);
-    height: round(down, 100%, 16px);
-  }
+}
+
+/* A sprite avatar is sharp only at whole multiples of 16 px: it takes the largest that fits
+   its tile, and the tile's color shows around it. Outside the layers, so a button's rule for
+   its icons (`[&_svg]:size-3.5`) doesn't squeeze it to 14 px. */
+.avatar-sprite {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  width: round(down, 100%, 16px);
+  height: round(down, 100%, 16px);
 }
 
 /*

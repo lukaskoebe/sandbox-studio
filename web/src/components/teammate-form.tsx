@@ -701,7 +701,9 @@ function AvatarPicker({
               title={label}
               onClick={() => onChange(choice)}
               className={cn(
-                "rounded-full p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                // flex, so the avatar isn't set on a line of text whose descent
+                // makes the ring taller than the avatar.
+                "flex rounded-full p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 worn === choice && "ring-2 ring-primary"
               )}
             >
