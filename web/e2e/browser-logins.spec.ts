@@ -31,6 +31,7 @@ async function signInPage(page: Page, api: Api, env: string) {
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.url)
     .toBe(`https://${host}/login`)
+  await settled(page)
   const logins = async () =>
     (await api.json<Secret[]>(
       "GET",
@@ -55,6 +56,12 @@ async function clickPage(page: Page, x: number, y: number) {
   })
 }
 
+// The address bar's navigation has answered: until then the live view takes no input, and a
+// click on it is dropped.
+async function settled(page: Page) {
+  await expect(page.getByRole("button", { name: "Reload" })).toBeEnabled()
+}
+
 // Opens url from the address bar, and waits until the browser has: a click sent before then
 // lands on the old page, whose field the new one forgets.
 async function open(page: Page, api: Api, tm: string, url: string) {
@@ -70,6 +77,7 @@ async function open(page: Page, api: Api, tm: string, url: string) {
   await address.fill(url)
   await address.press("Enter")
   await expect.poll(opened).toBeGreaterThan(before)
+  await settled(page)
 }
 
 // Clicks into the password field and waits for the page to say it is one: what is typed
@@ -96,7 +104,7 @@ test("a password typed into the live view is saved as a browser login", async ({
   env,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
-  const { name, host, logins } = await signInPage(page, api, env)
+  const { name, host, tm, logins } = await signInPage(page, api, env)
   await page.waitForTimeout(300) // the frame of the new page
   await clickPassword(page)
   await page.keyboard.type("hunter3")
@@ -131,10 +139,7 @@ test("a password typed into the live view is saved as a browser login", async ({
   expect(value!.value).toBe("hunter2")
 
   // The same password again is not offered.
-  const address = page.getByLabel("Browser address")
-  await address.fill(`https://${host}/login`)
-  await address.press("Enter")
-  await page.waitForTimeout(300)
+  await open(page, api, tm, `https://${host}/login`)
   await clickPassword(page)
   await page.keyboard.type("hunter2")
   await page.keyboard.press("Enter")
@@ -142,6 +147,7 @@ test("a password typed into the live view is saved as a browser login", async ({
   await expect(card).toHaveCount(0)
 
   // The site info has it: Copy password reads it back, and the switch takes agents off it.
+  const address = page.getByLabel("Browser address")
   await address.fill(`https://${host}/login`)
   await address.press("Enter")
   await page.getByRole("button", { name: `Site info for ${host}` }).click()
