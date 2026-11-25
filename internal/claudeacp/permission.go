@@ -87,6 +87,14 @@ func (s *session) decide(req permissionRequest) permissionAnswer {
 		input = json.RawMessage("{}")
 	}
 	title, kind, locations := toolCall(req.ToolName, input)
+	s.mu.Lock()
+	s.asking++
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.asking--
+		s.mu.Unlock()
+	}()
 	raw, err := s.a.call(s.a.ctx, acp.MethodRequestPermission, acp.RequestPermissionRequest{
 		SessionID: s.id,
 		ToolCall: acp.ToolCallUpdate{ToolCallID: req.ToolUseID, Title: title, Kind: kind,

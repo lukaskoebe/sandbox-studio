@@ -52,7 +52,9 @@ func TestMain(m *testing.M) {
 
 // fakeClaude is Claude Code for the tests. A prompt starting with "say" gets the text
 // fixture, "run" asks about a Bash call and "ask" about a question, "wait" streams until it
-// is stopped.
+// is stopped, and "hold" streams until a message is steered in, which interrupts it. Every
+// result names the messages it answers by their uuids, and each line read is recorded in the
+// argv file + ".in".
 func fakeClaude() {
 	args := os.Args[1:]
 	if path := os.Getenv(argvEnv); path != "" {
@@ -76,8 +78,27 @@ func fakeClaude() {
 	}
 	emit("doc-init.jsonl")
 	sc := bufio.NewScanner(os.Stdin)
-	for sc.Scan() {
-		text := promptText(sc.Bytes())
+	sc.Buffer(nil, 1<<20)
+	read := func() bool {
+		if !sc.Scan() {
+			return false
+		}
+		if path := os.Getenv(argvEnv); path != "" {
+			if f, err := os.OpenFile(path+".in", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+				f.Write(append(append([]byte{}, sc.Bytes()...), '\n'))
+				f.Close()
+			}
+		}
+		return true
+	}
+	for read() {
+		line := sc.Bytes()
+		text, answers := promptText(line), stdinMessage(line).UUID
+		// Results name what they answer, as Claude Code's do.
+		emit := func(fixture string, replace ...string) {
+			emit(fixture, append([]string{`"type":"result",`,
+				`"type":"result","user_message_uuid":"` + answers + `","user_message_uuids":["` + answers + `"],`}, replace...)...)
+		}
 		writeTranscript(session)
 		switch {
 		case strings.HasPrefix(text, "say"):
@@ -100,6 +121,22 @@ func fakeClaude() {
 		case strings.HasPrefix(text, "wait"):
 			emit("doc-wait.jsonl")
 			time.Sleep(time.Hour) // until the shim stops it
+		case strings.HasPrefix(text, "hold"):
+			first := answers
+			emit("doc-wait.jsonl")
+			if !read() {
+				return
+			}
+			steer := stdinMessage(sc.Bytes())
+			// The interrupted cycle ends with an error result that names only the prompt; the
+			// steered message runs next, and its result names both.
+			fmt.Printf(`{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":%q,"user_message_uuid":%q,"user_message_uuids":[%q]}`+"\n", session, first, first)
+			b := readFixture("doc-text.jsonl")
+			b = bytes.ReplaceAll(b, []byte("SESSION"), []byte(session))
+			b = bytes.ReplaceAll(b, []byte(`"Hel"`), []byte(`"took "`))
+			b = bytes.ReplaceAll(b, []byte(`"lo"`), []byte(`"`+promptText(sc.Bytes())+" at "+steer.Priority+`"`))
+			b = bytes.ReplaceAll(b, []byte(`"type":"result",`), []byte(`"type":"result","user_message_uuid":"`+steer.UUID+`","user_message_uuids":["`+first+`","`+steer.UUID+`"],`))
+			os.Stdout.Write(b)
 		}
 	}
 }
@@ -126,6 +163,18 @@ func flagOf(args []string, flag string) string {
 		}
 	}
 	return ""
+}
+
+// stdinMessage is what the shim stamps on a stream-json user message.
+func stdinMessage(line []byte) (m struct {
+	UUID     string `json:"uuid"`
+	Priority string `json:"priority"`
+	Origin   struct {
+		Kind string `json:"kind"`
+	} `json:"origin"`
+}) {
+	_ = json.Unmarshal(line, &m)
+	return m
 }
 
 // promptText is the text of a stream-json user message.
@@ -622,6 +671,109 @@ func TestCancelStopsTheTurnAndTheNextPromptResumes(t *testing.T) {
 	argv := s.argvs(t)
 	if len(argv) != 2 || flagOf(argv[1], "--resume") != id || slices.Contains(argv[1], "--session-id") {
 		t.Fatalf("starts: %q", argv)
+	}
+}
+
+// steer steers text into the session's running turn.
+func (s *shim) steer(t *testing.T, id, text string) acp.SteerResponse {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	resp, err := s.conn.Steer(ctx, id, []acp.ContentBlock{{Type: "text", Text: text}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+// inputs are the stream-json lines the fake Claude Code read, in order.
+func (s *shim) inputs(t *testing.T) [][]byte {
+	t.Helper()
+	b, err := os.ReadFile(s.argv + ".in")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bytes.Split(bytes.TrimSpace(b), []byte("\n"))
+}
+
+// A message steered into a running turn goes to Claude Code at priority "now", as
+// claude-agent-acp sends it; the result of the cycle it interrupted doesn't end the turn, and
+// the one that answers it does.
+func TestSteeringJoinsTheRunningTurn(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	init, err := s.conn.Initialize(ctx, acp.Implementation{Name: "test", Version: "1"})
+	if err != nil || !init.CanSteer() {
+		t.Fatalf("initialize: %+v %v", init, err)
+	}
+	id := s.open(t)
+	done := s.promptAsync(t, id, "hold on")
+	deadline := time.After(testTimeout)
+	for seen := false; !seen; {
+		select {
+		case n := <-s.client.updates:
+			seen = n.Update.Kind == acp.UpdateAgentMessageChunk
+		case <-deadline:
+			t.Fatal("no text before the steer")
+		}
+	}
+	if r := s.steer(t, id, "hurry up"); r.Outcome != acp.SteerInjected {
+		t.Fatalf("steer: %+v", r)
+	}
+	if resp := await(t, done); resp.StopReason != acp.StopEndTurn {
+		t.Fatalf("response: %+v", resp)
+	}
+	if got := agentText(s.drain()); !strings.HasSuffix(got, "took hurry up at now") {
+		t.Fatalf("text %q", got)
+	}
+	in := s.inputs(t)
+	if len(in) != 2 {
+		t.Fatalf("lines: %q", in)
+	}
+	prompt, steer := stdinMessage(in[0]), stdinMessage(in[1])
+	if prompt.UUID == "" || steer.UUID == "" || prompt.UUID == steer.UUID || prompt.Priority != "" ||
+		prompt.Origin.Kind != "human" {
+		t.Fatalf("messages: %s", in)
+	}
+}
+
+// While Studio is asked about a tool call, a steered message goes at priority "later", so it
+// doesn't interrupt the request; the turn ends once it is answered.
+func TestSteeringWaitsForAnOpenPermission(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	id := s.open(t)
+	done := s.promptAsync(t, id, "run the tests")
+	s.nextPermission(t)
+	if r := s.steer(t, id, "say it after"); r.Outcome != acp.SteerInjected {
+		t.Fatalf("steer: %+v", r)
+	}
+	s.client.answer <- acp.RequestPermissionResponse{Outcome: acp.PermissionOutcome{Outcome: "selected", OptionID: optionAllow}}
+	if resp := await(t, done); resp.StopReason != acp.StopEndTurn {
+		t.Fatalf("response: %+v", resp)
+	}
+	if got := agentText(s.drain()); !strings.HasSuffix(got, "Hello") {
+		t.Fatalf("text %q", got)
+	}
+	in := s.inputs(t)
+	if len(in) != 2 || stdinMessage(in[1]).Priority != "later" {
+		t.Fatalf("lines: %s", in)
+	}
+}
+
+// With no turn running, a steered message is left to Studio, which sends it as a prompt.
+func TestSteeringWithoutATurnLeavesTheMessage(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	id := s.open(t)
+	if r := s.steer(t, id, "anything"); r.Outcome != acp.SteerPromptRequired {
+		t.Fatalf("steer: %+v", r)
+	}
+	s.prompt(t, id, "say hi")
+	if r := s.steer(t, id, "anything"); r.Outcome != acp.SteerPromptRequired {
+		t.Fatalf("after a turn: %+v", r)
 	}
 }
 

@@ -203,7 +203,8 @@ terminal stays there.
 
 A message sent while a turn runs goes into it: with `_session/steering` for Claude's and
 Codex's adapters, and as a second `session/prompt` that joins the running loop for
-OpenCode (docs/design/chat-mode.md). The Claude subscription shim takes none yet. There,
+OpenCode (docs/design/chat-mode.md); the Claude subscription shim takes `_session/steering`
+too ([below](#claude-subscription-chats)). Otherwise,
 and when asked to wait (Alt+Enter), it waits in a queue in memory and goes once the chat is
 idle, one turn each. One that can't go then, because the agent can't start, stays first with the
 reason; the rest wait behind it until the user's next message, which tries again. Stop
@@ -303,6 +304,16 @@ Studio ends the chat. The session ID is Claude Code's, so the terminal's `claude
 continues the same conversation. `session/cancel` sends SIGTERM to Claude Code (SIGKILL after 5
 s), and the turn ends `cancelled`. The next prompt starts Claude Code with `--resume`, which
 the docs say leaves an interrupted turn as it is.
+
+**Steering.** The shim advertises `_session/steering` and does what `claude-agent-acp` does
+with the Agent SDK. Every message it writes to Claude Code carries a `uuid`, `session_id`,
+`parent_tool_use_id: null` and `origin: {kind: "human"}`, as the SDK's are. A steered one goes
+into the same stdin at `priority: "now"`, which interrupts the model's generation or moves a
+running tool to the background, or at `"later"` while a permission request waits on Studio, so
+the card stays. The cycle it interrupts ends with a result of its own, often an error, that
+names only the messages it answered (`user_message_uuids`); the turn goes on until a result
+names every steered message, and that result ends it. With no turn running, it answers
+`promptRequired` and Studio sends the message as the next prompt.
 
 Not done yet:
 

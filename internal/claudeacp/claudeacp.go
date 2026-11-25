@@ -158,6 +158,7 @@ func (a *agent) handle(m rpcMessage) (any, *rpcError) {
 				SessionCapabilities: acp.SessionCapabilities{Resume: json.RawMessage("{}")},
 			},
 			AgentInfo: &acp.Implementation{Name: agentName, Version: version.Version},
+			Meta:      steeringMeta(),
 		}, nil
 	case acp.MethodSessionNew:
 		var req acp.NewSessionRequest
@@ -222,8 +223,36 @@ func (a *agent) handle(m rpcMessage) (any, *rpcError) {
 			return nil, internal(err)
 		}
 		return resp, nil
+	case acp.MethodSessionSteering:
+		var req acp.SteerRequest
+		if err := json.Unmarshal(m.Params, &req); err != nil {
+			return nil, invalid(err)
+		}
+		s := a.session(req.SessionID)
+		if s == nil {
+			return nil, &rpcError{Code: acp.CodeInvalidParams, Message: "unknown session"}
+		}
+		if len(req.Prompt) == 0 {
+			return nil, &rpcError{Code: acp.CodeInvalidParams, Message: "steer params require a non-empty prompt"}
+		}
+		content, err := claudeContent(req.Prompt)
+		if err != nil {
+			return nil, &rpcError{Code: acp.CodeInvalidParams, Message: err.Error()}
+		}
+		resp, err := s.steer(content)
+		if err != nil {
+			return nil, internal(err)
+		}
+		return resp, nil
 	}
 	return nil, &rpcError{Code: acp.CodeMethodNotFound, Message: "method not found: " + m.Method}
+}
+
+// steeringMeta advertises _session/steering, as claude-agent-acp does.
+func steeringMeta() *acp.InitializeMeta {
+	m := &acp.InitializeMeta{}
+	m.Steering.Supported = true
+	return m
 }
 
 func invalid(err error) *rpcError {
@@ -376,10 +405,13 @@ type session struct {
 	// servers, which decide what the teammate may do (the permissions server is asked about).
 	allowed []string
 
-	mu    sync.Mutex // guards proc, turn, model, the turn's cancelled flag, and the context
+	mu    sync.Mutex // guards proc, turn, model, asking, the turn's fields, and the context
 	proc  *process   // the running Claude Code process, if any
 	turn  *turn      // the prompt being answered, if any
 	model string     // what --model Claude Code runs with; empty for the settings' model
+	// asking counts the permission requests waiting on Studio: a message steered in meanwhile
+	// waits for the answer rather than interrupting the tool call that asked.
+	asking int
 	// context is what the conversation holds, as claude-agent-acp reports it: the tokens of the
 	// last top-level assistant message (or what a compaction left), the model it came from,
 	// and the model's window from the last result.
@@ -394,6 +426,10 @@ type session struct {
 type turn struct {
 	cancelled bool // set by cancel; guarded by session.mu
 	done      chan turnResult
+	// steers are the uuids of the messages steered into the turn that no result has answered
+	// yet. While one is open, a result is that of the cycle the message interrupted, and the
+	// turn goes on; guarded by session.mu.
+	steers map[string]bool
 }
 
 // turnResult ends a turn: its response, or the error the prompt returns.
@@ -467,7 +503,7 @@ func (s *session) prompt(content []any) (acp.PromptResponse, error) {
 	t := &turn{done: make(chan turnResult, 1)}
 	s.turn = t
 	s.mu.Unlock()
-	msg, err := json.Marshal(userMessage{Type: "user", Message: userBody{Role: "user", Content: content}})
+	msg, err := s.userMessage(content, "", "")
 	if err == nil {
 		err = p.write(msg)
 	}
@@ -476,6 +512,59 @@ func (s *session) prompt(content []any) (acp.PromptResponse, error) {
 	}
 	r := <-t.done
 	return r.resp, r.err
+}
+
+// steer puts a message into the running turn, as claude-agent-acp does with the Agent SDK:
+// Claude Code takes a user message at priority "now" at once, interrupting the model's
+// generation or moving a running tool to the background, and one at "later" once the open
+// permission request is answered. The interrupted cycle ends with a result of its own, which
+// doesn't end the turn: the result that names the message does. With no turn running, the
+// message is left to Studio, which sends it as the next prompt.
+func (s *session) steer(content []any) (acp.SteerResponse, error) {
+	id, err := newSessionID() // a version 4 UUID, which Claude Code takes as a message's
+	if err != nil {
+		return acp.SteerResponse{}, err
+	}
+	s.mu.Lock()
+	t, p := s.turn, s.proc
+	if t == nil || p == nil || t.cancelled {
+		s.mu.Unlock()
+		return acp.SteerResponse{Outcome: acp.SteerPromptRequired, Reason: "noRunningTurn"}, nil
+	}
+	priority := "now"
+	if s.asking > 0 {
+		priority = "later"
+	}
+	// Marked before it is written, so the result of the cycle it interrupts can't end the turn.
+	if t.steers == nil {
+		t.steers = map[string]bool{}
+	}
+	t.steers[id] = true
+	s.mu.Unlock()
+	msg, err := s.userMessage(content, id, priority)
+	if err == nil {
+		err = p.write(msg)
+	}
+	if err != nil {
+		s.mu.Lock()
+		delete(t.steers, id)
+		s.mu.Unlock()
+		return acp.SteerResponse{}, err
+	}
+	return acp.SteerResponse{Outcome: acp.SteerInjected}, nil
+}
+
+// userMessage is a line of Claude Code's stream-json input with the user's content, stamped
+// with id, or a new uuid, which the results that answer it name.
+func (s *session) userMessage(content []any, id, priority string) ([]byte, error) {
+	if id == "" {
+		var err error
+		if id, err = newSessionID(); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(userMessage{Type: "user", Message: userBody{Role: "user", Content: content},
+		SessionID: s.id, UUID: id, Priority: priority, Origin: &messageOrigin{Kind: "human"}})
 }
 
 // setModel runs the session's next turns on model, "default" being the settings' own. Claude Code
@@ -692,11 +781,23 @@ func (s *session) usage(m streamMessage) (acp.SessionUpdate, bool) {
 	return u, u.Cost != nil || u.Size != nil
 }
 
-// result ends the running turn with what Claude Code reported.
+// result ends the running turn with what Claude Code reported, unless a message steered into
+// the turn hasn't been answered yet: then it is the result of the cycle that message
+// interrupted, and the turn goes on.
 func (s *session) result(m streamMessage) {
 	s.mu.Lock()
 	t := s.turn
-	s.turn = nil
+	if t != nil && !t.cancelled && len(t.steers) > 0 {
+		for _, id := range m.answered() {
+			delete(t.steers, id)
+		}
+		if len(t.steers) > 0 {
+			t = nil
+		}
+	}
+	if t != nil {
+		s.turn = nil
+	}
 	cancelled := t != nil && t.cancelled
 	s.mu.Unlock()
 	if u, ok := s.usage(m); ok {
@@ -812,10 +913,21 @@ func (p *process) terminate() {
 	}()
 }
 
-// userMessage is one user turn in Claude Code's stream-json input.
+// userMessage is one user message in Claude Code's stream-json input, as the Agent SDK writes
+// it. Priority is set on a message steered into a running turn.
 type userMessage struct {
-	Type    string   `json:"type"`
-	Message userBody `json:"message"`
+	Type            string         `json:"type"`
+	Message         userBody       `json:"message"`
+	SessionID       string         `json:"session_id"`
+	ParentToolUseID *string        `json:"parent_tool_use_id"`
+	UUID            string         `json:"uuid,omitempty"`
+	Priority        string         `json:"priority,omitempty"`
+	Origin          *messageOrigin `json:"origin,omitempty"`
+}
+
+// messageOrigin says who wrote a message: the user's own, relayed by Studio.
+type messageOrigin struct {
+	Kind string `json:"kind"`
 }
 
 type userBody struct {

@@ -36,6 +36,10 @@ type streamMessage struct {
 	ModelUsage map[string]struct {
 		ContextWindow int64 `json:"contextWindow"`
 	} `json:"modelUsage"`
+	// UserMessageUUID and UserMessageUUIDs name the user messages a result answers, by the
+	// uuids they were sent with: the last, and all of them.
+	UserMessageUUID  string   `json:"user_message_uuid"`
+	UserMessageUUIDs []string `json:"user_message_uuids"`
 	// CompactMetadata is a compact_boundary's: the tokens the summary left in the context.
 	CompactMetadata *struct {
 		PostTokens *int64 `json:"post_tokens"`
@@ -44,6 +48,17 @@ type streamMessage struct {
 		Name   string `json:"name"`
 		Status string `json:"status"`
 	} `json:"mcp_servers"`
+}
+
+// answered are the uuids of the user messages a result answers.
+func (m streamMessage) answered() []string {
+	if len(m.UserMessageUUIDs) > 0 {
+		return m.UserMessageUUIDs
+	}
+	if m.UserMessageUUID != "" {
+		return []string{m.UserMessageUUID}
+	}
+	return nil
 }
 
 // contentBlock is a block of an API message, of an assistant or a user message.

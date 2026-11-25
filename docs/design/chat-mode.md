@@ -238,7 +238,10 @@ visible thing, updated in place, not one row per chunk.
     and both prompts are answered when it is done (`harness.PromptJoiner`). Studio sends it
     as soon as the message comes; the turn ends once every prompt is answered, with the
     first stop other than `end_turn`, if any.
-  - The Claude subscription shim takes no messages mid-turn yet.
+  - The Claude subscription shim (`studio-agent claude-acp`) advertises `_session/steering`
+    since 2026-11-25 and writes the message to Claude Code's stdin at priority `now` (`later`
+    while a permission request is open), as the Agent SDK does; the turn ends at the result
+    that names every steered message's uuid (docs/harnesses.md).
 
   Otherwise, and with `after` (Alt+Enter in the composer), the prompt waits in the chat's
   queue (`chat.Service.Enqueue`): when the turn ends, however it ends (Stop included), the
