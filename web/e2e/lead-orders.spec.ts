@@ -120,7 +120,9 @@ test("a follow-up in a teammate's own thread waits for approval, then goes and i
 
   await followUp.getByRole("button", { name: "Approve and send" }).click()
   await expect(page.getByText("You approved the follow-up.")).toBeVisible()
-  await expect(followUp).toContainText(/Follow-up approved by you at \d?\d:\d\d/)
+  await expect(followUp).toContainText(
+    /Follow-up approved by you at \d?\d:\d\d/
+  )
   await expect
     .poll(
       async () => {
