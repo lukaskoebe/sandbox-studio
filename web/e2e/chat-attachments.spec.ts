@@ -51,13 +51,17 @@ test("attached pictures show as thumbnails in the composer and the thread, and l
   await main.locator('input[type="file"]').setInputFiles([
     { name: "shot.png", mimeType: "image/png", buffer: png(48, 32) },
     { name: "other.png", mimeType: "image/png", buffer: png(48, 32) },
-    { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hi") },
+    {
+      name: "notes-from-the-checkout-run.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("hi"),
+    },
   ])
 
   // A picture is a thumbnail with its ✕; another file stays a chip with its size.
   const shot = main.getByRole("img", { name: "shot.png" })
   await loaded(shot)
-  await expect(main.getByText("notes.txt")).toBeVisible()
+  await expect(main.getByText("notes-from-the-checkout-run.txt")).toBeVisible()
   await expect(main.getByText("2 B")).toBeVisible()
   await main.getByRole("button", { name: "Remove other.png" }).click()
   await expect(main.getByRole("img", { name: "other.png" })).toHaveCount(0)
@@ -75,9 +79,28 @@ test("attached pictures show as thumbnails in the composer and the thread, and l
   const sent = main.getByRole("img", { name: "shot.png" })
   await expect(sent).toHaveAttribute("src", /\/image\?src=attachment%3A0$/)
   await loaded(sent)
-  await expect(main.getByText("notes.txt")).toBeVisible()
+  await expect(main.getByText("notes-from-the-checkout-run.txt")).toBeVisible()
   await page.reload()
   await loaded(sent)
+  // On a phone the files run past the message's width; the row scrolls from the first one.
+  await page.setViewportSize({ width: 390, height: 844 })
+  const strip = main.locator("[data-slot=attachment-group]").last()
+  await expect
+    .poll(() =>
+      strip.evaluate((el) => {
+        const [row, message] = [
+          el.getBoundingClientRect(),
+          el.parentElement!.getBoundingClientRect(),
+        ]
+        const first = el.firstElementChild!.getBoundingClientRect()
+        return [
+          el.scrollWidth > el.clientWidth,
+          row.left >= message.left - 1 && first.left >= row.left - 1,
+        ]
+      })
+    )
+    .toEqual([true, true])
+  await page.setViewportSize({ width: 1280, height: 800 })
   await main.getByRole("button", { name: "Show shot.png large" }).click()
   await loaded(large.getByRole("img", { name: "shot.png" }))
   await page.keyboard.press("Escape")

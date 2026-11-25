@@ -261,7 +261,9 @@ function UserBubble({
     <Message align="end">
       <MessageContent>
         {files.length > 0 && (
-          <AttachmentList files={files} className="justify-end" />
+          // Held to the message's width, where it scrolls: aligned to the end, the row would
+          // otherwise take its files' width and run off the thread's start.
+          <AttachmentList files={files} className="max-w-full" />
         )}
         {u.text && (
           <Bubble align="end" variant="secondary">
