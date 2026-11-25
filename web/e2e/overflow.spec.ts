@@ -165,6 +165,8 @@ for (const width of [390, 1440])
 
     await page.goto(`/e/${env}/teammates/${id}?profile=settings`)
     const sheet = page.getByRole("region", { name: `${name}'s settings` })
-    await expect(sheet.getByRole("button", { name: /^Instructions/ })).toBeVisible()
+    await expect(
+      sheet.getByRole("button", { name: /^Instructions/ })
+    ).toBeVisible()
     expect(await overflowing(sheet)).toEqual([])
   })
