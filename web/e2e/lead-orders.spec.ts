@@ -113,14 +113,14 @@ test("a follow-up in a teammate's own thread waits for approval, then goes and i
   await expect(followUp).toContainText(`To ${name} in “Tidy the ${name} tests”`)
   await expect(followUp).toContainText("Please also run the slow tests.")
   const first = page.getByRole("group", { name: "The plan's messages" })
-  await expect(first).toContainText(/Approved by you at \d\d:\d\d/)
+  await expect(first).toContainText(/Approved by you at \d?\d:\d\d/)
   await expect(page.getByRole("article", { name: "Lead's report" })).toHaveText(
     new RegExp(`${name} answered in Tidy the ${name} tests.`)
   )
 
   await followUp.getByRole("button", { name: "Approve and send" }).click()
   await expect(page.getByText("You approved the follow-up.")).toBeVisible()
-  await expect(followUp).toContainText(/Follow-up approved by you at \d\d:\d\d/)
+  await expect(followUp).toContainText(/Follow-up approved by you at \d?\d:\d\d/)
   await expect
     .poll(
       async () => {

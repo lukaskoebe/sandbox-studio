@@ -41,7 +41,7 @@ test("home draws each sandbox's sessions as branches off its line", async ({
   await expect(folded).toContainText(
     new RegExp(`${name}'s chat · working \\d+ min|needs you`)
   )
-  await expect(folded).toContainText(/since \d\d:\d\d/)
+  await expect(folded).toContainText(/since \d?\d:\d\d/)
   await lines.getByRole("button", { name: "Show the lines" }).click()
   // Other tests' sandboxes have a main terminal and a preview on :3000 too.
   const own = lines.getByRole("img", { name: `${sandbox} with its sessions` })

@@ -100,9 +100,9 @@ test("Lead's plan waits for approval, then sends its message in the teammate's t
   await page.getByRole("button", { name: "Approve and send" }).click()
   await expect(page.getByText("You approved the plan.")).toBeVisible()
   await expect(steps.locator("..")).toContainText(
-    /Approved by you at \d\d:\d\d/
+    /Approved by you at \d?\d:\d\d/
   )
-  await expect(steps).toContainText(/sent \d\d:\d\d/, { timeout: 60_000 })
+  await expect(steps).toContainText(/sent \d?\d:\d\d/, { timeout: 60_000 })
   const report = page.getByRole("article", { name: "Lead's report" })
   await expect
     .poll(
@@ -124,7 +124,7 @@ test("Lead's plan waits for approval, then sends its message in the teammate's t
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${teammate}`))
   await expect(page.getByText(`Please ${words}`)).toBeVisible()
   await expect(
-    page.getByText(/Lead, approved by you at \d\d:\d\d/)
+    page.getByText(/Lead, approved by you at \d?\d:\d\d/)
   ).toBeVisible()
   await page.getByRole("link", { name: "Check the tests" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/lead/plans/${planId}$`))

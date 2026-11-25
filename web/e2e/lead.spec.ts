@@ -30,7 +30,7 @@ test("Lead writes today's day from Home, the day page links its work, and the se
   await expect(card.getByRole("heading", { name: "Today" })).toBeVisible({
     timeout: 30_000,
   })
-  await expect(card).toContainText(/written \d\d:\d\d/)
+  await expect(card).toContainText(/written \d?\d:\d\d/)
   await expect(card).toContainText(new RegExp(`${name}.* worked today\\.`))
   await card.getByRole("link", { name: "Open the day" }).click()
 
@@ -50,7 +50,7 @@ test("Lead writes today's day from Home, the day page links its work, and the se
     "Lead"
   )
   await expect(
-    page.getByText(/written \d\d:\d\d( [AP]M)? on request · e2e-writer/)
+    page.getByText(/written \d?\d:\d\d( [AP]M)? on request · e2e-writer/)
   ).toBeVisible()
 
   // Copy as Markdown puts the day on the clipboard.
@@ -71,7 +71,7 @@ test("Lead writes today's day from Home, the day page links its work, and the se
   const qa = page.getByRole("article", { name: question })
   await expect(qa).toContainText(`You asked: ${question}`, { timeout: 30_000 })
   await expect(qa.getByRole("link").first()).toBeVisible()
-  await expect(qa).toContainText(/\d\d:\d\d( [AP]M)? · e2e-writer/)
+  await expect(qa).toContainText(/\d?\d:\d\d( [AP]M)? · e2e-writer/)
   await expect(box).toHaveValue("")
 
   // The sidebar has Lead at the top of Teammates.
