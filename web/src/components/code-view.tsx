@@ -22,7 +22,10 @@ export function Tokens({ tokens }: { tokens: Token[] }) {
   )
 }
 
-/** A text file, highlighted by its language, with line numbers. */
+/**
+ * A text file, highlighted by its language, with line numbers. It is as tall as its lines, and
+ * scrolls once its parent, a flex column, has no more room.
+ */
 export function CodeView({ path, text }: { path: string; text: string }) {
   const parser = useParsers([path])(path)
   const lines = useMemo(() => {
@@ -33,10 +36,7 @@ export function CodeView({ path, text }: { path: string; text: string }) {
   }, [text, parser])
   const gutter = `${String(lines.length).length + 1}ch`
   return (
-    <ScrollArea
-      className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
-      viewportClassName="max-h-[70vh]"
-    >
+    <ScrollArea className="flex min-h-0 flex-col rounded-md bg-muted/40 ring-1 ring-foreground/10">
       <pre
         data-language={parser ? "highlighted" : undefined}
         className="py-2 font-mono text-caption/[1.45]"

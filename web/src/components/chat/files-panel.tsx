@@ -273,14 +273,16 @@ export function FilesPanel({
           </>
         )}
         {file ? (
-          <ScrollArea className="min-w-0 flex-1" viewportClassName="p-2.5">
+          // The file takes the panel's height: its code scrolls on its own once it reaches the
+          // bottom, with the name above staying in place.
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col p-2.5">
             <FileView
               env={env}
               sandboxId={sandboxId}
               path={file}
               changed={changed.has(file)}
             />
-          </ScrollArea>
+          </div>
         ) : (
           <NoFile
             env={env}
@@ -969,8 +971,8 @@ function FileView({
   }
 
   return (
-    <div className="grid min-w-0 content-start gap-2">
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-w-0 shrink-0 items-center gap-1">
         <span
           className={cn(
             "min-w-0 truncate font-mono text-xs font-semibold",
@@ -1029,7 +1031,7 @@ function FileView({
           Can't show this file: {errorMessage(content.error)}
         </p>
       )}
-      <div ref={body} className="grid min-w-0">
+      <div ref={body} className="flex min-h-0 min-w-0 flex-col">
         {c && <FileBody file={c} name={name} path={path} />}
       </div>
     </div>
@@ -1072,11 +1074,13 @@ function FileBody({
     return note("This kind of file can't be shown here.")
   if (c.mimeType?.startsWith("image/")) {
     return (
-      <img
-        src={`data:${c.mimeType};base64,${c.data}`}
-        alt={name}
-        className="max-w-full justify-self-start rounded-md ring-1 ring-foreground/10 [image-rendering:auto]"
-      />
+      <ScrollArea className="min-h-0">
+        <img
+          src={`data:${c.mimeType};base64,${c.data}`}
+          alt={name}
+          className="max-w-full rounded-md ring-1 ring-foreground/10 [image-rendering:auto]"
+        />
+      </ScrollArea>
     )
   }
   const text = decodeText(c.data)

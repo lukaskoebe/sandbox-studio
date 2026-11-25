@@ -111,6 +111,25 @@ test("Files highlights a file, shows the tree beside it, goes to a file by name,
   await expect(
     screen.locator("pre .tok-keyword", { hasText: "Webshop" })
   ).toBeVisible()
+
+  // A file longer than the window ends at the panel's bottom and scrolls there, not the page.
+  await page.goto(
+    `/e/${env}/sandboxes/${id}?tab=files&file=web%2Fsrc%2Fcheckout%2Fcoupon.ts`
+  )
+  await page.setViewportSize({ width: 1200, height: 330 })
+  await expect(code).toContainText("applyCoupon")
+  await expect
+    .poll(() =>
+      code.evaluate((pre) => {
+        const box = pre.closest("[data-slot=scroll-area-viewport]")!
+        return [
+          box.scrollHeight > box.clientHeight,
+          box.getBoundingClientRect().bottom <= window.innerHeight,
+          document.documentElement.scrollHeight <= window.innerHeight,
+        ]
+      })
+    )
+    .toEqual([true, true, true])
 })
 
 test("Files browses /tmp from the path's root, without uploads or mentions there", async ({
