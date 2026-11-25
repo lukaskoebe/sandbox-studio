@@ -644,3 +644,39 @@ test("a CORS preflight asks as its request, and Once lets the request follow", a
   await expect(asked).resolves.toEqual({ outcome: "allowed" })
   await expect(request("POST")).resolves.toEqual({ outcome: "allowed" })
 })
+
+test("a CORS preflight's request rule names the request's method and covers what follows", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("cors-rule"))
+  const host = `api.${freshLabel()}.example.com`
+  const request = (method: string, path: string, preflight?: string) =>
+    api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
+      sandboxId: id,
+      host,
+      port: 443,
+      method,
+      path,
+      preflight,
+    })
+
+  await page.goto(`/e/${env}`)
+  const asked = request("OPTIONS", "/v1/orders", "POST")
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: host })
+  await openRow(card)
+  // An OPTIONS rule would let the preflight through and leave the POST to ask again.
+  const rule = card.getByRole("button", { name: "POST /v1/*", exact: true })
+  await expect(rule).toHaveAttribute("title", "Only POST /v1/* requests")
+  await rule.click()
+  await card.getByRole("button", { name: "Always allow", exact: true }).click()
+  await expect(card).toBeHidden()
+  await expect(asked).resolves.toEqual({ outcome: "allowed" })
+  await expect(request("POST", "/v1/payments")).resolves.toEqual({
+    outcome: "allowed",
+  })
+})

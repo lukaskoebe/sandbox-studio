@@ -100,7 +100,7 @@ const kinds: Record<string, ApprovalKind> = {
       const net = a.network
       if (!net) return a.subject
       return net.write
-        ? `${net.method} ${net.host}${net.path}`
+        ? `${net.preflight || net.method} ${net.host}${net.path}`
         : `${net.host}:${net.port}`
     },
     icon: GlobeIcon,

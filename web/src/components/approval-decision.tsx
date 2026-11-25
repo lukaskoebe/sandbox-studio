@@ -592,9 +592,17 @@ export function initialDecisionBody(
     host: d.pattern,
     note: "",
     ...(d.requestLevel && net?.method && net.pathPattern
-      ? { method: net.method, pathPrefix: net.pathPattern }
+      ? { method: ruleMethod(net), pathPrefix: net.pathPattern }
       : {}),
   })
+}
+
+/**
+ * The method a request rule names: for a CORS preflight the request it announces, since that
+ * rule covers the preflight too, where an OPTIONS rule would leave the request to ask again.
+ */
+function ruleMethod(net: { method?: string; preflight?: string }) {
+  return net.preflight || net.method
 }
 
 /**
@@ -620,7 +628,7 @@ export function ApprovalDecision({
   // A browser request can also be allowed by its method and path, such as GET /repos/*.
   const requestPattern =
     net?.method && net.pathPattern
-      ? `${net.method} ${net.pathPattern}`
+      ? `${ruleMethod(net)} ${net.pathPattern}`
       : undefined
   const [requestLevel, setRequestLevel] = useState(initial.requestLevel)
   const [anyPort, setAnyPort] = useState(false)
@@ -663,7 +671,7 @@ export function ApprovalDecision({
         ports: anyPort ? [] : undefined,
         note,
         ...(requestLevel && net?.method && net.pathPattern
-          ? { method: net.method, pathPrefix: net.pathPattern }
+          ? { method: ruleMethod(net), pathPrefix: net.pathPattern }
           : {}),
       }),
     })
