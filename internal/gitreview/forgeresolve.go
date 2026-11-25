@@ -110,7 +110,7 @@ func (s *Service) toolPullRequestResolve(ctx context.Context, sb store.Sandbox, 
 		}
 	}
 	if len(ids) == 0 {
-		return nil, integrations.ToolError("give the threads to resolve: git_pull_request_read names each line comment's thread")
+		return nil, integrations.ToolError("give the threads to resolve: git_pull_request_read names each comment's thread")
 	}
 	if len(ids) > maxResolve {
 		return nil, integrations.ToolError("ask for at most %d threads at a time", maxResolve)
@@ -155,6 +155,18 @@ func (s *Service) toolPullRequestResolve(ctx context.Context, sb store.Sandbox, 
 		byID[c.Thread] = &DraftThread{ID: c.Thread, Path: c.Path, Line: c.Line, Side: c.Side, Author: c.Author, Body: truncateUTF8(strings.TrimSpace(c.Body), 2000)}
 		resolved[c.Thread] = c.Resolved
 	}
+	// GitLab's threads on the conversation, which have no file.
+	for _, c := range info.Comments {
+		if c.Thread == "" {
+			continue
+		}
+		if t, ok := byID[c.Thread]; ok {
+			t.Replies++
+			continue
+		}
+		byID[c.Thread] = &DraftThread{ID: c.Thread, Side: "new", Author: c.Author, Body: truncateUTF8(strings.TrimSpace(c.Body), 2000)}
+		resolved[c.Thread] = c.Resolved
+	}
 	var asked []DraftThread
 	var already, unknown []string
 	for _, id := range ids {
@@ -171,7 +183,7 @@ func (s *Service) toolPullRequestResolve(ctx context.Context, sb store.Sandbox, 
 		if info.threadErr != nil {
 			return nil, integrations.ToolError("the review threads of #%d couldn't be read: %v", in.Number, info.threadErr)
 		}
-		return nil, integrations.ToolError("#%d has no review thread %s; git_pull_request_read names each line comment's thread", in.Number, strings.Join(unknown, ", "))
+		return nil, integrations.ToolError("#%d has no review thread %s; git_pull_request_read names each comment's thread", in.Number, strings.Join(unknown, ", "))
 	}
 	pr := fmt.Sprintf("%s/%s#%d", owner, repo, in.Number)
 	if len(asked) == 0 {
@@ -475,8 +487,9 @@ func (g *GitHub) ResolveThread(ctx context.Context, token, owner, repo string, n
 
 // --- GitLab: a thread is a resolvable discussion --------------------------------------------
 
-// threads gives each line comment its discussion.
-func (g *GitLab) threads(ctx context.Context, token, mr string, comments []PRLineComment) error {
+// threads gives each line comment, and each comment on the conversation that started or
+// answers a thread, its resolvable discussion.
+func (g *GitLab) threads(ctx context.Context, token, mr string, comments []PRLineComment, conversation []PRComment) error {
 	var ds []struct {
 		ID    string `json:"id"`
 		Notes []struct {
@@ -504,6 +517,11 @@ func (g *GitLab) threads(ctx context.Context, token, mr string, comments []PRLin
 		}
 	}
 	setThreads(comments, by)
+	for i := range conversation {
+		if t, ok := by[conversation[i].id]; ok && conversation[i].id != 0 {
+			conversation[i].Thread, conversation[i].Resolved = t.id, t.resolved
+		}
+	}
 	return nil
 }
 

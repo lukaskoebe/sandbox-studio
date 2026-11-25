@@ -50,6 +50,34 @@ func TestGitLabLineCommentsNameTheirDiscussions(t *testing.T) {
 	if lc := info.LineComments; len(lc) != 2 || lc[0].Thread != "d1" || lc[0].Resolved || lc[1].Thread != "d2" || !lc[1].Resolved {
 		t.Fatalf("line comments %+v", lc)
 	}
+	// A thread started on the conversation, with a reply; a plain comment has none.
+	if c := info.Comments; len(c) != 3 || c[0].Thread != "" || c[1].Thread != "d4" || c[2].Thread != "d4" || c[1].Resolved {
+		t.Fatalf("comments %+v", c)
+	}
+}
+
+// A GitLab thread on the conversation, with no file, resolves as a line comment's does.
+func TestResolvingAConversationThread(t *testing.T) {
+	svc, st, sb, fg := newResolveHarness(t)
+	ctx := context.Background()
+	got, err := callReviewTool(t, svc.toolPullRequestResolve, sb, `{"repository":"group/sub/web","number":7,"threads":["d4"]}`)
+	if err != nil || got["status"] != "awaiting approval" {
+		t.Fatalf("resolve: %v %v", got, err)
+	}
+	pending, _ := st.Approvals(ctx, sb.EnvironmentID, store.StatusPending, 10)
+	d, err := ResolveDetail(pending[0])
+	if err != nil || len(d.Threads) != 1 {
+		t.Fatalf("detail: %+v %v", d, err)
+	}
+	if th := d.Threads[0]; th.ID != "d4" || th.Path != "" || th.Author != "dee" || th.Body != "Please add a changelog entry" || th.Replies != 1 {
+		t.Fatalf("thread: %+v", th)
+	}
+	if err := svc.decideResolve(ctx, pending[0], integrations.Decision{Action: integrations.Allow}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fg.posted) != 1 || fg.posted[0] != "PUT /discussions/d4" {
+		t.Fatalf("writes: %v", fg.posted)
+	}
 }
 
 func TestResolvingThreadsWaitsForApproval(t *testing.T) {

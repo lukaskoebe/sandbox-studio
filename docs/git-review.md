@@ -598,11 +598,15 @@ threads, forge?, idempotency_key?)` (`studio pr resolve <number> --thread <id> �
 `forgeresolve.go`. Resolving is a write, so it waits for the user like a comment.
 
 - **Threads.** `git_pull_request_read` names each line comment's `thread` and whether it is
-  `resolved`, and `~/forge`'s `reviews.md` has them in each comment's heading. On GitHub a
+  `resolved`, and `~/forge`'s `reviews.md` has them in each comment's heading. On GitLab a
+  comment on the conversation can start a thread too ("Start a thread"); those comments have
+  their `thread` and `resolved` as well, in `conversation.md`'s headings, and the card shows
+  such a thread as "Conversation" instead of a file. On GitHub a
   thread is GraphQL's only: Studio asks `POST /graphql` (`<base>/api/graphql` on GitHub
   Enterprise Server) for the pull request's `reviewThreads`, the first 100 with 50 comments
   each, and matches their comments' `databaseId` to the REST comments. On GitLab a thread is
-  a resolvable discussion, from `GET …/merge_requests/:iid/discussions`. Forgejo and Gitea
+  a resolvable discussion, from `GET …/merge_requests/:iid/discussions`, matched to the notes
+  by their IDs, diff notes and conversation notes alike. Forgejo and Gitea
   have no API to resolve a conversation, so the tool answers that it can't there. If the
   threads can't be read, the comments have none and `pr read` still answers.
 - **Asking.** Studio reads the pull request again, so a thread must be one of its own: an ID

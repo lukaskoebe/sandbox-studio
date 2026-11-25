@@ -125,7 +125,7 @@ var GitPullRequestCommentTool = Tool{agentproto.MethodGitPullRequestComment,
 // GitPullRequestResolveTool asks to resolve review threads of a pull request.
 var GitPullRequestResolveTool = Tool{agentproto.MethodGitPullRequestResolve,
 	"Asks to mark review threads of a pull request resolved, as its Resolve conversation button does, such as once you've fixed what " +
-		"they asked. git_pull_request_read names each line comment's thread. Nothing changes yet: the user sees the threads and resolves " +
+		"they asked. git_pull_request_read names each comment's thread: line comments', and on GitLab those on the conversation too. Nothing changes yet: the user sees the threads and resolves " +
 		"them or says no. The call answers at once with \"awaiting approval\" and the approval ID; approval_status says what became of it. " +
 		"To say what you changed, comment with git_pull_request_comment first. GitHub and GitLab only.",
 	obj([]string{"repository", "number", "threads"}, map[string]any{

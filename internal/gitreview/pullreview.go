@@ -99,6 +99,12 @@ type PRComment struct {
 	Author string    `json:"author"`
 	Body   string    `json:"body"`
 	When   time.Time `json:"when"`
+	// Thread is the resolvable thread the comment is in, on GitLab, where a comment on the
+	// conversation can start one as a line comment does.
+	Thread   string `json:"thread,omitempty" doc:"The resolvable thread the comment is in (GitLab), which git_pull_request_resolve takes; its replies share it"`
+	Resolved bool   `json:"resolved,omitempty" doc:"The thread is resolved"`
+	// id is the comment's ID on the forge, which finds its thread.
+	id int64
 }
 
 // Review verdicts.

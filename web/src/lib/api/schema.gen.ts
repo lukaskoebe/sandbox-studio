@@ -6439,6 +6439,10 @@ export interface components {
         PRComment: {
             author: string;
             body: string;
+            /** @description The thread is resolved */
+            resolved?: boolean;
+            /** @description The resolvable thread the comment is in (GitLab), which git_pull_request_resolve takes; its replies share it */
+            thread?: string;
             /** Format: date-time */
             when: string;
         };

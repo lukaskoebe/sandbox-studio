@@ -84,6 +84,8 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 				{"id": 21, "body": "Why 2?", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "new_line": 2}},
 				{"id": 22, "body": "Gone", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "old_line": 2}},
 				{"body": "Thanks!", "author": map[string]any{"username": "cy"}},
+				{"id": 25, "body": "Please add a changelog entry", "type": "DiscussionNote", "author": map[string]any{"username": "dee"}},
+				{"id": 26, "body": "Will do", "type": "DiscussionNote", "author": map[string]any{"username": "ada"}},
 			}
 			if f.thirdThread {
 				notes = append(notes, map[string]any{"id": 24, "body": "And 3?", "type": "DiffNote", "author": map[string]any{"username": "bob"}, "position": map[string]any{"new_path": "a.go", "old_path": "a.go", "new_line": 3}})
@@ -94,6 +96,7 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 				{"id": "d0", "individual_note": true, "notes": []map[string]any{{"id": 20}}},
 				{"id": "d1", "notes": []map[string]any{{"id": 21, "resolvable": true}, {"id": 23, "resolvable": true}}},
 				{"id": "d2", "notes": []map[string]any{{"id": 22, "resolvable": true, "resolved": true}}},
+				{"id": "d4", "notes": []map[string]any{{"id": 25, "resolvable": true}, {"id": 26, "resolvable": true}}},
 			}
 			if f.thirdThread {
 				threads = append(threads, map[string]any{"id": "d3", "notes": []map[string]any{{"id": 24, "resolvable": true}}})
@@ -162,7 +165,7 @@ func TestGitLabReadsAMergeRequestAsAPullRequest(t *testing.T) {
 	if len(info.LineComments) != 2 || info.LineComments[0].Side != "new" || info.LineComments[0].Line != 2 || info.LineComments[1].Side != "old" {
 		t.Errorf("line comments %+v", info.LineComments)
 	}
-	if len(info.Comments) != 1 || info.Comments[0].Body != "Thanks!" {
+	if len(info.Comments) != 3 || info.Comments[0].Body != "Thanks!" || info.Comments[1].Thread != "d4" {
 		t.Errorf("comments %+v", info.Comments)
 	}
 }

@@ -7769,6 +7769,14 @@
           "body": {
             "type": "string"
           },
+          "resolved": {
+            "description": "The thread is resolved",
+            "type": "boolean"
+          },
+          "thread": {
+            "description": "The resolvable thread the comment is in (GitLab), which git_pull_request_resolve takes; its replies share it",
+            "type": "string"
+          },
           "when": {
             "format": "date-time",
             "type": "string"

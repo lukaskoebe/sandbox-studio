@@ -51,8 +51,9 @@ export function forgeResolveDescription(a: Approval) {
   return `${who}${where} wants to mark review threads resolved. Nothing changes on the forge until you resolve them, as you.`
 }
 
-/** Where a thread is, as path:line. */
+/** Where a thread is, as path:line, or the conversation for a GitLab thread on no file. */
 function place(t: Thread) {
+  if (!t.path) return "Conversation"
   return `${t.path}${t.line ? `:${t.line}` : ""}${t.side === "old" ? " (old)" : ""}`
 }
 

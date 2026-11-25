@@ -907,7 +907,14 @@ func conversationFile(r *forgeRepo, info PullRequestInfo, at string) string {
 		b.WriteString("No comments.\n")
 	}
 	for _, c := range info.Comments {
-		fmt.Fprintf(&b, "## %s%s\n\n%s\n\n", c.Author, stamp(c.When), strings.TrimSpace(c.Body))
+		thread := ""
+		if c.Thread != "" {
+			thread = " · thread " + c.Thread
+			if c.Resolved {
+				thread += ", resolved"
+			}
+		}
+		fmt.Fprintf(&b, "## %s%s%s\n\n%s\n\n", c.Author, stamp(c.When), thread, strings.TrimSpace(c.Body))
 	}
 	return b.String()
 }

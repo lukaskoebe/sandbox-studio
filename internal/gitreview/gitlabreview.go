@@ -230,7 +230,7 @@ func (g *GitLab) ReadPullRequest(ctx context.Context, token, owner, repo string,
 			info.LineComments = append(info.LineComments, lc)
 		default:
 			if len(info.Comments) < pageSize {
-				info.Comments = append(info.Comments, PRComment{Author: n.Author.Username, Body: n.Body, When: n.CreatedAt})
+				info.Comments = append(info.Comments, PRComment{Author: n.Author.Username, Body: n.Body, When: n.CreatedAt, id: n.ID})
 			}
 		}
 	}
@@ -247,8 +247,8 @@ func (g *GitLab) ReadPullRequest(ctx context.Context, token, owner, repo string,
 			}
 		}
 	}
-	if len(info.LineComments) > 0 {
-		info.threadErr = g.threads(ctx, token, mr, info.LineComments)
+	if len(info.LineComments) > 0 || len(info.Comments) > 0 {
+		info.threadErr = g.threads(ctx, token, mr, info.LineComments, info.Comments)
 	}
 	return info, nil
 }
