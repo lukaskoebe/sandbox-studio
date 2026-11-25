@@ -379,7 +379,10 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	if err != nil {
 		return err
 	}
-	auth.Quit = stop // `studio quit`, and the Windows tray's Quit
+	// A quit, unlike a restart or a signal, tells the pages so, and the Studio app closes.
+	var quitting atomic.Bool
+	quit := func() { quitting.Store(true); stop() }
+	auth.Quit = quit // `studio quit`, and the Windows tray's Quit
 	refreshAutostart(addr, log)
 	// Studio must not run without its vault: without the key the stored secrets are lost.
 	// While the keychain holding the key is locked, Studio waits for it (keychain.go).
@@ -603,7 +606,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	checker := &updates.Checker{Settings: st, Current: version.Version, Log: log}
 	// Restart in the Studio menu: run ends, and main starts Studio again.
 	var restartAgain atomic.Bool
-	system := api.System{Shutdown: stop, Restart: func() { restartAgain.Store(true); stop() }, Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
+	system := api.System{Shutdown: quit, Restart: func() { restartAgain.Store(true); stop() }, Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
 		agentForges, err := st.AgentForges(ctx)
 		if err != nil {
 			log.Warn("doctor: count SSH agent forges", "err", err)
@@ -688,6 +691,10 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go func() {
 		defer close(shutdownDone)
 		<-ctx.Done()
+		if quitting.Load() {
+			bus.Publish(events.Event{Topic: events.TopicStudio, ID: events.StudioQuit})
+			time.Sleep(quitNotice) // for the event streams to send it
+		}
 		endStreams()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -725,6 +732,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	}
 	return nil
 }
+
+// quitNotice is how long a quit leaves the event streams to tell the pages before they end.
+const quitNotice = 300 * time.Millisecond
 
 // endWithShutdown ends a read's context, a GET's or a HEAD's, once streams ends: event
 // streams, terminals and other long reads stop with the server instead of holding up its

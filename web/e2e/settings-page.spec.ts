@@ -399,6 +399,13 @@ test("the Studio menu checks for updates, restarts and quits Studio, asking firs
   await item("Quit Studio…").click()
   await dialog.getByRole("button", { name: "Cancel" }).click()
   expect(asked.shutdown).toBe(0)
+  // The palette asks the same.
+  await page.keyboard.press("Control+k")
+  await page.keyboard.type("quit")
+  await page.getByRole("option", { name: /Quit Studio…/ }).click()
+  await expect(dialog).toContainText("Quit Studio?")
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  expect(asked.shutdown).toBe(0)
   await menu.click()
   await item("Quit Studio…").click()
   await dialog.getByRole("button", { name: "Quit" }).click()

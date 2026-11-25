@@ -27,7 +27,14 @@ const (
 	// TopicLead: Lead began or finished writing a day, or its settings changed; ID is the day,
 	// or "plan:" and the ID of a plan that changed.
 	TopicLead = "lead"
+	// TopicStudio: Studio itself; ID StudioQuit says it is quitting, as `studio quit`, the
+	// tray's Quit and the UI's Quit ask, so pages say so and the Studio app closes. A restart
+	// or a signal sends nothing.
+	TopicStudio = "studio"
 )
+
+// StudioQuit is the ID of the TopicStudio event sent as Studio quits.
+const StudioQuit = "quit"
 
 // Event is one change notification.
 type Event struct {

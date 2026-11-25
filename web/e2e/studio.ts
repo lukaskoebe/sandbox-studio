@@ -24,6 +24,8 @@ export type Studio = {
   home: string
   /** A fresh one-time login link, from `studio login-url`. */
   loginURL: () => Promise<string>
+  /** Runs `studio quit` against it. */
+  quit: () => Promise<void>
   stop: () => Promise<void>
   /** Unlocks the keychain of a Studio started with keychainLocked. */
   unlockKeychain: () => Promise<void>
@@ -119,6 +121,9 @@ export async function startStudio(
         { env }
       )
       return stdout.trim()
+    },
+    quit: async () => {
+      await promisify(execFile)(studioBinary, ["-addr", addr, "quit"], { env })
     },
   }
 }

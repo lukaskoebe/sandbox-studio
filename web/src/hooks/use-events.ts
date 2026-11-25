@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
+import { studioQuit } from "@/lib/power"
 
 /** The API queries each change topic makes stale. */
 const stale: Record<string, string[]> = {
@@ -136,7 +137,15 @@ export function useEvents() {
         stopRereads = rereadFirstReads(queryClient)
       }
       source.onmessage = (msg: MessageEvent<string>) => {
-        const change = JSON.parse(msg.data) as { topic: string }
+        const change = JSON.parse(msg.data) as { topic: string; id?: string }
+        // Studio is quitting, from wherever it was told to: the page says so, and the app
+        // closes with it.
+        if (change.topic === "studio" && change.id === "quit") {
+          closed = true
+          source?.close()
+          studioQuit()
+          return
+        }
         for (const path of stale[change.topic] ?? []) {
           queryClient.invalidateQueries({ queryKey: ["get", path] })
         }

@@ -64,7 +64,7 @@ Studio listens on loopback, so other machines on your network cannot open its UI
 
 Studio is square by default, with titles, buttons and labels in mono. For a soft, rounded look in sans, set **Style** to **Quiet** under **Settings → Appearance**. Each browser keeps its own style, text size and light or dark; the buttons at the bottom of the sidebar also pick light or dark.
 
-To stop Studio, run `studio quit` or pick **Quit Studio…** in the Studio menu, which the version line at the foot of the sidebar opens; computers keep running. `studio restart`, or **Restart Studio…** in the same menu, stops Studio and starts it again. Installing a new version restarts a running Studio by itself. To remove Studio and everything it created, run `studio uninstall`, which lists what goes and asks you to confirm.
+To stop Studio, run `studio quit` or pick **Quit Studio…** in the Studio menu, which the version line at the foot of the sidebar opens, or in the command palette (Ctrl+K); the Studio app closes with it, and computers keep running. `studio restart`, or **Restart Studio…** in the same menu, stops Studio and starts it again. Installing a new version restarts a running Studio by itself. To remove Studio and everything it created, run `studio uninstall`, which lists what goes and asks you to confirm.
 
 To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default.
 

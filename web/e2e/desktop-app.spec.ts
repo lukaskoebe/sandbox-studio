@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures"
+import { startStudio, studioPort } from "./studio"
 
 test("app: in the Studio app's webview, new windows go to the app and the page keeps what it said", async ({
   page,
@@ -156,4 +157,44 @@ test("app: on macOS the bar has room for the system's buttons, and none of its o
   // The sidebar starts below them.
   const header = page.locator("[data-slot=sidebar-header]").first()
   expect((await header.boundingBox())!.y).toBeGreaterThanOrEqual(28)
+})
+
+test("app: `studio quit` closes the Studio app, whose page says Studio stopped", async ({
+  browser,
+}, testInfo) => {
+  // A Studio of its own, since this one quits.
+  const studio = await startStudio(studioPort(testInfo.parallelIndex * 2 + 1))
+  const context = await browser.newContext({ baseURL: studio.url })
+  try {
+    const page = await context.newPage()
+    await page.addInitScript(() => {
+      const posted: string[] = []
+      Object.assign(window, {
+        posted,
+        webkit: {
+          messageHandlers: {
+            external: { postMessage: (m: string) => posted.push(m) },
+          },
+        },
+      })
+    })
+    await page.goto(await studio.loginURL())
+    await page.getByRole("link", { name: "Finish later" }).click()
+    await expect(
+      page.getByRole("heading", { name: "Home", level: 1 })
+    ).toBeVisible()
+
+    await studio.quit()
+    await expect(
+      page.getByRole("heading", { name: "Studio has stopped" })
+    ).toBeVisible()
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { posted: string[] }).posted
+      )
+    ).toContain("studio:quit")
+  } finally {
+    await context.close()
+    await studio.stop()
+  }
 })

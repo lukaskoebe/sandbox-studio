@@ -8,6 +8,7 @@ import {
 } from "react"
 import { useMatches, useNavigate } from "@tanstack/react-router"
 import {
+  ArrowClockwiseIcon,
   ArrowsInLineHorizontalIcon,
   BrowserIcon,
   ChatCircleIcon,
@@ -20,6 +21,7 @@ import {
   LightningIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  PowerIcon,
   SidebarSimpleIcon,
   SparkleIcon,
 } from "@phosphor-icons/react"
@@ -62,6 +64,7 @@ import { hasModKey } from "@/lib/keys"
 import { rank } from "@/lib/mentions"
 import { setPaletteOpen, usePaletteOpen } from "@/lib/palette"
 import { newThreadWith } from "@/lib/new-thread"
+import { askPower } from "@/lib/power"
 import { useStartNewChat } from "@/lib/new-chat"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { teammateSettings } from "@/lib/teammate-settings"
@@ -576,6 +579,22 @@ export function CommandPalette({
       "layout width split default",
       resetStoredSizes,
       <ArrowsInLineHorizontalIcon />
+    )
+    act(
+      "restart",
+      "Restart Studio…",
+      "Studio",
+      "reboot reload server",
+      () => askPower("restart"),
+      <ArrowClockwiseIcon />
+    )
+    act(
+      "quit",
+      "Quit Studio…",
+      "Studio",
+      "shut down shutdown stop exit close app server",
+      () => askPower("quit"),
+      <PowerIcon />
     )
     return out
   }, [

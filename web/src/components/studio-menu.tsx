@@ -29,7 +29,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Ident } from "@/components/ident"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
-import { quitApp } from "@/lib/desktop"
+import {
+  askPower,
+  closePower,
+  studioQuit,
+  usePower,
+  type PowerAction,
+} from "@/lib/power"
 
 const releases = "https://github.com/lukaskoebe/sandbox-studio/releases"
 
@@ -74,16 +80,6 @@ export function StudioMenu({ version }: { version?: string }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { env } = useParams({ strict: false })
-  const [asking, setAsking] = useState<"restart" | "quit" | null>(null)
-  // What the dialog asks, kept while it closes so its words don't flip as it fades.
-  const [kind, setKind] = useState<"restart" | "quit">("restart")
-  const ask = (k: "restart" | "quit") => {
-    setKind(k)
-    setAsking(k)
-  }
-  // The Studio that answered before the restart, to tell the new one by.
-  const before = useRef<string | undefined>(undefined)
-  const [stopped, setStopped] = useState(false)
   const showUpdates = () =>
     void navigate({
       to: "/e/$env/settings/updates",
@@ -111,9 +107,88 @@ export function StudioMenu({ version }: { version?: string }) {
         description: errorMessage(err),
       }),
   })
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`Sandbox Studio ${version ?? ""}`.trim()}
+        render={
+          <Button
+            variant="ghost"
+            size="xs"
+            // A dev build's version is long: the line shrinks, rather than pushing the theme
+            // toggle out of the sidebar.
+            className="min-w-0 shrink justify-start gap-1 px-1 text-meta font-normal text-muted-foreground"
+          />
+        }
+      >
+        <span className="truncate">
+          {/* A narrow sidebar has room for the version alone. */}
+          <span className="hidden @[15rem]:inline">Sandbox Studio </span>
+          <span className="font-mono">{version}</span>
+        </span>
+        <CaretUpIcon className="size-3 shrink-0" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        className="w-56 max-w-(--available-width)"
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            Sandbox Studio{" "}
+            <span className="font-mono break-all">{version}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuItem
+            closeOnClick={false}
+            disabled={check.isPending}
+            onClick={() => check.mutate({})}
+          >
+            <ArrowCircleUpIcon />
+            {check.isPending ? "Checking…" : "Check for updates"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            render={
+              <a
+                href={releaseNotes(version)}
+                target="_blank"
+                rel="noreferrer"
+              />
+            }
+          >
+            <SparkleIcon />
+            What's new
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => askPower("restart")}>
+            <ArrowClockwiseIcon />
+            Restart Studio…
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => askPower("quit")}>
+          <PowerIcon />
+          Quit Studio…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
+ * Asks whether to restart or quit Studio, for the Studio menu and the command palette, and
+ * says so once Studio quit, wherever it was quit from.
+ */
+export function StudioPower() {
+  const queryClient = useQueryClient()
+  const { asking, stopped } = usePower()
+  // What the dialog asks, kept while it closes so its words don't flip as it fades.
+  const [kind, setKind] = useState<PowerAction>("restart")
+  if (asking && asking !== kind) setKind(asking)
+  // The Studio that answered before the restart, to tell the new one by.
+  const before = useRef<string | undefined>(undefined)
   const restart = $api.useMutation("post", "/api/system/restart", {
     onSuccess: async () => {
-      setAsking(null)
+      closePower()
       const id = toast.loading("Restarting Studio…")
       if (await awaitRestart(before.current)) {
         toast.success("Studio restarted", { id })
@@ -130,11 +205,7 @@ export function StudioMenu({ version }: { version?: string }) {
       }),
   })
   const quit = $api.useMutation("post", "/api/system/shutdown", {
-    onSuccess: () => {
-      setAsking(null)
-      setStopped(true)
-      quitApp()
-    },
+    onSuccess: studioQuit,
     onError: (err) =>
       toast.error("Could not quit Studio", { description: errorMessage(err) }),
   })
@@ -156,101 +227,48 @@ export function StudioMenu({ version }: { version?: string }) {
   }
   const pending = restart.isPending || quit.isPending
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="xs"
-              className="min-w-0 justify-start gap-1 px-1 text-meta font-normal text-muted-foreground"
-            />
-          }
-        >
-          <span className="truncate">
-            Sandbox Studio <span className="font-mono">{version}</span>
-          </span>
-          <CaretUpIcon className="size-3 shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-56">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>
-              Sandbox Studio <span className="font-mono">{version}</span>
-            </DropdownMenuLabel>
-            <DropdownMenuItem
-              closeOnClick={false}
-              disabled={check.isPending}
-              onClick={() => check.mutate({})}
-            >
-              <ArrowCircleUpIcon />
-              {check.isPending ? "Checking…" : "Check for updates"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              render={
-                <a
-                  href={releaseNotes(version)}
-                  target="_blank"
-                  rel="noreferrer"
-                />
-              }
-            >
-              <SparkleIcon />
-              What's new
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => ask("restart")}>
-              <ArrowClockwiseIcon />
-              Restart Studio…
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => ask("quit")}>
-            <PowerIcon />
-            Quit Studio…
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Dialog
-        open={asking !== null}
-        onOpenChange={(open) => !open && setAsking(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {kind === "restart" ? "Restart Studio?" : "Quit Studio?"}
-            </DialogTitle>
-            <DialogDescription>
-              {kind === "restart" ? (
-                <>
-                  Chats in the middle of a turn stop. The computers keep
-                  running, and this page reconnects once Studio is back.
-                </>
-              ) : (
-                <>
-                  This page and every other one stop working until you start it
-                  again with <Ident>studio</Ident>. The computers keep running.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAsking(null)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={pending}
-              onClick={() => {
-                if (kind === "quit") return quit.mutate({})
-                void startedAt().then((s) => {
-                  before.current = s
-                  restart.mutate({})
-                })
-              }}
-            >
-              {kind === "restart" ? "Restart" : "Quit"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog
+      open={asking !== null}
+      onOpenChange={(open) => !open && closePower()}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {kind === "restart" ? "Restart Studio?" : "Quit Studio?"}
+          </DialogTitle>
+          <DialogDescription>
+            {kind === "restart" ? (
+              <>
+                Chats in the middle of a turn stop. The computers keep running,
+                and this page reconnects once Studio is back.
+              </>
+            ) : (
+              <>
+                This page and every other one stop working until you start it
+                again with <Ident>studio</Ident>, and the Studio app closes. The
+                computers keep running.
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={closePower}>
+            Cancel
+          </Button>
+          <Button
+            disabled={pending}
+            onClick={() => {
+              if (kind === "quit") return quit.mutate({})
+              void startedAt().then((s) => {
+                before.current = s
+                restart.mutate({})
+              })
+            }}
+          >
+            {kind === "restart" ? "Restart" : "Quit"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

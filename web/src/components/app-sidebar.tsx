@@ -54,7 +54,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { appWindow } from "@/lib/desktop"
 import { cn, formatAge } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { StudioMenu } from "@/components/studio-menu"
+import { StudioMenu, StudioPower } from "@/components/studio-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -423,7 +423,7 @@ export function AppSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-          <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:hidden">
+          <div className="@container flex items-center justify-between gap-2 group-data-[collapsible=icon]:hidden">
             <StudioMenu version={health.data?.version} />
             <ThemeToggle />
           </div>
@@ -460,6 +460,7 @@ export function AppSidebar({
         onOpenChange={setAddingTeammate}
       />
       <NewChatDialog env={env} onNewTeammate={openTeammateDialog} />
+      <StudioPower />
       <CommandPalette
         env={env}
         teammates={teammates.data ?? []}
