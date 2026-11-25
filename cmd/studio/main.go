@@ -450,7 +450,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	authority := &ca.Authority{Store: st, Sealer: vault}
 	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialGuest}
 	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log,
-		Client: forgeClient(p.Data)}
+		Client: forgeClient(p.Data), PictureDir: filepath.Join(p.Data, "pr-pictures")}
 	integs := integrations.Set{gitRemote}
 	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action, browser.credential and browser.control approvals
 	integs = append(integs, brw)
@@ -564,7 +564,8 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		return fmt.Errorf("chats: %w", err)
 	}
 	defer chats.Close()
-	integs = append(integs, chats) // settles chat.permission approvals; it serves no hosts
+	integs = append(integs, chats)         // settles chat.permission approvals; it serves no hosts
+	gitRemote.Pictures = chats.ReadPicture // the pictures a teammate shows in what it posts on a forge
 	// Before a decision can be under way: a push or post Studio stopped in the middle of fails.
 	if err := gitRemote.Recover(ctx); err != nil {
 		log.Warn("git remote: recover", "err", err)
@@ -572,6 +573,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	go integs.RunJobs(ctx, log)
 	if err := gitRemote.Sweep(ctx); err != nil {
 		log.Warn("git staging cleanup", "err", err)
+	}
+	if err := gitRemote.SweepPictures(ctx); err != nil {
+		log.Warn("pull request pictures cleanup", "err", err)
 	}
 	builds, err := templatebuild.New(templatebuild.Options{Store: st, Runtime: rt, Guests: mgr, Registry: registry, Bus: bus, Log: log})
 	if err != nil {

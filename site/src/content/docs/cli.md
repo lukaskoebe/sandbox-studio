@@ -112,7 +112,7 @@ On a computer, the `studio` command runs Studio's tools for its teammate. Agents
 | `studio wait <approval>` | Waits for your answer to something that needs it, and says what became of it. |
 | `studio call <tool> '<json>'` | Calls any of Studio's tools by name. |
 
-Flags come from each tool's arguments, and `--<flag>-file` reads one from a file. `--json` prints JSON, `--wait` waits for an approval instead of returning, and `-o` writes a screenshot or other output to a file. A pull request command takes the forge, repository and branch from the checkout it runs in. The command exits 0 when done, 1 when refused or failed, 2 for a wrong command line, and 75 when it waits for your approval; `studio pr checks` exits 8 while a check runs.
+Flags come from each tool's arguments, and `--<flag>-file` reads one from a file. `--json` prints JSON, `--wait` waits for an approval instead of returning, and `-o` writes a screenshot or other output to a file. A pull request command takes the forge, repository and branch from the checkout it runs in, and `studio pr create`, `review` and `comment` take `--attach <file>` for a picture; see [Git review](../git-review/#push-and-review). The command exits 0 when done, 1 when refused or failed, 2 for a wrong command line, and 75 when it waits for your approval; `studio pr checks` exits 8 while a check runs.
 
 ## Environments
 

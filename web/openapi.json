@@ -1330,7 +1330,7 @@
             "type": "boolean"
           },
           "body": {
-            "description": "The comment, in Markdown",
+            "description": "The comment, in Markdown; {{attach:\u003cpath\u003e}} places a picture",
             "type": "string"
           },
           "forge": {
@@ -1357,6 +1357,16 @@
           },
           "owner": {
             "type": "string"
+          },
+          "pictures": {
+            "description": "The pictures the comment places with {{attach:\u003cpath\u003e}}, uploaded once approved",
+            "items": {
+              "$ref": "#/components/schemas/Picture"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "postedUrl": {
             "description": "The posted comment's web URL",
@@ -4543,6 +4553,16 @@
       "GitDetail": {
         "additionalProperties": false,
         "properties": {
+          "pictures": {
+            "description": "The pictures a git.pr approval's description places with {{attach:\u003cpath\u003e}}, uploaded once approved",
+            "items": {
+              "$ref": "#/components/schemas/Picture"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "pullRequest": {
             "$ref": "#/components/schemas/PullRequest",
             "description": "Set for git.pr approvals"
@@ -8318,6 +8338,33 @@
         ],
         "type": "object"
       },
+      "Picture": {
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "description": "Studio's copy of the picture, until the draft is decided",
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "path": {
+            "description": "The file on the sandbox's computer, as {{attach:\u003cpath\u003e}} names it in the text",
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "mimeType",
+          "size",
+          "file"
+        ],
+        "type": "object"
+      },
       "PlanBody": {
         "additionalProperties": false,
         "properties": {
@@ -10295,6 +10342,16 @@
           },
           "owner": {
             "type": "string"
+          },
+          "pictures": {
+            "description": "The pictures the summary and the comments place with {{attach:\u003cpath\u003e}}, uploaded once approved",
+            "items": {
+              "$ref": "#/components/schemas/Picture"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "pullRequest": {
             "$ref": "#/components/schemas/PullRequestInfo"

@@ -43,6 +43,7 @@ func runCLI(t *testing.T, c Caller, stdin string, git map[string]string, args ..
 		},
 		WriteFile: func(name string, data []byte) error { files[name] = data; return nil },
 		TempDir:   "/tmp",
+		Getwd:     func() (string, error) { return "/workspace/web", nil },
 		Now:       func() time.Time { return time.Date(2026, 11, 12, 9, 30, 0, 0, time.UTC) },
 		Poll:      time.Millisecond,
 	}
@@ -160,6 +161,34 @@ func TestCLIResolveTakesThreads(t *testing.T) {
 	got := params(t, f.calls[0])
 	if threads, _ := got["threads"].([]any); len(threads) != 2 || threads[1] != "PRRT_b" || got["number"] != float64(12) {
 		t.Fatalf("params %v", got)
+	}
+}
+
+// --attach repeats, and a picture's relative path, in it or placed in the text, is from the
+// working directory.
+func TestCLIAttachTakesPicturesFromHere(t *testing.T) {
+	f := &fakeCaller{}
+	r := runCLI(t, f, "", nil, "pr", "comment", "9", "--repository", "o/r", "--body", "Before {{attach:shots/a.png}} and {{attach:/tmp/b.png}}",
+		"--attach", "c.png", "--attach", "/workspace/d.png")
+	if r.code != ExitOK {
+		t.Fatalf("code %d, stderr %q", r.code, r.stderr)
+	}
+	got := params(t, f.calls[0])
+	if got["body"] != "Before {{attach:/workspace/web/shots/a.png}} and {{attach:/tmp/b.png}}" {
+		t.Fatalf("body %q", got["body"])
+	}
+	if a, _ := got["attach"].([]any); len(a) != 2 || a[0] != "/workspace/web/c.png" || a[1] != "/workspace/d.png" {
+		t.Fatalf("attach %v", got["attach"])
+	}
+	r = runCLI(t, f, "", nil, "pr", "review", "9", "--repository", "o/r", "--verdict", "comment", "--comment", "a.go:2=see {{attach:x.png}}")
+	if r.code != ExitOK {
+		t.Fatalf("review: code %d, stderr %q", r.code, r.stderr)
+	}
+	if c := params(t, f.calls[1])["comments"].([]any)[0].(map[string]any); c["body"] != "see {{attach:/workspace/web/x.png}}" {
+		t.Fatalf("line comment %v", c)
+	}
+	if r := runCLI(t, f, "", nil, "pr", "comment", "--help"); !strings.Contains(r.stdout+r.stderr, "--attach file") {
+		t.Fatalf("help: %q", r.stdout+r.stderr)
 	}
 }
 

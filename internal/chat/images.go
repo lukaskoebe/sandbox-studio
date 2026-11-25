@@ -186,6 +186,12 @@ func imageMessage(src string, err error) string {
 	return "Studio couldn't copy " + src + ": " + err.Error()
 }
 
+// ReadPicture reads a picture off a sandbox's computer as a message's is read: a PNG, JPEG, GIF
+// or WebP of at most 8 MiB. Its errors say in words why it can't, as a missing file.
+func (s *Service) ReadPicture(ctx context.Context, sandboxID, p string) ([]byte, string, error) {
+	return s.readImage(ctx, sandboxID, p)
+}
+
 // readImage reads a picture out of the sandbox in parts that each fit one reply.
 func (s *Service) readImage(ctx context.Context, sandboxID, p string) ([]byte, string, error) {
 	if p == "" {

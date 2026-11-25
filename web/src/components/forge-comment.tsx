@@ -24,6 +24,7 @@ import { Ident } from "@/components/ident"
 import { StatusDot } from "@/components/status-dot"
 import { textareaClass } from "@/components/memory-dialogs"
 import { DecisionRow } from "@/components/review-feedback"
+import { DraftPictures } from "@/components/draft-pictures"
 import {
   rememberAttribution,
   rememberedAttribution,
@@ -213,6 +214,12 @@ export function ForgeComment({ approval }: { approval: Approval }) {
             className={textareaClass}
           />
         </label>
+        <DraftPictures
+          env={approval.environmentId}
+          approval={approval.id}
+          pictures={draft.pictures}
+          pending={pending}
+        />
         <label className="flex items-center gap-2 text-xs">
           <Checkbox
             checked={attribution}

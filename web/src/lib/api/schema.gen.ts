@@ -4203,7 +4203,7 @@ export interface components {
             account?: string;
             /** @description The posted comment ends with the line saying the teammate wrote it */
             attribution?: boolean;
-            /** @description The comment, in Markdown */
+            /** @description The comment, in Markdown; {{attach:<path>}} places a picture */
             body: string;
             forge: string;
             /** @description The forge's host, which the comment posts to */
@@ -4216,6 +4216,8 @@ export interface components {
             /** Format: int64 */
             number: number;
             owner: string;
+            /** @description The pictures the comment places with {{attach:<path>}}, uploaded once approved */
+            pictures?: components["schemas"]["Picture"][] | null;
             /** @description The posted comment's web URL */
             postedUrl?: string;
             repo: string;
@@ -5357,6 +5359,8 @@ export interface components {
             url: string;
         };
         GitDetail: {
+            /** @description The pictures a git.pr approval's description places with {{attach:<path>}}, uploaded once approved */
+            pictures?: components["schemas"]["Picture"][] | null;
             /** @description Set for git.pr approvals */
             pullRequest?: components["schemas"]["PullRequest"];
             push: components["schemas"]["GitPush"];
@@ -6606,6 +6610,15 @@ export interface components {
             title: string;
             toolKind?: string;
         };
+        Picture: {
+            /** @description Studio's copy of the picture, until the draft is decided */
+            file: string;
+            mimeType: string;
+            /** @description The file on the sandbox's computer, as {{attach:<path>}} names it in the text */
+            path: string;
+            /** Format: int64 */
+            size: number;
+        };
         PlanBody: {
             entries: components["schemas"]["PlanEntry"][] | null;
         };
@@ -7321,6 +7334,8 @@ export interface components {
             /** @description The account opened the pull request, so the forge takes a verdict only as a comment */
             ownPullRequest?: boolean;
             owner: string;
+            /** @description The pictures the summary and the comments place with {{attach:<path>}}, uploaded once approved */
+            pictures?: components["schemas"]["Picture"][] | null;
             pullRequest: components["schemas"]["PullRequestInfo"];
             repo: string;
             /** @description The sandbox's name */

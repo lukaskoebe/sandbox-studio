@@ -48,7 +48,7 @@ var repoPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+$`)
 // statusPath is a commit's combined status; every commit's CI passed.
 var statusPath = regexp.MustCompile(`^/api/v1/repos/[^/]+/[^/]+/commits/[^/]+/status$`)
 
-var pullPath = regexp.MustCompile(`^/api/v[13]/repos/([^/]+)/([^/]+)/(pulls|issues)/1(\.diff|/commits|/files|/reviews|/comments)?$`)
+var pullPath = regexp.MustCompile(`^/api/v[13]/repos/([^/]+)/([^/]+)/(pulls|issues)/1(\.diff|/commits|/files|/reviews|/comments|/assets)?$`)
 
 type pulls struct {
 	mu     sync.Mutex
@@ -160,6 +160,18 @@ func (p *pulls) serve(w http.ResponseWriter, r *http.Request) (ok bool) {
 			"base": map[string]string{"ref": "main", "sha": "b0b0b0"}, "head": map[string]string{"ref": "feature/coupons", "sha": "c0ffee"}})
 	case "pulls.diff":
 		_, _ = io.WriteString(w, pullDiff)
+	case "issues/assets":
+		// A picture a comment or review places: kept as its name and size.
+		file, h, err := r.FormFile("attachment")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		data, _ := io.ReadAll(io.LimitReader(file, 16<<20))
+		p.mu.Lock()
+		p.posted = append(p.posted, PostedReview{Repo: repo, Body: map[string]any{"asset": h.Filename, "size": len(data), "type": h.Header.Get("Content-Type")}})
+		p.mu.Unlock()
+		send(map[string]any{"name": h.Filename, "browser_download_url": "https://" + repo + "/attachments/" + h.Filename})
 	case "pulls/commits":
 		send([]map[string]any{{"sha": "c0ffee", "commit": map[string]any{"message": "Apply coupons", "author": map[string]string{"name": "Someone"}}}})
 	case "pulls/files":

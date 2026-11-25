@@ -371,3 +371,58 @@ test("a teammate's comment on a pull request waits for approval and posts as edi
       .first()
   ).toBeVisible()
 })
+
+test("a teammate's comment shows its pictures and uploads them once posted", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgejo(api, env)
+  const sb = await api.createSandbox(sandboxName("picture"))
+  const asked = await call<{ status: string; approval: string }>(
+    api,
+    sb,
+    "git_pull_request_comment",
+    {
+      forge: forge.name,
+      repository: "acme/web",
+      number: 1,
+      body: "The total is off:",
+      attach: ["/home/agent/shots/checkout.png"],
+    }
+  )
+  expect(asked.status).toBe("awaiting approval")
+
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "acme/web#1" })
+  await openRow(card)
+  await card.getByRole("button", { name: "Review", exact: true }).click()
+  const pane = page.getByTestId("git-review")
+  await expect(pane.getByRole("textbox", { name: "Comment" })).toHaveValue(
+    "The total is off:\n\n{{attach:/home/agent/shots/checkout.png}}"
+  )
+  const pictures = pane.getByRole("region", { name: "Pictures" })
+  await expect(pictures).toContainText("checkout.png")
+  const thumb = pictures.getByRole("img", {
+    name: "/home/agent/shots/checkout.png",
+  })
+  await expect
+    .poll(() => thumb.evaluate((i: HTMLImageElement) => i.naturalWidth))
+    .toBeGreaterThan(0)
+  await pane.getByRole("button", { name: "Post comment" }).click()
+  await expect(pane).toBeHidden()
+
+  const posted = (
+    (await api.json<Posted[]>("GET", "/api/e2e/reviews")) ?? []
+  ).filter((r) => r.repo === forge.repo)
+  expect(posted.at(-2)!.body).toMatchObject({
+    asset: "checkout.png",
+    type: "image/png",
+  })
+  expect(posted.at(-1)!.body.comment).toBe(
+    `The total is off:\n\n![checkout](https://${forge.repo}/attachments/checkout.png)`
+  )
+})

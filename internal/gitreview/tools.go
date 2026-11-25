@@ -134,12 +134,13 @@ func (s *Service) toolPullRequestStatus(ctx context.Context, sb store.Sandbox, p
 func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, params json.RawMessage) (any, error) {
 	s.httpClient()
 	var in struct {
-		Branch     string `json:"branch"`
-		Title      string `json:"title"`
-		Body       string `json:"body"`
-		Base       string `json:"base"`
-		Forge      string `json:"forge"`
-		Repository string `json:"repository"`
+		Branch     string   `json:"branch"`
+		Title      string   `json:"title"`
+		Body       string   `json:"body"`
+		Attach     []string `json:"attach"`
+		Base       string   `json:"base"`
+		Forge      string   `json:"forge"`
+		Repository string   `json:"repository"`
 	}
 	if err := decodeArgs(params, &in); err != nil {
 		return nil, err
@@ -147,6 +148,10 @@ func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, p
 	branch, title := strings.TrimSpace(in.Branch), strings.TrimSpace(in.Title)
 	if branch == "" || title == "" {
 		return nil, integrations.ToolError("give the branch you pushed and the pull request's title")
+	}
+	body, files, err := attachPictures(strings.TrimSpace(in.Body), nil, in.Attach)
+	if err != nil {
+		return nil, integrations.ToolError("%s", err)
 	}
 	// A forge without pull requests, such as the folder the repository was cloned from, gives way
 	// to where its pull requests are.
@@ -212,8 +217,17 @@ func (s *Service) toolPullRequestCreate(ctx context.Context, sb store.Sandbox, p
 	if base == branch {
 		return nil, integrations.ToolError("%s is the branch to merge into; push your changes to another branch", branch)
 	}
-	s.proposePR(ctx, p, PullRequest{Head: branch, Base: base, Title: truncate(title, 200), Body: strings.TrimSpace(in.Body),
-		Attribution: pushedBy(p.TeammateName, sb.Name)})
+	var pics []Picture
+	if len(files) > 0 {
+		if err := picturesOn(f, false); err != nil {
+			return nil, integrations.ToolError("%s", err)
+		}
+		if pics, err = s.copyPictures(ctx, sb, files); err != nil {
+			return nil, err
+		}
+	}
+	s.proposePR(ctx, p, PullRequest{Head: branch, Base: base, Title: truncate(title, 200), Body: body,
+		Attribution: pushedBy(p.TeammateName, sb.Name)}, pics)
 	p, err = s.Store.GitPush(ctx, p.EnvironmentID, p.ID)
 	if err != nil {
 		return nil, err

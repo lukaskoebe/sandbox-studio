@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,6 +49,8 @@ type CLIEnv struct {
 	WriteFile func(name string, data []byte) error
 	// TempDir is where an image goes without -o.
 	TempDir string
+	// Getwd is the working directory, which a picture's relative path is from.
+	Getwd func() (string, error)
 	// Now names the image files.
 	Now func() time.Time
 	// Poll is how long --wait waits between asking again; `pr checks --wait` waits
@@ -68,6 +71,7 @@ func OSEnv() CLIEnv {
 		ReadFile:  os.ReadFile,
 		WriteFile: func(name string, data []byte) error { return os.WriteFile(name, data, 0o644) },
 		TempDir:   os.TempDir(),
+		Getwd:     os.Getwd,
 		Now:       time.Now,
 		Poll:      5 * time.Second,
 	}
@@ -338,6 +342,15 @@ func parseArgs(ctx context.Context, cmd command, args []string, env CLIEnv) (inv
 			inv.params["comments"] = append(list, comment)
 			continue
 		}
+		if _, ok := props["attach"]; ok && name == "attach" {
+			v, err := next()
+			if err != nil {
+				return inv, err
+			}
+			list, _ := inv.params["attach"].([]any)
+			inv.params["attach"] = append(list, fromHere(env, v))
+			continue
+		}
 		if cmd.tool.Name == agentproto.MethodGitPullRequestResolve && name == "thread" {
 			v, err := next()
 			if err != nil {
@@ -400,6 +413,9 @@ func parseArgs(ctx context.Context, cmd command, args []string, env CLIEnv) (inv
 			return inv, err
 		}
 	}
+	if _, ok := props["attach"]; ok {
+		placeFromHere(env, inv.params)
+	}
 	fillFromGit(ctx, props, inv.params, env)
 	required, _ := cmd.tool.InputSchema["required"].([]string)
 	for _, r := range required {
@@ -408,6 +424,48 @@ func parseArgs(ctx context.Context, cmd command, args []string, env CLIEnv) (inv
 		}
 	}
 	return inv, nil
+}
+
+// pictureRef is a picture's place in a text the forge tools post: {{attach:<path>}}.
+var pictureRef = regexp.MustCompile(`\{\{attach:([^{}\n]+)\}\}`)
+
+// fromHere makes a picture's relative path absolute from the working directory, where the
+// command was given it; Studio would take it as relative to /workspace.
+func fromHere(env CLIEnv, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || filepath.IsAbs(p) || env.Getwd == nil {
+		return p
+	}
+	wd, err := env.Getwd()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(wd, p)
+}
+
+// placeFromHere makes the pictures the texts place absolute from the working directory.
+func placeFromHere(env CLIEnv, params map[string]any) {
+	fix := func(v any) any {
+		s, ok := v.(string)
+		if !ok {
+			return v
+		}
+		return pictureRef.ReplaceAllStringFunc(s, func(m string) string {
+			return "{{attach:" + fromHere(env, pictureRef.FindStringSubmatch(m)[1]) + "}}"
+		})
+	}
+	for _, k := range []string{"body", "summary"} {
+		if v, ok := params[k]; ok {
+			params[k] = fix(v)
+		}
+	}
+	if list, ok := params["comments"].([]any); ok {
+		for _, c := range list {
+			if m, ok := c.(map[string]any); ok {
+				m["body"] = fix(m["body"])
+			}
+		}
+	}
 }
 
 func flagOrArg(cmd command, key string) string {
@@ -1042,6 +1100,9 @@ func printCommandHelp(w io.Writer, c command) {
 		fmt.Fprintln(w, "\nArguments:")
 	}
 	for _, k := range keys {
+		if k == "attach" {
+			continue // below, as a flag to repeat
+		}
 		s, _ := props[k].(map[string]any)
 		name := "--" + strings.ReplaceAll(k, "_", "-")
 		if slices.Contains(c.args, k) {
@@ -1078,6 +1139,10 @@ func printCommandHelp(w io.Writer, c command) {
 	}
 	if c.tool.Name == agentproto.MethodGitPullRequestResolve {
 		fmt.Fprintln(w, "  --thread id            a thread to resolve, as pr read names it; repeat it")
+	}
+	if _, ok := props["attach"]; ok {
+		fmt.Fprintln(w, "  --attach file          a picture to show (PNG, JPEG, GIF or WebP, up to 8 MiB), uploaded once the user approves;")
+		fmt.Fprintln(w, "                         {{attach:file}} in the text places it, else it goes at the end; repeat it (GitLab, Forgejo, Gitea)")
 	}
 	fmt.Fprintln(w, "\n  --json  print the result as JSON    --wait  wait for the user's decision    -o file  where an image goes")
 }

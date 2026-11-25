@@ -72,6 +72,10 @@ type Service struct {
 	Agent  func(ctx context.Context) (net.Conn, error)
 	Log    *slog.Logger
 	Limits Limits
+	// Pictures reads the pictures an agent attaches to what it posts on a forge, and PictureDir
+	// keeps Studio's copies until the user decides (pictures.go).
+	Pictures   PictureReader
+	PictureDir string
 
 	slowSign time.Duration // DefaultSlowSign if zero
 

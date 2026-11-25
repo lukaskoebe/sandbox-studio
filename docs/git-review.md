@@ -590,6 +590,35 @@ review: `git_pull_request_comment(repository, number, body, forge?, idempotency_
   (`pr comment --wait` waits the same way): posted with its URL, discarded or dismissed
   with the note, or failed with the forge's answer. The next prompt has no note about it.
 
+## Pictures
+
+A pull request's description, a conversation comment and a review (its summary and line
+comments) can show pictures the agent made, such as screenshots. The sandbox's token can't
+upload them (GitLab's is read-only), so Studio does, with the forge's token, once the user
+approves. In `pictures.go`.
+
+- **Asking.** The text places a picture with `{{attach:<path>}}`, and `attach` (`--attach
+  <file>`, repeatable) names more: those the text doesn't place go at the end of the
+  description, comment or summary. A relative path is from `/workspace`; the CLI makes it
+  absolute from its working directory first, in placeholders too (`placeFromHere`). At most
+  10 per draft; PNG, JPEG, GIF or WebP up to 8 MiB each (`chat.Service.ReadPicture`, the chat
+  pictures' reader). A missing or unreadable file is a tool error before anything waits.
+- **Forges.** GitLab uploads with `POST /projects/:id/uploads` and places the `markdown` it
+  answers. Forgejo and Gitea upload with `POST /repos/{o}/{r}/issues/{n}/assets`, so only on a
+  pull request that is already open: not in `pr create`. GitHub has no API for it, so a draft
+  with pictures is refused there with a word to describe them instead.
+- **The copies.** Studio copies each picture into `<data>/pr-pictures/<32 hex>.<ext>` when the
+  agent asks, so the card shows what will upload: the payload's `pictures` (path, type, size,
+  file) and `GET /api/environments/{env}/approvals/{id}/pictures/{n}`, served with nosniff
+  and `default-src 'none'`. `DraftPictures` in `web/src/components/draft-pictures.tsx` shows
+  them below the text on the comment, review and pull request cards, and only their names once
+  decided. The copies are removed when the draft is decided or replaced, and at start
+  (`SweepPictures`) when no pending approval names them and they are over an hour old.
+- **Posting.** Only the pictures the text still places upload, each once however often it is
+  placed, and the placeholders become the forge's Markdown. Deleting a placeholder leaves its
+  picture out; one naming a picture the agent didn't attach is refused (`checkPlaces`), so the
+  decision fails and the draft keeps waiting.
+
 ## Resolve review threads
 
 A teammate can ask to mark review threads resolved, as the forge's Resolve conversation

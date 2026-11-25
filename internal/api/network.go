@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -999,4 +1000,42 @@ type ReviewEditCommentIn struct {
 	Line int    `json:"line" minimum:"1"`
 	Side string `json:"side,omitempty" enum:"new,old" doc:"new (default): an added or kept line, numbered in the new file; old: a removed line"`
 	Body string `json:"body" maxLength:"5000"`
+}
+
+// approvalPicture serves the nth picture a waiting pull request, comment or review shows, as
+// Studio copied it out of the sandbox (gitreview/pictures.go). Once the draft is decided the
+// copy is gone, and so is the picture.
+func (s *Server) approvalPicture(w http.ResponseWriter, r *http.Request) {
+	if s.Git == nil {
+		http.Error(w, "git is not available", http.StatusServiceUnavailable)
+		return
+	}
+	a, err := s.Store.Approval(r.Context(), r.PathValue("env"), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "no such approval", http.StatusNotFound)
+		return
+	}
+	pics := gitreview.ApprovalPictures(a)
+	n, err := strconv.Atoi(r.PathValue("n"))
+	if err != nil || n < 0 || n >= len(pics) {
+		http.Error(w, "the approval shows no such picture", http.StatusNotFound)
+		return
+	}
+	file, err := s.Git.PictureFile(pics[n])
+	if err != nil {
+		http.Error(w, "the picture is gone", http.StatusNotFound)
+		return
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		http.Error(w, "the picture is gone", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	h := w.Header()
+	h.Set("Content-Type", pics[n].MIMEType)
+	h.Set("Cache-Control", "private, max-age=86400")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "default-src 'none'")
+	http.ServeContent(w, r, "", time.Time{}, f)
 }

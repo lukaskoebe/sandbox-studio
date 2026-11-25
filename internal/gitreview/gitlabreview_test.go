@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -45,6 +46,20 @@ func newFakeGitLab(t *testing.T) (*GitLab, *fakeGitLab) {
 			if f.me != "" && strings.HasSuffix(path, "/approve") {
 				w.WriteHeader(http.StatusUnauthorized)
 				write(w, map[string]any{"message": "401 Unauthorized"})
+				return
+			}
+			if strings.HasSuffix(path, "/uploads") {
+				file, h, err := r.FormFile("file")
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				data, _ := io.ReadAll(file)
+				f.mu.Lock()
+				f.posted = append(f.posted, fmt.Sprintf("POST /uploads %s %d %s", h.Filename, len(data), h.Header.Get("Content-Type")))
+				f.bodies = append(f.bodies, nil)
+				f.mu.Unlock()
+				write(w, map[string]any{"markdown": "![" + strings.TrimSuffix(h.Filename, ".png") + "](/uploads/abc/" + h.Filename + ")"})
 				return
 			}
 			if f.publishStatus != 0 && strings.HasSuffix(path, "/bulk_publish") {

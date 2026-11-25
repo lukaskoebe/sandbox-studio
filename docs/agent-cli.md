@@ -36,6 +36,9 @@ work:
   - `--<flag>-file <path>` reads a string from a file, or from stdin with `-`.
   - `pr review` also takes `--comment path:line=text` (or `path:line:old=text` for a removed
     line), which can be repeated.
+  - `pr create`, `pr review` and `pr comment` take `--attach <file>`, repeatable, for a
+    picture Studio uploads once approved; `{{attach:<file>}}` in the text places one. Both are
+    made absolute from the working directory. See [git-review.md](git-review.md#pictures).
 - **Taken from the checkout.** In a checkout, a pull request command fills in what it was not
   given: `forge` and `repository` come from a remote on `git.studio.internal` (`origin`
   first, otherwise the only such remote), and `branch` from `HEAD`. A forge without pull

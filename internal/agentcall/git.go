@@ -33,6 +33,13 @@ var GitPullRequestStatusTool = Tool{agentproto.MethodGitPullRequestStatus,
 		"repository": str("owner/repo on that forge, when you pushed the branch to more than one", "maxLength", 300),
 	})}
 
+// attachPictures is the attach argument of the tools that post Markdown on a forge.
+var attachPictures = map[string]any{"type": "array", "maxItems": 10, "items": str("A path on this computer, absolute or relative to /workspace", "minLength", 1, "maxLength", 1024),
+	"description": "Pictures to show (PNG, JPEG, GIF or WebP, up to 8 MiB each): files on this computer. Write {{attach:<path>}} in the text " +
+		"where each goes; one the text doesn't place goes at the end of the description, comment or summary. A {{attach:<path>}} in the text " +
+		"attaches its file too. Studio copies them when you ask, the user sees them, and they are uploaded with the user's account once " +
+		"approved. GitLab, Forgejo and Gitea; on Forgejo and Gitea not in a new pull request's description. GitHub has no API for it."}
+
 // GitPullRequestCreateTool proposes a pull request for a pushed branch.
 var GitPullRequestCreateTool = Tool{agentproto.MethodGitPullRequestCreate,
 	"Proposes a pull request (a merge request on GitLab) for a branch you pushed and Studio pushed to the forge. Nothing is opened yet: " +
@@ -44,6 +51,7 @@ var GitPullRequestCreateTool = Tool{agentproto.MethodGitPullRequestCreate,
 		"branch":     str("The branch you pushed", "maxLength", 255),
 		"title":      str("The pull request's title", "maxLength", 200),
 		"body":       str("Its description, in Markdown", "maxLength", 20000),
+		"attach":     attachPictures,
 		"base":       str("The branch to merge into; default the repository's default branch", "maxLength", 255),
 		"forge":      str("The forge's name, when you pushed the branch to more than one", "maxLength", 32),
 		"repository": str("owner/repo on that forge, when you pushed the branch to more than one", "maxLength", 300),
@@ -106,6 +114,7 @@ var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
 			"side": map[string]any{"type": "string", "enum": []string{"new", "old"}, "description": "Default new"},
 			"body": str("The comment, in Markdown", "maxLength", 5000),
 		})},
+		"attach":          attachPictures,
 		"idempotency_key": idempotencyKey,
 	})}
 
@@ -119,6 +128,7 @@ var GitPullRequestCommentTool = Tool{agentproto.MethodGitPullRequestComment,
 		"repository":      pullRequestRef["repository"],
 		"number":          pullRequestRef["number"],
 		"body":            str("The comment, in Markdown", "maxLength", 20000),
+		"attach":          attachPictures,
 		"idempotency_key": idempotencyKey,
 	})}
 

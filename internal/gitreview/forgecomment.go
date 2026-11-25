@@ -42,8 +42,10 @@ type CommentDraft struct {
 	Title       string `json:"title" doc:"The pull request's title"`
 	URL         string `json:"url,omitempty" doc:"The pull request's web URL"`
 	Account     string `json:"account,omitempty" doc:"The forge account the comment posts as: the user's token's"`
-	Body        string `json:"body" doc:"The comment, in Markdown"`
+	Body        string `json:"body" doc:"The comment, in Markdown; {{attach:<path>}} places a picture"`
 	Attribution bool   `json:"attribution,omitempty" doc:"The posted comment ends with the line saying the teammate wrote it"`
+	// Pictures are the pictures the comment places, copied out of the sandbox (pictures.go).
+	Pictures []Picture `json:"pictures,omitempty" doc:"The pictures the comment places with {{attach:<path>}}, uploaded once approved"`
 	// IdempotencyKey is the agent's key for the comment: asking again with it answers with this one.
 	IdempotencyKey string `json:"idempotencyKey,omitempty" doc:"The agent's key for this comment, so that asking again doesn't ask twice"`
 	State          string `json:"state,omitempty" enum:"posted,discarded,failed" doc:"Empty until it is decided and, once approved, posted"`
@@ -71,8 +73,9 @@ func CommentDetail(a store.Approval) (*CommentDraft, error) {
 func (s *Service) toolPullRequestComment(ctx context.Context, sb store.Sandbox, params json.RawMessage) (any, error) {
 	var in struct {
 		pullRequestArgs
-		Body string `json:"body"`
-		Key  string `json:"idempotency_key"`
+		Body   string   `json:"body"`
+		Attach []string `json:"attach"`
+		Key    string   `json:"idempotency_key"`
 	}
 	if err := decodeArgs(params, &in); err != nil {
 		return nil, err
@@ -92,7 +95,10 @@ func (s *Service) toolPullRequestComment(ctx context.Context, sb store.Sandbox, 
 			return nil, err
 		}
 	}
-	body := strings.TrimSpace(in.Body)
+	body, files, err := attachPictures(strings.TrimSpace(in.Body), nil, in.Attach)
+	if err != nil {
+		return nil, integrations.ToolError("%s", err)
+	}
 	if err := checkComment(body); err != nil {
 		return nil, integrations.ToolError("%s", err)
 	}
@@ -107,6 +113,11 @@ func (s *Service) toolPullRequestComment(ctx context.Context, sb store.Sandbox, 
 	}
 	if _, ok := rv.(Commenter); !ok {
 		return nil, integrations.ToolError("%s has no API to comment with", f.Name)
+	}
+	if len(files) > 0 {
+		if err := picturesOn(f, true); err != nil {
+			return nil, integrations.ToolError("%s", err)
+		}
 	}
 	owner, repo, err := in.split(f.Kind)
 	if err != nil {
@@ -134,13 +145,18 @@ func (s *Service) toolPullRequestComment(ctx context.Context, sb store.Sandbox, 
 			draft.Teammate = tm.Name
 		}
 	}
+	if draft.Pictures, err = s.copyPictures(ctx, sb, files); err != nil {
+		return nil, err
+	}
 	payload, err := json.Marshal(draft)
 	if err != nil {
+		s.removePictures(draft.Pictures)
 		return nil, err
 	}
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, Kind: KindComment,
 		Subject: fmt.Sprintf("%s/%s/%s#%d", f.Name, owner, repo, in.Number), Payload: payload})
 	if err != nil {
+		s.removePictures(draft.Pictures)
 		return nil, err
 	}
 	s.publish(sb.EnvironmentID, a.ID)
@@ -210,12 +226,16 @@ func (s *Service) decideComment(ctx context.Context, a store.Approval, d integra
 		if err := checkComment(body); err != nil {
 			return fmt.Errorf("%w: %v", integrations.ErrAction, err)
 		}
+		if err := checkPlaces(draft.Pictures, body); err != nil {
+			return fmt.Errorf("%w: %v", integrations.ErrAction, err)
+		}
 		draft.Body, draft.Attribution = body, d.Comment.Attribution
 	}
 	if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, st, ""); err != nil {
 		return err
 	}
 	defer s.publish(a.EnvironmentID, a.ID)
+	defer s.removePictures(draft.Pictures)
 	// Decided, the comment settles even if the user's request goes away.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer cancel()
@@ -259,7 +279,14 @@ func (s *Service) postComment(ctx context.Context, envID string, d CommentDraft)
 	if err != nil {
 		return "", fmt.Errorf("the forge's token: %w", err)
 	}
-	body := d.Body
+	pl, err := s.placer(ad, f, token, d.Owner, d.Repo, d.Number, d.Pictures)
+	if err != nil {
+		return "", err
+	}
+	body, err := pl.place(ctx, d.Body)
+	if err != nil {
+		return "", err
+	}
 	if d.Attribution {
 		name := d.Teammate
 		if name == "" {

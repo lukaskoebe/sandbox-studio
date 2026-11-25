@@ -84,6 +84,7 @@ import { approvalKind, gitSummary, plural } from "@/lib/approval-kinds"
 import { draftBase, useReviewDraft } from "@/lib/review-drafts"
 import { cn, formatAge } from "@/lib/utils"
 import { viewedScope } from "@/lib/viewed-files"
+import { DraftPictures } from "@/components/draft-pictures"
 
 type Action = "allow" | "deny" | "dismiss"
 
@@ -736,6 +737,12 @@ function PushReview({
               </pre>
             </ScrollArea>
           )}
+          <DraftPictures
+            env={approval.environmentId}
+            approval={approval.id}
+            pictures={git.pictures}
+            pending={pending}
+          />
         </section>
       )}
 

@@ -43,6 +43,8 @@ type ReviewDraft struct {
 	Summary       string          `json:"summary"`
 	Comments      []ReviewComment `json:"comments"`
 	Attribution   bool            `json:"attribution,omitempty" doc:"The posted review ends with the line saying the teammate wrote it"`
+	// Pictures are the pictures the summary and the comments place (pictures.go).
+	Pictures []Picture `json:"pictures,omitempty" doc:"The pictures the summary and the comments place with {{attach:<path>}}, uploaded once approved"`
 	// IdempotencyKey is the agent's key for the draft: asking again with it answers with this draft.
 	IdempotencyKey string `json:"idempotencyKey,omitempty" doc:"The agent's key for this draft, so that asking again doesn't draft it twice"`
 }
@@ -190,6 +192,7 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 		Verdict  string          `json:"verdict"`
 		Summary  string          `json:"summary"`
 		Comments []ReviewComment `json:"comments"`
+		Attach   []string        `json:"attach"`
 		Key      string          `json:"idempotency_key"`
 	}
 	if err := decodeArgs(params, &in); err != nil {
@@ -222,8 +225,22 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 	if err != nil {
 		return nil, err
 	}
+	var notes []string
+	for i := range in.Comments {
+		in.Comments[i].Body = cleanPlaces(in.Comments[i].Body)
+		notes = append(notes, in.Comments[i].Body)
+	}
+	summary, files, err := attachPictures(strings.TrimSpace(in.Summary), notes, in.Attach)
+	if err != nil {
+		return nil, integrations.ToolError("%s", err)
+	}
+	if len(files) > 0 {
+		if err := picturesOn(f, true); err != nil {
+			return nil, integrations.ToolError("%s", err)
+		}
+	}
 	draft := ReviewDraft{Forge: f.Name, ForgeHost: forgeHost(f), Owner: owner, Repo: repo, Sandbox: sb.Name,
-		Verdict: in.Verdict, Summary: strings.TrimSpace(in.Summary), Comments: in.Comments, IdempotencyKey: strings.TrimSpace(in.Key)}
+		Verdict: in.Verdict, Summary: summary, Comments: in.Comments, IdempotencyKey: strings.TrimSpace(in.Key)}
 	if err := checkReview(draft.Verdict, draft.Summary, draft.Comments); err != nil {
 		return nil, integrations.ToolError("%s", err)
 	}
@@ -286,15 +303,23 @@ func (s *Service) toolPullRequestReview(ctx context.Context, sb store.Sandbox, p
 		// The agent wrote the newer draft itself; it needs no telling.
 		_ = s.Store.MarkGitReviewNotified(ctx, sb.EnvironmentID, old.ID)
 		s.publish(sb.EnvironmentID, old.ApprovalID)
+		if a, err := s.Store.Approval(ctx, sb.EnvironmentID, old.ApprovalID); err == nil {
+			s.removePictures(ApprovalPictures(a))
+		}
 	}
 
+	if draft.Pictures, err = s.copyPictures(ctx, sb, files); err != nil {
+		return nil, err
+	}
 	payload, err := json.Marshal(draft)
 	if err != nil {
+		s.removePictures(draft.Pictures)
 		return nil, err
 	}
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, Kind: KindReview,
 		Subject: fmt.Sprintf("%s/%s/%s#%d", f.Name, owner, repo, in.Number), Payload: payload})
 	if err != nil {
+		s.removePictures(draft.Pictures)
 		return nil, err
 	}
 	if _, err := s.Store.CreateGitReview(ctx, store.GitReview{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, ApprovalID: a.ID,
@@ -412,10 +437,20 @@ func (s *Service) decideReview(ctx context.Context, a store.Approval, d integrat
 			return fmt.Errorf("%w: %v", integrations.ErrAction, err)
 		}
 	}
+	if st == store.StatusApproved {
+		texts := []string{draft.Summary}
+		for _, c := range draft.Comments {
+			texts = append(texts, c.Body)
+		}
+		if err := checkPlaces(draft.Pictures, texts...); err != nil {
+			return fmt.Errorf("%w: %v", integrations.ErrAction, err)
+		}
+	}
 	if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, st, ""); err != nil {
 		return err
 	}
 	defer s.publish(a.EnvironmentID, a.ID)
+	defer s.removePictures(draft.Pictures)
 	// Decided, the review settles even if the user's request goes away.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer cancel()
@@ -490,6 +525,21 @@ func (s *Service) postDraft(ctx context.Context, r store.GitReview, draft Review
 		return "", "", fmt.Errorf("the forge's token: %w", err)
 	}
 	post, result := reviewPost(r, draft)
+	pl, err := s.placer(ad, f, token, r.Owner, r.Repo, r.Number, draft.Pictures)
+	if err != nil {
+		return "", "", err
+	}
+	if post.Body, err = pl.place(ctx, post.Body); err != nil {
+		return "", "", err
+	}
+	comments := make([]ReviewComment, len(post.Comments))
+	for i, c := range post.Comments {
+		if c.Body, err = pl.place(ctx, c.Body); err != nil {
+			return "", "", err
+		}
+		comments[i] = c
+	}
+	post.Comments = comments
 	url, err := rv.PostReview(ctx, token, r.Owner, r.Repo, r.Number, post)
 	if err != nil {
 		return "", "", err

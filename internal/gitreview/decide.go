@@ -21,6 +21,8 @@ import (
 type prPayload struct {
 	PushID      string      `json:"pushId"`
 	PullRequest PullRequest `json:"pullRequest"`
+	// Pictures are the pictures the description places (pictures.go).
+	Pictures []Picture `json:"pictures,omitempty"`
 }
 
 // GitDetail is what the inbox shows for a git approval besides the approval itself.
@@ -28,6 +30,7 @@ type GitDetail struct {
 	Push        store.GitPush `json:"push"`
 	Review      *PushReview   `json:"review,omitempty" doc:"Set for git.push approvals"`
 	PullRequest *PullRequest  `json:"pullRequest,omitempty" doc:"Set for git.pr approvals"`
+	Pictures    []Picture     `json:"pictures,omitempty" doc:"The pictures a git.pr approval's description places with {{attach:<path>}}, uploaded once approved"`
 }
 
 // ApprovalKinds are the approvals the git remote raises.
@@ -110,7 +113,7 @@ func (s *Service) GitDetail(ctx context.Context, a store.Approval) (*GitDetail, 
 			return nil, err
 		}
 		pr := pp.PullRequest.separated()
-		d.PullRequest = &pr
+		d.PullRequest, d.Pictures = &pr, pp.Pictures
 	}
 	return d, nil
 }
@@ -401,7 +404,7 @@ func (s *Service) pullRequestAfterPush(ctx context.Context, p store.GitPush, a s
 		}
 	case rv.PullRequest == nil:
 	case choice == nil:
-		s.proposePR(ctx, p, *rv.PullRequest)
+		s.proposePR(ctx, p, *rv.PullRequest, nil)
 	case choice.Open:
 		pr := *rv.PullRequest
 		if t := strings.TrimSpace(choice.Title); t != "" {
@@ -417,7 +420,7 @@ const PRUpdated = "updated"
 // openPRNow opens a pushed branch's pull request without a git.pr approval, since the
 // reviewer chose to, and records how it went. The error is the forge's, if it refused.
 func (s *Service) openPRNow(ctx context.Context, p store.GitPush, pr PullRequest) (store.GitPush, error) {
-	url, openErr := s.openPR(ctx, p, pr)
+	url, openErr := s.openPR(ctx, p, pr, nil)
 	p.PRApprovalID, p.PRURL, p.PRResult = "", url, "opened"
 	if openErr != nil {
 		p.PRURL, p.PRResult = "", "failed: "+openErr.Error()
@@ -517,9 +520,10 @@ func (s *Service) OpenPullRequest(ctx context.Context, envID, approvalID, title 
 }
 
 // proposePR raises the git.pr approval for an approved push.
-func (s *Service) proposePR(ctx context.Context, p store.GitPush, pr PullRequest) {
-	payload, err := json.Marshal(prPayload{PushID: p.ID, PullRequest: pr})
+func (s *Service) proposePR(ctx context.Context, p store.GitPush, pr PullRequest, pics []Picture) {
+	payload, err := json.Marshal(prPayload{PushID: p.ID, PullRequest: pr, Pictures: pics})
 	if err != nil {
+		s.removePictures(pics)
 		return
 	}
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{
@@ -528,6 +532,7 @@ func (s *Service) proposePR(ctx context.Context, p store.GitPush, pr PullRequest
 	})
 	if err != nil {
 		s.Log.Error("git remote: propose PR", "push", p.ID, "err", err)
+		s.removePictures(pics)
 		return
 	}
 	if err := s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, a.ID, "", ""); err != nil {
@@ -555,6 +560,7 @@ func (s *Service) decidePR(ctx context.Context, a store.Approval, d integrations
 		return err
 	}
 	defer s.publish(a.EnvironmentID, a.ID)
+	defer s.removePictures(pp.Pictures)
 	if st != store.StatusApproved {
 		return s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, a.ID, "", "not opened: "+st)
 	}
@@ -569,7 +575,7 @@ func (s *Service) decidePR(ctx context.Context, a store.Approval, d integrations
 	} else {
 		pr = pr.attributed(false)
 	}
-	url, err := s.openPR(ctx, p, pr)
+	url, err := s.openPR(ctx, p, pr, pp.Pictures)
 	sctx, scancel := settleCtx(ctx)
 	defer scancel()
 	if err != nil {
@@ -578,7 +584,7 @@ func (s *Service) decidePR(ctx context.Context, a store.Approval, d integrations
 	return s.Store.SetGitPushPR(sctx, p.EnvironmentID, p.ID, a.ID, url, "opened")
 }
 
-func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (string, error) {
+func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest, pics []Picture) (string, error) {
 	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
 	if err != nil {
 		return "", errors.New("the forge was removed from Sandbox Studio")
@@ -594,6 +600,13 @@ func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (
 	token, err := s.token(ctx, f)
 	if err != nil {
 		return "", fmt.Errorf("the forge's token: %w", err)
+	}
+	pl, err := s.placer(ad, f, token, p.Owner, p.Repo, 0, pics)
+	if err != nil {
+		return "", err
+	}
+	if pr.Body, err = pl.place(ctx, pr.Body); err != nil {
+		return "", err
 	}
 	return ad.OpenPullRequest(ctx, token, p.Owner, p.Repo, pr)
 }

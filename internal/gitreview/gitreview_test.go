@@ -875,6 +875,12 @@ func TestPushWithoutItsPullRequestCanOpenItLater(t *testing.T) {
 	if _, text, _ := h.svc.Feedback(h.ctx, h.env.ID, a.ID, ""); !strings.HasSuffix(text, "approved and pushed.") {
 		t.Fatalf("feedback = %q", text)
 	}
+	// Forgejo takes pictures only once the pull request is open.
+	h.svc.PictureDir = t.TempDir()
+	h.svc.Pictures = func(context.Context, string, string) ([]byte, string, error) { return png, "image/png", nil }
+	if _, err := h.svc.toolPullRequestCreate(h.ctx, g.sb, json.RawMessage(`{"branch":"feature","title":"Shots","body":"{{attach:shot.png}}"}`)); !integrations.IsToolError(err) || !strings.Contains(err.Error(), "only on an open pull request") {
+		t.Fatalf("pictures in a new Forgejo pull request: %v", err)
+	}
 	p, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "Later", false)
 	if err != nil || p.PRResult != "opened" || p.PRURL == "" || len(h.forge.pulls) != 1 || h.forge.pulls[0].Title != "Later" {
 		t.Fatalf("open later = %+v, %v (%+v)", p, err, h.forge.pulls)

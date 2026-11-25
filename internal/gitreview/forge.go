@@ -425,6 +425,12 @@ func (f *Forgejo) call(ctx context.Context, token, method, path string, in, out 
 	return err
 }
 
+// rawBody is a request body callJSON sends as it is, such as a form with a file.
+type rawBody struct {
+	contentType string
+	data        []byte
+}
+
 // maxAnswer bounds one JSON answer of a forge's API. A page of 100 pull requests from GitHub,
 // each with its full head and base repositories, runs to a few MiB.
 const maxAnswer = 8 << 20
@@ -439,12 +445,17 @@ func callJSON(ctx context.Context, client *http.Client, auth, token, method, url
 // than being read cut short.
 func callJSONMax(ctx context.Context, client *http.Client, auth, token, method, url string, headers map[string]string, in, out any, max int64) (http.Header, error) {
 	var body io.Reader
-	if in != nil {
+	contentType := ""
+	switch v := in.(type) {
+	case nil:
+	case rawBody:
+		body, contentType = bytes.NewReader(v.data), v.contentType
+	default:
 		b, err := json.Marshal(in)
 		if err != nil {
 			return nil, err
 		}
-		body = bytes.NewReader(b)
+		body, contentType = bytes.NewReader(b), "application/json"
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
@@ -455,8 +466,8 @@ func callJSONMax(ctx context.Context, client *http.Client, auth, token, method, 
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

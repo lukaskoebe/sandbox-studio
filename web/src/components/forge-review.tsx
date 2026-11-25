@@ -57,6 +57,7 @@ import {
 import { plural, pullRequestName, verdictLabels } from "@/lib/approval-kinds"
 import { draftBase, useReviewDraft } from "@/lib/review-drafts"
 import { viewedScope } from "@/lib/viewed-files"
+import { DraftPictures } from "@/components/draft-pictures"
 
 type Detail = NonNullable<Approval["forgeReview"]>
 type Draft = Detail["draft"]
@@ -482,6 +483,12 @@ export function ForgeReview({
             className={textareaClass}
           />
         </label>
+        <DraftPictures
+          env={approval.environmentId}
+          approval={approval.id}
+          pictures={draft.pictures}
+          pending={pending}
+        />
         <label className="flex items-center gap-2 text-xs">
           <Checkbox
             checked={attribution}
