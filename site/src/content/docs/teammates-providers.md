@@ -62,6 +62,8 @@ A subscription is not an API key. With an API key you paste the key and are done
 - **Claude Pro/Max:** open the sign-in page, sign in and choose Authorize, copy the code the page shows, and paste it into the dialog's code field (or press **Paste**). Studio hands the code to Claude Code and saves the sign-in by itself; you don't type into the terminal. **Show the terminal Claude Code runs in** displays what Claude Code says, and opens by itself if it rejects the code. If you'd rather, run `claude setup-token` on your own machine and paste the `sk-ant-oat…` token it prints under **Use a token from claude setup-token instead**.
 - **ChatGPT Plus/Pro:** open the sign-in page, enter the code the dialog shows, and sign in. Studio notices when you're done; there is nothing to paste back.
 
+A teammate whose provider still needs its sign-in or key can't start agents. Its **Sign-in needed** or **Key required** badge, next to its name, opens that provider's dialog; its settings offer **Sign in…** (or **Add key…**) under **Provider**; and a message it can't start a thread for says why, with **Fix it in AI providers**.
+
 ### Logins on this machine
 
 If Claude Code, Codex or opencode is signed in on the machine Studio runs on, the setup and **Settings → AI providers** list it under **On this machine**:

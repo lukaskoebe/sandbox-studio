@@ -211,6 +211,7 @@ function TeammatesPage() {
                           }
                         />
                         <Readiness
+                          env={env}
                           teammate={p}
                           provider={providerById.get(p.providerId)}
                           problemsOnly

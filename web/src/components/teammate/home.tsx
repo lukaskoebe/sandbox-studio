@@ -57,6 +57,7 @@ import { Spinner } from "@/components/ui/spinner"
 import {
   $api,
   errorMessage,
+  providerToFix,
   fetchClient,
   type Approval,
   type Sandbox,
@@ -476,6 +477,7 @@ function HomeStatus({
           )}
         </span>
         <Readiness
+          env={env}
           teammate={teammate}
           provider={providers.data?.find((p) => p.id === teammate.providerId)}
           problemsOnly
@@ -1389,6 +1391,8 @@ function NewThread({
   const wake = useWakeOnType(env, computer)
   const [mode, setMode] = useState<Mode>("message")
   const [problem, setProblem] = useState<string>()
+  // The provider the problem asks to sign in to, or add a key to.
+  const [fix, setFix] = useState<string>()
   // The model a new thread starts on: "" for the teammate's default.
   const [model, setModel] = useState("")
 
@@ -1423,6 +1427,7 @@ function NewThread({
 
   const send = async (p: Prompt) => {
     setProblem(undefined)
+    setFix(undefined)
     const text = p.text?.trim() ?? ""
     try {
       if (mode === "teach") {
@@ -1464,6 +1469,7 @@ function NewThread({
       return true
     } catch (err) {
       setProblem(errorMessage(err))
+      setFix(providerToFix(err))
       return false
     }
   }
@@ -1520,6 +1526,18 @@ function NewThread({
       <Composer
         onSend={send}
         error={problem}
+        errorAction={
+          fix && (
+            <Link
+              to="/e/$env/settings/providers"
+              params={{ env }}
+              search={{ signIn: fix }}
+              className="font-medium underline underline-offset-2"
+            >
+              Fix it in AI providers
+            </Link>
+          )
+        }
         placeholder={placeholder}
         draft={`teammate:${teammate.id}`}
         sendLabel={modes[mode].send}

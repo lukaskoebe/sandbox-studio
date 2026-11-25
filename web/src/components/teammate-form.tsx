@@ -5,8 +5,10 @@ import { toast } from "sonner"
 import {
   GitBranchIcon,
   IdentificationCardIcon,
+  PlusIcon,
   RobotIcon,
   ShieldCheckIcon,
+  SignInIcon,
   SparkleIcon,
   type Icon,
 } from "@phosphor-icons/react"
@@ -34,7 +36,7 @@ import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ModelInput, knownModels } from "@/components/model-input"
 import { ModelsInput } from "@/components/models-input"
-import { ModelSuggestions } from "@/components/provider-dialog"
+import { ModelSuggestions, ProviderDialog } from "@/components/provider-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { spriteFor, spriteLabel, spriteNames } from "@/lib/sprites"
 import {
@@ -103,6 +105,47 @@ function slug(name: string) {
     .replace(/^-+|-+$/g, "")
 }
 
+/**
+ * What the chosen provider needs before its agents can start, with the button that opens its
+ * sign-in or key; a form without providers offers to add one.
+ */
+function ProviderNeeds({
+  provider,
+  none,
+  onOpen,
+}: {
+  provider?: Provider
+  none: boolean
+  onOpen: () => void
+}) {
+  let text: string
+  let action: string
+  if (none) {
+    text = "A teammate's model runs on a provider's account."
+    action = "Add provider…"
+  } else if (provider?.state === "login_required") {
+    text = `${provider.name} needs a sign-in before its agents start.`
+    action = "Sign in…"
+  } else if (provider?.state === "expired") {
+    text = `${provider.name}'s sign-in has expired.`
+    action = "Sign in again…"
+  } else if (provider?.state === "key_required") {
+    text = `${provider.name} needs its API key before its agents start.`
+    action = "Add key…"
+  } else {
+    return null
+  }
+  return (
+    <FieldDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>{text}</span>
+      <Button type="button" size="xs" variant="outline" onClick={onOpen}>
+        {none ? <PlusIcon /> : <SignInIcon />}
+        {action}
+      </Button>
+    </FieldDescription>
+  )
+}
+
 export function TeammateForm({
   env,
   teammate,
@@ -135,6 +178,9 @@ export function TeammateForm({
     teammate?.providerId ?? providers.at(0)?.id ?? ""
   )
   const provider = providers.find((p) => p.id === providerId)
+  // The provider dialog, opened from here to sign in to the chosen provider, add its key or add
+  // a first provider, without leaving the form.
+  const [providerDialog, setProviderDialog] = useState(false)
   // An OpenAI-compatible endpoint's own models, listed with the provider's stored key.
   const compatible =
     provider?.kind === "openai_compatible" && provider.state === "ready"
@@ -434,6 +480,11 @@ export function TeammateForm({
                 ))}
               </SelectContent>
             </Select>
+            <ProviderNeeds
+              provider={provider}
+              none={providers.length === 0}
+              onOpen={() => setProviderDialog(true)}
+            />
           </Field>
           <Field>
             <FieldLabel>Agent</FieldLabel>
@@ -587,6 +638,13 @@ export function TeammateForm({
         </FormSection>
         {!sections && saveRow}
       </form>
+      {/* Outside the form: React sends the dialog's submit up its tree, which would save this. */}
+      <ProviderDialog
+        env={env}
+        provider={providers.length ? provider : undefined}
+        open={providerDialog}
+        onOpenChange={setProviderDialog}
+      />
     </FormSections.Provider>
   )
 }

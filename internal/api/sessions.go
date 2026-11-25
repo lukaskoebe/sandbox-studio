@@ -113,6 +113,12 @@ type sessionPlan struct {
 	teammate store.Teammate
 }
 
+// providerToFix names, in a 409's details, the provider that needs a sign-in or key before a
+// session starts, so the page can link to it; without a message, it adds nothing to the text.
+func providerToFix(id string) error {
+	return &huma.ErrorDetail{Location: "provider", Value: id}
+}
+
 // planSession checks that sb's owner teammate can run its harness and renders the files.
 func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan, error) {
 	if sb.TeammateID == "" {
@@ -132,11 +138,11 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	view := s.providerViewOf(ctx, prov)
 	switch view.State {
 	case teammates.StateLoginRequired:
-		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a sign-in first", prov.Name))
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a sign-in first", prov.Name), providerToFix(prov.ID))
 	case teammates.StateExpired:
-		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("the sign-in of provider %s has expired; sign in again", prov.Name))
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("the sign-in of provider %s has expired; sign in again", prov.Name), providerToFix(prov.ID))
 	case teammates.StateKeyRequired:
-		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs its API key first", prov.Name))
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs its API key first", prov.Name), providerToFix(prov.ID))
 	}
 	h, ok := harness.Lookup(p.Harness)
 	if !ok || !teammates.Supports(prov.Kind, p.Harness) {
@@ -184,7 +190,7 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 		}
 		auth, err := s.Login.GuestFiles(ctx, prov)
 		if errors.Is(err, login.ErrNoLogin) {
-			return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a sign-in first", prov.Name))
+			return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a sign-in first", prov.Name), providerToFix(prov.ID))
 		}
 		if err != nil {
 			return sessionPlan{}, apiError(err)

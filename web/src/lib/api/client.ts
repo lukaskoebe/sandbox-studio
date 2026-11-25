@@ -73,6 +73,18 @@ export function errorMessage(err: unknown): string {
   return String(err)
 }
 
+/**
+ * The provider that needs a sign-in or its key before an agent can start, when a 409 names
+ * one in its details (internal/api providerToFix).
+ */
+export function providerToFix(err: unknown): string | undefined {
+  if (errorStatus(err) !== 409) return undefined
+  const fields = (err as { errors?: { location?: string; value?: unknown }[] })
+    .errors
+  const v = fields?.find((f) => f.location === "provider")?.value
+  return typeof v === "string" ? v : undefined
+}
+
 /** The HTTP status of an API problem response, if the error is one. */
 export function errorStatus(err: unknown): number | undefined {
   return err && typeof err === "object"

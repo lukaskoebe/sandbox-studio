@@ -1,6 +1,12 @@
 import { mkdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { expect, test } from "./fixtures"
+import {
+  addTeammate,
+  expect,
+  sandboxName,
+  teammateMenu,
+  test,
+} from "./fixtures"
 
 test("a Claude subscription asks for a browser sign-in, not a key", async ({
   page,
@@ -254,4 +260,74 @@ test("logins on this computer become providers without copying a sign-in", async
     for (const added of providers.filter((p) => !before.has(p.id)))
       await api.request.delete(`/api/environments/${env}/providers/${added.id}`)
   }
+})
+
+test("a teammate whose subscription needs a sign-in links to it: its badge, a refused message and its settings", async ({
+  page,
+  api,
+  env,
+}) => {
+  // An API-key provider first, so addTeammate's default stays one that works.
+  const existing = await api.json<{ id: string }[]>(
+    "GET",
+    `/api/environments/${env}/providers`
+  )
+  if (!existing?.length)
+    await api.json("POST", `/api/environments/${env}/providers`, {
+      name: "Anthropic",
+      kind: "anthropic_api",
+      apiKey: "sk-ant-e2e-fake",
+    })
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const provider = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/providers`,
+    { name: `Zed Max ${suffix}`, kind: "claude_subscription" }
+  ))!
+  const name = `Signer ${suffix}`
+  const id = await addTeammate(api, env, name, {
+    providerId: provider.id,
+    harness: "claude",
+  })
+  await api.createSandbox(sandboxName("signer"), id)
+  const signIn = page.getByRole("dialog", {
+    name: `Sign in to Zed Max ${suffix}`,
+  })
+
+  // The header's badge opens the sign-in.
+  await page.goto(`/e/${env}/teammates/${id}`)
+  await page.getByRole("link", { name: "Sign-in needed" }).click()
+  await expect(page).toHaveURL(/\/settings\/providers\?signIn=/)
+  await expect(signIn).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(signIn).toBeHidden()
+  await expect(page).toHaveURL(/\/settings\/providers$/)
+
+  // A message the provider can't run yet says so, with the way to fix it.
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const composer = page.getByPlaceholder(`Message ${name}…`)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(
+    page.getByText(`provider Zed Max ${suffix} needs a sign-in first`)
+  ).toBeVisible()
+  await page.getByRole("link", { name: "Fix it in AI providers" }).click()
+  await expect(signIn).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  // Its settings say so beside the provider, and sign in without leaving them.
+  await page.goto(`/e/${env}/teammates/${id}`)
+  await teammateMenu(page, name, "Settings")
+  const settings = page.getByRole("region", { name: `${name}'s settings` })
+  await settings.getByRole("button", { name: /^Model/ }).click()
+  await expect(
+    settings.getByText(
+      `Zed Max ${suffix} needs a sign-in before its agents start.`
+    )
+  ).toBeVisible()
+  await settings.getByRole("button", { name: "Sign in…" }).click()
+  await expect(signIn).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(signIn).toBeHidden()
+  await expect(settings).toBeVisible()
 })

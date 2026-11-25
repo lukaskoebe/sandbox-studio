@@ -1,16 +1,20 @@
+import { Link } from "@tanstack/react-router"
 import { Badge } from "@/components/ui/badge"
 import type { Provider, Teammate } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 
 /**
  * Whether the teammate's agent sessions can start: its harness is in the base image, so it
- * comes down to the provider being able to run that harness with a key.
+ * comes down to the provider being able to run that harness with a key. A provider that needs
+ * a key or a sign-in links to it, in Settings → AI providers.
  */
 export function Readiness({
+  env,
   teammate,
   provider,
   problemsOnly,
 }: {
+  env: string
   teammate: Teammate
   provider?: Provider
   /** Shows nothing when the teammate is ready, as a header that only flags what blocks it. */
@@ -22,23 +26,33 @@ export function Readiness({
       <Badge variant="outline">No provider</Badge>
     )
   }
-  if (provider.state === "key_required") {
+  if (
+    provider.state === "key_required" ||
+    provider.state === "login_required" ||
+    provider.state === "expired"
+  ) {
+    const key = provider.state === "key_required"
     return (
       <Badge
         variant="outline"
-        title={`${provider.name} needs its API key, added in Settings → AI providers`}
+        title={
+          key
+            ? `Add ${provider.name}'s API key, in Settings → AI providers`
+            : `Sign in to ${provider.name}, in Settings → AI providers`
+        }
+        render={
+          <Link
+            to="/e/$env/settings/providers"
+            params={{ env }}
+            search={{ signIn: provider.id }}
+          />
+        }
       >
-        Key required
-      </Badge>
-    )
-  }
-  if (provider.state === "login_required" || provider.state === "expired") {
-    return (
-      <Badge
-        variant="outline"
-        title={`${provider.name} needs a sign-in, in Settings → AI providers`}
-      >
-        {provider.state === "expired" ? "Sign-in expired" : "Sign-in needed"}
+        {key
+          ? "Key required"
+          : provider.state === "expired"
+            ? "Sign-in expired"
+            : "Sign-in needed"}
       </Badge>
     )
   }

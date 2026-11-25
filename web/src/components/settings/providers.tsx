@@ -42,7 +42,19 @@ import { formatAge } from "@/lib/utils"
 const explanation =
   "Providers give teammates access to a model. An API key is stored as a secret bound to the provider's API host, so computers see only its placeholder."
 
-export function ProvidersSettings({ env }: { env: string }) {
+/**
+ * Settings → AI providers. signIn opens that provider's sign-in, or its key, once the list has
+ * it; onSignInClosed is called when that dialog closes.
+ */
+export function ProvidersSettings({
+  env,
+  signIn,
+  onSignInClosed,
+}: {
+  env: string
+  signIn?: string
+  onSignInClosed?: () => void
+}) {
   // The open dialog: an empty object adds a provider, an offer adds one from a login on this
   // computer, a provider edits it, null is closed.
   const [dialog, setDialog] = useState<{
@@ -53,6 +65,8 @@ export function ProvidersSettings({ env }: { env: string }) {
     params: { path: { env } },
   })
   const list = providers.data ?? []
+  const linked = signIn ? list.find((p) => p.id === signIn) : undefined
+  const shown = dialog ?? (linked ? { provider: linked } : null)
 
   return (
     <>
@@ -197,11 +211,13 @@ export function ProvidersSettings({ env }: { env: string }) {
       </SettingsPage>
       <ProviderDialog
         env={env}
-        provider={dialog?.provider}
-        offer={dialog?.offer}
-        open={dialog !== null}
+        provider={shown?.provider}
+        offer={shown?.offer}
+        open={shown !== null}
         onOpenChange={(open) => {
-          if (!open) setDialog(null)
+          if (open) return
+          setDialog(null)
+          if (signIn !== undefined) onSignInClosed?.()
         }}
       />
     </>

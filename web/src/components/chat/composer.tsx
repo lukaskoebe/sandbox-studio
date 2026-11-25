@@ -68,6 +68,7 @@ export function Composer({
   placeholder = "Ask for something…",
   autoFocus,
   error,
+  errorAction,
   toolbar,
   hint,
   attachments: canAttach = true,
@@ -90,6 +91,8 @@ export function Composer({
   placeholder?: string
   autoFocus?: boolean
   error?: string
+  /** What fixes error, such as a sign-in link, shown after it. */
+  errorAction?: ReactNode
   /** A row above the text, inside the box: the teammate page's modes and sandbox. */
   toolbar?: ReactNode
   /** A short note beside the buttons. */
@@ -472,6 +475,7 @@ export function Composer({
       {shown && (
         <p role="alert" className="px-1 text-xs text-destructive">
           {shown}
+          {shown === error && errorAction && <> · {errorAction}</>}
         </p>
       )}
     </div>
