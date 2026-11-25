@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { $api, errorMessage } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
+import { clock as time } from "@/lib/time"
 import { cn, formatBytes } from "@/lib/utils"
 
 type RecordingState = components["schemas"]["RecordingState"]
@@ -28,9 +29,6 @@ type Body = components["schemas"]["Body"]
 
 const recordingPath = "/api/environments/{env}/sandboxes/{id}/recording"
 const requestsPath = "/api/environments/{env}/sandboxes/{id}/recording/requests"
-
-const time = (at: string) =>
-  new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
 /** A sandbox's recording: whether it runs, while the panel is open. */
 export function useRecording(env: string, id: string) {

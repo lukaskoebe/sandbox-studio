@@ -38,6 +38,7 @@ import {
   type Pulse,
 } from "@/lib/session-lines"
 import { useStyleName } from "@/lib/theme"
+import { clock } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 /** The windows Home can show, in hours. */
@@ -129,13 +130,6 @@ const glyph: Record<BranchKind, string> = {
   terminal: "▭",
   browser: "◎",
   preview: "⇢",
-}
-
-function clock(t: number) {
-  return new Date(t).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
 }
 
 /** The window the user picked last, in this browser. */

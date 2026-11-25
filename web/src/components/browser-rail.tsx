@@ -39,6 +39,7 @@ import {
   useBrowserPatterns,
   useSetSitePolicy,
 } from "@/lib/browser-sites"
+import { clock } from "@/lib/time"
 import { cn, formatAge } from "@/lib/utils"
 
 type BrowserPattern = components["schemas"]["BrowserPattern"]
@@ -334,10 +335,7 @@ export function BrowserSteps({
             >
               <span className="flex items-baseline gap-1.5">
                 <span className="shrink-0 font-mono text-meta text-muted-foreground">
-                  {new Date(a.at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {clock(a.at)}
                 </span>
                 <span className="min-w-0 flex-1 break-words">
                   {a.actor === "user" && (

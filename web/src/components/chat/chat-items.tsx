@@ -43,6 +43,7 @@ import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { Message, MessageContent } from "@/components/ui/message"
 import type { components } from "@/lib/api/schema.gen"
 import type { ChatItem, ChatTurn } from "@/lib/chats"
+import { clock } from "@/lib/time"
 import { cn, formatBytes } from "@/lib/utils"
 
 type MarkerKind = components["schemas"]["MarkerBody"]["kind"]
@@ -195,10 +196,7 @@ function FromLead({
   env: string
   lead: NonNullable<NonNullable<ChatItem["user"]>["lead"]>
 }) {
-  const at = new Date(lead.approvedAt).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  const at = clock(lead.approvedAt)
   return (
     <span className="flex items-center gap-1 text-meta text-muted-foreground">
       <CompassIcon className="size-3" aria-hidden />
