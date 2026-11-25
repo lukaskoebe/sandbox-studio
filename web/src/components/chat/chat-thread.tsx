@@ -77,14 +77,19 @@ import { cn } from "@/lib/utils"
 
 /**
  * A request's name in lists and dialogs: the start of its message, from its header or, for a
- * turn the stream brought, its items.
+ * turn the stream brought, its items. A turn the agent started on its own has no message.
  */
 export function requestLabel(items: ChatItem[], t: ChatTurn) {
+  const turnItems = items.filter((i) => i.turnId === t.id)
   const text = (
-    t.prompt ??
-    items.find((i) => i.turnId === t.id && i.kind === "user")?.user?.text
+    t.prompt ?? turnItems.find((i) => i.kind === "user")?.user?.text
   )?.trim()
-  if (!text) return t.origin === "terminal" ? "In the terminal" : "A message"
+  if (!text) {
+    if (t.origin === "terminal") return "In the terminal"
+    return turnItems.length > 0 && !turnItems.some((i) => i.kind === "user")
+      ? "On its own"
+      : "A message"
+  }
   return text.length > 60 ? `${text.slice(0, 60)}…` : text
 }
 

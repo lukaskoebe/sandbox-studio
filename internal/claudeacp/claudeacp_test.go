@@ -52,9 +52,12 @@ func TestMain(m *testing.M) {
 
 // fakeClaude is Claude Code for the tests. A prompt starting with "say" gets the text
 // fixture, "run" asks about a Bash call and "ask" about a question, "wait" streams until it
-// is stopped, and "hold" streams until a message is steered in, which interrupts it. Every
-// result names the messages it answers by their uuids, and each line read is recorded in the
-// argv file + ".in".
+// is stopped, and "hold" streams until a message is steered in, which interrupts it. "later"
+// is answered, and then Claude Code starts a cycle of its own, as when a command a steered
+// message moved to the background finishes: the cycle writes, waits for the next message, and
+// ends before that message is answered; "later, wait" leaves the cycle running instead. Every
+// result of a prompt names the messages it answers by their uuids, and each line read is
+// recorded in the argv file + ".in".
 func fakeClaude() {
 	args := os.Args[1:]
 	if path := os.Getenv(argvEnv); path != "" {
@@ -121,6 +124,24 @@ func fakeClaude() {
 		case strings.HasPrefix(text, "wait"):
 			emit("doc-wait.jsonl")
 			time.Sleep(time.Hour) // until the shim stops it
+		case strings.HasPrefix(text, "later"):
+			emit("doc-text.jsonl")
+			// The cycle's init and result name no message.
+			fmt.Printf(`{"type":"system","subtype":"init","session_id":%q}`+"\n", session)
+			fmt.Printf(`{"type":"assistant","message":{"id":"msg_own","type":"message","role":"assistant","model":"claude-sonnet-5","content":[{"type":"text","text":"The tests passed."}],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}},"session_id":%q,"parent_tool_use_id":null}`+"\n", session)
+			if strings.Contains(text, "wait") {
+				time.Sleep(time.Hour) // until the shim stops it
+			}
+			if !read() {
+				return
+			}
+			next := stdinMessage(sc.Bytes())
+			fmt.Printf(`{"type":"result","subtype":"success","is_error":false,"result":"The tests passed.","stop_reason":"end_turn","session_id":%q,"usage":{}}`+"\n", session)
+			time.Sleep(200 * time.Millisecond) // a result that ended the turn would come first
+			b := readFixture("doc-text.jsonl")
+			b = bytes.ReplaceAll(b, []byte("SESSION"), []byte(session))
+			b = bytes.ReplaceAll(b, []byte(`"type":"result",`), []byte(`"type":"result","user_message_uuid":"`+next.UUID+`","user_message_uuids":["`+next.UUID+`"],`))
+			os.Stdout.Write(b)
 		case strings.HasPrefix(text, "hold"):
 			first := answers
 			emit("doc-wait.jsonl")
@@ -760,6 +781,81 @@ func TestSteeringWaitsForAnOpenPermission(t *testing.T) {
 	in := s.inputs(t)
 	if len(in) != 2 || stdinMessage(in[1]).Priority != "later" {
 		t.Fatalf("lines: %s", in)
+	}
+}
+
+// next waits for the first update that ok takes, and returns it with the updates before it.
+func (s *shim) next(t *testing.T, what string, ok func(acp.SessionUpdate) bool) (acp.SessionUpdate, []acp.SessionNotification) {
+	t.Helper()
+	var seen []acp.SessionNotification
+	deadline := time.After(testTimeout)
+	for {
+		select {
+		case n := <-s.client.updates:
+			if ok(n.Update) {
+				return n.Update, seen
+			}
+			seen = append(seen, n)
+		case <-deadline:
+			t.Fatalf("never: %s", what)
+		}
+	}
+}
+
+func isKind(kind string) func(acp.SessionUpdate) bool {
+	return func(u acp.SessionUpdate) bool { return u.Kind == kind }
+}
+
+// A cycle Claude Code starts on its own, with no turn running, is an async task of the turn
+// type, which the cycle's result ends. A prompt sent meanwhile waits for the cycle, and the
+// cycle's result doesn't end its turn: the result that answers the prompt does.
+func TestACycleOfClaudeCodesOwnEndsNoTurn(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	id := s.open(t)
+	if resp := s.prompt(t, id, "later"); resp.StopReason != acp.StopEndTurn {
+		t.Fatalf("response: %+v", resp)
+	}
+	started, _ := s.next(t, "the cycle's task", isKind(acp.UpdateAsyncTaskSpawned))
+	if started.TaskType != acp.TaskTurn || started.AsyncTaskID == "" {
+		t.Fatalf("task: %+v", started)
+	}
+	if _, before := s.next(t, "the cycle's text", isKind(acp.UpdateAgentMessageChunk)); len(before) != 0 {
+		t.Fatalf("updates before the cycle's text: %+v", before)
+	}
+	if r := s.steer(t, id, "anything"); r.Outcome != acp.SteerPromptRequired {
+		t.Fatalf("steer during the cycle: %+v", r)
+	}
+	done := s.promptAsync(t, id, "say it")
+	ended, _ := s.next(t, "the cycle's end", isKind(acp.UpdateAsyncTaskState))
+	if ended.AsyncTaskID != started.AsyncTaskID || ended.State != acp.TaskCompleted {
+		t.Fatalf("end: %+v", ended)
+	}
+	if resp := await(t, done); resp.StopReason != acp.StopEndTurn {
+		t.Fatalf("response: %+v", resp)
+	}
+	if got := agentText(s.drain()); got != "Hello" {
+		t.Fatalf("the turn ended before its answer: text %q", got)
+	}
+}
+
+// A cancel with no turn running stops the cycle Claude Code runs on its own.
+func TestCancelStopsACycleOfClaudeCodesOwn(t *testing.T) {
+	setHome(t)
+	s := startShim(t)
+	id := s.open(t)
+	s.prompt(t, id, "later, wait")
+	started, _ := s.next(t, "the cycle's task", isKind(acp.UpdateAsyncTaskSpawned))
+	s.next(t, "the cycle's text", isKind(acp.UpdateAgentMessageChunk))
+	if err := s.conn.Cancel(id); err != nil {
+		t.Fatal(err)
+	}
+	ended, _ := s.next(t, "the cycle's end", isKind(acp.UpdateAsyncTaskState))
+	if ended.AsyncTaskID != started.AsyncTaskID || ended.State != acp.TaskStopped {
+		t.Fatalf("end: %+v", ended)
+	}
+	if resp := s.prompt(t, id, "say again"); resp.StopReason != acp.StopEndTurn {
+		t.Fatalf("after the cancel: %+v", resp)
 	}
 }
 

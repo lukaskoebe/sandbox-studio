@@ -405,9 +405,10 @@ type session struct {
 	// servers, which decide what the teammate may do (the permissions server is asked about).
 	allowed []string
 
-	mu    sync.Mutex // guards proc, turn, model, asking, the turn's fields, and the context
+	mu    sync.Mutex // guards proc, turn, cycle, model, asking, their fields, and the context
 	proc  *process   // the running Claude Code process, if any
 	turn  *turn      // the prompt being answered, if any
+	cycle *cycle     // the model cycle Claude Code runs on its own, if any
 	model string     // what --model Claude Code runs with; empty for the settings' model
 	// asking counts the permission requests waiting on Studio: a message steered in meanwhile
 	// waits for the answer rather than interrupting the tool call that asked.
@@ -424,12 +425,33 @@ type session struct {
 
 // turn is a prompt being answered.
 type turn struct {
-	cancelled bool // set by cancel; guarded by session.mu
+	prompt    string // the uuid of the prompt's message
+	cancelled bool   // set by cancel; guarded by session.mu
 	done      chan turnResult
 	// steers are the uuids of the messages steered into the turn that no result has answered
 	// yet. While one is open, a result is that of the cycle the message interrupted, and the
 	// turn goes on; guarded by session.mu.
 	steers map[string]bool
+}
+
+// names says whether a cycle's init or result names one of the turn's messages. Called with
+// session.mu held.
+func (t *turn) names(m streamMessage) bool {
+	for _, id := range m.answered() {
+		if id == t.prompt || t.steers[id] {
+			return true
+		}
+	}
+	return false
+}
+
+// cycle is a model cycle Claude Code starts on its own, with no message to answer: the
+// follow-up once a command that a steered message moved to the background finishes, for one.
+// Its result answers no prompt, so it ends no turn, and Studio learns of it as an async task of
+// the turn type, as claude-agent-acp tells a client of the AIR extension.
+type cycle struct {
+	id        string
+	cancelled bool // set by cancel; guarded by session.mu
 }
 
 // turnResult ends a turn: its response, or the error the prompt returns.
@@ -500,10 +522,15 @@ func (s *session) prompt(content []any) (acp.PromptResponse, error) {
 		}
 		s.proc = p
 	}
-	t := &turn{done: make(chan turnResult, 1)}
+	id, err := newSessionID()
+	if err != nil {
+		s.mu.Unlock()
+		return acp.PromptResponse{}, err
+	}
+	t := &turn{prompt: id, done: make(chan turnResult, 1)}
 	s.turn = t
 	s.mu.Unlock()
-	msg, err := s.userMessage(content, "", "")
+	msg, err := s.userMessage(content, id, "")
 	if err == nil {
 		err = p.write(msg)
 	}
@@ -591,16 +618,20 @@ func (s *session) setModel(model string) error {
 	return nil
 }
 
-// cancel ends the running turn. Claude Code is stopped, and the next prompt resumes the
-// session in a new process: Claude Code leaves an interrupted turn as it is on resume.
+// cancel ends the running turn and the cycle Claude Code runs on its own. Claude Code is
+// stopped, and the next prompt resumes the session in a new process: Claude Code
+// leaves an interrupted turn as it is on resume.
 func (s *session) cancel() {
 	s.mu.Lock()
-	t, p := s.turn, s.proc
+	t, c, p := s.turn, s.cycle, s.proc
 	if t != nil {
 		t.cancelled = true
 	}
+	if c != nil {
+		c.cancelled = true
+	}
 	s.mu.Unlock()
-	if t != nil && p != nil {
+	if (t != nil || c != nil) && p != nil {
 		p.terminate()
 	}
 }
@@ -719,6 +750,7 @@ func (s *session) system(m streamMessage) {
 				fmt.Fprintf(s.a.opts.Log, "claude-acp: MCP server %s is %s\n", srv.Name, srv.Status)
 			}
 		}
+		s.begin(m)
 	case "compact_boundary":
 		// The summary is what the context holds now; without a count, the next message tells.
 		var used int64
@@ -730,6 +762,36 @@ func (s *session) system(m streamMessage) {
 		s.mu.Unlock()
 		s.updates([]acp.SessionUpdate{{Kind: acp.UpdateCompaction, Status: "completed"}})
 	}
+}
+
+// begin notes the init of a model cycle. One that starts while no turn runs and names no
+// message to answer is Claude Code's own (see cycle); a prompt sent meanwhile waits for it to
+// end. A cycle that names one ends a cycle of its own whose result never came.
+func (s *session) begin(m streamMessage) {
+	named := len(m.answered()) > 0
+	s.mu.Lock()
+	var ended, started *cycle
+	if named {
+		ended, s.cycle = s.cycle, nil
+	} else if s.turn == nil && s.cycle == nil {
+		if id, err := newSessionID(); err == nil {
+			started = &cycle{id: "autonomous-turn-" + id}
+			s.cycle = started
+		}
+	}
+	s.mu.Unlock()
+	if ended != nil {
+		s.updates([]acp.SessionUpdate{cycleEnded(ended, acp.TaskCompleted, "")})
+	}
+	if started != nil {
+		s.updates([]acp.SessionUpdate{{Kind: acp.UpdateAsyncTaskSpawned, AsyncTaskID: started.id, TaskType: acp.TaskTurn,
+			Name: "Claude is working", Description: "Claude Code started a turn without a prompt."}})
+	}
+}
+
+// cycleEnded is the update that ends the async task of a cycle, in state.
+func cycleEnded(c *cycle, state, summary string) acp.SessionUpdate {
+	return acp.SessionUpdate{Kind: acp.UpdateAsyncTaskState, AsyncTaskID: c.id, State: state, Summary: summary}
 }
 
 // measure keeps how full the context is after a top-level assistant message. Claude Code's
@@ -783,10 +845,18 @@ func (s *session) usage(m streamMessage) (acp.SessionUpdate, bool) {
 
 // result ends the running turn with what Claude Code reported, unless a message steered into
 // the turn hasn't been answered yet: then it is the result of the cycle that message
-// interrupted, and the turn goes on.
+// interrupted, and the turn goes on. The result of a cycle Claude Code started on its own ends
+// that cycle, and the turn only if the cycle took one of its messages in.
 func (s *session) result(m streamMessage) {
 	s.mu.Lock()
-	t := s.turn
+	t, c := s.turn, s.cycle
+	cycleCancelled := c != nil && c.cancelled
+	if c != nil {
+		s.cycle = nil
+		if t != nil && !t.cancelled && !t.names(m) {
+			t = nil
+		}
+	}
 	if t != nil && !t.cancelled && len(t.steers) > 0 {
 		for _, id := range m.answered() {
 			delete(t.steers, id)
@@ -802,6 +872,16 @@ func (s *session) result(m streamMessage) {
 	s.mu.Unlock()
 	if u, ok := s.usage(m); ok {
 		s.updates([]acp.SessionUpdate{u})
+	}
+	if c != nil {
+		switch {
+		case cycleCancelled:
+			s.updates([]acp.SessionUpdate{cycleEnded(c, acp.TaskStopped, "")})
+		case m.IsError || strings.HasPrefix(m.Subtype, "error"):
+			s.updates([]acp.SessionUpdate{cycleEnded(c, acp.TaskFailed, resultError(m))})
+		default:
+			s.updates([]acp.SessionUpdate{cycleEnded(c, acp.TaskCompleted, "")})
+		}
 	}
 	if t != nil {
 		t.done <- finishTurn(m, cancelled)
@@ -844,28 +924,35 @@ func resultError(m streamMessage) string {
 	return "claude reported an error"
 }
 
-// exited ends the turn of a process that exited. A cancelled turn ends cancelled.
+// exited ends the turn and the cycle of a process that exited. A cancelled one ends
+// cancelled or stopped.
 func (s *session) exited(p *process, err error) {
 	s.mu.Lock()
 	if s.proc == p {
 		s.proc = nil
 	}
-	t := s.turn
-	s.turn = nil
-	cancelled := t != nil && t.cancelled
+	t, c := s.turn, s.cycle
+	s.turn, s.cycle = nil, nil
+	turnCancelled := t != nil && t.cancelled
+	cycleCancelled := c != nil && c.cancelled
 	s.mu.Unlock()
-	if t == nil {
-		return
-	}
-	if cancelled {
-		t.done <- turnResult{resp: acp.PromptResponse{StopReason: acp.StopCancelled}}
-		return
-	}
 	msg := "claude stopped before the turn ended"
 	if err != nil {
 		msg += ": " + err.Error()
 	}
-	t.done <- turnResult{err: errors.New(msg)}
+	switch {
+	case cycleCancelled:
+		s.updates([]acp.SessionUpdate{cycleEnded(c, acp.TaskStopped, "")})
+	case c != nil:
+		s.updates([]acp.SessionUpdate{cycleEnded(c, acp.TaskFailed, msg)})
+	}
+	switch {
+	case t == nil:
+	case turnCancelled:
+		t.done <- turnResult{resp: acp.PromptResponse{StopReason: acp.StopCancelled}}
+	default:
+		t.done <- turnResult{err: errors.New(msg)}
+	}
 }
 
 // updates sends session updates for the session.

@@ -74,6 +74,20 @@ const (
 	UpdateCompactionSummary = "compaction_summary_chunk"
 )
 
+// Background work, in the session updates of the AIR extension of Anthropic's Claude adapter.
+// Studio follows only the task of a turn the agent runs without a prompt (TaskTurn), which
+// Studio's Claude shim reports for a model cycle Claude Code starts on its own.
+const (
+	UpdateAsyncTaskSpawned = "async_task_spawned"
+	UpdateAsyncTaskState   = "async_task_state_update"
+
+	TaskTurn = "turn"
+
+	TaskCompleted = "completed"
+	TaskFailed    = "failed"
+	TaskStopped   = "stopped"
+)
+
 // InitializeRequest is what Studio offers the agent. It advertises no fs, terminal or
 // auth.terminal capability on purpose: the agent works on the sandbox's filesystem
 // itself, and Studio never proxies files, commands or logins.
@@ -264,6 +278,13 @@ type SessionUpdate struct {
 	Cost json.RawMessage `json:"cost,omitempty"`
 	// Notices.
 	Message string `json:"message,omitempty"`
+	// Async tasks.
+	AsyncTaskID string `json:"asyncTaskId,omitempty"`
+	TaskType    string `json:"taskType,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	State       string `json:"state,omitempty"`
+	Summary     string `json:"summary,omitempty"`
 }
 
 // Chunk decodes Content as a single content block.

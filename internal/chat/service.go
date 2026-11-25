@@ -859,6 +859,7 @@ type live struct {
 
 	mu     sync.Mutex
 	turn   *run    // the running turn
+	next   *run    // a turn the agent started on its own, waiting for its row (see claim)
 	replay *folder // collects session/load's replay
 	asks   map[string]*ask
 	used   time.Time   // when the last turn started or ended
@@ -884,6 +885,14 @@ type run struct {
 	held     []acp.SessionUpdate       // the updates that came meanwhile
 	settled  bool                      // takes no more messages
 	updated  time.Time                 // when the agent last sent an update
+
+	// A turn the agent started on its own, with no message (see claim), ends with the async
+	// task that stands for it.
+	own      bool
+	task     string        // the task's ID
+	over     chan struct{} // closed when the task ended
+	finished bool          // over is closed
+	failed   string        // what the agent said when the task failed
 }
 
 func (s *Service) get(chatID string) *live {
@@ -1039,7 +1048,7 @@ func (s *Service) retire(l *live) bool {
 func (l *live) resting() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.turn == nil && l.replay == nil && len(l.asks) == 0
+	return l.turn == nil && l.next == nil && l.replay == nil && len(l.asks) == 0
 }
 
 func (l *live) lastUsed() time.Time {
@@ -1211,14 +1220,127 @@ func (l *live) SessionUpdate(n acp.SessionNotification) {
 		l.replay.apply(n.Update)
 		return
 	}
-	if r := l.turn; r != nil {
-		r.updated = time.Now()
-		if r.holding > 0 {
-			r.held = append(r.held, n.Update)
+	u := n.Update
+	if u.Kind == acp.UpdateAsyncTaskSpawned && u.TaskType == acp.TaskTurn && l.next == nil && (l.turn == nil || l.turn.task != u.AsyncTaskID) {
+		l.claim(u.AsyncTaskID)
+		return
+	}
+	// What comes once the agent started work of its own is that work's.
+	r := l.turn
+	if l.next != nil {
+		r = l.next
+	}
+	if r == nil {
+		return
+	}
+	if u.Kind == acp.UpdateAsyncTaskSpawned || u.Kind == acp.UpdateAsyncTaskState {
+		r.track(u)
+		return
+	}
+	r.updated = time.Now()
+	if r.holding > 0 {
+		r.held = append(r.held, u)
+		return
+	}
+	l.write(r, r.f.apply(u))
+}
+
+// claim gives work the agent started on its own, with no message to answer, a turn of the
+// chat: Claude Code's follow-up once a command a steered message moved to the background
+// finished, for one, which Studio's Claude shim reports as an async task of the turn type. The
+// chat runs while the agent works, what it writes shows in the turn, and the turn ends with the
+// task. It waits for the turn that runs to end; its updates are held until then. A chat that
+// can't run, such as one in the terminal, or one whose next message went first, leaves the
+// work unshown. Called with l.mu held.
+func (l *live) claim(task string) {
+	sent := make(chan struct{})
+	close(sent)
+	r := &run{f: newFolder(store.NewID), promptSent: sent, answered: make(chan struct{}), done: make(chan struct{}),
+		woken: make(chan struct{}, 1), updated: time.Now(), holding: 1, own: true, task: task, over: make(chan struct{})}
+	l.next = r
+	prev := l.turn
+	go func() {
+		if prev != nil {
+			<-prev.done
+		}
+		ctx := context.Background()
+		var t store.ChatTurn
+		c, err := l.s.Store.Chat(ctx, l.envID, l.chatID)
+		if err == nil && isClosed(l.conn) {
+			err = acp.ErrClosed
+		}
+		if err == nil {
+			c, err = l.s.lock(ctx, c, store.ChatRunning)
+		}
+		if err == nil {
+			if t, err = l.s.Store.StartChatTurnOn(ctx, c.ID, store.OriginChat, "", ""); err != nil {
+				l.s.unlock(c, store.ChatRunning)
+			}
+		}
+		l.mu.Lock()
+		l.next = nil
+		if err != nil {
+			l.mu.Unlock()
 			return
 		}
-		l.write(r, r.f.apply(n.Update))
+		r.turn = t
+		l.turn = r
+		l.used = time.Now()
+		l.idle.Stop()
+		for _, u := range r.held {
+			l.write(r, r.f.apply(u))
+		}
+		r.held, r.holding = nil, 0
+		l.mu.Unlock()
+		l.s.changed(l.envID, l.chatID, false)
+		l.run(r, l.ownEnd(r))
+	}()
+}
+
+// ownEnd is the end of a turn the agent started on its own: its task's, or the agent's going
+// away.
+func (l *live) ownEnd(r *run) <-chan acp.PromptResult {
+	end := make(chan acp.PromptResult, 1)
+	go func() {
+		var res acp.PromptResult
+		select {
+		case <-r.over:
+			l.mu.Lock()
+			switch {
+			case r.cancelled:
+				res.Response.StopReason = acp.StopCancelled
+			case r.failed != "":
+				res.Err = errors.New(r.failed)
+			default:
+				res.Response.StopReason = acp.StopEndTurn
+			}
+			l.mu.Unlock()
+		case <-l.conn.Done():
+			res.Err = acp.ErrClosed
+		}
+		end <- res
+	}()
+	return end
+}
+
+// track follows the task of a turn the agent started on its own, which ends the turn. Called
+// with l.mu held.
+func (r *run) track(u acp.SessionUpdate) {
+	if !r.own || r.finished || u.Kind != acp.UpdateAsyncTaskState || u.AsyncTaskID != r.task {
+		return
 	}
+	switch u.State {
+	case acp.TaskFailed:
+		r.failed = u.Summary
+		if r.failed == "" {
+			r.failed = "the agent's work failed"
+		}
+	case acp.TaskCompleted, acp.TaskStopped:
+	default:
+		return
+	}
+	r.finished = true
+	close(r.over)
 }
 
 // write stores changed entries: new ones at once, so items keep their order, ended ones

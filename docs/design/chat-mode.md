@@ -242,6 +242,14 @@ visible thing, updated in place, not one row per chunk.
     since 2026-11-25 and writes the message to Claude Code's stdin at priority `now` (`later`
     while a permission request is open), as the Agent SDK does; the turn ends at the result
     that names every steered message's uuid (docs/harnesses.md).
+  - Work an agent starts on its own, with no message, has a turn of its own once the agent
+    reports it as an async task of the turn type (`async_task_spawned`), as the Claude
+    subscription shim does for the follow-up Claude Code runs when a backgrounded command
+    finishes (`chat.live.claim`). The turn waits for the running one to end, has no user
+    item and no snapshot, and ends with the task's `async_task_state_update`: `completed`,
+    `failed` (an error marker with the agent's summary) or `stopped` (Stop works on it).
+    A message sent meanwhile waits in the queue. Other updates that come while no turn runs
+    are still dropped.
 
   Otherwise, and with `after` (Alt+Enter in the composer), the prompt waits in the chat's
   queue (`chat.Service.Enqueue`): when the turn ends, however it ends (Stop included), the

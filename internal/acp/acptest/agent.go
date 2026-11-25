@@ -467,6 +467,10 @@ func (a *Agent) reply(id json.RawMessage, result any, e *rpcError) {
 	_ = a.send(m) // a client that has gone away gets no reply
 }
 
+// Notify sends u as a session/update of the agent's session outside any turn, as an agent does
+// for work it starts on its own.
+func (a *Agent) Notify(u json.RawMessage) { a.update(a.SessionID, u) }
+
 func (a *Agent) update(session string, u json.RawMessage) {
 	_ = a.send(map[string]any{"jsonrpc": "2.0", "method": "session/update",
 		"params": map[string]any{"sessionId": session, "update": u}})

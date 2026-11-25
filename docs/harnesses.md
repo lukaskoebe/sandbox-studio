@@ -315,6 +315,15 @@ names only the messages it answered (`user_message_uuids`); the turn goes on unt
 names every steered message, and that result ends it. With no turn running, it answers
 `promptRequired` and Studio sends the message as the next prompt.
 
+**Cycles of Claude Code's own.** When a command a steered message moved to the background
+finishes while no turn runs, Claude Code starts a model cycle by itself: its `system/init` and
+its result name no message (checked on 2.1.332). The shim reports that cycle as an async task
+of the turn type, in the session updates of the AIR extension of Anthropic's adapter
+(`async_task_spawned`, then `async_task_state_update` `completed`, `failed` with the error as
+`summary`, or `stopped`), and Studio shows it as a turn without a message. A prompt sent
+meanwhile waits for the cycle in Claude Code, and the cycle's result doesn't end its turn,
+unless it names the prompt. `session/cancel` with no turn running stops the cycle.
+
 Not done yet:
 
 - Back to chat after a terminal session shows a marker, "Continued in the terminal. This agent
