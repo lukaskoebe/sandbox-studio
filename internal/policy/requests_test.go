@@ -179,3 +179,24 @@ func TestRuleNote(t *testing.T) {
 		t.Errorf("a long request's note has %d characters", len(got))
 	}
 }
+
+// A rule for a method covers the CORS preflights of its requests, and only those.
+func TestRequestRulesCoverTheirPreflights(t *testing.T) {
+	rules := []store.Rule{
+		{ID: "all", Host: "api.example.com", Action: store.ActionAllow},
+		{ID: "post", Host: "api.example.com", Method: "POST", PathPrefix: "/v1/*", Action: store.ActionDeny},
+	}
+	for _, c := range []struct {
+		req  HTTPRequest
+		want string
+	}{
+		{HTTPRequest{Method: "OPTIONS", Path: "/v1/items", Preflight: "POST"}, "post"},
+		{HTTPRequest{Method: "OPTIONS", Path: "/v1/items", Preflight: "PUT"}, "all"},
+		{HTTPRequest{Method: "OPTIONS", Path: "/v1/items"}, "all"},
+		{HTTPRequest{Method: "OPTIONS", Path: "/v2/items", Preflight: "POST"}, "all"},
+	} {
+		if r, ok := matchRule(rules, "", "", "api.example.com", 443, &c.req); !ok || r.ID != c.want {
+			t.Errorf("%+v: got %q, want %q", c.req, r.ID, c.want)
+		}
+	}
+}

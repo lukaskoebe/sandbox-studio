@@ -51,7 +51,7 @@ func (g *Gateway) serveVirtual(c net.Conn, br *bufio.Reader, entry *Conn, sb sto
 	h := vh.Serve(sb)
 	serveHTTP(tc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hostOnly(r.Host) != host {
-			writeRefusal(w, http.StatusMisdirectedRequest, fmt.Sprintf("This connection only serves %s.", host))
+			writeRefusal(w, r, http.StatusMisdirectedRequest, fmt.Sprintf("This connection only serves %s.", host))
 			return
 		}
 		h.ServeHTTP(w, r)

@@ -75,7 +75,7 @@ func requestFits(r store.Rule, req *HTTPRequest) bool {
 	if r.Method == "" && r.PathPrefix == "" {
 		return true
 	}
-	if req == nil || (r.Method != "" && r.Method != req.Method) {
+	if req == nil || (r.Method != "" && r.Method != req.Method && r.Method != req.Preflight) {
 		return false
 	}
 	if r.PathPrefix == "" {

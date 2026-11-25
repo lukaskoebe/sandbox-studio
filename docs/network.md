@@ -198,6 +198,21 @@ are denied the same way, by what they are rather than by host
 OPTIONS with no `Sec-Fetch-Mode`, asking for POST with only `content-type`). A page's own
 requests carry `Sec-Fetch-Mode`, so its preflights are decided as usual.
 
+A page's CORS preflight (an OPTIONS with an `Origin` and an `Access-Control-Request-Method`) is
+decided as the request it asks to send: `HTTPRequest.Preflight` holds that method
+(`requestInfo`). A request rule naming the method covers the preflight too, so "POST /v1/*"
+lets its preflights through and a deny of it refuses them. The card shows the request, such as
+"POST /v1/items", and says it is the preflight. "Once" on it lets the preflight through, and
+then the request it asked about (`internal/policy/preflight.go`): once, from the same sandbox,
+with the same method and path, within 30 seconds. Without that the request would raise a card
+of its own after the preflight passed.
+
+Studio's own answers (refusals, a 502 when the upstream can't be reached, a 421) carry
+`Access-Control-Allow-Origin` with the request's `Origin`, credentials allowed and
+`X-Sandbox-Studio` exposed (`writeRefusal`). A page, and DevTools, then show why, such as
+"waiting for approval", rather than a CORS error. They hold nothing of the upstream's, and a
+refused preflight still fails, as a preflight needs an OK status.
+
 ## System VMs
 
 The VMs of subscription logins (`claude-login`, `codex-login`, `claude-utility` and

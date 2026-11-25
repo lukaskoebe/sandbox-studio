@@ -217,7 +217,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 			if errors.Is(err, context.Canceled) { // the sandbox went away
 				return
 			}
-			ic.refuse(w, http.StatusBadGateway, fmt.Sprintf("Sandbox Studio could not complete the request to %s: %s", host, ic.mask(err.Error())))
+			ic.refuse(w, r, http.StatusBadGateway, fmt.Sprintf("Sandbox Studio could not complete the request to %s: %s", host, ic.mask(err.Error())))
 		},
 		ErrorLog: slog.NewLogLogger(g.Log.Handler(), slog.LevelDebug),
 	}
@@ -249,23 +249,23 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The policy approved host, and the requests go there. A Host header naming another site
 	// would otherwise reach it through a shared front end (domain fronting).
 	if name := hostOnly(r.Host); name != "" && name != ic.host {
-		ic.refuse(w, http.StatusMisdirectedRequest, fmt.Sprintf("This connection is to %s. Open a new connection for %s.", ic.host, name))
+		ic.refuse(w, r, http.StatusMisdirectedRequest, fmt.Sprintf("This connection is to %s. Open a new connection for %s.", ic.host, name))
 		return
 	}
 	if ic.stale != nil && ic.stale() {
 		// Connection: close ends the connection after this answer, with a GOAWAY on HTTP/2,
 		// and a browser sends a 421 again on a new connection, which the new driver decides.
 		w.Header().Set("Connection", "close")
-		ic.refuse(w, http.StatusMisdirectedRequest, "Who drives this browser changed. Retry on a new connection.")
+		ic.refuse(w, r, http.StatusMisdirectedRequest, "Who drives this browser changed. Retry on a new connection.")
 		return
 	}
 	if ic.broken != "" {
-		ic.refuse(w, http.StatusForbidden, ic.broken)
+		ic.refuse(w, r, http.StatusForbidden, ic.broken)
 		return
 	}
 	if ic.gate != nil {
 		if msg := ic.gate(r); msg != "" {
-			ic.refuse(w, http.StatusForbidden, msg)
+			ic.refuse(w, r, http.StatusForbidden, msg)
 			return
 		}
 	}
@@ -279,7 +279,7 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sent := &sentSecrets{}
 	out = out.WithContext(context.WithValue(out.Context(), sentSecretsKey{}, sent))
 	if err := ic.rewrite(out, sent); err != nil {
-		ic.refuse(w, http.StatusForbidden, err.Error())
+		ic.refuse(w, r, http.StatusForbidden, err.Error())
 		return
 	}
 	if t != nil {
@@ -580,7 +580,7 @@ func plaintextError(name, host string) error {
 }
 
 // refuse answers a request Studio did not pass on, and notes why for the connection log.
-func (ic *interception) refuse(w http.ResponseWriter, code int, msg string) {
+func (ic *interception) refuse(w http.ResponseWriter, r *http.Request, code int, msg string) {
 	ic.mu.Lock()
 	ic.problem = msg
 	ic.mu.Unlock()
@@ -588,7 +588,7 @@ func (ic *interception) refuse(w http.ResponseWriter, code int, msg string) {
 		t.refused = msg
 	}
 	ic.log.Info("intercepted request failed", "host", ic.host, "status", code, "reason", msg)
-	writeRefusal(w, code, msg)
+	writeRefusal(w, r, code, msg)
 }
 
 func handshakeProblem(err error) string {
@@ -787,15 +787,26 @@ func (g *Gateway) serverTLS(envID, host string) *tls.Config {
 func (g *Gateway) refuseTLS(c net.Conn, br *bufio.Reader, envID, host, msg string) {
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 	tc := tls.Server(&countingConn{Conn: c, r: br}, g.serverTLS(envID, host))
-	serveHTTP(tc, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	serveHTTP(tc, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Connection", "close")
-		writeRefusal(w, http.StatusForbidden, msg)
+		writeRefusal(w, r, http.StatusForbidden, msg)
 	}), g.Log, 10*time.Second)
 }
 
-func writeRefusal(w http.ResponseWriter, code int, msg string) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("X-Sandbox-Studio", "refused")
+// writeRefusal answers a request Studio refused with why, as text. A page's request (one with an
+// Origin) may read the answer, so that it, and DevTools, show the reason rather than "CORS
+// error": the answer is Studio's, with nothing of the upstream's in it. A refused preflight still
+// fails, as a preflight needs an OK status.
+func writeRefusal(w http.ResponseWriter, r *http.Request, code int, msg string) {
+	h := w.Header()
+	h.Set("Content-Type", "text/plain; charset=utf-8")
+	h.Set("X-Sandbox-Studio", "refused")
+	if origin := r.Header.Get("Origin"); origin != "" {
+		h.Set("Access-Control-Allow-Origin", origin)
+		h.Set("Access-Control-Allow-Credentials", "true")
+		h.Set("Access-Control-Expose-Headers", "X-Sandbox-Studio")
+		h.Add("Vary", "Origin")
+	}
 	w.WriteHeader(code)
 	_, _ = io.WriteString(w, msg+"\n")
 }

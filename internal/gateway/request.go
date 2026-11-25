@@ -27,6 +27,8 @@ func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host str
 	})
 	where := fmt.Sprintf("%s:%d", host, port)
 	switch {
+	case err == nil && rule.Action == store.ActionDeny && info.Preflight != "":
+		return fmt.Sprintf("A Sandbox Studio network rule blocks %s %s on %s, so its preflight fails.", info.Preflight, info.Path, where)
 	case err == nil && rule.Action == store.ActionDeny:
 		return fmt.Sprintf("A Sandbox Studio network rule blocks %s %s on %s.", info.Method, info.Path, where)
 	case err == nil:
@@ -121,6 +123,12 @@ func requestInfo(r *http.Request, host string) *policy.HTTPRequest {
 		info.Navigation, info.Site = true, policy.Site(host)
 	}
 	info.Report = isReport(r)
+	// A page's CORS preflight is decided as the request it asks to send, and its card shows that.
+	if r.Method == http.MethodOptions && r.Header.Get("Origin") != "" {
+		if m, err := policy.ValidMethod(strings.ToUpper(strings.TrimSpace(r.Header.Get("Access-Control-Request-Method")))); err == nil && m != "" {
+			info.Preflight = m
+		}
+	}
 	info.Override = r.Header.Get("X-HTTP-Method-Override") != "" || r.Header.Get("X-HTTP-Method") != "" || r.Header.Get("X-Method-Override") != ""
 	if ref, err := url.Parse(r.Header.Get("Referer")); err == nil && (ref.Scheme == "http" || ref.Scheme == "https") && ref.Host != "" {
 		info.Initiator = clip(ref.Scheme+"://"+ref.Host, 256)

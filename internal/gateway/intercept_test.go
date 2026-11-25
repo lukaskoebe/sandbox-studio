@@ -572,8 +572,8 @@ func TestInterceptRefusesEncodedResponseWhenMasking(t *testing.T) {
 			}, nil
 		}),
 		ModifyResponse: ic.maskResponse,
-		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
-			ic.refuse(w, http.StatusBadGateway, err.Error())
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			ic.refuse(w, r, http.StatusBadGateway, err.Error())
 		},
 	}
 	rec := httptest.NewRecorder()

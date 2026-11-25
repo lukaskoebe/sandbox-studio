@@ -44,3 +44,32 @@ func TestIsReport(t *testing.T) {
 		t.Error("a preflight over plain HTTP, which carries no Sec-Fetch headers, counted as a report")
 	}
 }
+
+// A page's CORS preflight is decided as the request it asks to send.
+func TestPreflightNamesItsRequest(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		header map[string]string
+		want   string
+	}{
+		{"page preflight", map[string]string{"Origin": "http://localhost:5173", "Access-Control-Request-Method": "post"}, "POST"},
+		{"no Origin", map[string]string{"Access-Control-Request-Method": "POST"}, ""},
+		{"no method asked", map[string]string{"Origin": "http://localhost:5173"}, ""},
+		{"not a method rules name", map[string]string{"Origin": "http://localhost:5173", "Access-Control-Request-Method": "PROPFIND"}, ""},
+	} {
+		r, _ := http.NewRequest(http.MethodOptions, "https://api.example.com/v1/items", nil)
+		for k, v := range c.header {
+			r.Header.Set(k, v)
+		}
+		info := requestInfo(r, "api.example.com")
+		if info.Method != http.MethodOptions || info.Preflight != c.want {
+			t.Errorf("%s: %s, preflight of %q, want %q", c.name, info.Method, info.Preflight, c.want)
+		}
+	}
+	r, _ := http.NewRequest(http.MethodPost, "https://api.example.com/v1/items", nil)
+	r.Header.Set("Origin", "http://localhost:5173")
+	r.Header.Set("Access-Control-Request-Method", "POST")
+	if info := requestInfo(r, "api.example.com"); info.Preflight != "" {
+		t.Errorf("a POST counted as a preflight: %+v", info)
+	}
+}

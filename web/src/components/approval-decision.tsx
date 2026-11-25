@@ -675,9 +675,18 @@ export function ApprovalDecision({
       <SSHForgeHint approval={approval} />
       {net?.method && (
         <div className="grid gap-0.5 text-xs">
-          <p className="truncate font-mono" title={`${net.method} ${net.path}`}>
-            {net.method} {net.path}
+          <p
+            className="truncate font-mono"
+            title={`${net.preflight || net.method} ${net.path}`}
+          >
+            {net.preflight || net.method} {net.path}
           </p>
+          {net.preflight && (
+            <p className="text-muted-foreground">
+              The browser asks first whether the page may send it (a CORS
+              preflight). Once lets both through.
+            </p>
+          )}
           {net.initiator && (
             <p className="truncate text-muted-foreground" title={net.initiator}>
               From {net.initiator}

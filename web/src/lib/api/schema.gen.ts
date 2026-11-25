@@ -6343,6 +6343,8 @@ export interface components {
             patterns: string[] | null;
             /** Format: int64 */
             port: number;
+            /** @description For a CORS preflight, the method of the request it asks to send */
+            preflight?: string;
             /** @description The curated entry, or the reviewer's reason */
             reason?: string;
             sandboxName: string;

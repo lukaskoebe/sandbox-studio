@@ -7503,6 +7503,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "preflight": {
+            "description": "For a CORS preflight, the method of the request it asks to send",
+            "type": "string"
+          },
           "reason": {
             "description": "The curated entry, or the reviewer's reason",
             "type": "string"

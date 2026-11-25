@@ -118,6 +118,10 @@ type HTTPRequest struct {
 	// go by: the method here says nothing about what it does. A card keeps it, so that "Once" can
 	// tell the request it showed from another with the same method and path.
 	Override bool `json:"override,omitempty" doc:"The request's headers name another method, which the upstream may go by"`
+	// Preflight is set on a browser's CORS preflight (OPTIONS) to the method of the request it
+	// asks about. A rule for that method covers the preflight, and "Once" on its card lets the
+	// request through too (preflightGrants).
+	Preflight string `json:"preflight,omitempty" doc:"For a CORS preflight, the method of the request it asks to send"`
 }
 
 // NetworkRequest is the payload of a network approval.
@@ -180,6 +184,8 @@ type Engine struct {
 	wake  map[string]chan struct{} // closed when an environment's rules or approvals change
 	hits  map[string]ruleHits      // connections rules decided, not yet written to the store
 	holds map[string]*held         // the connections held right now, by approval ID
+
+	preflights preflightGrants // the requests a preflight's "Once" lets through
 
 	reviewMu sync.Mutex
 	reviews  map[string]*question   // the reviewer's questions this session, by reviewKey
@@ -282,6 +288,9 @@ func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r st
 	} else if ok {
 		return r, r.Origin != store.OriginReviewer, nil
 	}
+	if e.preflights.take(req, e.now()) {
+		return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Ports: []int{req.Port}, Action: store.ActionAllow}, false, nil
+	}
 	if req.Allowed != nil {
 		if host := Normalize(req.Host); slices.Contains(req.Allowed, host) {
 			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, false, nil
@@ -378,6 +387,9 @@ func (e *Engine) ask(ctx context.Context, req Request, host, teammate string, wa
 				return store.Rule{}, false, true, nil
 			}
 			r, err := onceAnswer(cur, err, host, req.Port)
+			if err == nil && req.HTTP != nil && req.HTTP.Preflight != "" {
+				e.preflights.grant(req, e.now())
+			}
 			return r, false, false, err
 		}
 	}
@@ -559,7 +571,9 @@ func RuleNote(action string, req NetworkRequest, at time.Time) string {
 		verb = "Denied"
 	}
 	what := fmt.Sprintf("%s:%d", req.Host, req.Port)
-	if req.Method != "" {
+	if req.Preflight != "" {
+		what = req.Preflight + " " + req.Host + req.Path + ", its preflight"
+	} else if req.Method != "" {
 		what = req.Method + " " + req.Host + req.Path
 	}
 	note := fmt.Sprintf("%s for %s on %s (%s)", verb, req.SandboxName, at.Local().Format("2 Jan 2006"), what)

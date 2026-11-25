@@ -184,6 +184,9 @@ func (e *Engine) askReviewer(ctx context.Context, req Request, teammate, host, t
 	if req.HTTP != nil {
 		// As approvalOf names it: a navigation's own site, else the site of the browser's page.
 		in.Method, in.Path, in.Site = req.HTTP.Method, req.HTTP.Path, req.HTTP.Site
+		if req.HTTP.Preflight != "" {
+			in.Method = "OPTIONS (the CORS preflight of a " + req.HTTP.Preflight + ")"
+		}
 		if !req.HTTP.Navigation && e.Browsers != nil {
 			in.Site = e.Browsers.TopLevel(ctx, req.EnvironmentID, teammate)
 		}

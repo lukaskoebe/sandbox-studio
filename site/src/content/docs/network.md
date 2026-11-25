@@ -14,7 +14,7 @@ The row's **Allow** and **Deny** add a lasting rule for the teammate's choice of
 Opened, **Always allow** and **Always deny** add a lasting rule; the buttons follow **For** below, such as **Allow for 1 hour** or **Deny once**. When the request offers several host patterns, such as `registry.npmjs.org` and `*.npmjs.org`, pick one first. **Options** has two rows:
 
 - **Who**: the whole **Environment**, the teammate's computers, or only this computer. The teammate's **New rules from approvals apply to** setting picks the default. **Any port** makes the rule cover every port instead of the request's default ports.
-- **For**: **Always**, **1 hour**, or **Once**, which answers this request, and other GET requests to the host that wait with it, and adds no rule; any other request asks again. **Once** is offered only while the connection is still held.
+- **For**: **Always**, **1 hour**, or **Once**, which answers this request, and other GET requests to the host that wait with it, and adds no rule; any other request asks again. **Once** is offered only while the connection is still held. A page's CORS preflight, which a browser sends before a request such as a POST to another site, shows that request and says it is the preflight; **Once** lets both through. When Studio refuses a page's request, the page and DevTools show why, such as "waiting for approval", instead of a CORS error.
 
 **Why? (saved on the rule)** keeps a note with the rule. **Ignore** refuses the request this time without a rule. Its **Options** list the scopes narrowest first: only the computer that asked, the teammate's computers, or every computer in the environment. Which one a request starts with is set per teammate, under **Network → New rules cover** in its settings.
 

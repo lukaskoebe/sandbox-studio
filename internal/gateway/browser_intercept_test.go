@@ -381,3 +381,29 @@ func TestABrowserConnectionEndsWhenWhoDrivesChanges(t *testing.T) {
 		t.Errorf("%d connections", n)
 	}
 }
+
+// A page may read why Studio refused its request, so that it and DevTools show the reason, not
+// "CORS error". A refused preflight still fails: it has no OK status.
+func TestRefusalsTellPagesWhy(t *testing.T) {
+	h := newBrowserHarness(t)
+	c := h.clientAs(t, "vm1", h.envCA)
+	req, _ := http.NewRequest(http.MethodOptions, "https://ask.example/v1/items", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	resp, body := do(t, c, req)
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(body, "waiting for approval") {
+		t.Fatalf("preflight: status %d: %s", resp.StatusCode, body)
+	}
+	if resp.Header.Get("Access-Control-Allow-Origin") != "http://localhost:5173" || resp.Header.Get("Access-Control-Allow-Credentials") != "true" ||
+		resp.Header.Get("Access-Control-Expose-Headers") != "X-Sandbox-Studio" || resp.Header.Get("Vary") != "Origin" {
+		t.Fatalf("refusal headers %v", resp.Header)
+	}
+	resp, _ = get(t, c, "https://ask.example/v1/items")
+	if resp.StatusCode != http.StatusForbidden || resp.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("a request without an Origin: %d %v", resp.StatusCode, resp.Header)
+	}
+	if n := h.requests(); n != 0 {
+		t.Fatalf("%d refused requests reached the upstream", n)
+	}
+}

@@ -607,3 +607,61 @@ func TestOnceLeavesOtherWritesToAskForThemselves(t *testing.T) {
 		t.Errorf("once made rules: %+v", rules)
 	}
 }
+
+// A preflight's card shows the request the page wants to send, and "Once" on it lets that request
+// through when it follows: once, from the same sandbox, and soon.
+func TestOnceOnAPreflightLetsItsRequestFollow(t *testing.T) {
+	ctx := context.Background()
+	e, env, other, sb, _ := newTeammateEngine(t)
+	if err := e.Store.SetSecurityLevel(ctx, env.ID, store.LevelLocked); err != nil {
+		t.Fatal(err)
+	}
+	e.Browsers = &fakeSites{page: "localhost", approved: map[string]map[string]bool{}}
+	clock := &testClock{t: time.Unix(1_800_000_000, 0)}
+	e.Now = clock.now
+	decide := func(s store.Sandbox, req HTTPRequest) (store.Rule, error) {
+		return e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: s.ID, Host: "api.example.net", Port: 443, Browser: true, Deferred: true, HTTP: &req})
+	}
+	preflight := HTTPRequest{Method: "OPTIONS", Path: "/v1/items", FullPath: "/v1/items", Preflight: "POST"}
+	post := HTTPRequest{Method: "POST", Path: "/v1/items", FullPath: "/v1/items"}
+
+	done := make(chan heldResult, 1)
+	go func() { r, err := decide(sb, preflight); done <- heldResult{r, err} }()
+	var card store.Approval
+	for deadline := time.Now().Add(5 * time.Second); card.ID == "" && time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+		if list, _ := e.Store.Approvals(ctx, env.ID, store.StatusPending, 10); len(list) == 1 {
+			card = list[0]
+		}
+	}
+	var shown NetworkRequest
+	if err := json.Unmarshal(card.Payload, &shown); err != nil || shown.Preflight != "POST" || shown.Method != "OPTIONS" {
+		t.Fatalf("card %s: %+v %v", card.Payload, shown, err)
+	}
+	if _, err := e.Resolve(ctx, env.ID, card.ID, Decision{Action: ActionAllowOnce}); err != nil {
+		t.Fatal(err)
+	}
+	if r := <-done; r.err != nil || r.rule.Action != store.ActionAllow {
+		t.Fatalf("preflight: %+v %v", r.rule, r.err)
+	}
+
+	e.Hold = 20 * time.Millisecond
+	if _, err := decide(other, post); !errors.Is(err, ErrUndecided) {
+		t.Fatalf("another sandbox's POST: %v", err)
+	}
+	if _, err := decide(sb, HTTPRequest{Method: "POST", Path: "/v1/items", FullPath: "/v1/items", Override: true}); !errors.Is(err, ErrUndecided) {
+		t.Fatalf("a POST naming another method: %v", err)
+	}
+	if r, err := decide(sb, post); err != nil || r.Action != store.ActionAllow {
+		t.Fatalf("the POST the preflight asked about: %+v %v", r, err)
+	}
+	if _, err := decide(sb, post); !errors.Is(err, ErrUndecided) {
+		t.Fatalf("a second POST: %v", err)
+	}
+
+	// A grant left unused runs out.
+	e.preflights.grant(Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "api.example.net", Port: 443, HTTP: &preflight}, clock.now())
+	clock.advance(preflightWindow)
+	if _, err := decide(sb, post); !errors.Is(err, ErrUndecided) {
+		t.Fatalf("a POST after the window: %v", err)
+	}
+}
