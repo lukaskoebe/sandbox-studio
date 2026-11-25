@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.29.0 — 2026-11-25
 
 - The UI calls the VM a teammate or you work in a computer everywhere, where it said "sandbox"
   in many places: Create computer, Import computer, the Computer column. The machine Studio
