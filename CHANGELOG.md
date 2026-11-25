@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- Pictures attached to a message show as small thumbnails, in the box before you send and in
+  the chat after; a click shows one large. Studio keeps a copy of each picture up to 8 MB you
+  send, so the chat still shows it after the computer is gone.
+- A computer's Details tab lists its tools: the versions of Claude Code, Codex and OpenCode,
+  and every tool mise has, with where each comes from (the template, added in the computer,
+  kept from before a rebase, a project's mise.toml, or unused).
+- **Update…** next to Claude Code installs its newest stable release in that computer, without
+  a new base image. New terminals and chats run it; a rebase or a disk resize brings back the
+  base image's version.
+- A teammate whose provider needs a sign-in or a key says so with a link: Sign-in needed opens
+  the provider's sign-in in Settings → AI providers. The teammate form offers Sign in…, Add
+  key… or Add provider… under its Provider, and a message refused for that reason says Fix it
+  in AI providers.
+- Local network entries can be edited, not only added and removed. Adding one, or an edit that
+  lets computers reach more, asks you to type the host first.
+- `studio quit`, the tray's Quit and Quit Studio… in another tab close the Studio app too, and
+  ⌘K / Ctrl+K has Restart Studio and Quit Studio.
+- The Studio menu at the foot of the sidebar fits a narrow sidebar: the version line shortens
+  to the version and the menu stays on screen.
+- Teammate avatars sit centred in their buttons, with the focus ring around the avatar.
+- On Windows, the app and the tray draw at the screen's scale, so they are no longer blurry at
+  125% or 150%.
+- With Claude on a subscription, what Claude writes once a command that a steered message moved
+  to the background finishes shows in the chat, as a turn without a message. Before, Studio
+  dropped it, and a message sent during that follow-up ended without its answer.
+- A release built without signing secrets says so on its run, for each macOS and Windows build
+  that ships unsigned.
+
 ## v0.29.0 — 2026-11-25
 
 - The UI calls the VM a teammate or you work in a computer everywhere, where it said "sandbox"
