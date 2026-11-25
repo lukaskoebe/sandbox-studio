@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   DesktopIcon,
+  PencilSimpleIcon,
   PlusIcon,
   ShareNetworkIcon,
   TrashIcon,
@@ -10,6 +11,16 @@ import {
 } from "@phosphor-icons/react"
 import { SettingsPage } from "@/components/settings/page"
 import { SectionHeader } from "@/components/section-header"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -47,15 +58,38 @@ function parsePorts(text: string): number[] | null {
     : null
 }
 
+/** The ports a host may be reached on: none listed means 80 and 443. */
+function portsOf(h: PrivateHost) {
+  return h.ports?.length ? h.ports : [80, 443]
+}
+
+/** Whether after lets computers reach more than before did: a new host, or another port. */
+function widens(before: PrivateHost | undefined, after: PrivateHost) {
+  if (!before || before.host.toLowerCase() !== after.host.toLowerCase())
+    return true
+  const old = portsOf(before)
+  return portsOf(after).some((p) => !old.includes(p))
+}
+
+/** A change to the list, waiting for the user to type the host it opens up. */
+type Proposal = {
+  next: PrivateHost[]
+  host: PrivateHost
+  done: () => void
+  fail: (message: string) => void
+}
+
 function LocalNetworkSection({ env }: { env: string }) {
   const queryClient = useQueryClient()
   const list = $api.useQuery("get", "/api/environments/{env}/private-hosts", {
     params: { path: { env } },
   })
-  const [host, setHost] = useState("")
-  const [ports, setPorts] = useState("")
-  const [formError, setFormError] = useState<string>()
-  const portList = parsePorts(ports)
+  // The add form remounts empty under a new key once its host is saved.
+  const [addKey, setAddKey] = useState(0)
+  const [addError, setAddError] = useState<string>()
+  const [editing, setEditing] = useState<string>()
+  const [editError, setEditError] = useState<string>()
+  const [proposal, setProposal] = useState<Proposal>()
   const hosts = list.data ?? []
 
   const save = $api.useMutation(
@@ -70,33 +104,67 @@ function LocalNetworkSection({ env }: { env: string }) {
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/rules"],
         })
-        setHost("")
-        setPorts("")
-        setFormError(undefined)
-      },
-      onError: (err) => {
-        // A 422 says which host is wrong, so it stays in the form.
-        if (errorStatus(err) === 422) setFormError(errorMessage(err))
-        else
-          toast.error("Could not save the local network", {
-            description: errorMessage(err),
-          })
       },
     }
   )
 
-  const write = (next: PrivateHost[]) =>
-    save.mutate({
-      params: { path: { env } },
-      body: {
-        hosts: next.map((h) => ({ host: h.host, ports: h.ports })),
+  const write = (
+    next: PrivateHost[],
+    done?: () => void,
+    fail?: (message: string) => void
+  ) =>
+    save.mutate(
+      {
+        params: { path: { env } },
+        body: {
+          hosts: next.map((h) => ({ host: h.host, ports: h.ports })),
+        },
       },
-    })
+      {
+        onSuccess: () => done?.(),
+        onError: (err) => {
+          // A 422 says which host is wrong, so it stays in its form.
+          if (errorStatus(err) === 422 && fail) fail(errorMessage(err))
+          else
+            toast.error("Could not save the local network", {
+              description: errorMessage(err),
+            })
+        },
+      }
+    )
 
-  const add = () => {
-    if (!host.trim() || portList === null || save.isPending) return
-    setFormError(undefined)
-    write([...hosts, { host: host.trim(), ports: portList }])
+  // A change that lets computers reach more waits for the user to type the host.
+  const propose = (
+    next: PrivateHost[],
+    host: PrivateHost,
+    before: PrivateHost | undefined,
+    done: () => void,
+    fail: (message: string) => void
+  ) => {
+    if (widens(before, host)) setProposal({ next, host, done, fail })
+    else write(next, done, fail)
+  }
+
+  const add = (h: PrivateHost) => {
+    setAddError(undefined)
+    propose(
+      [...hosts, h],
+      h,
+      undefined,
+      () => setAddKey((k) => k + 1),
+      setAddError
+    )
+  }
+
+  const update = (before: PrivateHost, h: PrivateHost) => {
+    setEditError(undefined)
+    propose(
+      hosts.map((x) => (x.host === before.host ? h : x)),
+      h,
+      before,
+      () => setEditing(undefined),
+      setEditError
+    )
   }
 
   return (
@@ -133,99 +201,270 @@ function LocalNetworkSection({ env }: { env: string }) {
           </p>
         ) : (
           <ul className="divide-y" aria-label="Local network">
-            {hosts.map((h) => (
-              <li
-                key={h.host}
-                className="flex min-h-(--wb-row) items-center gap-3 px-3 py-1.5"
-              >
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate font-mono">{h.host}</span>
-                  <LANNameHint host={h.host} />
-                </span>
-                <span className="shrink-0 font-mono text-caption text-muted-foreground">
-                  {h.ports?.length
-                    ? `Ports ${h.ports.join(", ")}`
-                    : "Ports 80, 443"}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  title="Remove"
-                  aria-label={`Remove ${h.host}`}
-                  disabled={save.isPending}
-                  onClick={() => write(hosts.filter((x) => x.host !== h.host))}
+            {hosts.map((h) =>
+              editing === h.host ? (
+                <li key={h.host} aria-label={`Edit ${h.host}`}>
+                  <HostForm
+                    id="private-host-edit"
+                    initial={h}
+                    label="Save"
+                    pending={save.isPending}
+                    error={editError}
+                    onChange={() => setEditError(undefined)}
+                    onSubmit={(next) => update(h, next)}
+                    onCancel={() => {
+                      setEditing(undefined)
+                      setEditError(undefined)
+                    }}
+                  />
+                </li>
+              ) : (
+                <li
+                  key={h.host}
+                  className="flex min-h-(--wb-row) items-center gap-3 px-3 py-1.5"
                 >
-                  <TrashIcon />
-                </Button>
-              </li>
-            ))}
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="truncate font-mono">{h.host}</span>
+                    <LANNameHint host={h.host} />
+                  </span>
+                  <span className="shrink-0 font-mono text-caption text-muted-foreground">
+                    Ports {portsOf(h).join(", ")}
+                  </span>
+                  <span className="flex shrink-0 items-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      title="Edit"
+                      aria-label={`Edit ${h.host}`}
+                      disabled={save.isPending}
+                      onClick={() => {
+                        setEditing(h.host)
+                        setEditError(undefined)
+                      }}
+                    >
+                      <PencilSimpleIcon />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      title="Remove"
+                      aria-label={`Remove ${h.host}`}
+                      disabled={save.isPending}
+                      onClick={() =>
+                        write(hosts.filter((x) => x.host !== h.host))
+                      }
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </span>
+                </li>
+              )
+            )}
           </ul>
         )}
 
+        <HostForm
+          key={addKey}
+          id="private-host"
+          label="Add"
+          icon={<PlusIcon />}
+          pending={save.isPending}
+          error={addError}
+          onChange={() => setAddError(undefined)}
+          onSubmit={add}
+        />
+      </div>
+      {proposal && (
+        <ConfirmHostDialog
+          host={proposal.host}
+          pending={save.isPending}
+          onCancel={() => setProposal(undefined)}
+          onConfirm={() =>
+            write(
+              proposal.next,
+              () => {
+                setProposal(undefined)
+                proposal.done()
+              },
+              (message) => {
+                setProposal(undefined)
+                proposal.fail(message)
+              }
+            )
+          }
+        />
+      )}
+    </section>
+  )
+}
+
+/** The host and its ports, to add a host or to change one. */
+function HostForm({
+  id,
+  initial,
+  label,
+  icon,
+  pending,
+  error,
+  onChange,
+  onSubmit,
+  onCancel,
+}: {
+  id: string
+  initial?: PrivateHost
+  label: string
+  icon?: ReactNode
+  pending: boolean
+  error?: string
+  onChange: () => void
+  onSubmit: (host: PrivateHost) => void
+  onCancel?: () => void
+}) {
+  const [host, setHost] = useState(initial?.host ?? "")
+  const [ports, setPorts] = useState(initial?.ports?.join(", ") ?? "")
+  const portList = parsePorts(ports)
+  const ready = !!host.trim() && portList !== null && !pending
+  return (
+    <form
+      className="grid gap-3 bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto] sm:items-start"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (ready) onSubmit({ host: host.trim(), ports: portList })
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && onCancel) {
+          e.preventDefault()
+          onCancel()
+        }
+      }}
+    >
+      <Field>
+        <FieldLabel htmlFor={id}>Host</FieldLabel>
+        <Input
+          id={id}
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus={!!initial}
+          placeholder="e.g. 192.168.178.20, 192.168.178.0/24 or git.company.local"
+          value={host}
+          onChange={(e) => {
+            setHost(e.target.value)
+            onChange()
+          }}
+        />
+        {error ? (
+          <FieldError>{error}</FieldError>
+        ) : (
+          <FieldDescription>
+            An address, a range, a name or a wildcard such as *.company.local.
+          </FieldDescription>
+        )}
+      </Field>
+      <Field data-invalid={portList === null || undefined}>
+        <FieldLabel htmlFor={`${id}-ports`}>Ports</FieldLabel>
+        <Input
+          id={`${id}-ports`}
+          autoComplete="off"
+          placeholder="e.g. 80, 443"
+          value={ports}
+          aria-invalid={portList === null}
+          onChange={(e) => {
+            setPorts(e.target.value)
+            onChange()
+          }}
+        />
+        {portList === null ? (
+          <FieldError>Port numbers from 1 to 65535, with commas.</FieldError>
+        ) : (
+          <FieldDescription>
+            List others than 80 and 443, such as 22 for SSH.
+          </FieldDescription>
+        )}
+      </Field>
+      <div className="flex gap-2 sm:mt-[1.375rem]">
+        <Button type="submit" variant="outline" disabled={!ready}>
+          {pending ? <Spinner /> : icon}
+          {label}
+        </Button>
+        {onCancel && (
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    </form>
+  )
+}
+
+/**
+ * Asks the user to type the host a change opens up before it is saved, so a host isn't listed
+ * by a slip or by someone else's instructions.
+ */
+function ConfirmHostDialog({
+  host,
+  pending,
+  onConfirm,
+  onCancel,
+}: {
+  host: PrivateHost
+  pending: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const [typed, setTyped] = useState("")
+  const ok = typed.trim().toLowerCase() === host.host.toLowerCase()
+  return (
+    <AlertDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel()
+      }}
+    >
+      <AlertDialogContent>
         <form
-          className="grid gap-3 bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto] sm:items-start"
+          className="grid gap-3"
           onSubmit={(e) => {
             e.preventDefault()
-            add()
+            if (ok && !pending) onConfirm()
           }}
         >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Let computers reach this host?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Computers can then connect to{" "}
+              <span className="font-mono break-all text-foreground">
+                {host.host}
+              </span>{" "}
+              on ports {portsOf(host).join(", ")}, once a rule or an approval
+              allows it. Only list hosts you trust.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <Field>
-            <FieldLabel htmlFor="private-host">Host</FieldLabel>
+            <FieldLabel htmlFor="confirm-private-host">
+              Type the host to confirm
+            </FieldLabel>
             <Input
-              id="private-host"
+              id="confirm-private-host"
+              autoFocus
               autoComplete="off"
-              placeholder="e.g. 192.168.178.20, 192.168.178.0/24 or git.company.local"
-              value={host}
-              onChange={(e) => {
-                setHost(e.target.value)
-                setFormError(undefined)
-              }}
+              spellCheck={false}
+              placeholder={host.host}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
             />
-            {formError ? (
-              <FieldError>{formError}</FieldError>
-            ) : (
-              <FieldDescription>
-                An address, a range, a name or a wildcard such as
-                *.company.local.
-              </FieldDescription>
-            )}
           </Field>
-          <Field data-invalid={portList === null || undefined}>
-            <FieldLabel htmlFor="private-host-ports">Ports</FieldLabel>
-            <Input
-              id="private-host-ports"
-              autoComplete="off"
-              placeholder="e.g. 80, 443"
-              value={ports}
-              aria-invalid={portList === null}
-              onChange={(e) => {
-                setPorts(e.target.value)
-                setFormError(undefined)
-              }}
-            />
-            {portList === null ? (
-              <FieldError>
-                Port numbers from 1 to 65535, with commas.
-              </FieldError>
-            ) : (
-              <FieldDescription>
-                List others than 80 and 443, such as 22 for SSH.
-              </FieldDescription>
-            )}
-          </Field>
-          <Button
-            type="submit"
-            variant="outline"
-            className="sm:mt-[1.375rem]"
-            disabled={!host.trim() || portList === null || save.isPending}
-          >
-            {save.isPending ? <Spinner /> : <PlusIcon />}
-            Add
-          </Button>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction type="submit" disabled={!ok || pending}>
+              {pending && <Spinner />}
+              Allow
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </form>
-      </div>
-    </section>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

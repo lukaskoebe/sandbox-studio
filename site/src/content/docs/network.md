@@ -111,7 +111,7 @@ Computers reach public addresses only, so a NAS at `192.168.178.20` or a company
 - A **name** or a wildcard such as `*.company.local`. Computers use the name as it is.
 - A **private IPv4 address**, such as `192.168.178.20`, or a **range**, such as `192.168.178.0/24`. Computers can't connect to private addresses directly, so they use the name the list shows, `192-168-178-20.lan.studio.internal`; rules and approvals name the address itself.
 
-Ports default to 80 and 443; list others, such as 22 for SSH. Each connection still needs a rule or an approval, never a security level. Approvals, rules, and imported environment files never add to the list, and loopback, link-local, and this machine's own addresses stay unreachable: use **This machine** for those.
+Ports default to 80 and 443; list others, such as 22 for SSH. **Edit** changes an entry's address or ports in place. Adding an entry, or an edit that lets computers reach more, asks you to type the host first, so none is listed by a slip or by someone else's instructions. Each connection still needs a rule or an approval, never a security level. Approvals, rules, and imported environment files never add to the list, and loopback, link-local, and this machine's own addresses stay unreachable: use **This machine** for those.
 
 ## Rules no computer can reach
 

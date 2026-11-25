@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "./fixtures"
 
 /** A host name unique to this run, so tests don't see each other's entries. */
@@ -5,7 +6,18 @@ function freshName(label: string, suffix: string) {
   return `${label}-${Math.random().toString(36).slice(2, 8)}.${suffix}`
 }
 
-test("Settings > Ports and LAN adds, lists and removes local network hosts", async ({
+/** Answers the dialog that asks for the host a change opens up. */
+async function confirmHost(page: Page, host: string) {
+  const dialog = page.getByRole("alertdialog")
+  await expect(dialog).toContainText("Let computers reach this host?")
+  const allow = dialog.getByRole("button", { name: "Allow" })
+  await expect(allow).toBeDisabled()
+  await dialog.getByLabel("Type the host to confirm").fill(host)
+  await allow.click()
+  await expect(dialog).toBeHidden()
+}
+
+test("Settings > Ports and LAN adds, edits, lists and removes local network hosts", async ({
   page,
   api,
   env,
@@ -23,15 +35,41 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
   ).toBeVisible()
   await expect(page.getByText(/compan(y|ies) networks?/i)).toHaveCount(0)
 
+  // A host is listed once the user typed it again; Cancel lists nothing.
   await page.getByLabel("Host", { exact: true }).fill(host)
   await page.getByRole("textbox", { name: "Ports" }).fill("22")
   await page.getByRole("button", { name: "Add", exact: true }).click()
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Cancel" })
+    .click()
+  await expect(page.getByRole("alertdialog")).toBeHidden()
+  expect((await saved())?.map((h) => h.host) ?? []).not.toContain(host)
+  await page.getByRole("button", { name: "Add", exact: true }).click()
+  await confirmHost(page, host)
   const list = page.getByRole("list", { name: "Local network" })
   await expect(list).toContainText(host)
   await expect(list).toContainText("Ports 22")
   await expect
     .poll(async () => (await saved())?.map((h) => h.host))
     .toContain(host)
+  await expect(page.getByLabel("Host", { exact: true })).toHaveValue("")
+
+  // Another port asks again; dropping one doesn't.
+  await page.getByRole("button", { name: `Edit ${host}` }).click()
+  const edit = list.getByRole("listitem", { name: `Edit ${host}` })
+  await edit.getByRole("textbox", { name: "Ports" }).fill("22, 2222")
+  await edit.getByRole("button", { name: "Save" }).click()
+  await confirmHost(page, host)
+  await expect(list).toContainText("Ports 22, 2222")
+  await page.getByRole("button", { name: `Edit ${host}` }).click()
+  await edit.getByRole("textbox", { name: "Ports" }).fill("2222")
+  await edit.getByRole("button", { name: "Save" }).click()
+  await expect(list).toContainText("Ports 2222")
+  await expect(page.getByRole("alertdialog")).toBeHidden()
+  await expect
+    .poll(async () => (await saved())?.find((h) => h.host === host)?.ports)
+    .toEqual([2222])
 
   // An address is listed too, and the row says the name sandboxes connect to.
   const octet = 2 + Math.floor(Math.random() * 250)
@@ -39,6 +77,7 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
   await page.getByLabel("Host", { exact: true }).fill(addr)
   await page.getByRole("textbox", { name: "Ports" }).fill("22")
   await page.getByRole("button", { name: "Add", exact: true }).click()
+  await confirmHost(page, addr)
   await expect(list).toContainText(
     `Computers connect to 192-168-231-${octet}.lan.studio.internal`
   )
@@ -46,6 +85,7 @@ test("Settings > Ports and LAN adds, lists and removes local network hosts", asy
   // A wildcard over a top-level domain is refused, and the list keeps its entries.
   await page.getByLabel("Host", { exact: true }).fill("*.com")
   await page.getByRole("button", { name: "Add", exact: true }).click()
+  await confirmHost(page, "*.com")
   await expect(page.getByText("is too broad")).toBeVisible()
   await expect(list).toContainText(host)
 
