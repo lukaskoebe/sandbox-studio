@@ -45,6 +45,9 @@ type UserBody struct {
 	// Lead is set on a message Lead sent as a step of a plan: one the user approved, or a
 	// follow-up Lead's settings let it send without asking.
 	Lead *FromLead `json:"lead,omitempty"`
+	// kept are the attached pictures Studio copied into its chat-images folder for the thread,
+	// recorded once the message is (Service.keepAttached).
+	kept []store.ChatImage
 }
 
 // FromLead says which of Lead's plans a message came from, and when the user approved it.
@@ -64,11 +67,13 @@ type Mention struct {
 	End   int    `json:"end,omitempty" minimum:"0" doc:"The last line mentioned; 0 for just start"`
 }
 
-// Attachment describes a file sent with a prompt; its content goes to the agent only.
+// Attachment describes a file sent with a prompt. Its content goes to the agent, and a
+// picture's is kept for the thread too.
 type Attachment struct {
 	Name     string `json:"name"`
 	MimeType string `json:"mimeType"`
 	Size     int64  `json:"size"`
+	Picture  bool   `json:"picture,omitempty" doc:"Studio kept the picture: GET …/items/{item}/image?src=attachment:<index> serves it"`
 }
 
 // TextBody is an agent message or thought, streamed in chunks.

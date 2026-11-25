@@ -471,9 +471,12 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 		var atts []Attachment
 		if blocks, atts, err = l.prompt(p); err == nil {
 			var t store.ChatTurn
-			if t, err = l.start(ctx, c, UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions, Lead: p.Lead}, blocks, launch.ModelName); err == nil {
+			user := UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions, Lead: p.Lead}
+			s.keepAttached(&user, p.Attachments)
+			if t, err = l.start(ctx, c, user, blocks, launch.ModelName); err == nil {
 				return t, nil
 			}
+			s.forgetKept(&user)
 		}
 	}
 	s.started(c.ID)
@@ -645,6 +648,7 @@ func (l *live) steer(ctx context.Context, p Prompt) (bool, error) {
 		l.mu.Unlock()
 	}()
 	<-r.promptSent
+	l.s.keepAttached(&user, p.Attachments)
 	if !l.steers {
 		// The joined prompt's answer comes once the turn is done, so the message shows now.
 		l.mu.Lock()
@@ -670,6 +674,9 @@ func (l *live) steer(ctx context.Context, p Prompt) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	ok := err == nil && (resp.Outcome == acp.SteerInjected || resp.Outcome == acp.SteerStartedNewTurn)
+	if !ok {
+		l.s.forgetKept(&user)
+	}
 	if ok {
 		l.add(r, &user)
 		// Codex starts a turn of its own when its last one just ended, and ACP says nothing
@@ -1355,6 +1362,9 @@ func (l *live) write(r *run, changes []change) {
 				continue
 			}
 			wrote = true
+		}
+		if b, ok := e.body.(*UserBody); ok && e.saved && len(b.kept) > 0 {
+			l.s.recordKept(l.chatID, e.id, b)
 		}
 		// A message is written once it ended: what it shows is copied then.
 		if b, ok := e.body.(*TextBody); ok && c.ended && e.kind == KindAgent && !e.pictured {

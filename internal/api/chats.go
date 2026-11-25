@@ -677,7 +677,8 @@ type ChatTerminal struct {
 // prompts waiting for the running turn change); each carries a rev as the event ID, so a
 // reconnect resumes where it left off. The stream ends when the chat is deleted.
 // chatImage serves a picture an agent's message shows (?src= as the message writes it), copied
-// out of its sandbox (chat/images.go). One that can't be shown is a 404 whose text says why.
+// out of its sandbox, or one attached to the user's message (?src=attachment:<index>), kept as
+// it was sent (chat/images.go). One that can't be shown is a 404 whose text says why.
 func (s *Server) chatImage(w http.ResponseWriter, r *http.Request) {
 	chats, err := s.chats()
 	if err != nil {

@@ -3923,6 +3923,8 @@ export interface components {
         Attachment: {
             mimeType: string;
             name: string;
+            /** @description Studio kept the picture: GET …/items/{item}/image?src=attachment:<index> serves it */
+            picture?: boolean;
             /** Format: int64 */
             size: number;
         };

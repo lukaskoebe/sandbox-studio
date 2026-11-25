@@ -7,24 +7,8 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react"
-import {
-  ArrowUpIcon,
-  FileIcon,
-  ImageIcon,
-  PaperclipIcon,
-  StopIcon,
-  XIcon,
-} from "@phosphor-icons/react"
-import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@/components/ui/attachment"
+import { ArrowUpIcon, PaperclipIcon, StopIcon } from "@phosphor-icons/react"
+import { AttachmentList, useFilePictures } from "@/components/chat/attachments"
 import {
   MentionBackdrop,
   MentionPicker,
@@ -121,6 +105,7 @@ export function Composer({
     setText((t) => (t.trim() ? `${t}\n\n${insert.text}` : insert.text))
   }
   const [files, setFiles] = useState<File[]>(() => loadDraft(draft).files)
+  const pictures = useFilePictures(files)
   const [problem, setProblem] = useState<string>()
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -333,32 +318,18 @@ export function Composer({
       >
         {toolbar}
         {files.length > 0 && (
-          <AttachmentGroup>
-            {files.map((f, i) => (
-              <Attachment key={`${f.name}-${i}`} size="sm">
-                <AttachmentMedia>
-                  {f.type.startsWith("image/") ? <ImageIcon /> : <FileIcon />}
-                </AttachmentMedia>
-                <AttachmentContent>
-                  <AttachmentTitle>{f.name}</AttachmentTitle>
-                  <AttachmentDescription>
-                    {formatBytes(f.size)}
-                  </AttachmentDescription>
-                </AttachmentContent>
-                <AttachmentActions>
-                  <AttachmentAction
-                    aria-label={`Remove ${f.name}`}
-                    onClick={() => {
-                      setFiles(files.filter((_, j) => j !== i))
-                      setProblem(undefined)
-                    }}
-                  >
-                    <XIcon />
-                  </AttachmentAction>
-                </AttachmentActions>
-              </Attachment>
-            ))}
-          </AttachmentGroup>
+          <AttachmentList
+            files={files.map((f, i) => ({
+              name: f.name,
+              mimeType: f.type,
+              size: f.size,
+              picture: pictures[i],
+            }))}
+            onRemove={(i) => {
+              setFiles(files.filter((_, j) => j !== i))
+              setProblem(undefined)
+            }}
+          />
         )}
         {picking && (
           <MentionPicker

@@ -140,21 +140,25 @@ export function ChatPicture({
             className="block max-h-80 max-w-full object-contain"
           />
         </DialogTrigger>
-        {/* As wide as the picture, up to the screen's width: with w-auto the dialog, fixed at
-            the screen's middle, would only have the right half of the screen to fit into. */}
-        <DialogContent
-          bare
-          className="w-max p-2 pt-10 sm:max-w-[calc(100vw-4rem)]"
-        >
-          <DialogTitle className="sr-only">{alt || src}</DialogTitle>
-          <img
-            src={now.picture}
-            alt={alt || src}
-            className="block max-h-[calc(100dvh-6rem)] max-w-full rounded-md object-contain"
-          />
-        </DialogContent>
+        <LargePicture src={now.picture} alt={alt || src} />
       </Dialog>
       {caption}
     </span>
+  )
+}
+
+/** A picture shown large, in a dialog its thumbnail opens. */
+export function LargePicture({ src, alt }: { src?: string; alt: string }) {
+  return (
+    // As wide as the picture, up to the screen's width: with w-auto the dialog, fixed at the
+    // screen's middle, would only have the right half of the screen to fit into.
+    <DialogContent bare className="w-max p-2 pt-10 sm:max-w-[calc(100vw-4rem)]">
+      <DialogTitle className="sr-only">{alt}</DialogTitle>
+      <img
+        src={src}
+        alt={alt}
+        className="block max-h-[calc(100dvh-6rem)] max-w-full rounded-md object-contain"
+      />
+    </DialogContent>
   )
 }

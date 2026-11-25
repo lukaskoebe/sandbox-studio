@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -99,11 +100,23 @@ func (s *Service) Image(ctx context.Context, envID, chatID, itemID, src string) 
 	if err != nil {
 		return "", "", err
 	}
-	if v := ItemView(it); it.Kind != KindAgent || v.Text == nil || !slices.Contains(ImageSources(v.Text.Text), src) {
+	v := ItemView(it)
+	user := it.Kind == KindUser && v.User != nil && attached(*v.User, src)
+	if !user && (it.Kind != KindAgent || v.Text == nil || !slices.Contains(ImageSources(v.Text.Text), src)) {
 		return "", "", store.ErrNotFound
 	}
 	if s.Images == "" {
 		return "", "", imageError("This Studio keeps no pictures.")
+	}
+	if user {
+		img, err := s.Store.ChatImage(ctx, itemID, src)
+		switch {
+		case errors.Is(err, store.ErrNotFound), err == nil && img.File == "":
+			return "", "", imageError("Studio didn't keep this picture.")
+		case err != nil:
+			return "", "", err
+		}
+		return filepath.Join(s.Images, img.File), img.MimeType, nil
 	}
 	img, err := s.keepImage(ctx, chatID, c.SandboxID, itemID, src, true)
 	if err != nil {
@@ -113,6 +126,70 @@ func (s *Service) Image(ctx context.Context, envID, chatID, itemID, src string) 
 		return "", "", imageError(img.Error)
 	}
 	return filepath.Join(s.Images, img.File), img.MimeType, nil
+}
+
+// Pictures attached to the user's messages are kept the same way, under the src
+// attachment:<index>, so the thread shows them after they went to the agent: Studio has no
+// other copy, and the agent's is in its session.
+
+// attachedSrc is the src an attached picture is kept under: its index among the message's
+// attachments.
+func attachedSrc(i int) string { return "attachment:" + strconv.Itoa(i) }
+
+// attached says whether src is a picture u was sent with that Studio kept.
+func attached(u UserBody, src string) bool {
+	n, ok := strings.CutPrefix(src, "attachment:")
+	i, err := strconv.Atoi(n)
+	return ok && err == nil && attachedSrc(i) == src && i < len(u.Attachments) && u.Attachments[i].Picture
+}
+
+// keepAttached copies the pictures files attaches to the user's message into the chat-images
+// folder and marks them in it, to be recorded once the message is stored (recordKept). One that
+// can't be kept shows as a file.
+func (s *Service) keepAttached(u *UserBody, files []File) {
+	if s.Images == "" {
+		return
+	}
+	for i, f := range files {
+		if i >= len(u.Attachments) {
+			break
+		}
+		t := http.DetectContentType(f.Data)
+		if _, ok := imageTypes[t]; !ok || len(f.Data) > MaxImage {
+			continue
+		}
+		name, err := s.saveImage(f.Data, t)
+		if err != nil {
+			s.log().Warn("chat: keeping an attached picture", "err", err)
+			continue
+		}
+		u.Attachments[i].Picture = true
+		u.kept = append(u.kept, store.ChatImage{Src: attachedSrc(i), File: name, MimeType: t, Size: int64(len(f.Data))})
+	}
+}
+
+// recordKept records the pictures kept for the user's message once it is stored, before the
+// thread hears of it. One that can't be recorded is removed, and its thumbnail shows the file.
+func (s *Service) recordKept(chatID, itemID string, u *UserBody) {
+	for _, img := range u.kept {
+		img.ItemID, img.ChatID = itemID, chatID
+		if err := s.Store.PutChatImage(context.Background(), img); err != nil {
+			s.log().Warn("chat: recording an attached picture", "chat", chatID, "err", err)
+			s.removeImage(img.File)
+		}
+	}
+	u.kept = nil
+}
+
+// forgetKept removes the pictures kept for a message that didn't go after all.
+func (s *Service) forgetKept(u *UserBody) {
+	for _, img := range u.kept {
+		s.removeImage(img.File)
+	}
+	u.kept = nil
+	for i := range u.Attachments {
+		u.Attachments[i].Picture = false
+	}
 }
 
 // IsImageError says whether err is why a picture can't be shown, and not a failure.

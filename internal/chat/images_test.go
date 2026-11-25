@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -120,5 +121,89 @@ func TestImagesFromAnOlderGuest(t *testing.T) {
 	}
 	if _, _, err := f.s.readImage(ctx, f.sb.ID, "/tmp/big.png"); !IsImageError(err) || !strings.Contains(err.Error(), "Restart the computer") {
 		t.Fatalf("big %v", err)
+	}
+}
+
+// A picture attached to the user's message is kept for the thread, and served under its index;
+// another file isn't.
+func TestAttachedPicturesAreKept(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	f.s.Images = t.TempDir()
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	shot := png(2000)
+	turn, err := f.s.Send(ctx, env, f.chat.ID, f.launch(), Prompt{Text: "Look", Attachments: []File{
+		{Name: "notes.txt", Data: []byte("just words")},
+		{Name: "shot.png", MimeType: "image/png", Data: shot},
+		{Name: "fake.png", MimeType: "image/png", Data: []byte("not a picture")},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, log := f.wait(t, turn.ID)
+	u := log.Items[0]
+	if u.User == nil || len(u.User.Attachments) != 3 {
+		t.Fatalf("user item %+v", u)
+	}
+	if a := u.User.Attachments; a[0].Picture || !a[1].Picture || a[2].Picture {
+		t.Fatalf("attachments %+v; want only shot.png kept", a)
+	}
+	file, mimeType, err := f.s.Image(ctx, env, f.chat.ID, u.ID, "attachment:1")
+	if err != nil || mimeType != "image/png" {
+		t.Fatalf("image %q %q %v", file, mimeType, err)
+	}
+	if b, err := os.ReadFile(file); err != nil || !bytes.Equal(b, shot) {
+		t.Fatalf("copy of %d bytes, want %d: %v", len(b), len(shot), err)
+	}
+	for _, src := range []string{"attachment:0", "attachment:2", "attachment:3", "attachment:01", "/tmp/shot.png"} {
+		if _, _, err := f.s.Image(ctx, env, f.chat.ID, u.ID, src); err != store.ErrNotFound {
+			t.Errorf("%s: %v; want not found", src, err)
+		}
+	}
+	if err := f.s.sweepImages(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("kept picture removed: %v", err)
+	}
+}
+
+// A picture steered into a turn the agent already ended is kept once, when its message goes
+// as the next turn.
+func TestAPictureSteeredAfterTheTurnIsKeptOnce(t *testing.T) {
+	release := make(chan struct{})
+	var prompts atomic.Int32
+	a := &acptest.Agent{Steering: true, Turns: []acptest.Turn{{}, {}}, BeforePrompt: func() {
+		if prompts.Add(1) == 1 {
+			<-release
+		}
+	}}
+	f := newFixture(t, a)
+	f.s.Images = t.TempDir()
+	first := f.send(t, "work")
+	if err := a.WaitForCall(context.Background(), "session/prompt"); err != nil {
+		t.Fatal(err)
+	}
+	d, err := f.s.Steer(context.Background(), f.sb.EnvironmentID, f.chat.ID, f.launch(),
+		Prompt{Text: "and this", Attachments: []File{{Name: "shot.png", Data: png(100)}}}, nil)
+	if err != nil || d.Steered || d.Queued == nil {
+		t.Fatalf("Steer = %+v, %v; want it queued", d, err)
+	}
+	close(release)
+	f.wait(t, first.ID)
+	log := f.until(t, "the queued message's turn", func(l Log) bool { return len(l.Turns) == 2 && userTexts(l) == "work|and this" })
+	f.wait(t, log.Turns[1].ID)
+	entries, err := os.ReadDir(f.s.Images)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("%d pictures kept, %v; want 1", len(entries), err)
+	}
+	last := log.Items[len(log.Items)-1]
+	for _, it := range log.Items {
+		if it.User != nil && it.User.Text == "and this" {
+			last = it
+		}
+	}
+	if _, _, err := f.s.Image(context.Background(), f.sb.EnvironmentID, f.chat.ID, last.ID, "attachment:0"); err != nil {
+		t.Fatalf("the queued message's picture: %v", err)
 	}
 }

@@ -3,8 +3,6 @@ import {
   ArrowsInSimpleIcon,
   CaretRightIcon,
   CompassIcon,
-  FileIcon,
-  ImageIcon,
   InfoIcon,
   StopCircleIcon,
   TerminalWindowIcon,
@@ -13,6 +11,11 @@ import {
 } from "@phosphor-icons/react"
 import { useCallback } from "react"
 import { Link } from "@tanstack/react-router"
+import {
+  AttachmentList,
+  pictureTypes,
+  type ShownFile,
+} from "@/components/chat/attachments"
 import type { Prompt } from "@/components/chat/composer"
 import {
   ChatPicture,
@@ -25,14 +28,6 @@ import { PermissionCard } from "@/components/chat/permission-card"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QuestionCard } from "@/components/chat/question-card"
 import { ToolCallCard } from "@/components/chat/tool-call-card"
-import {
-  Attachment,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@/components/ui/attachment"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import {
   Collapsible,
@@ -44,7 +39,7 @@ import { Message, MessageContent } from "@/components/ui/message"
 import type { components } from "@/lib/api/schema.gen"
 import type { ChatItem, ChatTurn } from "@/lib/chats"
 import { clock } from "@/lib/time"
-import { cn, formatBytes } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
 type MarkerKind = components["schemas"]["MarkerBody"]["kind"]
 
@@ -77,7 +72,7 @@ export function ChatItemView({
 }) {
   switch (item.kind) {
     case "user":
-      return <UserMessage item={item} env={ctx.env} />
+      return <UserMessage item={item} ctx={ctx} />
     case "agent":
       return item.text ? (
         <Message>
@@ -172,14 +167,15 @@ function AgentText({
   )
 }
 
-function UserMessage({ item, env }: { item: ChatItem; env: string }) {
+function UserMessage({ item, ctx }: { item: ChatItem; ctx: ItemContext }) {
   if (!item.user) return null
   const lead = item.user.lead
-  if (!lead) return <UserBubble u={item.user} />
+  const files = sentFiles(item, ctx)
+  if (!lead) return <UserBubble u={item.user} files={files} />
   return (
     <div className="grid justify-items-end gap-1">
-      <UserBubble u={item.user} />
-      <FromLead env={env} lead={lead} />
+      <UserBubble u={item.user} files={files} />
+      <FromLead env={ctx.env} lead={lead} />
     </div>
   )
 }
@@ -222,45 +218,50 @@ function FromLead({
  * at once even while the agent takes a moment to start.
  */
 export function SendingMessage({ prompt }: { prompt: Prompt }) {
-  const attachments = (prompt.attachments ?? []).map((a) => ({
+  const files = (prompt.attachments ?? []).map((a) => ({
     name: a.name,
     mimeType: a.mimeType ?? "",
     size: Math.floor((a.data.length * 3) / 4), // base64
+    picture: pictureTypes.includes(a.mimeType ?? "")
+      ? `data:${a.mimeType};base64,${a.data}`
+      : undefined,
   }))
   return (
     <div className="grid justify-items-end gap-1">
       <UserBubble
-        u={{ text: prompt.text ?? "", attachments, mentions: prompt.mentions }}
+        u={{ text: prompt.text ?? "", mentions: prompt.mentions }}
+        files={files}
       />
       <span className="shimmer text-meta text-muted-foreground">Sending…</span>
     </div>
   )
 }
 
-function UserBubble({ u }: { u: NonNullable<ChatItem["user"]> }) {
+/** The files of a user's message, each picture Studio kept with its thumbnail. */
+function sentFiles(
+  item: ChatItem,
+  ctx: Pick<ItemContext, "env" | "chatId">
+): ShownFile[] {
+  return (item.user?.attachments ?? []).map((a, i) => ({
+    ...a,
+    picture: a.picture
+      ? chatPictureURL(ctx.env, ctx.chatId, item.id, `attachment:${i}`)
+      : undefined,
+  }))
+}
+
+function UserBubble({
+  u,
+  files,
+}: {
+  u: Pick<NonNullable<ChatItem["user"]>, "text" | "mentions">
+  files: ShownFile[]
+}) {
   return (
     <Message align="end">
       <MessageContent>
-        {u.attachments && u.attachments.length > 0 && (
-          <AttachmentGroup className="justify-end">
-            {u.attachments.map((a, i) => (
-              <Attachment key={i} size="sm">
-                <AttachmentMedia>
-                  {a.mimeType.startsWith("image/") ? (
-                    <ImageIcon />
-                  ) : (
-                    <FileIcon />
-                  )}
-                </AttachmentMedia>
-                <AttachmentContent>
-                  <AttachmentTitle>{a.name}</AttachmentTitle>
-                  <AttachmentDescription>
-                    {formatBytes(a.size)}
-                  </AttachmentDescription>
-                </AttachmentContent>
-              </Attachment>
-            ))}
-          </AttachmentGroup>
+        {files.length > 0 && (
+          <AttachmentList files={files} className="justify-end" />
         )}
         {u.text && (
           <Bubble align="end" variant="secondary">

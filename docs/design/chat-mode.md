@@ -670,6 +670,15 @@ is in `/workspace`. The managed instructions ([harnesses](../harnesses.md)) and 
   on a click, or the reason with **Try again**. A web address stays a link with the alt text,
   as loading it would tell its server who reads the chat; outside a message, pictures stay as
   written.
+- **Attached pictures.** A PNG, JPEG, GIF or WebP up to 8 MiB attached to the user's message
+  is written into the same folder before the message is stored, marked `picture` in its
+  `attachments`, and recorded under `src` `attachment:<index>` right after the item is, before
+  the thread hears of it. A message that doesn't go after all, as a steer that finds the
+  agent's turn over and waits in the queue instead, removes its copies. The endpoint serves
+  them for the user's item from the recorded copy alone. The composer shows a picture about
+  to be sent from an object URL, and the thread from the endpoint (`attachments.tsx`): a
+  small square thumbnail, larger in a dialog on a click; other files, and a picture that
+  won't load, stay a chip with the name and size.
 - **TUI.** `[picture: alt] (src)`, dim.
 
 ## 6. Stages

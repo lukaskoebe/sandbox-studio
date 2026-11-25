@@ -317,6 +317,10 @@
           "name": {
             "type": "string"
           },
+          "picture": {
+            "description": "Studio kept the picture: GET …/items/{item}/image?src=attachment:\u003cindex\u003e serves it",
+            "type": "boolean"
+          },
           "size": {
             "format": "int64",
             "type": "integer"
