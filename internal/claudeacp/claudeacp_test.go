@@ -85,7 +85,7 @@ func fakeClaude() {
 		}
 		if path := os.Getenv(argvEnv); path != "" {
 			if f, err := os.OpenFile(path+".in", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-				f.Write(append(append([]byte{}, sc.Bytes()...), '\n'))
+				_, _ = f.Write(append(append([]byte{}, sc.Bytes()...), '\n'))
 				f.Close()
 			}
 		}

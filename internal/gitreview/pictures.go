@@ -322,7 +322,8 @@ func (p *placer) upload(ctx context.Context, file string) (string, error) {
 			return "", err
 		}
 		name := path.Base(file)
-		if ext := pictureExt[pic.MIMEType]; !strings.EqualFold(path.Ext(name), ext) && !(ext == ".jpg" && strings.EqualFold(path.Ext(name), ".jpeg")) {
+		ext, got := pictureExt[pic.MIMEType], path.Ext(name)
+		if fits := strings.EqualFold(got, ext) || ext == ".jpg" && strings.EqualFold(got, ".jpeg"); !fits {
 			name += ext
 		}
 		md, err := p.up.UploadPicture(ctx, p.token, p.owner, p.repo, p.number, name, pic.MIMEType, data)
