@@ -2137,6 +2137,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/harnesses/{harness}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install another version of a harness's CLI in a running computer
+         * @description npm installs it in the computer over the base image's, downloading through the environment's network rules, so it may wait on the user to allow registry.npmjs.org. It answers once the version is installed, with the computer's tools; that can take minutes. Sessions already running keep their version, and a rebase or disk resize brings back the base image's. Only Claude Code updates.
+         */
+        post: operations["updateSandboxHarness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/lineage": {
         parameters: {
             query?: never;
@@ -2542,6 +2562,26 @@ export interface paths {
         get?: never;
         /** @description Names a terminal in the UI. Its tmux name, which links use, stays. */
         put: operations["renameTerminal"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a running computer has installed
+         * @description The harnesses' CLIs and the tools mise has, asked of the computer's guest agent. A computer that doesn't run answers 409, as does one started before Studio was upgraded, until it restarts.
+         */
+        get: operations["getSandboxTools"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3298,6 +3338,26 @@ export interface paths {
         /** @description The built-in tracker list and whether the environment's browsers are denied it. */
         get: operations["getTrackers"];
         put: operations["setTrackers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/harnesses/{harness}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A harness's newest stable release
+         * @description Studio asks npm, and remembers the answer for ten minutes. 502 when npm can't be reached.
+         */
+        get: operations["getHarnessRelease"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -5482,6 +5542,14 @@ export interface components {
              */
             to: "back" | "forward" | "reload";
         };
+        HarnessRelease: {
+            harness: string;
+            version: string;
+        };
+        HarnessUpdateInBody: {
+            /** @description An exact version, such as GET /api/harnesses/{harness}/release names */
+            version: string;
+        };
         Header: {
             name: string;
             value: string;
@@ -7523,6 +7591,13 @@ export interface components {
             /** @description The template of the generation; empty for none */
             templateId?: string;
         };
+        SandboxHarness: {
+            /** @enum {string} */
+            harness: "claude" | "codex" | "opencode";
+            /** @description Studio can install another version of it in the computer */
+            updatable: boolean;
+            version: string;
+        };
         SandboxImport: {
             buildJobId?: string;
             /** Format: date-time */
@@ -7541,6 +7616,32 @@ export interface components {
         SandboxTerminals: {
             sandboxId: string;
             terminals: components["schemas"]["Terminal"][] | null;
+        };
+        SandboxTool: {
+            /** @description What the computer's shells run, outside a project with its own mise.toml */
+            active: boolean;
+            /** @description The config file that pins it */
+            config?: string;
+            /** @description False for a version a config asks for that isn't installed */
+            installed: boolean;
+            /** @description mise's name for it: node, python, npm:prettier */
+            name: string;
+            /**
+             * @description Where it came from: the computer's template pins it; mise use -g pinned it in the computer; a rebase kept it from the old VM; a project's mise.toml asks for it; or no config asks for this version
+             * @enum {string}
+             */
+            origin: "template" | "added" | "kept" | "project" | "unpinned";
+            /** @description What the config that pins it asks for: 24, latest */
+            requested?: string;
+            version: string;
+        };
+        SandboxTools: {
+            /** @description The harnesses' CLIs, as the base image installs them or as updated since */
+            harnesses: components["schemas"]["SandboxHarness"][];
+            /** @description Each version of a tool mise has, by name and version */
+            mise: components["schemas"]["SandboxTool"][];
+            /** @description Why mise didn't list its tools */
+            miseError?: string;
         };
         Scope: {
             /** Format: int64 */
@@ -14040,6 +14141,45 @@ export interface operations {
             };
         };
     };
+    updateSandboxHarness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+                harness: "claude" | "codex" | "opencode";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HarnessUpdateInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxTools"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getSandboxLineage: {
         parameters: {
             query?: never;
@@ -14986,6 +15126,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSandboxTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxTools"];
+                };
             };
             /** @description Error */
             default: {
@@ -16957,6 +17131,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrackersView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getHarnessRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: "claude" | "codex" | "opencode";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarnessRelease"];
                 };
             };
             /** @description Error */

@@ -8,6 +8,7 @@ import {
   MonitorIcon,
   PlugsConnectedIcon,
   WarningIcon,
+  WrenchIcon,
   type Icon,
 } from "@phosphor-icons/react"
 import {
@@ -15,6 +16,7 @@ import {
   type ComputerDialog,
 } from "@/components/computer/computer-menu"
 import { BaseMark } from "@/components/base-dialog"
+import { ComputerTools } from "@/components/computer/tools"
 import { canCopyDisks, phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { formatMiB } from "@/components/sandbox-details"
@@ -32,8 +34,8 @@ import { cn, formatAge, formatUptime } from "@/lib/utils"
 
 /**
  * The screen's Details tab: what the ⋯ menu used to hold, laid out to read. Its state, disks,
- * ports, how to reach it, its checkpoints and where it came from, with Maintenance last. It
- * works while the computer is off too.
+ * ports, how to reach it, its tools, its checkpoints and where it came from, with Maintenance
+ * last. It works while the computer is off too.
  */
 export function ComputerDetails({
   env,
@@ -395,6 +397,11 @@ export function ComputerDetails({
               }
             />
           </Card>
+          {!building && (
+            <Card label="Tools" icon={WrenchIcon}>
+              <ComputerTools env={env} sandbox={sb} />
+            </Card>
+          )}
           {!building && (
             <Card
               label="Checkpoints"

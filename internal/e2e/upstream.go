@@ -204,6 +204,12 @@ func (u *Upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"object":"list","data":[{"id":"e2e-coder"},{"id":"e2e-chat"}]}`)
 		return
 	}
+	// npm's newest releases, for a harness update.
+	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/-/package/") && strings.HasSuffix(r.URL.Path, "/dist-tags") {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"latest":"2.1.345","stable":"2.1.340"}`)
+		return
+	}
 	if u.pulls.serve(w, r) {
 		return
 	}

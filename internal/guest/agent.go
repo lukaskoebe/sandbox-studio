@@ -202,6 +202,10 @@ func (a *Agent) handle(st net.Conn) {
 		err = replyPorts(st)
 	case agentproto.KindDisk:
 		err = a.replyDisks(st)
+	case agentproto.KindTools:
+		err = a.replyTools(st)
+	case agentproto.KindHarnessUpdate:
+		err = a.updateHarness(st, br)
 	case agentproto.KindKill:
 		err = a.killSession(st, h.Session)
 	case agentproto.KindTitle:

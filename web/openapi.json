@@ -4933,6 +4933,35 @@
         ],
         "type": "object"
       },
+      "HarnessRelease": {
+        "additionalProperties": false,
+        "properties": {
+          "harness": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "harness",
+          "version"
+        ],
+        "type": "object"
+      },
+      "HarnessUpdateInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "description": "An exact version, such as GET /api/harnesses/{harness}/release names",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
       "Header": {
         "additionalProperties": false,
         "properties": {
@@ -10876,6 +10905,32 @@
         ],
         "type": "object"
       },
+      "SandboxHarness": {
+        "additionalProperties": false,
+        "properties": {
+          "harness": {
+            "enum": [
+              "claude",
+              "codex",
+              "opencode"
+            ],
+            "type": "string"
+          },
+          "updatable": {
+            "description": "Studio can install another version of it in the computer",
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "harness",
+          "version",
+          "updatable"
+        ],
+        "type": "object"
+      },
       "SandboxImport": {
         "additionalProperties": false,
         "properties": {
@@ -10947,6 +11002,81 @@
         "required": [
           "sandboxId",
           "terminals"
+        ],
+        "type": "object"
+      },
+      "SandboxTool": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "description": "What the computer's shells run, outside a project with its own mise.toml",
+            "type": "boolean"
+          },
+          "config": {
+            "description": "The config file that pins it",
+            "type": "string"
+          },
+          "installed": {
+            "description": "False for a version a config asks for that isn't installed",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "mise's name for it: node, python, npm:prettier",
+            "type": "string"
+          },
+          "origin": {
+            "description": "Where it came from: the computer's template pins it; mise use -g pinned it in the computer; a rebase kept it from the old VM; a project's mise.toml asks for it; or no config asks for this version",
+            "enum": [
+              "template",
+              "added",
+              "kept",
+              "project",
+              "unpinned"
+            ],
+            "type": "string"
+          },
+          "requested": {
+            "description": "What the config that pins it asks for: 24, latest",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "origin",
+          "installed",
+          "active"
+        ],
+        "type": "object"
+      },
+      "SandboxTools": {
+        "additionalProperties": false,
+        "properties": {
+          "harnesses": {
+            "description": "The harnesses' CLIs, as the base image installs them or as updated since",
+            "items": {
+              "$ref": "#/components/schemas/SandboxHarness"
+            },
+            "type": "array"
+          },
+          "mise": {
+            "description": "Each version of a tool mise has, by name and version",
+            "items": {
+              "$ref": "#/components/schemas/SandboxTool"
+            },
+            "type": "array"
+          },
+          "miseError": {
+            "description": "Why mise didn't list its tools",
+            "type": "string"
+          }
+        },
+        "required": [
+          "harnesses",
+          "mise"
         ],
         "type": "object"
       },
@@ -22515,6 +22645,83 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/harnesses/{harness}/update": {
+      "post": {
+        "description": "npm installs it in the computer over the base image's, downloading through the environment's network rules, so it may wait on the user to allow registry.npmjs.org. It answers once the version is installed, with the computer's tools; that can take minutes. Sessions already running keep their version, and a rebase or disk resize brings back the base image's. Only Claude Code updates.",
+        "operationId": "updateSandboxHarness",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "enum": [
+                "claude",
+                "codex",
+                "opencode"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HarnessUpdateInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxTools"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Install another version of a harness's CLI in a running computer",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/lineage": {
       "get": {
         "description": "The sandbox's history: its events in order, the sandbox it was forked from, the forks made from it and its checkpoints. Deleted forks and sources stay visible as tombstones.",
@@ -24123,6 +24330,60 @@
         },
         "tags": [
           "terminals"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/tools": {
+      "get": {
+        "description": "The harnesses' CLIs and the tools mise has, asked of the computer's guest agent. A computer that doesn't run answers 409, as does one started before Studio was upgraded, until it restarts.",
+        "operationId": "getSandboxTools",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxTools"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What a running computer has installed",
+        "tags": [
+          "sandboxes"
         ]
       }
     },
@@ -27381,6 +27642,53 @@
         },
         "tags": [
           "network"
+        ]
+      }
+    },
+    "/api/harnesses/{harness}/release": {
+      "get": {
+        "description": "Studio asks npm, and remembers the answer for ten minutes. 502 when npm can't be reached.",
+        "operationId": "getHarnessRelease",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "enum": [
+                "claude",
+                "codex",
+                "opencode"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HarnessRelease"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "A harness's newest stable release",
+        "tags": [
+          "sandboxes"
         ]
       }
     },

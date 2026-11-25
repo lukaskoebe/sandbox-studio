@@ -144,6 +144,20 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
     await expect(
       preview.getByRole("heading", { name: "Live preview works" })
     ).toBeVisible({ timeout: 60_000 })
+
+    // Details lists the harnesses' versions and what mise has, which the guest agent asks
+    // mise for as the agent user.
+    await page.bringToFront()
+    await page
+      .getByRole("tablist", { name: `${name}'s screen` })
+      .getByRole("tab", { name: "Details" })
+      .click()
+    const tools = screen.getByRole("region", { name: "Tools", exact: true })
+    await expect(tools.getByRole("list", { name: "Harnesses" })).toContainText(
+      /Claude Code\d+\.\d+\.\d+/,
+      { timeout: 60_000 }
+    )
+    await expect(tools).not.toContainText("didn't")
   } finally {
     // Back to the default level and the previews setting, and the VM gone.
     await level("guarded")

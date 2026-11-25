@@ -57,6 +57,9 @@ var SetBase func(ctx context.Context, sandboxID, image, version string) error
 //	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
 //	PUT  /api/e2e/sandboxes/{id}/disks    {"disks": [{"name": "home", "free": 1, "total": 4}]}: how
 //	                                    full its disks are, in bytes; null is plenty of room
+//	PUT  /api/e2e/sandboxes/{id}/tools    {"tools": {"harnesses": [...], "mise": [...]}, "old": false}:
+//	                                    what it has installed (null is a few tools); old answers
+//	                                    as a guest from before the tools streams
 //	PUT  /api/e2e/sandboxes/{id}/terminals/{name} {"command": "npm", "foreground": ["npm run dev"],
 //	                                    "path", "harness", "idle": 3}: what runs in a terminal
 //	                                    session, which it creates if needed
@@ -354,6 +357,23 @@ func (r *Runtime) Control() http.Handler {
 			return
 		}
 		g.SetPorts(body.Ports)
+		writeJSON(w, http.StatusOK, g.State())
+	})
+	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/tools", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.Guest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		var body struct {
+			Tools *agentproto.Tools `json:"tools"`
+			Old   bool              `json:"old"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 1<<20)).Decode(&body); err != nil {
+			http.Error(w, "want {tools, old}", http.StatusBadRequest)
+			return
+		}
+		g.SetTools(body.Tools, body.Old)
 		writeJSON(w, http.StatusOK, g.State())
 	})
 	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/disks", func(w http.ResponseWriter, req *http.Request) {

@@ -59,7 +59,11 @@ A file opens its diff, **Stacked** or **Split**, with **Open in Files**.
 
 ### Details
 
-**Details** shows the computer itself: its state, CPU and memory use, its disks, the ports it listens on, how to reach it, its latest checkpoints and where it came from. **Maintenance**, at the bottom, has the actions that change it: rebase, fork, use as a base, merge, export and delete.
+**Details** shows the computer itself: its state, CPU and memory use, its disks, the ports it listens on, how to reach it, its tools, its latest checkpoints and where it came from. **Maintenance**, at the bottom, has the actions that change it: rebase, fork, use as a base, merge, export and delete.
+
+**Tools** lists, while the computer runs, the harnesses' versions and each version of a tool that mise has, with where it came from: **template** (the computer's template pins it), **added** (`mise use -g` pinned it in the computer), **kept** (a rebase kept it from before), **project** (a project's `mise.toml` asks for it) or **unused** (installed, but nothing asks for this version). **missing** marks a version a config asks for that isn't installed. Hover a label for the version it asks for. A dimmed version isn't the one the computer's shells run outside a project with its own `mise.toml`.
+
+**Update…** next to Claude Code installs its newest stable release in the computer. The computer downloads it from `registry.npmjs.org`, so allow that if Studio asks. New terminals and chats run it; running ones keep their version until they start again. A rebase or disk resize brings back the version of the base image, and the next Studio release's base image brings a newer one for every computer. A computer started before Studio was upgraded lists its tools once it restarts.
 
 ## Stop, suspend, and resume
 

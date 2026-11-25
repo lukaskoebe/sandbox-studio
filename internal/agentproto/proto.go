@@ -7,7 +7,9 @@
 //   - KindHello (guest → host): the guest writes a Hello line, then closes.
 //   - KindPTY (host → guest): framed in both directions (see WriteFrame).
 //   - KindTCP (host → guest): raw bytes to a guest loopback port.
-//   - KindSessions, KindPorts, KindKill, KindDisk (host → guest): one JSON reply line.
+//   - KindSessions, KindPorts, KindKill, KindDisk, KindTools (host → guest): one JSON reply line.
+//   - KindHarnessUpdate (host → guest): the host writes a HarnessUpdate line; the guest replies
+//     with one Tools line once the harness is installed (see tools.go).
 //   - KindConfig (host → guest): the host writes a Config line; the guest applies it and
 //     replies like KindKill: {} or an Error.
 //   - KindHomeFiles, KindHomeDir, KindStartSession, KindTitle (host → guest): the host writes

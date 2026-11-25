@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
+	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
+	"github.com/lukaskoebe/sandbox-studio/internal/npmrelease"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -127,6 +129,11 @@ func forgeClient(data string) *http.Client {
 // modelsClient sends the model listings of OpenAI-compatible providers to the fake upstream,
 // which answers every /models with the same two models. It follows forgeClient.
 func modelsClient() *http.Client { return fakeUpstream.Client() }
+
+// harnessReleases asks the fake upstream, which stands in for npm too.
+func harnessReleases() api.HarnessReleases {
+	return &npmrelease.Finder{Client: fakeUpstream.Client()}
+}
 
 // hostLogins looks in a home of its own in the data directory, which the tests fill: never in
 // the home of the user who runs them, and without the CLIs' variables.

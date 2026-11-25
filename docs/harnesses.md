@@ -168,6 +168,26 @@ The base image (`images/base/Dockerfile`) installs these versions.
 | `@agentclientprotocol/claude-agent-acp` | 0.107.3, whose Agent SDK (0.3.325) matches Claude Code | npm, exact version, `--omit=optional --before=2026-11-17`; it serves ACP v1 to Studio, which asks for v1 |
 | `@agentclientprotocol/codex-acp` | 2.1.1 | npm, exact version, `--omit=optional --before=2026-10-08` |
 
+### Updating Claude Code in a computer
+
+A computer's **Details** tab lists the harnesses' versions under **Tools**, and **Update…** next
+to Claude Code installs its newest stable release in that computer without a new base image.
+Studio asks npm for the package's `stable` dist-tag (`latest` for a package without one) at
+`GET /api/harnesses/claude/release`, remembering it for ten minutes; `internal/npmrelease` sends
+no identifying header beyond `User-Agent: sandbox-studio`. The update is
+`POST /api/environments/{env}/sandboxes/{id}/harnesses/claude/update` with `{"version": …}`, an
+exact version (`agentproto.HarnessVersionPattern`), which the guest agent installs with
+`npm install -g` ([guest agent](guest-agent.md#channel)). The download goes through the
+computer's network rules, so it waits on `registry.npmjs.org` being allowed.
+
+Terminals and chats start `/usr/local/bin/claude` (chats through `CLAUDE_CODE_EXECUTABLE`), so
+new ones run the new version; running ones keep theirs until they start again.
+`claude-agent-acp` and its Agent SDK keep the base image's versions, which were checked
+together; if chats misbehave after an update, a rebase goes back to that pair. The install is on the computer's root layer, so a rebase or disk resize brings
+back the base image's version. Codex and OpenCode are listed but don't update here. A computer
+started before the Studio that has this needs a restart, as its guest agent doesn't know the
+request; the tab says so.
+
 ## Chats (ACP)
 
 Chats run each harness's Agent Client Protocol agent instead of its TUI

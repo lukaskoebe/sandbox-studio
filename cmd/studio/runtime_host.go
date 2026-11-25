@@ -19,10 +19,12 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
+	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
+	"github.com/lukaskoebe/sandbox-studio/internal/npmrelease"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -365,6 +367,9 @@ func forgeClient(string) *http.Client { return nil }
 // modelsClient lists the models of OpenAI-compatible endpoints; nil is its default, public
 // addresses only.
 func modelsClient() *http.Client { return nil }
+
+// harnessReleases asks npm for the harnesses' newest releases.
+func harnessReleases() api.HarnessReleases { return &npmrelease.Finder{} }
 
 // hostLogins finds the CLIs' logins in the home directory of the user Studio runs as.
 func hostLogins(string) *hostlogins.Finder {

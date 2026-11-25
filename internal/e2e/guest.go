@@ -58,7 +58,9 @@ type Guest struct {
 	clones   []string          // the folders repositories were cloned to, see runGit
 	ports    []int
 	disks    []agentproto.Disk
-	forwards []int // a browser VM's forwarded ports
+	tools    *agentproto.Tools // what it has installed; nil is defaultTools
+	oldAgent bool              // it answers tools streams as a guest older than them does
+	forwards []int             // a browser VM's forwarded ports
 	conns    []*Connection
 	calls    []*Call
 	browser  *browserVM // the browser of this boot, once Studio sent a browser stream
@@ -238,6 +240,8 @@ func (g *Guest) handle(st net.Conn) {
 		}
 		g.mu.Unlock()
 		err = agentproto.WriteJSONLine(st, disks)
+	case agentproto.KindTools, agentproto.KindHarnessUpdate:
+		err = g.serveTools(st, br, h.Kind)
 	case agentproto.KindPTY:
 		err = g.servePTY(st, br, h.Session)
 	case agentproto.KindTCP:
@@ -644,6 +648,73 @@ func (g *Guest) SetPorts(ports []int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.ports = slices.Clone(ports)
+}
+
+// defaultTools are the harnesses of the base image and a few tools from mise: the global
+// config's, one a rebase kept and an older version nothing pins.
+func defaultTools() agentproto.Tools {
+	const global = "/opt/mise/config/config.toml"
+	return agentproto.Tools{
+		Harnesses: []agentproto.HarnessVersion{{Harness: "claude", Version: "2.1.325"}, {Harness: "codex", Version: "0.162.1"}, {Harness: "opencode", Version: "1.18.35"}},
+		Mise: []agentproto.MiseTool{
+			{Name: "node", Version: "22.1.0", Installed: true},
+			{Name: "node", Version: "24.11.0", Requested: "24", Config: global, Installed: true, Active: true},
+			{Name: "npm:prettier", Version: "3.6.2", Requested: "latest", Config: "/opt/mise/config/conf.d/studio-kept-tools.toml", Installed: true, Active: true},
+			{Name: "python", Version: "3.12.12", Requested: "3.12", Config: global, Installed: true, Active: true},
+		},
+	}
+}
+
+// SetTools sets what the guest has installed; nil is defaultTools. With old it answers as a
+// guest from before KindTools.
+func (g *Guest) SetTools(t *agentproto.Tools, old bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.tools, g.oldAgent = t, old
+}
+
+// serveTools answers KindTools, and KindHarnessUpdate as the real guest does without npm: a
+// moment later the version is installed. Version 9.9.9 fails as npm does without a network.
+func (g *Guest) serveTools(st net.Conn, br *bufio.Reader, kind string) error {
+	g.mu.Lock()
+	old := g.oldAgent
+	g.mu.Unlock()
+	if old {
+		return agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(kind)})
+	}
+	if kind == agentproto.KindHarnessUpdate {
+		var req agentproto.HarnessUpdate
+		if err := agentproto.ReadJSONLine(br, &req); err != nil {
+			return err
+		}
+		if !slices.Contains(agentproto.UpdatableHarnesses, req.Harness) || !agentproto.HarnessVersionPattern.MatchString(req.Version) {
+			return agentproto.WriteJSONLine(st, agentproto.Error{Error: "not an update this guest takes"})
+		}
+		time.Sleep(400 * time.Millisecond)
+		if req.Version == "9.9.9" {
+			return agentproto.WriteJSONLine(st, agentproto.Error{Error: "npm install @anthropic-ai/claude-code@9.9.9: exit status 1: npm error code ECONNRESET"})
+		}
+		g.mu.Lock()
+		t := defaultTools()
+		if g.tools != nil {
+			t = *g.tools
+		}
+		t.Harnesses = slices.Clone(t.Harnesses)
+		for i := range t.Harnesses {
+			if t.Harnesses[i].Harness == req.Harness {
+				t.Harnesses[i].Version = req.Version
+			}
+		}
+		g.tools = &t
+		g.mu.Unlock()
+	}
+	g.mu.Lock()
+	t := defaultTools()
+	if g.tools != nil {
+		t = *g.tools
+	}
+	g.mu.Unlock()
+	return agentproto.WriteJSONLine(st, t)
 }
 
 // SetDisks sets how full the guest's disks are; nil is the default, with plenty of room.

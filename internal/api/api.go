@@ -80,6 +80,9 @@ type Server struct {
 	// ModelsClient lists the models of OpenAI-compatible endpoints; nil dials public addresses
 	// only.
 	ModelsClient *http.Client
+	// HarnessReleases finds the harnesses' newest releases, for updating one in a computer;
+	// GET /api/harnesses/{harness}/release answers 501 without it.
+	HarnessReleases HarnessReleases
 	// Reach says why no sandbox can make the connections a rule allows (Rule.Unreachable); nil
 	// leaves rules without warnings.
 	Reach interface {
@@ -123,6 +126,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerExports(api, mux)
 	s.registerUploads(api, mux)
 	s.registerPreviews(api)
+	s.registerTools(api)
 	s.registerNetwork(api)
 	s.registerPrivateHosts(api)
 	s.registerSecrets(api)

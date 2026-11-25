@@ -673,6 +673,21 @@ func (h *Hub) Disks(ctx context.Context, id string) ([]agentproto.Disk, error) {
 	return out, err
 }
 
+// Tools lists the guest's harness versions and what mise has (agentproto.KindTools).
+func (h *Hub) Tools(ctx context.Context, id string) (agentproto.Tools, error) {
+	var out agentproto.Tools
+	err := h.requestLimit(ctx, id, agentproto.Header{Kind: agentproto.KindTools}, nil, &out, agentproto.MaxToolsLine)
+	return out, err
+}
+
+// UpdateHarness has the guest install a harness's version, and returns its tools after
+// (agentproto.KindHarnessUpdate). It takes as long as npm does: minutes on a slow network.
+func (h *Hub) UpdateHarness(ctx context.Context, id string, req agentproto.HarnessUpdate) (agentproto.Tools, error) {
+	var out agentproto.Tools
+	err := h.requestLimit(ctx, id, agentproto.Header{Kind: agentproto.KindHarnessUpdate}, req, &out, agentproto.MaxToolsLine)
+	return out, err
+}
+
 // Configure sends a sandbox its environment's configuration.
 func (h *Hub) Configure(ctx context.Context, id string, cfg agentproto.Config) error {
 	var ok struct{}
