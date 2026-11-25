@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -430,17 +431,18 @@ func parseArgs(ctx context.Context, cmd command, args []string, env CLIEnv) (inv
 var pictureRef = regexp.MustCompile(`\{\{attach:([^{}\n]+)\}\}`)
 
 // fromHere makes a picture's relative path absolute from the working directory, where the
-// command was given it; Studio would take it as relative to /workspace.
+// command was given it; Studio would take it as relative to /workspace. The path is the
+// computer's, so it has slashes wherever the tests run.
 func fromHere(env CLIEnv, p string) string {
 	p = strings.TrimSpace(p)
-	if p == "" || filepath.IsAbs(p) || env.Getwd == nil {
+	if p == "" || path.IsAbs(p) || env.Getwd == nil {
 		return p
 	}
 	wd, err := env.Getwd()
 	if err != nil {
 		return p
 	}
-	return filepath.Join(wd, p)
+	return path.Join(filepath.ToSlash(wd), p)
 }
 
 // placeFromHere makes the pictures the texts place absolute from the working directory.
