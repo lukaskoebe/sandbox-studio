@@ -25,6 +25,41 @@
   place.
 - Lead's day says how many requests need you and links to Home, instead of a second copy of
   them.
+- Settings are grouped by what they apply to: Studio, this environment, and this browser.
+- The sidebar ends Teammates with All teammates, whose table lists Lead first and says what
+  each teammate is doing, or what keeps it from starting, such as a missing key.
+- New chat asks who should do it and opens that teammate's box. Thread, Task and Teach sit
+  side by side under the box, and its button says what happens: Send, Add task or Remember.
+- A teammate's page starts on its desk: what waits for you, its threads and its computers. A
+  computer opens beside it, its screen's tabs named and on the left.
+- Every list page has the same empty state, with what goes there and how to add the first.
+- Adding a teammate takes a name, what it does and a model; the rest keeps its defaults until
+  you change it in its settings. Iris is offered only by the guided setup.
+- A rule's scopes are listed narrowest first, and a teammate's settings have a Network group.
+  Memory says Tidy for what was Dream, and the browser's history is Steps.
+- Home shows each computer on one line, and draws the timeline only with Show the lines.
+  Lead's Shipped lists only pushes that went out.
+- Lead's pages are one column, like a teammate's settings, and the caret beside its name opens
+  Today, Standing orders and Settings. Ask and Plan share one box under the day.
+- Times read the same everywhere ("12 min", "1 h 20 min"); ⌘K lists the places you last
+  worked in under Continue.
+- Agents can show pictures in a pull request, a comment or a review:
+  `studio pr comment 42 --body "Before and after:" --attach before.png --attach after.png`, or
+  `{{attach:shot.png}}` in the text. The card shows them, and once you approve, Studio uploads
+  them with your forge account, so the agent needs no write access. GitLab, Forgejo and Gitea;
+  on Forgejo and Gitea not yet in a new pull request's description. GitHub has no API to
+  upload pictures.
+- GitLab threads started on a merge request's conversation, not only those on its files, can
+  be resolved: `~/forge` and `studio pr read` name their thread.
+- A message sent while Claude works on a Claude subscription now reaches it mid-turn, as it
+  does with an API key.
+- Claude Code 2.1.325, which Fable 5.2 needs. A computer made before this release gets it with
+  Rebase, under Details → Maintenance, onto the current base image.
+- The Files tab's code fills the panel, and scrolls only once it reaches the bottom.
+- In a teammate's browser, a page's CORS preflight shows on its card as the request it asks
+  to send ("POST /v1/items"), a request rule for that method covers it, and Once lets the
+  preflight and its request through. When Studio refuses a page's request, the page and
+  DevTools show why, such as "waiting for approval", rather than a CORS error.
 
 ## v0.28.0 — 2026-11-21
 
