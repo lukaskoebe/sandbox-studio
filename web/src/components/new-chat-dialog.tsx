@@ -32,7 +32,12 @@ export function NewChatDialog({
   const chats = $api.useQuery("get", "/api/environments/{env}/chats", {
     params: { path: { env } },
   })
-  const list = lastUsedFirst(teammates.data ?? [], chats.data ?? [])
+  // The order waits for the chats too: a list that reordered under the focus would leave
+  // Enter on someone other than the last used.
+  const list =
+    teammates.data && chats.data
+      ? lastUsedFirst(teammates.data, chats.data)
+      : []
   const used = new Set(chats.data?.map((c) => c.teammateId))
   const pick = (id: string) => {
     setNewChatOpen(false)
@@ -55,6 +60,7 @@ export function NewChatDialog({
               key={t.id}
               variant="ghost"
               className="h-auto justify-start gap-2.5 py-1.5 text-left"
+              autoFocus={i === 0}
               onClick={() => pick(t.id)}
             >
               <TeammateAvatar name={t.name} avatar={t.avatar} />
