@@ -224,12 +224,13 @@ func (r *Runtime) Control() http.Handler {
 			Navigation bool   `json:"navigation"`
 			Site       string `json:"site"`
 			Curated    bool   `json:"curated"`
+			Preflight  string `json:"preflight"` // the method an OPTIONS asks about
 		}
 		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.SandboxID == "" || body.Host == "" {
-			http.Error(w, "want {sandboxId, host, port, method, path, navigation, site, curated}", http.StatusBadRequest)
+			http.Error(w, "want {sandboxId, host, port, method, path, navigation, site, curated, preflight}", http.StatusBadRequest)
 			return
 		}
-		rq := policy.HTTPRequest{Method: body.Method, Path: body.Path, Navigation: body.Navigation, Site: body.Site}
+		rq := policy.HTTPRequest{Method: body.Method, Path: body.Path, Navigation: body.Navigation, Site: body.Site, Preflight: body.Preflight}
 		rule, err := Requests(req.Context(), body.SandboxID, body.Host, body.Port, body.Curated, rq)
 		outcome := "allowed"
 		switch {

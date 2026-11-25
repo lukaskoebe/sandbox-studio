@@ -607,3 +607,40 @@ test("a sandbox's write to a read-only curated host has a card of its own", asyn
     .click()
   await expect(third).resolves.toEqual({ outcome: "denied" })
 })
+
+// A page's CORS preflight asks as the request it announces, and Once lets that request follow.
+test("a CORS preflight asks as its request, and Once lets the request follow", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("cors"))
+  const host = `api.${freshLabel()}.example.com`
+  const request = (method: string, preflight?: string) =>
+    api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
+      sandboxId: id,
+      host,
+      port: 443,
+      method,
+      path: "/v1/orders",
+      preflight,
+    })
+
+  await page.goto(`/e/${env}`)
+  const asked = request("OPTIONS", "POST")
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: host })
+  await openRow(card)
+  await expect(card).toContainText("POST /v1/orders")
+  await expect(card).toContainText(
+    "(a CORS preflight). Once lets both through."
+  )
+  await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card.getByRole("button", { name: "Once", exact: true }).click()
+  await card.getByRole("button", { name: "Allow once", exact: true }).click()
+  await expect(card).toBeHidden()
+  await expect(asked).resolves.toEqual({ outcome: "allowed" })
+  await expect(request("POST")).resolves.toEqual({ outcome: "allowed" })
+})
