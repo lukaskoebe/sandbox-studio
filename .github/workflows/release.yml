@@ -217,6 +217,12 @@ jobs:
           cp LICENSE README.md "dist/$NAME/"
           "dist/$NAME/$EXE" openapi > /dev/null
 
+      # Says so on the run's summary when a build that users must trust ships unsigned, as
+      # Gatekeeper and SmartScreen then warn on first launch (docs/release.md).
+      - name: unsigned
+        if: (matrix.goos == 'darwin' && env.APPLE_CERTIFICATE_P12 == '') || (matrix.goos == 'windows' && env.WINDOWS_CERT_PFX == '')
+        shell: bash
+        run: echo "::warning title=Unsigned ${{ matrix.goos }} build::No signing secrets are set, so $NAME ships unsigned. See docs/release.md, Secrets."
       - name: sign (macOS)
         if: matrix.goos == 'darwin' && env.APPLE_CERTIFICATE_P12 != ''
         env:

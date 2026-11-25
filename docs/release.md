@@ -150,7 +150,8 @@ Each run of the workflow:
 6. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
    `sandbox-studio_<tag>_<os>_<arch>`, each holding a directory of the same name with
    `studio`, `studio-app` (the [Studio app](app.md); on macOS `Sandbox Studio.app`, signed,
-   notarized and stapled), `LICENSE` and `README.md`, and on Windows also `studiow.exe`, the
+   notarized and stapled when the signing secrets are set, else unsigned with a warning on the
+   run), `LICENSE` and `README.md`, and on Windows also `studiow.exe`, the
    tray launcher. It writes `checksums.txt`, adds build provenance
    attestations, and creates the GitHub release with generated notes. Only a tag's run does
    this; a release branch's run keeps the archives as workflow artifacts.
