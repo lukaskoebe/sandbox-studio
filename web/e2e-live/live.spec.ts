@@ -108,12 +108,14 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
     await term.run(
       `c=$(curl -sS -o /dev/null --max-time 600 -w '%{http_code}' https://registry.npmjs.org/); echo "npm=$c"`
     )
-    const waiting = page.getByRole("button", { name: /\d+ requests? waiting/ })
+    const waiting = page.getByRole("button", {
+      name: /^\d+ requests? needs? you$/,
+    })
     await expect(waiting).toBeVisible({ timeout: 2 * 60_000 })
     await waiting.click()
     const popover = page.getByTestId("waiting-popover")
     await expect(popover).toContainText("registry.npmjs.org")
-    await popover.getByRole("button", { name: "Allow all" }).click()
+    await popover.getByRole("button", { name: "Always allow all" }).click()
     await expect(waiting).toBeHidden()
     expect(await term.result("npm", 2 * 60_000)).toBe("200")
 
