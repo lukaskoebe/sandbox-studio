@@ -124,7 +124,9 @@ func (s *Service) localRemote(t target) (*remote, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &remote{ep: ep, tr: file.DefaultClient}, nil
+	// The repository is on this computer, and git pushes from the mirror itself
+	// (pushUpdatingCheckedOut), so the mirror is whole.
+	return &remote{ep: ep, tr: file.DefaultClient, whole: true}, nil
 }
 
 // gitEnv is the environment for the host's git: Studio's own without git's variables, so

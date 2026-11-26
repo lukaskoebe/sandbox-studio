@@ -348,7 +348,9 @@ func (s *Service) sshRemote(t target, key string) (*remote, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &remote{ep: ep, tr: &sshTransport{s: s, f: t.forge, key: key, path: t.path()}}, nil
+	// Every connection through the SSH agent may ask the user to confirm a signature, so the
+	// mirror is whole and a review connects no more than its fetch did.
+	return &remote{ep: ep, tr: &sshTransport{s: s, f: t.forge, key: key, path: t.path()}, secret: key, whole: t.forge.Auth == store.ForgeAuthAgent}, nil
 }
 
 func (tr *sshTransport) NewUploadPackSession(*transport.Endpoint, transport.AuthMethod) (transport.UploadPackSession, error) {

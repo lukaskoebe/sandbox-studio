@@ -23,8 +23,10 @@ type CommitDiff struct {
 
 // CommitDiff reads one of the commits a push review lists from the push's staging
 // repository. A commit the review doesn't list, or one the repository no longer has, is
-// not found.
+// not found. The files it changes come from the forge where the repository is a partial
+// mirror of it.
 func (s *Service) CommitDiff(ctx context.Context, envID, approvalID, sha string) (CommitDiff, error) {
+	s.httpClient()
 	a, err := s.Store.Approval(ctx, envID, approvalID)
 	if err != nil {
 		return CommitDiff{}, err
@@ -76,6 +78,14 @@ func (s *Service) CommitDiff(ctx context.Context, envID, approvalID, sha string)
 			return CommitDiff{}, err
 		}
 	}
-	d, err := s.treeDiff(ctx, r, from, to)
+	// Without its forge or the forge's credential, the diff shows what the repository has.
+	var rm *remote
+	if f, err := s.Store.Forge(ctx, envID, p.ForgeID); err == nil {
+		t.forge = f
+		if token, err := s.token(ctx, f); err == nil {
+			rm, _ = s.remote(t, token)
+		}
+	}
+	d, err := s.treeDiff(ctx, r, rm, from, to)
 	return CommitDiff{Commit: rv.Commits[i], TreeDiff: d}, err
 }

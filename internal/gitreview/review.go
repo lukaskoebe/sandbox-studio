@@ -67,7 +67,8 @@ const truncMarker = "\n[... diff truncated by Sandbox Studio: %s ...]\n"
 
 // review describes the commits a push adds on top of what the forge has, and their diff.
 // newObjs are the objects reachable from the pushed commit but not from the forge's refs.
-func (s *Service) review(ctx context.Context, r *git.Repository, old, newHash plumbing.Hash, newObjs []plumbing.Hash) (PushReview, error) {
+// rm fetches the changed files a partial mirror lacks.
+func (s *Service) review(ctx context.Context, r *git.Repository, rm *remote, old, newHash plumbing.Hash, newObjs []plumbing.Hash) (PushReview, error) {
 	var rv PushReview
 	inNew := make(map[plumbing.Hash]bool, len(newObjs))
 	var commits []*object.Commit
@@ -126,7 +127,7 @@ func (s *Service) review(ctx context.Context, r *git.Repository, old, newHash pl
 			return rv, err
 		}
 	}
-	d, err := s.treeDiff(ctx, r, from, to)
+	d, err := s.treeDiff(ctx, r, rm, from, to)
 	if err != nil {
 		return rv, err
 	}
@@ -143,11 +144,16 @@ type TreeDiff struct {
 	DiffTruncated bool   `json:"diffTruncated"`
 }
 
-func (s *Service) treeDiff(ctx context.Context, r *git.Repository, from, to *object.Tree) (TreeDiff, error) {
+// treeDiff diffs two trees of r. rm, if not nil, fetches the changed files a partial
+// mirror lacks first (partial.go).
+func (s *Service) treeDiff(ctx context.Context, r *git.Repository, rm *remote, from, to *object.Tree) (TreeDiff, error) {
 	var d TreeDiff
+	if err := s.fetchChanged(ctx, rm, r, from, to); err != nil {
+		return d, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	changes, err := object.DiffTreeWithOptions(ctx, from, to, object.DefaultDiffTreeOptions)
+	changes, err := diffChanges(ctx, r, from, to)
 	if err != nil {
 		return d, err
 	}
@@ -253,7 +259,7 @@ func (s *Service) rewrite(ctx context.Context, r *git.Repository, rv *PushReview
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	changes, err := object.DiffTreeWithOptions(ctx, from, to, object.DefaultDiffTreeOptions)
+	changes, err := diffChanges(ctx, r, from, to)
 	if err != nil {
 		return err
 	}
@@ -283,6 +289,10 @@ func (s *Service) changeDiff(ctx context.Context, r *git.Repository, ch *object.
 		}
 		if e.TreeEntry.Mode == filemode.Submodule {
 			return fmt.Sprintf("diff --git a/%s b/%s\n[submodule %s changed]\n", name, name, name), 0, 0
+		}
+		if r.Storer.HasEncodedObject(e.TreeEntry.Hash) != nil {
+			// Left out of a partial mirror's fetch (fetchBlobs), or of the push itself.
+			return fmt.Sprintf("diff --git a/%s b/%s\n[%s: not shown: Sandbox Studio does not have this file's content; it may be larger than %d KiB]\n", name, name, name, s.Limits.MaxBlob>>10), 0, 0
 		}
 		if size, err := r.Storer.EncodedObjectSize(e.TreeEntry.Hash); err == nil && size > s.Limits.MaxBlob {
 			return fmt.Sprintf("diff --git a/%s b/%s\n[%s: %d bytes, larger than %d KiB; not shown]\n", name, name, name, size, s.Limits.MaxBlob>>10), 0, 0

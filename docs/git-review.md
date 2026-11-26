@@ -272,6 +272,15 @@ body is limited to 16 MiB.
    (`<data>/git-staging/<env-id>/<sandbox-id>/<forge-id>/<path>.git`) and advertises them.
    Each sandbox has its own staging repo, so sandboxes and environments never see each
    other's pushes.
+   The mirror holds the forge's commits and folders. A forge that filters fetches and hands
+   out objects by ID (it advertises `filter` and `allow-reachable-sha1-in-want`: GitHub,
+   GitLab, Forgejo, a git server with `uploadpack.allowFilter` and
+   `uploadpack.allowAnySHA1InWant`) is mirrored without file contents, so a repository with
+   gigabytes of files in its history mirrors in seconds; the review fetches the contents it
+   shows (step 2). Other forges are mirrored whole, as are local forges and SSH forges that
+   sign with the agent, where every connection may ask you to confirm. A mirror fetch has
+   two minutes (`mirrorFetchTimeout`), or the push fails with 502 "could not fetch the
+   repository from the forge".
    The mirror fetch is rate-limited per staging repo, since a fetch signed by the SSH agent
    may ask you to confirm it: a mirror that fetched within the last 30 seconds
    (`MirrorFetchInterval`) is advertised as it is, and pushes that arrive while a fetch of
@@ -306,6 +315,15 @@ The approval shows teammate, sandbox, repository, branch, old and new commit, up
 commits, and a unified diff bounded at 512 KiB. Binary files, submodules and files over
 1 MiB are summarized instead of diffed.
 
+For a mirror without file contents, Studio fetches the earlier contents of the files the
+push changes from the forge before it diffs them, and again for a commit's own diff: in one
+fetch if together they are at most as large as a push may be (100 MiB), else one by one,
+leaving out files over 1 MiB. It fetches at most 2000 files, and one by one for at most a
+minute. A file left out is listed as "not shown", and a rename that also edits the file
+then shows as a delete and an add. If the forge doesn't hand the files out, the update is
+refused ("could not fetch the files the push changes from the forge; push again") rather
+than queued with a diff that doesn't show them.
+
 A forced push's review (`forced: true`) also lists the commits it drops (`dropped`: on the
 forge's branch, not in the push; up to 50), each with `replacedBy`, the pushed commit with
 the same subject and author where a rebase kept one, and `tipFiles`, the files whose content
@@ -322,7 +340,9 @@ it, so a client that doesn't know about rewrites can't approve one by accident.
 - **Approve:** Studio pushes the staged commit upstream with the token or key, provided the
   upstream branch is still at the reviewed old commit (or already at the new one). The push
   names that old commit, so the forge updates the branch only from it: a lease, which keeps
-  a forced push from dropping commits that reached the forge after the review. The
+  a forced push from dropping commits that reached the forge after the review. The pack
+  holds what the push adds to what the forge's refs and the mirror's reach, so a branch
+  that moved on the forge since the review doesn't make Studio send its history again. The
   push state becomes `pushed` or `failed` with the forge's message. The push runs inside the
   decision, so the web tells how it went as the approval closes: "Pushed main to owner/repo",
   or an error that stays until it's closed, with the reason and a link to the review. A 403

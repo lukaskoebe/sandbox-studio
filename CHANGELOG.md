@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A push to a repository with gigabytes of files in its history no longer fails with "could
+  not fetch the repository from the forge: context deadline exceeded". From GitHub, GitLab,
+  Forgejo and other forges that can leave file contents out of a fetch, Studio now copies only
+  the commits and folders before a push, and fetches the files a review shows. A push whose
+  changed files the forge doesn't hand out is refused with the reason, to push again.
+- An approved push sends only what it adds, also when the forge's default branch moved on
+  after the review.
 - An agent that finds Studio or its computer confusing or broken can offer a report for
   Studio's developers. Studio takes out the names, addresses and paths it knows; you read and
   edit the report on its card, and **Open on GitHub…** opens a new issue filled in, for you to

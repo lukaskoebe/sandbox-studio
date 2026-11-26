@@ -40,7 +40,14 @@ type remote struct {
 	ep   *transport.Endpoint
 	auth transport.AuthMethod
 	tr   transport.Transport
+	// whole keeps the mirror complete, file contents and all (partial.go).
+	whole bool
+	// secret is the credential, which hide keeps out of what a sandbox is told.
+	secret string
 }
+
+// hide masks the forge's credential in msg.
+func (rm *remote) hide(msg string) string { return mask(msg, rm.secret) }
 
 func (s *Service) remote(t target, token string) (*remote, error) {
 	switch t.forge.Kind {
@@ -58,14 +65,16 @@ func (s *Service) remote(t target, token string) (*remote, error) {
 		return nil, err
 	}
 	user, pass := ad.GitAuth(token)
-	return &remote{ep: ep, auth: &githttp.BasicAuth{Username: user, Password: pass}, tr: githttp.NewClient(s.httpClient())}, nil
+	return &remote{ep: ep, auth: &githttp.BasicAuth{Username: user, Password: pass}, tr: githttp.NewClient(s.httpClient()), secret: token}, nil
 }
 
 func mirrored(name plumbing.ReferenceName) bool {
 	return name.IsBranch() || name.IsTag()
 }
 
-// fetchMirror brings the staging repository's branches and tags up to date with the forge.
+// fetchMirror brings the staging repository's branches and tags up to date with the forge:
+// its commits and folders, and its files' contents too unless the forge hands those out
+// later (partial.go).
 func (rm *remote) fetchMirror(ctx context.Context, r *git.Repository) error {
 	sess, err := rm.tr.NewUploadPackSession(rm.ep, rm.auth)
 	if err != nil {
@@ -108,18 +117,15 @@ func (rm *remote) fetchMirror(ctx context.Context, r *git.Repository) error {
 		if ar.Capabilities.Supports(capability.NoProgress) {
 			_ = req.Capabilities.Set(capability.NoProgress) // it takes no arguments, so it can't fail
 		}
+		if rm.partial(ar.Capabilities) {
+			req.Filter = packp.FilterBlobNone()
+			_ = req.Capabilities.Set(capability.Filter) // no arguments either
+		}
 		resp, err := sess.UploadPack(ctx, req)
 		if err != nil {
 			return err
 		}
-		var pack io.Reader = resp
-		switch {
-		case req.Capabilities.Supports(capability.Sideband64k):
-			pack = sideband.NewDemuxer(sideband.Sideband64k, resp)
-		case req.Capabilities.Supports(capability.Sideband):
-			pack = sideband.NewDemuxer(sideband.Sideband, resp)
-		}
-		err = packfile.UpdateObjectStorage(r.Storer, pack)
+		err = packfile.UpdateObjectStorage(r.Storer, packOf(req, resp))
 		resp.Close()
 		if err != nil {
 			return err
@@ -138,6 +144,17 @@ func (rm *remote) fetchMirror(ctx context.Context, r *git.Repository) error {
 		}
 	}
 	return nil
+}
+
+// packOf is the pack in a fetch's response, out of its side band if the request asked for one.
+func packOf(req *packp.UploadPackRequest, resp io.Reader) io.Reader {
+	switch {
+	case req.Capabilities.Supports(capability.Sideband64k):
+		return sideband.NewDemuxer(sideband.Sideband64k, resp)
+	case req.Capabilities.Supports(capability.Sideband):
+		return sideband.NewDemuxer(sideband.Sideband, resp)
+	}
+	return resp
 }
 
 // mirrorRefs returns the staging repository's copy of the forge's branches and tags.
@@ -186,12 +203,21 @@ func (rm *remote) pushUpstream(ctx context.Context, r *git.Repository, p store.G
 		return "", fmt.Errorf("%s moved on the forge since the sandbox pushed (now %s); the agent has to fetch, rebase and push again",
 			name.Short(), short(current.String()))
 	}
+	// The pack holds what the forge lacks: nothing its refs reach, nor what the mirror's do.
+	// The forge had those when the mirror last fetched, and a branch that moved on since the
+	// sandbox pushed is not in the mirror yet. Without them the pack would carry the history
+	// under the push again, with file contents a partial mirror doesn't have.
 	var ignore []plumbing.Hash
 	for _, h := range ar.References {
 		if r.Storer.HasEncodedObject(h) == nil {
 			ignore = append(ignore, h)
 		}
 	}
+	mirror, err := mirrorRefs(r)
+	if err != nil {
+		return "", fmt.Errorf("staged objects: %w", err)
+	}
+	ignore = append(ignore, hashes(mirror)...)
 	objs, err := revlist.Objects(r.Storer, []plumbing.Hash{newHash}, ignore)
 	if err != nil {
 		return "", fmt.Errorf("staged objects: %w", err)
@@ -208,8 +234,12 @@ func (rm *remote) pushUpstream(ctx context.Context, r *git.Repository, p store.G
 	}()
 	rs, err := sess.ReceivePack(ctx, req)
 	pr.Close()
-	if encErr := <-done; err == nil && encErr != nil && !errors.Is(encErr, io.ErrClosedPipe) {
+	if encErr := <-done; encErr != nil && !errors.Is(encErr, io.ErrClosedPipe) && (err == nil || errors.Is(encErr, plumbing.ErrObjectNotFound)) {
 		err = encErr
+	}
+	if errors.Is(err, plumbing.ErrObjectNotFound) {
+		// The push left out what a branch of the forge had, and the forge lists it no more.
+		return "", errors.New("the push builds on commits the forge no longer lists; the agent has to fetch and push again")
 	}
 	if err != nil {
 		return "", err

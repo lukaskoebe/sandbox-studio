@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -76,7 +77,7 @@ func (s *Service) receivePack(w http.ResponseWriter, r *http.Request, t target) 
 		s.advertise(w, repo)
 		return
 	}
-	s.stage(w, r, t, repo)
+	s.stage(w, r, t, repo, rm)
 }
 
 // stagingError is a mirror fetch that failed because the staging repository didn't open.
@@ -192,8 +193,8 @@ func validatePack(r io.ReadSeeker) error {
 }
 
 // stage receives a push into the staging repository and raises a git.push approval for
-// each branch update that passes the checks.
-func (s *Service) stage(w http.ResponseWriter, r *http.Request, t target, repo *git.Repository) {
+// each branch update that passes the checks. rm is the forge, for the files a review shows.
+func (s *Service) stage(w http.ResponseWriter, r *http.Request, t target, repo *git.Repository, rm *remote) {
 	ctx := r.Context()
 	if r.Header.Get("Content-Type") != "application/x-git-receive-pack-request" {
 		refuse(w, http.StatusUnsupportedMediaType, "Expected a git receive-pack request.")
@@ -254,7 +255,7 @@ func (s *Service) stage(w http.ResponseWriter, r *http.Request, t target, repo *
 	statuses := make([]string, len(req.Commands))
 	var messages []string
 	for i, cmd := range req.Commands {
-		approvalID, err := s.stageCommand(ctx, t, repo, upstream, cmd)
+		approvalID, err := s.stageCommand(ctx, t, repo, rm, upstream, cmd)
 		if err != nil {
 			statuses[i] = err.Error()
 			continue
@@ -333,7 +334,7 @@ func fastForwardOnly(branch, defaultBranch string) bool {
 
 // stageCommand checks one ref update and stages it. Anything the sandbox sent is untrusted:
 // names, hashes and objects are all checked against what the host has.
-func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Repository, upstream map[plumbing.ReferenceName]plumbing.Hash, cmd *packp.Command) (string, error) {
+func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Repository, rm *remote, upstream map[plumbing.ReferenceName]plumbing.Hash, cmd *packp.Command) (string, error) {
 	if !cmd.Name.IsBranch() || cmd.Name.Validate() != nil {
 		return "", refusal("only branches (refs/heads/...) can be pushed through Sandbox Studio")
 	}
@@ -374,9 +375,16 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	if forced {
 		diffFrom = plumbing.ZeroHash
 	}
-	rv, err := s.review(ctx, repo, diffFrom, cmd.New, objs)
+	rv, err := s.review(ctx, repo, rm, diffFrom, cmd.New, objs)
 	if err == nil && forced {
 		err = s.rewrite(ctx, repo, &rv, current, cmd.New, objs)
+	}
+	var fetch *fetchError
+	if errors.As(err, &fetch) {
+		// The forge didn't hand out the files the push changes: the next push asks again.
+		s.Log.Warn("git remote: fetch the changed files", "sandbox", t.sb.ID, "forge", t.forge.Name, "repo", t.path(), "err", rm.hide(fetch.err.Error()))
+		why := truncate(strings.Join(strings.Fields(rm.hide(fetch.err.Error())), " "), 300)
+		return "", refusal("Sandbox Studio could not fetch the files the push changes from the forge (" + why + "); push again")
 	}
 	if err != nil {
 		s.Log.Error("git remote: review", "sandbox", t.sb.ID, "err", err)
