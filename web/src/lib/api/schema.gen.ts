@@ -1566,7 +1566,7 @@ export interface paths {
         };
         get: operations["listProviders"];
         put?: never;
-        /** @description API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate. */
+        /** @description API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. It adds no teammate: createDefaultTeammate adds the guided setup's. */
         post: operations["createProvider"];
         delete?: never;
         options?: never;

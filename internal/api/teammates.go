@@ -138,7 +138,7 @@ func (s *Server) registerTeammates(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createProvider", Method: http.MethodPost, Path: "/api/environments/{env}/providers", Tags: []string{"providers"},
 		DefaultStatus: http.StatusCreated,
-		Description:   "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate.",
+		Description:   "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. It adds no teammate: createDefaultTeammate adds the guided setup's.",
 	}, func(ctx context.Context, in *createProviderIn) (*struct{ Body ProviderView }, error) {
 		b := in.Body
 		v, err := s.addProvider(ctx, in.Env, newProvider{Name: b.Name, Kind: b.Kind, APIKey: b.APIKey, BaseURL: b.BaseURL, Model: b.Model, Images: b.Images})
