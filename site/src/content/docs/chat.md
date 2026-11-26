@@ -59,6 +59,14 @@ Network requests to hosts without a rule still go through [network approvals](..
 
 Sometimes the agent asks you something, such as which option to pick. The question appears as a short form in the chat. Fill it in and choose **Send answer**, or choose **Skip this question**.
 
+## Reports for Studio's developers
+
+When something in Studio or a computer confuses or misleads your teammate, such as an instruction that doesn't hold or an error that names the wrong cause, it can offer you a report for Sandbox Studio's developers. The report waits on Home under **Needs you**, and your teammate goes on with its work meanwhile.
+
+- Studio takes out what it finds that could tell who you are: your computers', teammates' and repositories' names, hosts, email and IP addresses, your user name in paths, and keys. The card says how many it took out.
+- Read the title and text, and change them if you like. **Open on GitHub…** opens a new issue on Sandbox Studio's GitHub repository with them filled in, in your browser; you send it there under your own GitHub account, or close the tab. The issue is public.
+- **Don't send** drops the report. Nothing is sent unless you send it on GitHub.
+
 ## Context and compacting
 
 Once your teammate has answered, a small ring beside the message box shows how full its context is: how much of this thread it keeps in mind. When the context runs full, your teammate summarizes the conversation on its own to make room. To choose when, select the ring and **Compact now**; this sends `/compact` to the agent, which summarizes the thread so far. Compacting waits while your teammate works.

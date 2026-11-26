@@ -307,6 +307,9 @@ const (
 	MethodSandboxInfo = "sandbox_info"
 	// MethodApprovalStatus is what became of one of the sandbox's approvals, by its ID.
 	MethodApprovalStatus = "approval_status"
+	// MethodReportIssue offers the user a report, for Studio's developers, of something in
+	// Studio or the sandbox that confused or misled the agent (docs/reports.md).
+	MethodReportIssue = "report_issue"
 
 	// MethodForgeSync fetches ~/forge again now (docs/agent-cli.md#forge). It is no MCP tool:
 	// only `studio forge sync` makes it.

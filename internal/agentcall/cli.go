@@ -115,6 +115,7 @@ var commandNames = map[string]struct {
 	agentproto.MethodGitPullRequestResolve:      {"pr resolve", []string{"number"}},
 	agentproto.MethodSandboxInfo:                {"info", nil},
 	agentproto.MethodApprovalStatus:             {"wait", []string{"approval"}},
+	agentproto.MethodReportIssue:                {"report", []string{"title"}},
 	agentproto.MethodBrowserOpen:                {"browser open", []string{"url"}},
 	agentproto.MethodBrowserClick:               {"browser click", []string{"ref"}},
 	agentproto.MethodBrowserFill:                {"browser fill", []string{"ref", "text"}},

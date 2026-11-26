@@ -54,6 +54,8 @@ work:
   browser`) the commands of one group, and `studio <command> --help` the tool's description
   and its arguments. A bare group, as `studio browser`, lists its commands on stderr and exits
   with 2.
+- **`studio report <title> --body-file -`** offers the user a report for Studio's developers
+  and returns at once; see [reports.md](reports.md).
 - **`studio forge sync`** is the one command that is not an MCP tool
   (`agentproto.MethodForgeSync`); see below.
 

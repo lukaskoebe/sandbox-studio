@@ -304,9 +304,10 @@ func TestInstructionsNameTheSandboxes(t *testing.T) {
 // 5400 since the studio command's line, without which agents don't find it; 6000 since the
 // browser left the MCP server, whose instructions and 18 tool schemas described it: this
 // section is now the only place that says what Studio's command can do; 6200 since pictures
-// in messages, which agents can't guess the chat shows.
+// in messages, which agents can't guess the chat shows; 6400 since reports, which agents don't
+// offer unless told they can.
 func TestInstructionsStayShort(t *testing.T) {
-	const max = 6200
+	const max = 6400
 	p := teammate
 	p.Soul = ""
 	if n := len(instructions(p, Sandbox{Name: "api"}).Content); n > max {

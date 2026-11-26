@@ -20,6 +20,7 @@ it allows, and an answer to the old card finds it gone (`Store.RequestExactAppro
 | `git.credential` | git asking credentials for a host no forge covers | `internal/gitreview` ([git review](git-review.md#credential-hints)) |
 | `secret.rejected` | a host answering 401 three times in ten minutes to requests carrying a secret | `internal/secretcheck` ([network](network.md#refused-secrets)) |
 | `credential.issue` | `studio-agent credential` asking for credentials from a secret with a kind | `internal/credentials` ([network](network.md#credentials)) |
+| `studio.report` | an agent offering a report for Studio's developers (`report_issue`) | `internal/reports` ([reports](reports.md)) |
 | `chat.permission` | a permission request from an ACP agent | `internal/chat` ([chat design](design/chat-mode.md)) |
 
 Kinds other than `network` belong to an integration (`internal/integrations`): each declares

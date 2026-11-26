@@ -29,6 +29,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/lead"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/reports"
 	"github.com/lukaskoebe/sandbox-studio/internal/secretcheck"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -77,6 +78,8 @@ type ApprovalView struct {
 	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
 	// LeadPlan is set for lead.plan approvals.
 	LeadPlan *lead.PlanPayload `json:"leadPlan,omitempty" doc:"The messages Lead sends to teammates once the user approves"`
+	// Report is set for studio.report approvals.
+	Report *reports.Payload `json:"report,omitempty" doc:"An agent offers a report, for Studio's developers, of something in Studio or its computer that confused or misled it"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -156,6 +159,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p lead.PlanPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.LeadPlan = &p
+		}
+	case reports.Kind:
+		var p reports.Payload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.Report = &p
 		}
 	}
 	if policy.IsNetworkKind(a.Kind) {

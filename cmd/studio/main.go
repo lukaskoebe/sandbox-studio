@@ -61,6 +61,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/preview"
+	"github.com/lukaskoebe/sandbox-studio/internal/reports"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxinfo"
@@ -462,6 +463,10 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 	integs = append(integs, secretCheck)
 	creds := &credentials.Service{Store: st, Secrets: vault, Bus: bus, Log: log} // settles credential.issue approvals
 	integs = append(integs, creds)
+	integs = append(integs, &reports.Service{Store: st, Bus: bus, Log: log, Host: func() []reports.Name { // settles studio.report approvals
+		id := api.HostGitIdentity(ctx)
+		return append(reports.SystemNames(), reports.Name{Text: id.Name, Label: "user"}, reports.Name{Text: id.Email, Label: "email"})
+	}})
 	transfers := &sandboxes.Transfers{} // archives source VMs upload when a copy moves their disks
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,

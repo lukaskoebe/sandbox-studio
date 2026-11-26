@@ -36,6 +36,7 @@ import {
 import { CredentialIssueDecision } from "@/components/credential-issue"
 import { ApprovalTip } from "@/components/feature-tip"
 import { GitCredentialDecision } from "@/components/git-credential"
+import { ReportDecision } from "@/components/studio-report"
 import {
   GitApprovalSummary,
   isGitApproval,
@@ -837,6 +838,8 @@ export function ApprovalBody({
       return <SecretRejectedDecision approval={approval} />
     case "credential.issue":
       return <CredentialIssueDecision approval={approval} />
+    case "studio.report":
+      return <ReportDecision approval={approval} />
   }
   if (approval.kind === "chat.permission" && approval.chatPermission)
     return <ChatPermissionSummary approval={approval} />

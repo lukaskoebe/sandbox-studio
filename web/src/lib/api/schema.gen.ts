@@ -3904,6 +3904,8 @@ export interface components {
             network?: components["schemas"]["NetworkRequest"];
             /** @description Set when a network request was decided for its one connection, without a rule */
             once?: boolean;
+            /** @description An agent offers a report, for Studio's developers, of something in Studio or its computer that confused or misled it */
+            report?: components["schemas"]["Payload"];
             /** @description Set when the user undid an AI reviewer's decision and its rule was deleted */
             reverted?: boolean;
             ruleId?: string;
@@ -6653,6 +6655,27 @@ export interface components {
             path: string;
             /** Format: int64 */
             size: number;
+        };
+        Payload: {
+            /** @description What the agent found, anonymized: the issue's text above its footer */
+            body: string;
+            /** @description Which Studio, system, harness and base image the report comes from; the issue ends with it */
+            footer: string;
+            /** @description GitHub's new-issue page for the repository, without the title and text */
+            issueUrl: string;
+            /**
+             * Format: int64
+             * @description How many names, addresses, paths and secrets Studio took out
+             */
+            replaced: number;
+            /** @description The GitHub repository the issue goes to, owner/name */
+            repository: string;
+            sandboxId: string;
+            sandboxName: string;
+            teammateId?: string;
+            teammateName?: string;
+            /** @description The issue's title, anonymized */
+            title: string;
         };
         PermissionBody: {
             input?: string;

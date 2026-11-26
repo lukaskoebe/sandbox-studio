@@ -26,6 +26,7 @@ data locations, repository layout, security model, testing and conventions.
 | [Logins on this computer](host-logins.md) | offering providers from the host's Claude Code, Codex and opencode logins, and what Studio reads of them | `internal/hostlogins` |
 | [Harnesses and agent sessions](harnesses.md) | adapters, files, hooks, versions, chats over ACP | `internal/harness`, `internal/chat` |
 | [Agent command](agent-cli.md) | `studio` in the sandbox: the MCP tools as commands, flags from schemas, exit codes, `--wait`; `~/forge` | `internal/agentcall`, `internal/gitreview/forgefiles.go` |
+| [Reports from agents](reports.md) | `studio report`: what Studio takes out, the card, GitHub's new-issue page | `internal/reports` |
 | [Lead](lead.md) | the day written up: notes, facts, sentences, budget, API, pages | `internal/lead` |
 | [Memory](memory.md) | store, search, embeddings, hooks and tools, extraction, consolidation | `internal/memory`, `internal/agentmem` |
 | [Browser broker](browser.md) | browser VM, tools, policy, redaction, credentials, live view | `internal/browser` |

@@ -11,6 +11,7 @@ import {
   GlobeIcon,
   HandIcon,
   KeyIcon,
+  MegaphoneIcon,
   ScalesIcon,
   ShieldIcon,
   type Icon,
@@ -251,6 +252,17 @@ const kinds: Record<string, ApprovalKind> = {
     icon: ChatCircleDotsIcon,
     area: "chat",
   },
+  "studio.report": {
+    title: "Report",
+    summary: (a) => {
+      const r = a.report
+      return r
+        ? `${r.teammateName || r.sandboxName} offers a report for Studio's developers: ${r.title}`
+        : a.subject
+    },
+    icon: MegaphoneIcon,
+    area: "chat",
+  },
 }
 
 kinds["network.request"] = kinds.network
@@ -303,6 +315,8 @@ export function approvalSource(a: Approval): string | undefined {
     a.gitCredential?.sandboxName ??
     a.secretRejected?.sandboxName ??
     a.chatPermission?.sandboxName ??
+    a.report?.teammateName ??
+    a.report?.sandboxName ??
     a.leadPlan?.lead
   )
 }
@@ -327,6 +341,8 @@ export function approvalDecision(a: Approval): string {
     return a.status === "approved" ? "Allowed" : "Denied"
   if (a.kind === "secret.rejected")
     return a.status === "approved" ? "Updating the secret" : "Not now"
+  if (a.kind === "studio.report")
+    return a.status === "approved" ? "Opened on GitHub" : "Not sent"
   if (a.network?.tracker) return "Denied · tracker"
   if (a.reverted) return "Reverted · reviewer"
   switch (a.network?.decided) {
