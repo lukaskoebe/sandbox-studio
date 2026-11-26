@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- An agent that finds Studio or its computer confusing or broken can offer a report for
+  Studio's developers. Studio takes out the names, addresses and paths it knows; you read and
+  edit the report on its card, and **Open on GitHub…** opens a new issue filled in, for you to
+  send under your own account. Nothing is sent otherwise.
+
 ## v0.30.0 — 2026-11-26
 
 - Pictures attached to a message show as small thumbnails, in the box before you send and in
