@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.30.0 — 2026-11-26
 
 - Pictures attached to a message show as small thumbnails, in the box before you send and in
   the chat after; a click shows one large. Studio keeps a copy of each picture up to 8 MB you
