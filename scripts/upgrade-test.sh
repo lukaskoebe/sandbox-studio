@@ -2,7 +2,7 @@
 # Checks that an upgrade keeps what the previous release made. It runs twice against the
 # running Studio, with the same data directory:
 #
-#   before  under the previous release: adds a provider, which brings the default teammate,
+#   before  under the previous release: adds a provider and the default teammate, as setup does,
 #           and, where VMs boot, creates a sandbox and writes a file into its workspace
 #   after   under the new build: the teammate is still there; the sandbox still runs and its
 #           agent, reconnected, reads the file; it stops and starts again with the file; a
@@ -97,8 +97,10 @@ before() {
 	login
 	api POST "/api/environments/$env/providers" -H 'Content-Type: application/json' \
 		-d '{"name":"Anthropic","kind":"anthropic_api","apiKey":"sk-ant-upgrade-test"}' >/dev/null
+	# Since v0.29.0 a provider brings no teammate; the guided setup adds this one.
+	api POST "/api/environments/$env/teammates/default" -H 'Content-Type: application/json' -d '{}' >/dev/null
 	api GET "/api/environments/$env/teammates" | jq -r '.[0].name // empty' >"$work/teammate"
-	[ -s "$work/teammate" ] || fail "The provider brought no teammate."
+	[ -s "$work/teammate" ] || fail "Studio lists no teammate after adding the default one."
 	say "Teammate: $(cat "$work/teammate")"
 	[ "$boot" = true ] || return 0
 
